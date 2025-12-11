@@ -1,0 +1,25 @@
+# Environment files with secrets
+.env
+stratai-main/.env
+
+# OS files
+.DS_Store
+*.DS_Store
+
+# Node
+node_modules/
+stratai-main/node_modules/
+
+# Build outputs
+stratai-main/build/
+stratai-main/.svelte-kit/
+
+# Exports and data
+exports/
+
+# Large deployment packages
+*.tar.gz
+
+# Vite timestamps
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

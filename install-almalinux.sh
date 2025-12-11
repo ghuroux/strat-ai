@@ -1,0 +1,437 @@
+#!/bin/bash
+################################################################################
+# LibreChat with LiteLLM and Export System - AlmaLinux Installation Script
+#
+# This script installs and configures:
+# - Docker & Docker Compose
+# - LibreChat with MongoDB
+# - LiteLLM Proxy with PostgreSQL
+# - Gotenberg (PDF conversion)
+# - Export API with auto-injection
+# - Nginx proxy with export buttons
+################################################################################
+
+set -e  # Exit on error
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Script variables
+INSTALL_DIR="/opt/librechat"
+LOG_FILE="/var/log/librechat-install.log"
+
+################################################################################
+# Helper Functions
+################################################################################
+
+log() {
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" | tee -a "$LOG_FILE"
+    exit 1
+}
+
+warn() {
+    echo -e "${YELLOW}[WARNING]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+info() {
+    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        error "Please run as root (use sudo)"
+    fi
+}
+
+check_os() {
+    if [ ! -f /etc/almalinux-release ]; then
+        warn "This script is designed for AlmaLinux"
+        read -p "Continue anyway? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    else
+        log "Detected AlmaLinux: $(cat /etc/almalinux-release)"
+    fi
+}
+
+################################################################################
+# Installation Functions
+################################################################################
+
+install_prerequisites() {
+    log "Installing system prerequisites..."
+
+    dnf update -y >> "$LOG_FILE" 2>&1
+    dnf install -y \
+        curl \
+        wget \
+        git \
+        nano \
+        vim \
+        firewalld \
+        dnf-plugins-core \
+        yum-utils \
+        >> "$LOG_FILE" 2>&1
+
+    log "✓ Prerequisites installed"
+}
+
+install_docker() {
+    log "Installing Docker..."
+
+    # Check if Docker is already installed
+    if command -v docker &> /dev/null; then
+        log "Docker already installed: $(docker --version)"
+        return
+    fi
+
+    # Add Docker repository
+    dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo >> "$LOG_FILE" 2>&1
+
+    # Install Docker
+    dnf install -y \
+        docker-ce \
+        docker-ce-cli \
+        containerd.io \
+        docker-buildx-plugin \
+        docker-compose-plugin \
+        >> "$LOG_FILE" 2>&1
+
+    # Start and enable Docker
+    systemctl start docker
+    systemctl enable docker
+
+    # Add current user to docker group (if not root)
+    if [ -n "$SUDO_USER" ]; then
+        usermod -aG docker "$SUDO_USER"
+        log "Added $SUDO_USER to docker group (logout required)"
+    fi
+
+    log "✓ Docker installed: $(docker --version)"
+}
+
+install_docker_compose() {
+    log "Verifying Docker Compose..."
+
+    if docker compose version &> /dev/null; then
+        log "✓ Docker Compose installed: $(docker compose version)"
+    else
+        error "Docker Compose plugin not found"
+    fi
+}
+
+install_pandoc() {
+    log "Installing Pandoc (for DOCX export)..."
+
+    if command -v pandoc &> /dev/null; then
+        log "Pandoc already installed: $(pandoc --version | head -1)"
+        return
+    fi
+
+    # Install EPEL repository for pandoc
+    dnf install -y epel-release >> "$LOG_FILE" 2>&1
+    dnf install -y pandoc >> "$LOG_FILE" 2>&1
+
+    log "✓ Pandoc installed: $(pandoc --version | head -1)"
+}
+
+setup_firewall() {
+    log "Configuring firewall..."
+
+    # Start and enable firewalld
+    systemctl start firewalld
+    systemctl enable firewalld
+
+    # Open required ports
+    firewall-cmd --permanent --add-port=3001/tcp  # LibreChat
+    firewall-cmd --permanent --add-port=4000/tcp  # LiteLLM
+    firewall-cmd --permanent --add-port=8080/tcp  # Download Server (optional)
+    firewall-cmd --permanent --add-port=8081/tcp  # Export API
+    firewall-cmd --reload
+
+    log "✓ Firewall configured (ports 3001, 4000, 8080, 8081)"
+}
+
+create_directory_structure() {
+    log "Creating directory structure..."
+
+    mkdir -p "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+
+    mkdir -p exports
+    mkdir -p init-scripts
+
+    log "✓ Directories created at $INSTALL_DIR"
+}
+
+generate_jwt_secret() {
+    openssl rand -hex 32
+}
+
+create_env_file() {
+    log "Creating environment configuration..."
+
+    JWT_SECRET=$(generate_jwt_secret)
+    LITELLM_KEY=$(generate_jwt_secret | cut -c1-16)
+
+    cat > "$INSTALL_DIR/.env" << EOF
+# LibreChat Environment Configuration
+# Generated by install script on $(date)
+
+# Security
+JWT_SECRET=$JWT_SECRET
+AUTH_TOKEN=
+
+# LLM Provider Configuration
+# Add your API keys here
+# ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
+# OPENAI_API_KEY=sk-your-openai-key-here
+
+# LiteLLM Configuration
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-$LITELLM_KEY
+OPENAI_BASE_URL=http://litellm:4000
+
+# Embedding Configuration
+EMBEDDING_ENGINE=openai
+EMBEDDING_MODEL_PREF=text-embedding-3-small
+
+# Vector Database
+VECTOR_DB=lancedb
+
+# LiteLLM Proxy
+LITELLM_MASTER_KEY=sk-1234
+UI_USERNAME=admin
+UI_PASSWORD=sk-1234
+STORE_MODEL_IN_DB=True
+
+# Database
+POSTGRES_PASSWORD=securepassword123
+
+# Feature Flags
+DISABLE_TELEMETRY=true
+
+# Registration
+ALLOW_REGISTRATION=true
+ALLOW_UNVERIFIED_EMAIL_LOGIN=true
+EOF
+
+    chmod 600 "$INSTALL_DIR/.env"
+    log "✓ Environment file created"
+}
+
+download_config_files() {
+    log "Creating configuration files..."
+
+    # Note: In actual deployment, these files should already exist
+    # This is a placeholder - the files from the current directory should be copied
+
+    info "Configuration files should be present in: $INSTALL_DIR"
+    info "  - docker-compose.yml"
+    info "  - librechat.yaml"
+    info "  - litellm-config.yaml"
+    info "  - nginx-inject.conf"
+    info "  - export-enhancer.js"
+    info "  - export-api-v2.py"
+    info "  - convert-export.sh"
+}
+
+setup_postgresql_init() {
+    log "Creating PostgreSQL initialization script..."
+
+    cat > "$INSTALL_DIR/init-scripts/01-create-litellm-db.sql" << 'EOF'
+-- Create LiteLLM database
+CREATE DATABASE litellm_db;
+
+-- Grant privileges
+GRANT ALL PRIVILEGES ON DATABASE litellm_db TO anythingllm;
+EOF
+
+    log "✓ PostgreSQL init script created"
+}
+
+set_permissions() {
+    log "Setting permissions..."
+
+    # Make scripts executable
+    chmod +x "$INSTALL_DIR"/*.sh 2>/dev/null || true
+
+    # Set ownership (if not root)
+    if [ -n "$SUDO_USER" ]; then
+        chown -R "$SUDO_USER":"$SUDO_USER" "$INSTALL_DIR"
+    fi
+
+    log "✓ Permissions configured"
+}
+
+start_services() {
+    log "Starting Docker services..."
+
+    cd "$INSTALL_DIR"
+
+    # Pull images
+    info "Pulling Docker images (this may take a while)..."
+    docker compose pull >> "$LOG_FILE" 2>&1
+
+    # Start services
+    docker compose up -d
+
+    log "✓ Services started"
+}
+
+wait_for_services() {
+    log "Waiting for services to be healthy..."
+
+    sleep 10
+
+    # Check service status
+    cd "$INSTALL_DIR"
+    docker compose ps
+
+    log "✓ Services status checked"
+}
+
+create_admin_user() {
+    log "Creating admin user for LibreChat..."
+
+    info "Waiting 20 seconds for LibreChat to fully initialize..."
+    sleep 20
+
+    cd "$INSTALL_DIR"
+
+    # Create admin user
+    if docker compose exec -T librechat npm run create-user admin@librechat.local Admin admin admin123 -- --email-verified=true >> "$LOG_FILE" 2>&1; then
+        log "✓ Admin user created"
+        info "  Email: admin@librechat.local"
+        info "  Password: admin123"
+    else
+        warn "Failed to create admin user - you can create it manually later"
+    fi
+}
+
+display_summary() {
+    echo
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${GREEN}     LibreChat Installation Complete! 🎉${NC}"
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+    echo
+    echo -e "${BLUE}Installation Directory:${NC} $INSTALL_DIR"
+    echo
+    echo -e "${BLUE}Services:${NC}"
+    echo "  📱 LibreChat:     http://$(hostname -I | awk '{print $1}'):3001"
+    echo "  🤖 LiteLLM UI:    http://$(hostname -I | awk '{print $1}'):4000"
+    echo "  📥 Export Server: http://$(hostname -I | awk '{print $1}'):8080"
+    echo
+    echo -e "${BLUE}Default Credentials:${NC}"
+    echo "  LibreChat:"
+    echo "    Email:    admin@librechat.local"
+    echo "    Password: admin123"
+    echo
+    echo "  LiteLLM UI:"
+    echo "    Username: admin"
+    echo "    Password: sk-1234"
+    echo
+    echo -e "${BLUE}Features Enabled:${NC}"
+    echo "  ✅ Auto-inject PDF/DOCX export buttons"
+    echo "  ✅ LiteLLM multi-model support"
+    echo "  ✅ MongoDB storage"
+    echo "  ✅ PostgreSQL for LiteLLM"
+    echo
+    echo -e "${BLUE}Next Steps:${NC}"
+    echo "  1. Open http://$(hostname -I | awk '{print $1}'):3001"
+    echo "  2. Login with admin@librechat.local / admin123"
+    echo "  3. Add your API keys in LiteLLM UI (port 4000)"
+    echo "  4. Look for export buttons in bottom-right corner"
+    echo
+    echo -e "${BLUE}Useful Commands:${NC}"
+    echo "  cd $INSTALL_DIR"
+    echo "  docker compose ps              # View service status"
+    echo "  docker compose logs -f         # View logs"
+    echo "  docker compose restart         # Restart services"
+    echo "  docker compose down            # Stop services"
+    echo "  docker compose up -d           # Start services"
+    echo
+    echo -e "${YELLOW}Configuration Files:${NC}"
+    echo "  Environment: $INSTALL_DIR/.env"
+    echo "  Docker:      $INSTALL_DIR/docker-compose.yml"
+    echo "  LibreChat:   $INSTALL_DIR/librechat.yaml"
+    echo "  LiteLLM:     $INSTALL_DIR/litellm-config.yaml"
+    echo
+    echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+}
+
+################################################################################
+# Main Installation Process
+################################################################################
+
+main() {
+    echo
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}  LibreChat Installation Script for AlmaLinux${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo
+
+    # Create log file
+    touch "$LOG_FILE"
+    chmod 644 "$LOG_FILE"
+
+    log "Starting installation process..."
+
+    # Pre-installation checks
+    check_root
+    check_os
+
+    # Install components
+    install_prerequisites
+    install_docker
+    install_docker_compose
+    install_pandoc
+    setup_firewall
+
+    # Setup application
+    create_directory_structure
+    create_env_file
+    download_config_files
+    setup_postgresql_init
+    set_permissions
+
+    # Note about config files
+    echo
+    warn "IMPORTANT: Copy the following files to $INSTALL_DIR:"
+    warn "  - docker-compose.yml"
+    warn "  - librechat.yaml"
+    warn "  - litellm-config.yaml"
+    warn "  - nginx-inject.conf"
+    warn "  - export-enhancer.js"
+    warn "  - export-api-v2.py"
+    warn "  - convert-export.sh"
+    warn "  - paste-and-convert.sh"
+    echo
+    read -p "Press Enter when files are copied, or Ctrl+C to exit..."
+
+    # Start services
+    start_services
+    wait_for_services
+    create_admin_user
+
+    # Complete
+    display_summary
+
+    log "Installation completed successfully!"
+    echo
+    echo -e "${YELLOW}Note: If you added a user to the docker group, they need to logout and login again.${NC}"
+    echo
+}
+
+# Run main installation
+main "$@"

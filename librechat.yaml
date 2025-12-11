@@ -1,0 +1,60 @@
+# LibreChat Configuration
+# Connects to LiteLLM proxy for multi-LLM support
+
+version: 1.1.7
+
+# Cache settings
+cache: true
+
+# Custom endpoints
+endpoints:
+  custom:
+    # LiteLLM Endpoint
+    - name: "LiteLLM"
+      apiKey: "sk-1234"
+      baseURL: "http://litellm:4000"
+      models:
+        default:
+          - "claude-opus-4-5"
+          - "claude-sonnet-4-5"
+          - "claude-3-5-sonnet"
+          - "claude-3-5-haiku"
+        fetch: true
+      titleConvo: true
+      titleModel: "claude-3-5-haiku"
+      summarize: false
+      summaryModel: "claude-3-5-haiku"
+      forcePrompt: false
+      modelDisplayLabel: "Claude"
+      addParams:
+        stream: true
+        temperature: 0.7
+        max_tokens: 4096
+
+# Interface configuration
+interface:
+  endpointsMenu: true
+  modelSelect: true
+  parameters: true
+  sidePanel: true
+  presets: true
+
+# File handling
+fileConfig:
+  endpoints:
+    default:
+      fileLimit: 5
+      fileSizeLimit: 10
+      totalSizeLimit: 50
+      supportedMimeTypes:
+        - "image/png"
+        - "image/jpeg"
+        - "image/jpg"
+        - "image/webp"
+        - "text/plain"
+        - "application/pdf"
+
+# Registration and authentication
+registration:
+  socialLogins: []
+  allowedDomains: []

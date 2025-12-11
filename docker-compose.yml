@@ -1,0 +1,60 @@
+services:
+  # PostgreSQL - Database for LiteLLM
+  postgres:
+    image: postgres:15-alpine
+    container_name: anythingllm_postgres
+    environment:
+      - POSTGRES_USER=anythingllm
+      - POSTGRES_PASSWORD=securepassword123
+      - POSTGRES_DB=anythingllm_db
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anythingllm -d anythingllm_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - stratai_network
+
+  # LiteLLM Proxy - Multi-model LLM gateway
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm_proxy
+    ports:
+      - "4000:4000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - ./litellm-config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
+    restart: unless-stopped
+    networks:
+      - stratai_network
+
+  # Gotenberg - Document conversion service (PDF generation)
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: gotenberg
+    ports:
+      - "3002:3000"
+    command:
+      - "gotenberg"
+      - "--chromium-disable-javascript=true"
+      - "--chromium-allow-list=file:///tmp/.*"
+    restart: unless-stopped
+    networks:
+      - stratai_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  stratai_network:
+    driver: bridge

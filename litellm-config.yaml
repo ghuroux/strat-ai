@@ -1,0 +1,48 @@
+model_list:
+  # Anthropic Claude Models - Latest (December 2025)
+  - model_name: claude-opus-4-5
+    litellm_params:
+      model: anthropic/claude-opus-4-5-20251101
+      api_key: os.environ/ANTHROPIC_API_KEY
+      max_tokens: 8192
+
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: anthropic/claude-sonnet-4-5-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+      max_tokens: 8192
+
+  # Claude 3.5 Models (still excellent)
+  - model_name: claude-3-5-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+      max_tokens: 8192
+
+  - model_name: claude-3-5-haiku
+    litellm_params:
+      model: anthropic/claude-3-5-haiku-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+      max_tokens: 8192
+
+litellm_settings:
+  drop_params: true
+  set_verbose: false
+  cache: false
+  
+router_settings:
+  model_group_alias:
+    claude: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-3-5-sonnet", "claude-3-5-haiku"]
+
+  fallback_models:
+    claude-opus-4-5: ["claude-sonnet-4-5", "claude-3-5-sonnet"]
+    claude-sonnet-4-5: ["claude-3-5-sonnet", "claude-3-5-haiku"]
+    claude-3-5-sonnet: ["claude-sonnet-4-5", "claude-3-5-haiku"]
+
+general_settings:
+  # Logging
+  log_level: INFO
+
+  # Timeout settings
+  request_timeout: 600
+  stream_timeout: 60
