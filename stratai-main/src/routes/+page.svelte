@@ -12,12 +12,21 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
+	import { modelSupportsVision } from '$lib/config/model-capabilities';
 	import type { ChatCompletionChunk } from '$lib/types/api';
 	import type { FileAttachment } from '$lib/types/chat';
 
 	// Svelte 5: Use $state for local reactive state
-	let selectedModel = $state(settingsStore.selectedModel || '');
 	let messagesContainer: HTMLElement | undefined = $state();
+
+	// Selected model from settings (used for new conversations and model selector)
+	let selectedModel = $derived(settingsStore.selectedModel || '');
+
+	// Effective model: Use conversation's model if it exists, otherwise fall back to settings
+	// This ensures mid-conversation model changes in settings don't affect existing chats
+	let effectiveModel = $derived(
+		chatStore.activeConversation?.model || settingsStore.selectedModel || ''
+	);
 	let settingsOpen = $state(false);
 	let isGeneratingSummary = $state(false);
 	let isCompacting = $state(false);
@@ -213,15 +222,19 @@
 	}
 
 	async function handleSend(content: string, attachments?: FileAttachment[]) {
-		if (!selectedModel) {
+		// Check if we have a valid model to use
+		// For existing conversations, use the conversation's model
+		// For new conversations, use the settings model
+		const modelToUse = chatStore.activeConversation?.model || settingsStore.selectedModel;
+		if (!modelToUse) {
 			toastStore.error('Please select a model first');
 			return;
 		}
 
-		// Validate image attachments against model capabilities
+		// Validate image attachments against model capabilities (check the model that will actually be used)
 		const hasImages = hasImageAttachments(attachments);
-		if (hasImages && !settingsStore.canUseVision) {
-			const modelName = modelCapabilitiesStore.getDisplayName(selectedModel);
+		if (hasImages && !modelSupportsVision(modelToUse)) {
+			const modelName = modelCapabilitiesStore.getDisplayName(modelToUse);
 			toastStore.error(`${modelName} does not support image analysis. Please select a vision-capable model.`);
 			return;
 		}
@@ -229,7 +242,8 @@
 		// Ensure we have an active conversation
 		let conversationId = chatStore.activeConversation?.id;
 		if (!conversationId) {
-			conversationId = chatStore.createConversation(selectedModel);
+			// New conversation - use settings model
+			conversationId = chatStore.createConversation(settingsStore.selectedModel);
 		}
 
 		// Add user message with attachments
@@ -293,7 +307,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					model: selectedModel,
+					model: effectiveModel,
 					messages: apiMessages,
 					temperature: settingsStore.temperature,
 					max_tokens: settingsStore.effectiveMaxTokens, // Use effective max respecting model limits
@@ -432,7 +446,6 @@
 	}
 
 	function handleModelChange(model: string) {
-		selectedModel = model;
 		settingsStore.setSelectedModel(model);
 		// Update current conversation's model if exists
 		if (chatStore.activeConversation) {
@@ -442,7 +455,7 @@
 
 	async function handleGenerateSummary() {
 		const conversation = chatStore.activeConversation;
-		if (!conversation || !selectedModel) return;
+		if (!conversation || !effectiveModel) return;
 
 		isGeneratingSummary = true;
 
@@ -451,7 +464,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					model: selectedModel,
+					model: effectiveModel,
 					messages: conversation.messages.map(m => ({
 						role: m.role,
 						content: m.content
@@ -487,7 +500,7 @@
 	 */
 	async function handleCompact() {
 		const conversation = chatStore.activeConversation;
-		if (!conversation || !selectedModel) return;
+		if (!conversation || !effectiveModel) return;
 
 		isCompacting = true;
 
@@ -511,11 +524,11 @@
 
 			const { summary, continuationSystemPrompt } = await response.json();
 
-			// Create a new continued conversation
+			// Create a new continued conversation (inherits the original conversation's model)
 			const newConversationId = chatStore.createContinuedConversation(
 				conversation.id,
 				summary,
-				selectedModel
+				effectiveModel
 			);
 
 			// Now send a message to the AI to acknowledge the continuation
@@ -535,7 +548,7 @@
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
-						model: selectedModel,
+						model: effectiveModel,
 						messages: [
 							{ role: 'system', content: continuationSystemPrompt },
 							{
@@ -684,7 +697,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					model: selectedModel,
+					model: effectiveModel,
 					messages: apiMessages,
 					temperature: settingsStore.temperature,
 					max_tokens: settingsStore.effectiveMaxTokens, // Use effective max respecting model limits
@@ -804,7 +817,7 @@
 	 */
 	async function handleEditAndResend(messageId: string, newContent: string) {
 		const conversationId = chatStore.activeConversation?.id;
-		if (!conversationId || !selectedModel) return;
+		if (!conversationId || !effectiveModel) return;
 
 		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
 		if (messageIndex === -1) return;
@@ -824,7 +837,7 @@
 	 */
 	async function handleResend(messageId: string) {
 		const conversationId = chatStore.activeConversation?.id;
-		if (!conversationId || !selectedModel) return;
+		if (!conversationId || !effectiveModel) return;
 
 		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
 		if (messageIndex === -1) return;
@@ -841,7 +854,7 @@
 	 */
 	async function handleRegenerate(messageId: string) {
 		const conversationId = chatStore.activeConversation?.id;
-		if (!conversationId || !selectedModel) return;
+		if (!conversationId || !effectiveModel) return;
 
 		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
 		if (messageIndex === -1) return;
@@ -860,7 +873,7 @@
 
 <div class="h-screen flex flex-col overflow-hidden">
 	<!-- Header -->
-	<Header bind:selectedModel onModelChange={handleModelChange} onSettingsClick={() => settingsOpen = true} />
+	<Header onModelChange={handleModelChange} onSettingsClick={() => settingsOpen = true} />
 
 	<div class="flex-1 flex overflow-hidden">
 		<!-- Sidebar -->

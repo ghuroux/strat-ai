@@ -4,19 +4,20 @@
 	import ModelSelector from '../ModelSelector.svelte';
 
 	interface Props {
-		selectedModel: string;
 		onModelChange?: (model: string) => void;
 		onSettingsClick?: () => void;
 	}
 
-	let { selectedModel = $bindable(), onModelChange, onSettingsClick }: Props = $props();
+	let { onModelChange, onSettingsClick }: Props = $props();
+
+	// Read selected model directly from store (for new conversations)
+	let selectedModel = $derived(settingsStore.selectedModel || '');
 
 	function toggleSidebar() {
 		settingsStore.toggleSidebar();
 	}
 
 	function handleModelChange(model: string) {
-		selectedModel = model;
 		settingsStore.setSelectedModel(model);
 		onModelChange?.(model);
 	}
@@ -75,7 +76,7 @@
 	{#if !chatStore.messages || chatStore.messages.length === 0}
 		<div class="flex-1 flex justify-center">
 			<div class="w-full max-w-xs">
-				<ModelSelector bind:selectedModel disabled={chatStore.isStreaming} onchange={handleModelChange} />
+				<ModelSelector {selectedModel} disabled={chatStore.isStreaming} onchange={handleModelChange} />
 			</div>
 		</div>
 	{:else}

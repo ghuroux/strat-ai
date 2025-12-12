@@ -420,9 +420,15 @@
 						</span>
 					{/if}
 				{:else}
-					<span class="flex items-center gap-2">
-						<span class="w-2 h-2 rounded-full bg-accent-500 animate-pulse"></span>
-						Generating response...
+					<span class="streaming-status flex items-center gap-2.5">
+						<span class="status-orb">
+							<span class="orb-core"></span>
+							<span class="orb-ring"></span>
+						</span>
+						<span class="status-text">Generating response</span>
+						<span class="status-dots">
+							<span></span><span></span><span></span>
+						</span>
 					</span>
 				{/if}
 			</div>
@@ -474,6 +480,98 @@
 		50% {
 			transform: scale(1.02);
 			opacity: 0.9;
+		}
+	}
+
+	/* Streaming status indicator */
+	.streaming-status {
+		padding: 4px 10px 4px 6px;
+		background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(20, 184, 166, 0.08));
+		border: 1px solid rgba(34, 197, 94, 0.2);
+		border-radius: 20px;
+	}
+
+	.status-orb {
+		position: relative;
+		width: 14px;
+		height: 14px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.orb-core {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: linear-gradient(135deg, #22c55e, #14b8a6);
+		box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+		animation: orbPulse 2s ease-in-out infinite;
+	}
+
+	.orb-ring {
+		position: absolute;
+		inset: 0;
+		border-radius: 50%;
+		border: 1.5px solid rgba(34, 197, 94, 0.4);
+		animation: ringExpand 2s ease-out infinite;
+	}
+
+	.status-text {
+		font-size: 12px;
+		font-weight: 500;
+		background: linear-gradient(90deg, #22c55e, #14b8a6);
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+	}
+
+	.status-dots {
+		display: flex;
+		gap: 3px;
+	}
+
+	.status-dots span {
+		width: 4px;
+		height: 4px;
+		border-radius: 50%;
+		background: #22c55e;
+		opacity: 0.4;
+		animation: dotPulse 1.4s ease-in-out infinite;
+	}
+
+	.status-dots span:nth-child(1) { animation-delay: 0s; }
+	.status-dots span:nth-child(2) { animation-delay: 0.15s; }
+	.status-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+	@keyframes orbPulse {
+		0%, 100% {
+			transform: scale(1);
+		}
+		50% {
+			transform: scale(1.15);
+		}
+	}
+
+	@keyframes ringExpand {
+		0% {
+			transform: scale(0.8);
+			opacity: 0.6;
+		}
+		100% {
+			transform: scale(1.8);
+			opacity: 0;
+		}
+	}
+
+	@keyframes dotPulse {
+		0%, 60%, 100% {
+			transform: translateY(0);
+			opacity: 0.4;
+		}
+		30% {
+			transform: translateY(-3px);
+			opacity: 1;
 		}
 	}
 </style>

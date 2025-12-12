@@ -67,7 +67,45 @@ This file tracks planned features and improvements organized by topic.
 
 ---
 
-## 3. User Experience Enhancements
+## 3. Chat Persistence & History
+
+**Status**: Not Started
+**Priority**: Critical (Core Feature)
+
+### Phase 1: Local Storage Persistence
+- [ ] Save conversations to browser localStorage
+- [ ] Auto-save on each message
+- [ ] Restore current conversation on page refresh
+- [ ] Handle storage quota limits gracefully
+
+### Phase 2: Chat History Sidebar
+- [ ] Sidebar with list of past conversations
+- [ ] Chat titles (auto-generated from first message or AI-suggested)
+- [ ] Timestamp and preview for each chat
+- [ ] Search across chat history
+- [ ] Delete individual chats
+
+### Phase 3: Chat Management
+- [ ] Rename conversations
+- [ ] Pin important chats
+- [ ] Archive old conversations
+- [ ] Bulk delete/export
+
+### Phase 4: Cloud Sync (Future)
+- [ ] Optional account system
+- [ ] Sync chats across devices
+- [ ] End-to-end encryption option
+- [ ] Conversation sharing
+
+### Technical Considerations
+- localStorage limit: ~5-10MB per domain
+- Consider IndexedDB for larger storage needs
+- Compression for long conversations
+- Migration strategy when moving to cloud
+
+---
+
+## 5. User Experience Enhancements
 
 **Status**: Not Started
 **Priority**: Medium
@@ -97,7 +135,7 @@ This file tracks planned features and improvements organized by topic.
 
 ---
 
-## 4. Export & Sharing
+## 6. Export & Sharing
 
 **Status**: Not Started
 **Priority**: Low
@@ -114,7 +152,7 @@ This file tracks planned features and improvements organized by topic.
 
 ---
 
-## 5. Advanced Model Features
+## 7. Advanced Model Features
 
 **Status**: Partial
 **Priority**: Medium
@@ -132,7 +170,7 @@ This file tracks planned features and improvements organized by topic.
 
 ---
 
-## 6. Search & RAG
+## 8. Search & RAG
 
 **Status**: Not Started
 **Priority**: Medium
@@ -153,7 +191,10 @@ This file tracks planned features and improvements organized by topic.
 
 | Feature | Impact | Effort | Priority |
 |---------|--------|--------|----------|
-| Conversation History Caching | High | Low | **P1** |
+| Chat Persistence (localStorage) | **Critical** | Medium | **P0** |
+| Chat History Sidebar | **Critical** | Medium | **P0** |
+| New Chat / Chat Switching | **Critical** | Low | **P0** |
+| Conversation History Caching | High | Low | P1 |
 | Cost Tracking UI | Medium | Medium | P2 |
 | Keyboard Shortcuts | Medium | Low | P2 |
 | Message Editing | High | High | P3 |
@@ -164,6 +205,7 @@ This file tracks planned features and improvements organized by topic.
 
 ## Notes
 
-- Focus on features that reduce costs or improve daily usability first
+- **World-class chat basics first**: Persistence and history are table stakes for any chat app
+- Focus on features that reduce costs or improve daily usability
 - Caching has the best ROI - low effort, high savings
 - UI polish can wait until core functionality is solid

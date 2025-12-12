@@ -2,7 +2,7 @@
 	import { fly, fade, slide } from 'svelte/transition';
 	import { cubicOut } from 'svelte/easing';
 	import type { Message } from '$lib/types/chat';
-	import AIStatusIndicator from './chat/AIStatusIndicator.svelte';
+	import AIResponseIndicator from './chat/AIResponseIndicator.svelte';
 	import MarkdownRenderer from './chat/MarkdownRenderer.svelte';
 	import AttachmentDisplay from './chat/AttachmentDisplay.svelte';
 	import DownloadButton from './chat/DownloadButton.svelte';
@@ -40,6 +40,22 @@
 	let hasThinking = $derived(!!message.thinking);
 	let isThinking = $derived(!!message.isThinking);
 	let hasContent = $derived(!!message.content);
+
+	// Unified AI state for the indicator
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'generating' | 'complete';
+	let aiState = $derived<AIState>(() => {
+		if (!message.isStreaming && !isThinking) return 'complete';
+		if (isSearching) return 'searching';
+		if (isThinking) return 'reasoning';
+		if (isStreaming) return 'generating';
+		if (isStreamingEmpty) return 'processing';
+		return 'complete';
+	});
+
+	// Show the unified indicator (not during extended thinking - that has its own display)
+	let showUnifiedIndicator = $derived(
+		(aiState() === 'processing' || aiState() === 'searching') && !isThinking && !hasThinking
+	);
 
 	// Track if this is the first content after thinking (for animation)
 	let showContentReveal = $state(false);
@@ -257,32 +273,40 @@
 						</div>
 					{/if}
 				{:else}
-					<!-- Extended thinking display (Claude models) - shows FIRST -->
+					<!-- Unified AI Response Indicator (processing/searching states) -->
+					{#if showUnifiedIndicator}
+						<AIResponseIndicator
+							state={aiState()}
+							searchQuery={message.searchQuery}
+							sources={message.sources || []}
+						/>
+					{/if}
+
+					<!-- Extended thinking display (Claude models) -->
 					{#if hasThinking || isThinking}
 						<ThinkingDisplay thinking={message.thinking || ''} {isThinking} {hasContent} />
 					{/if}
 
-					<!-- Search status indicator - shows BELOW thinking when searching -->
-					{#if isSearching}
-						<div class:mt-3={hasThinking || isThinking}>
-							<AIStatusIndicator status="searching" query={message.searchQuery} sources={message.sources || []} />
+					<!-- Search indicator when also showing thinking -->
+					{#if isSearching && (hasThinking || isThinking)}
+						<div class="mt-3">
+							<AIResponseIndicator
+								state="searching"
+								searchQuery={message.searchQuery}
+								sources={message.sources || []}
+							/>
 						</div>
-					{:else if isStreamingEmpty && !isThinking && !hasThinking}
-						<!-- Generic thinking indicator (only when NOT using extended thinking) -->
-						<AIStatusIndicator status="thinking" />
 					{/if}
 
 					<!-- Main response content with reveal animation -->
 					{#if displayContent}
 						<div
 							class="response-content {showContentReveal ? 'content-reveal' : ''}"
-							class:mt-2={hasThinking && !isThinking}
+							class:mt-3={hasThinking && !isThinking}
+							class:mt-2={isSearching && !hasThinking}
 						>
 							<MarkdownRenderer content={displayContent} {isStreaming} />
 						</div>
-					{:else if !isThinking && !hasThinking && !isSearching}
-						<!-- Only show empty MarkdownRenderer if no thinking or searching -->
-						<MarkdownRenderer content={displayContent} {isStreaming} />
 					{/if}
 				{/if}
 

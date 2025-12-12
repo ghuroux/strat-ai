@@ -6,9 +6,9 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 
-	// Svelte 5: Use $props with $bindable for two-way binding
+	// Svelte 5: Use $props - selectedModel can be passed as prop or managed internally
 	let {
-		selectedModel = $bindable(''),
+		selectedModel: propSelectedModel = '',
 		disabled = false,
 		onchange
 	}: {
@@ -16,6 +16,19 @@
 		disabled?: boolean;
 		onchange?: (model: string) => void;
 	} = $props();
+
+	// Internal state for the selected model - sync with prop
+	let internalSelectedModel = $state(propSelectedModel);
+
+	// Sync internal state with prop when prop changes
+	$effect(() => {
+		if (propSelectedModel) {
+			internalSelectedModel = propSelectedModel;
+		}
+	});
+
+	// Computed value that uses internal state
+	let selectedModel = $derived(internalSelectedModel);
 
 	// Svelte 5: Use $state for local reactive state
 	let models = $state<LiteLLMModel[]>([]);
@@ -114,9 +127,11 @@
 			// Try to restore saved model preference
 			const savedModel = settingsStore.selectedModel;
 			if (savedModel && models.some((m) => m.id === savedModel)) {
-				selectedModel = savedModel;
-			} else if (!selectedModel && models.length > 0) {
-				selectedModel = models[0].id;
+				internalSelectedModel = savedModel;
+			} else if (!internalSelectedModel && models.length > 0) {
+				internalSelectedModel = models[0].id;
+				// Also trigger onchange for the default selection
+				onchange?.(models[0].id);
 			}
 		} catch (err) {
 			error = true;
@@ -128,7 +143,7 @@
 	}
 
 	function selectModel(modelId: string) {
-		selectedModel = modelId;
+		internalSelectedModel = modelId;
 		isOpen = false;
 		onchange?.(modelId);
 	}

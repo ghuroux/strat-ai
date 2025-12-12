@@ -112,8 +112,8 @@ function injectPlatformPrompt(messages: ChatMessage[], model: string): ChatMessa
 	}
 }
 
-// Web search tool definition for Claude
-const webSearchTool: ToolDefinition = {
+// Web search tool definition - Anthropic format (input_schema)
+const webSearchToolAnthropic: ToolDefinition = {
 	name: 'web_search',
 	description: 'Search the web for current information. Use this when the user asks about recent events, current news, real-time data, weather, prices, or anything that might have changed since your training cutoff. The search returns titles, URLs, and description snippets from relevant web pages. After receiving results, synthesize the information into a helpful, comprehensive answer.',
 	input_schema: {
@@ -127,6 +127,41 @@ const webSearchTool: ToolDefinition = {
 		required: ['query']
 	}
 };
+
+// Web search tool definition - OpenAI format (type: 'function', function.parameters)
+const webSearchToolOpenAI = {
+	type: 'function' as const,
+	function: {
+		name: 'web_search',
+		description: 'Search the web for current information. Use this when the user asks about recent events, current news, real-time data, weather, prices, or anything that might have changed since your training cutoff. The search returns titles, URLs, and description snippets from relevant web pages. After receiving results, synthesize the information into a helpful, comprehensive answer.',
+		parameters: {
+			type: 'object',
+			properties: {
+				query: {
+					type: 'string',
+					description: 'The search query to look up on the web. Be specific and include relevant details like location, date, or context.'
+				}
+			},
+			required: ['query']
+		}
+	}
+};
+
+/**
+ * Get the appropriate tool format for the model
+ * Anthropic uses input_schema, OpenAI uses type:'function' with parameters
+ */
+function getToolsForModel(model: string): unknown[] {
+	const lowerModel = model.toLowerCase();
+
+	// Check if it's an Anthropic/Claude model
+	if (lowerModel.includes('claude') || lowerModel.includes('anthropic')) {
+		return [webSearchToolAnthropic];
+	}
+
+	// For OpenAI and other models, use OpenAI format
+	return [webSearchToolOpenAI];
+}
 
 // System message to add when search is enabled
 const searchSystemMessage = `You have access to web search. When you use the web_search tool:
@@ -344,11 +379,12 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 		async start(controller) {
 			try {
 				// Make initial request with tools (non-streaming to detect tool use)
+				// Use model-appropriate tool format (Anthropic vs OpenAI)
 				const initialResponse = await createChatCompletionWithTools({
 					...body,
 					messages: messagesWithSearchContext,
 					stream: false,
-					tools: [webSearchTool]
+					tools: getToolsForModel(body.model)
 				});
 
 				if (!initialResponse.ok) {
@@ -516,7 +552,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					const finalResponse = await createChatCompletionWithTools({
 						...body,
 						messages: [...messagesWithToolResults, synthesisInstruction],
-						tools: [webSearchTool],
+						tools: getToolsForModel(body.model),
 						stream: true
 					});
 
