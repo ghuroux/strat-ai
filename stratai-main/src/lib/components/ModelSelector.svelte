@@ -4,6 +4,7 @@
 	import type { LiteLLMModel } from '$lib/types/api';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 
 	// Svelte 5: Use $props with $bindable for two-way binding
 	let {
@@ -23,20 +24,30 @@
 	let isOpen = $state(false);
 	let dropdownRef: HTMLDivElement | undefined = $state();
 
-	// Get display name from model ID
+	// Get display name from model capabilities or fallback to ID parsing
 	function getDisplayName(modelId: string): string {
+		const caps = modelCapabilitiesStore.capabilities[modelId];
+		if (caps?.displayName) {
+			return caps.displayName;
+		}
+		// Fallback: parse from model ID
 		const parts = modelId.split('/');
 		return parts[parts.length - 1];
 	}
 
-	// Get provider from model ID
+	// Get provider from model capabilities or fallback to ID parsing
 	function getProvider(modelId: string): string {
+		const caps = modelCapabilitiesStore.capabilities[modelId];
+		if (caps?.provider) {
+			return caps.provider;
+		}
+		// Fallback: parse from model ID
 		const parts = modelId.split('/');
 		if (parts.length > 1) {
 			return parts[0];
 		}
 		if (modelId.includes('claude')) return 'anthropic';
-		if (modelId.includes('gpt')) return 'openai';
+		if (modelId.includes('gpt') || modelId.startsWith('o3') || modelId.startsWith('o4')) return 'openai';
 		return 'other';
 	}
 
@@ -52,6 +63,21 @@
 			default:
 				return 'bg-surface-600/50 text-surface-400';
 		}
+	}
+
+	// Check model capabilities for badges
+	function modelHasThinking(modelId: string): boolean {
+		return modelCapabilitiesStore.supportsThinking(modelId);
+	}
+
+	function modelHasVision(modelId: string): boolean {
+		return modelCapabilitiesStore.supportsVision(modelId);
+	}
+
+	// Format context window for display
+	function getContextBadge(modelId: string): string {
+		const contextWindow = modelCapabilitiesStore.getContextWindow(modelId);
+		return modelCapabilitiesStore.formatContextWindow(contextWindow);
 	}
 
 	onMount(() => {
@@ -80,6 +106,11 @@
 			const data = await response.json();
 			models = data.data || [];
 
+			// Also fetch capabilities if not already loaded
+			if (!modelCapabilitiesStore.isLoaded) {
+				await modelCapabilitiesStore.fetch();
+			}
+
 			// Try to restore saved model preference
 			const savedModel = settingsStore.selectedModel;
 			if (savedModel && models.some((m) => m.id === savedModel)) {
@@ -102,7 +133,8 @@
 		onchange?.(modelId);
 	}
 
-	function toggleDropdown() {
+	function toggleDropdown(e: MouseEvent) {
+		e.stopPropagation();
 		if (!disabled && !loading && !error) {
 			isOpen = !isOpen;
 		}
@@ -146,6 +178,24 @@
 						{getProvider(selectedModel)}
 					</span>
 					<span class="truncate text-surface-100">{getDisplayName(selectedModel)}</span>
+					<!-- Capability badges for selected model -->
+					<div class="flex items-center gap-1 ml-1">
+						{#if modelHasThinking(selectedModel)}
+							<span class="text-amber-400" title="Supports extended thinking">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+								</svg>
+							</span>
+						{/if}
+						{#if modelHasVision(selectedModel)}
+							<span class="text-blue-400" title="Supports image analysis">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+								</svg>
+							</span>
+						{/if}
+					</div>
 				{:else}
 					<span class="text-surface-500">Select a model</span>
 				{/if}
@@ -163,7 +213,7 @@
 		<!-- Dropdown menu -->
 		{#if isOpen}
 			<div
-				class="absolute z-50 w-full mt-2 py-2 bg-surface-800 border border-surface-700 rounded-xl shadow-xl"
+				class="absolute z-50 min-w-full w-max mt-2 py-2 bg-surface-800 border border-surface-700 rounded-xl shadow-xl"
 				transition:fade={{ duration: 150 }}
 			>
 				{#if models.length === 0}
@@ -175,13 +225,36 @@
 								type="button"
 								onclick={() => selectModel(model.id)}
 								class="w-full px-4 py-2.5 text-left flex items-center gap-3
-									   hover:bg-surface-700 transition-colors
+									   hover:bg-surface-700 transition-colors whitespace-nowrap
 									   {model.id === selectedModel ? 'bg-surface-700/50' : ''}"
 							>
-								<span class="px-1.5 py-0.5 rounded text-xs font-medium {getProviderColor(getProvider(model.id))}">
+								<span class="px-1.5 py-0.5 rounded text-xs font-medium shrink-0 {getProviderColor(getProvider(model.id))}">
 									{getProvider(model.id)}
 								</span>
-								<span class="flex-1 truncate text-surface-100">{getDisplayName(model.id)}</span>
+								<span class="text-surface-100">{getDisplayName(model.id)}</span>
+
+								<!-- Capability badges -->
+								<div class="flex items-center gap-1.5 shrink-0 ml-auto">
+									<!-- Context window badge -->
+									<span class="text-xs text-surface-500">{getContextBadge(model.id)}</span>
+
+									{#if modelHasThinking(model.id)}
+										<span class="text-amber-400" title="Supports extended thinking">
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+											</svg>
+										</span>
+									{/if}
+									{#if modelHasVision(model.id)}
+										<span class="text-blue-400" title="Supports image analysis">
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+											</svg>
+										</span>
+									{/if}
+								</div>
+
 								{#if model.id === selectedModel}
 									<svg class="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />

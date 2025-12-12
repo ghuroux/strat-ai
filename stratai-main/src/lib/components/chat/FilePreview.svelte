@@ -19,7 +19,25 @@
 		}
 	}
 
+	function isImageAttachment(attachment: FileAttachment): boolean {
+		return attachment.content.type === 'image';
+	}
+
+	function getImageDataUrl(attachment: FileAttachment): string | null {
+		if (attachment.content.type === 'image') {
+			return `data:${attachment.content.mediaType};base64,${attachment.content.data}`;
+		}
+		return null;
+	}
+
 	function getFileIcon(mimeType: string): { class: string; path: string } {
+		// Image types
+		if (mimeType.startsWith('image/')) {
+			return {
+				class: 'text-emerald-400',
+				path: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'
+			};
+		}
 		if (mimeType === 'application/pdf' || mimeType === 'application/x-pdf') {
 			return {
 				class: 'text-red-400',
@@ -50,51 +68,98 @@
 	<div class="flex flex-wrap gap-2 mb-2 px-1">
 		{#each attachments as attachment (attachment.id)}
 			{@const icon = getFileIcon(attachment.mimeType)}
-			<div
-				class="file-chip flex items-center gap-2 px-3 py-1.5 rounded-lg
-					   bg-surface-700 border border-surface-600
-					   text-surface-200 text-sm"
-				in:fly={{ y: 10, duration: 200 }}
-				out:fly={{ y: -10, duration: 150 }}
-			>
-				<!-- File type icon -->
-				<svg class="w-4 h-4 flex-shrink-0 {icon.class}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={icon.path} />
-				</svg>
+			{@const isImage = isImageAttachment(attachment)}
+			{@const imageUrl = getImageDataUrl(attachment)}
 
-				<!-- Filename -->
-				<span class="truncate max-w-[150px]" title={attachment.filename}>
-					{attachment.filename}
-				</span>
-
-				<!-- Size -->
-				<span class="text-xs text-surface-500 flex-shrink-0">
-					{formatSize(attachment.size)}
-				</span>
-
-				<!-- Truncation indicator -->
-				{#if attachment.truncated}
-					<span
-						class="text-xs px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-400 flex-shrink-0"
-						title="Content truncated due to length"
-					>
-						Truncated
-					</span>
-				{/if}
-
-				<!-- Remove button -->
-				<button
-					type="button"
-					onclick={() => onremove?.(attachment.id)}
-					class="ml-1 p-0.5 rounded hover:bg-surface-600 text-surface-400 hover:text-surface-200
-						   transition-colors flex-shrink-0"
-					title="Remove attachment"
+			{#if isImage && imageUrl}
+				<!-- Image attachment with thumbnail -->
+				<div
+					class="file-chip relative flex items-center gap-2 pr-3 pl-1 py-1 rounded-lg
+						   bg-surface-700 border border-surface-600
+						   text-surface-200 text-sm"
+					in:fly={{ y: 10, duration: 200 }}
+					out:fly={{ y: -10, duration: 150 }}
 				>
-					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					<!-- Image thumbnail -->
+					<div class="w-10 h-10 rounded overflow-hidden bg-surface-800 flex-shrink-0">
+						<img
+							src={imageUrl}
+							alt={attachment.filename}
+							class="w-full h-full object-cover"
+						/>
+					</div>
+
+					<!-- File info -->
+					<div class="flex flex-col min-w-0">
+						<span class="truncate max-w-[120px] text-xs" title={attachment.filename}>
+							{attachment.filename}
+						</span>
+						<span class="text-xs text-surface-500">
+							{formatSize(attachment.size)}
+						</span>
+					</div>
+
+					<!-- Remove button -->
+					<button
+						type="button"
+						onclick={() => onremove?.(attachment.id)}
+						class="ml-1 p-0.5 rounded hover:bg-surface-600 text-surface-400 hover:text-surface-200
+							   transition-colors flex-shrink-0"
+						title="Remove attachment"
+					>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+			{:else}
+				<!-- Document attachment -->
+				<div
+					class="file-chip flex items-center gap-2 px-3 py-1.5 rounded-lg
+						   bg-surface-700 border border-surface-600
+						   text-surface-200 text-sm"
+					in:fly={{ y: 10, duration: 200 }}
+					out:fly={{ y: -10, duration: 150 }}
+				>
+					<!-- File type icon -->
+					<svg class="w-4 h-4 flex-shrink-0 {icon.class}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={icon.path} />
 					</svg>
-				</button>
-			</div>
+
+					<!-- Filename -->
+					<span class="truncate max-w-[150px]" title={attachment.filename}>
+						{attachment.filename}
+					</span>
+
+					<!-- Size -->
+					<span class="text-xs text-surface-500 flex-shrink-0">
+						{formatSize(attachment.size)}
+					</span>
+
+					<!-- Truncation indicator -->
+					{#if attachment.truncated}
+						<span
+							class="text-xs px-1.5 py-0.5 rounded bg-amber-600/20 text-amber-400 flex-shrink-0"
+							title="Content truncated due to length"
+						>
+							Truncated
+						</span>
+					{/if}
+
+					<!-- Remove button -->
+					<button
+						type="button"
+						onclick={() => onremove?.(attachment.id)}
+						class="ml-1 p-0.5 rounded hover:bg-surface-600 text-surface-400 hover:text-surface-200
+							   transition-colors flex-shrink-0"
+						title="Remove attachment"
+					>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+			{/if}
 		{/each}
 	</div>
 {/if}

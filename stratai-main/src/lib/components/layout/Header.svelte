@@ -22,7 +22,7 @@
 	}
 </script>
 
-<header class="h-16 px-4 flex items-center border-b border-surface-800 bg-surface-900/80 backdrop-blur-xl">
+<header class="h-16 px-4 flex items-center border-b border-surface-800 bg-surface-900/80 backdrop-blur-xl overflow-visible relative z-40">
 	<!-- Left: Sidebar Toggle & Logo -->
 	<div class="flex items-center gap-3 min-w-0">
 		<!-- Sidebar Toggle -->

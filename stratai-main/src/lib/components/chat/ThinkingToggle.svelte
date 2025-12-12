@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 
 	interface Props {
 		disabled?: boolean;
@@ -7,28 +8,46 @@
 
 	let { disabled = false }: Props = $props();
 
-	let isEnabled = $derived(settingsStore.extendedThinkingEnabled);
+	// Check if the current model supports thinking
+	let modelSupportsThinking = $derived(settingsStore.canUseExtendedThinking);
+	let isEnabled = $derived(settingsStore.extendedThinkingEnabled && modelSupportsThinking);
+
+	// Compute effective disabled state
+	let effectiveDisabled = $derived(disabled || !modelSupportsThinking);
+
+	// Get model display name for tooltip
+	let modelName = $derived(modelCapabilitiesStore.currentDisplayName);
 
 	function toggleThinking() {
-		if (!disabled) {
+		if (!effectiveDisabled) {
 			settingsStore.toggleExtendedThinking();
 		}
 	}
+
+	// Dynamic tooltip based on model support
+	let tooltip = $derived.by(() => {
+		if (!modelSupportsThinking) {
+			return `Extended thinking not supported by ${modelName}`;
+		}
+		return isEnabled
+			? 'Extended thinking enabled - click to disable'
+			: 'Enable extended thinking for deeper reasoning';
+	});
 </script>
 
 <button
 	type="button"
 	onclick={toggleThinking}
-	disabled={disabled}
+	disabled={effectiveDisabled}
 	class="thinking-toggle flex items-center justify-center w-10 h-10 rounded-xl
 		   transition-all duration-200
 		   {isEnabled
 			? 'bg-amber-600/20 text-amber-400 ring-2 ring-amber-500/50 hover:bg-amber-600/30'
-			: 'text-surface-400 hover:text-surface-200 hover:bg-surface-700'}
-		   {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
-	title={isEnabled
-		? 'Extended thinking enabled (Claude 3.7+ Sonnet, Claude 4+) - click to disable'
-		: 'Enable extended thinking (requires Claude 3.7+ Sonnet, Claude 4+)'}
+			: modelSupportsThinking
+				? 'text-surface-400 hover:text-surface-200 hover:bg-surface-700'
+				: 'text-surface-500 opacity-50'}
+		   {effectiveDisabled ? 'cursor-not-allowed' : ''}"
+	title={tooltip}
 >
 	<!-- Brain/thinking icon -->
 	<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

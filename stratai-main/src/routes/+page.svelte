@@ -11,6 +11,7 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import type { ChatCompletionChunk } from '$lib/types/api';
 	import type { FileAttachment } from '$lib/types/chat';
 
@@ -20,6 +21,11 @@
 	let settingsOpen = $state(false);
 	let isGeneratingSummary = $state(false);
 	let isCompacting = $state(false);
+
+	// Global drag state for drop zone indicator
+	let isGlobalDragging = $state(false);
+	let globalDragCounter = $state(0);
+	let chatInputRef: { triggerFileDrop?: (files: FileList) => void } | undefined = $state();
 
 	// Apply saved theme on mount
 	onMount(() => {
@@ -81,23 +87,142 @@
 	}
 
 	/**
-	 * Format attachments as context for the LLM
+	 * Scroll to a specific message by its index and highlight it
 	 */
-	function formatAttachmentsForLLM(attachments: FileAttachment[]): string {
+	async function scrollToMessage(index: number) {
+		await tick();
+		const messageElement = document.getElementById(`message-${index}`);
+		if (messageElement && messagesContainer) {
+			// Scroll the message into view
+			messageElement.scrollIntoView({
+				behavior: 'smooth',
+				block: 'center'
+			});
+
+			// Add highlight animation
+			messageElement.classList.add('message-highlight');
+			setTimeout(() => {
+				messageElement.classList.remove('message-highlight');
+			}, 2000);
+		}
+	}
+
+	// Global drag handlers for visual indicator
+	function handleGlobalDragEnter(e: DragEvent) {
+		e.preventDefault();
+		globalDragCounter++;
+		if (e.dataTransfer?.types.includes('Files')) {
+			isGlobalDragging = true;
+		}
+	}
+
+	function handleGlobalDragLeave(e: DragEvent) {
+		e.preventDefault();
+		globalDragCounter--;
+		if (globalDragCounter === 0) {
+			isGlobalDragging = false;
+		}
+	}
+
+	function handleGlobalDragOver(e: DragEvent) {
+		e.preventDefault();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'copy';
+		}
+	}
+
+	function handleGlobalDrop(e: DragEvent) {
+		// Let the ChatInput handle the actual drop
+		// This just resets the visual state
+		isGlobalDragging = false;
+		globalDragCounter = 0;
+	}
+
+	/**
+	 * Format text attachments as context for the LLM (document files only)
+	 */
+	function formatTextAttachmentsForLLM(attachments: FileAttachment[]): string | null {
+		const textAttachments = attachments.filter(att => att.content.type === 'text');
+		if (textAttachments.length === 0) return null;
+
 		let context = 'The user has attached the following document(s):\n\n';
-		for (const att of attachments) {
-			context += `--- ${att.filename} ---\n${att.content}\n---\n\n`;
-			if (att.truncated) {
-				context += '(Note: This document was truncated due to length)\n\n';
+		for (const att of textAttachments) {
+			if (att.content.type === 'text') {
+				context += `--- ${att.filename} ---\n${att.content.data}\n---\n\n`;
+				if (att.truncated) {
+					context += '(Note: This document was truncated due to length)\n\n';
+				}
 			}
 		}
 		context += 'Please reference these documents when answering the user\'s question.\n';
 		return context;
 	}
 
+	/**
+	 * Check if attachments contain any images
+	 */
+	function hasImageAttachments(attachments?: FileAttachment[]): boolean {
+		return attachments?.some(att => att.content.type === 'image') || false;
+	}
+
+	/**
+	 * Build a vision-compatible user message with image content blocks
+	 * Uses OpenAI format (image_url) which LiteLLM converts to provider-native format
+	 * Using separate 'format' field for MIME type (more reliable for Anthropic/Bedrock)
+	 */
+	function buildVisionMessage(
+		textContent: string,
+		attachments: FileAttachment[]
+	): Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; format?: string } }> {
+		const contentBlocks: Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string; format?: string } }> = [];
+
+		// Add images first (Claude performs better with images before text)
+		// Using OpenAI format with LiteLLM's format extension for MIME type
+		// LiteLLM will convert this to the appropriate format for each provider
+		for (const att of attachments) {
+			if (att.content.type === 'image') {
+				contentBlocks.push({
+					type: 'image_url',
+					image_url: {
+						url: `data:${att.content.mediaType};base64,${att.content.data}`,
+						format: att.content.mediaType
+					}
+				});
+			}
+		}
+
+		// Add text documents as text blocks
+		for (const att of attachments) {
+			if (att.content.type === 'text') {
+				contentBlocks.push({
+					type: 'text',
+					text: `[Document: ${att.filename}]\n${att.content.data}${att.truncated ? '\n(Note: Document truncated due to length)' : ''}`
+				});
+			}
+		}
+
+		// Add the user's message text
+		if (textContent.trim()) {
+			contentBlocks.push({
+				type: 'text',
+				text: textContent
+			});
+		}
+
+		return contentBlocks;
+	}
+
 	async function handleSend(content: string, attachments?: FileAttachment[]) {
 		if (!selectedModel) {
 			toastStore.error('Please select a model first');
+			return;
+		}
+
+		// Validate image attachments against model capabilities
+		const hasImages = hasImageAttachments(attachments);
+		if (hasImages && !settingsStore.canUseVision) {
+			const modelName = modelCapabilitiesStore.getDisplayName(selectedModel);
+			toastStore.error(`${modelName} does not support image analysis. Please select a vision-capable model.`);
 			return;
 		}
 
@@ -126,29 +251,43 @@
 		chatStore.setStreaming(true, controller);
 
 		try {
-			// Build messages array for API (user message already added to store above)
-			// Get fresh messages from the conversation (not the derived value which may be stale)
+			// Build messages array for API
 			const conv = chatStore.getConversation(conversationId);
-			const conversationMessages = (conv?.messages || [])
-				.filter((m) => !m.isStreaming && !m.error)
-				.map((m) => ({
-					role: m.role,
-					content: m.content
-				}));
+			const allMessages = (conv?.messages || []).filter((m) => !m.isStreaming && !m.error);
 
 			// Prepend system prompt if configured
 			const systemPrompt = settingsStore.systemPrompt?.trim();
 
-			// Build attachment context if present
-			const attachmentContext = attachments && attachments.length > 0
-				? formatAttachmentsForLLM(attachments)
-				: null;
+			// Check if this message has images - need vision format
+			const hasImages = hasImageAttachments(attachments);
 
-			const apiMessages = [
-				...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
-				...(attachmentContext ? [{ role: 'system' as const, content: attachmentContext }] : []),
-				...conversationMessages
-			];
+			// Build API messages with proper format for vision/non-vision
+			const apiMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string | Array<unknown> }> = [];
+
+			// Add system prompt
+			if (systemPrompt) {
+				apiMessages.push({ role: 'system', content: systemPrompt });
+			}
+
+			// Add text document context as system message (for non-image attachments)
+			if (attachments && !hasImages) {
+				const textContext = formatTextAttachmentsForLLM(attachments);
+				if (textContext) {
+					apiMessages.push({ role: 'system', content: textContext });
+				}
+			}
+
+			// Add conversation history (all messages except the last user message if it has images)
+			const historyMessages = hasImages ? allMessages.slice(0, -1) : allMessages;
+			for (const m of historyMessages) {
+				apiMessages.push({ role: m.role, content: m.content });
+			}
+
+			// If we have images, add the last user message with vision format
+			if (hasImages && attachments) {
+				const visionContent = buildVisionMessage(content, attachments);
+				apiMessages.push({ role: 'user', content: visionContent });
+			}
 
 			const response = await fetch('/api/chat', {
 				method: 'POST',
@@ -157,10 +296,10 @@
 					model: selectedModel,
 					messages: apiMessages,
 					temperature: settingsStore.temperature,
-					max_tokens: settingsStore.maxTokens,
+					max_tokens: settingsStore.effectiveMaxTokens, // Use effective max respecting model limits
 					searchEnabled: settingsStore.webSearchEnabled,
-					// Extended thinking for Claude models
-					thinkingEnabled: settingsStore.extendedThinkingEnabled,
+					// Extended thinking - only enable if model supports it
+					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
 					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
 				}),
 				signal: controller.signal
@@ -327,6 +466,8 @@
 
 			const { summary } = await response.json();
 			chatStore.setSummary(conversation.id, summary);
+			// Scroll to bottom to show the summary
+			scrollToBottom();
 		} catch (err) {
 			toastStore.error(err instanceof Error ? err.message : 'Failed to generate summary');
 		} finally {
@@ -479,6 +620,238 @@
 			isCompacting = false;
 		}
 	}
+
+	/**
+	 * Trigger an assistant response based on the current conversation state
+	 * Extracted for reuse in edit/resend/regenerate flows
+	 */
+	async function triggerAssistantResponse(conversationId: string) {
+		// Add placeholder assistant message
+		const assistantMessageId = chatStore.addMessage(conversationId, {
+			role: 'assistant',
+			content: '',
+			isStreaming: true
+		});
+
+		const controller = new AbortController();
+		chatStore.setStreaming(true, controller);
+
+		try {
+			const conv = chatStore.getConversation(conversationId);
+			const allMessages = (conv?.messages || []).filter((m) => !m.isStreaming && !m.error);
+
+			const systemPrompt = settingsStore.systemPrompt?.trim();
+
+			// Get the last user message to check for attachments
+			const lastUserMessage = allMessages.filter((m) => m.role === 'user').pop();
+			const attachments = lastUserMessage?.attachments;
+			const hasImages = hasImageAttachments(attachments);
+
+			// Build API messages with proper format for vision/non-vision
+			const apiMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string | Array<unknown> }> = [];
+
+			// Add system prompt
+			if (systemPrompt) {
+				apiMessages.push({ role: 'system', content: systemPrompt });
+			}
+
+			// Add text document context as system message (only when no images)
+			if (attachments && !hasImages) {
+				const textContext = formatTextAttachmentsForLLM(attachments);
+				if (textContext) {
+					apiMessages.push({ role: 'system', content: textContext });
+				}
+			}
+
+			// Add conversation history
+			if (hasImages && lastUserMessage) {
+				// Add all messages except the last user message
+				const historyMessages = allMessages.slice(0, allMessages.lastIndexOf(lastUserMessage));
+				for (const m of historyMessages) {
+					apiMessages.push({ role: m.role, content: m.content });
+				}
+				// Add the last user message with vision format
+				const visionContent = buildVisionMessage(lastUserMessage.content, attachments!);
+				apiMessages.push({ role: 'user', content: visionContent });
+			} else {
+				// No images, use simple string format
+				for (const m of allMessages) {
+					apiMessages.push({ role: m.role, content: m.content });
+				}
+			}
+
+			const response = await fetch('/api/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					model: selectedModel,
+					messages: apiMessages,
+					temperature: settingsStore.temperature,
+					max_tokens: settingsStore.effectiveMaxTokens, // Use effective max respecting model limits
+					searchEnabled: settingsStore.webSearchEnabled,
+					// Extended thinking - only enable if model supports it
+					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
+				}),
+				signal: controller.signal
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Request failed');
+			}
+
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (!reader) throw new Error('No response body');
+
+			let buffer = '';
+			let collectedSources: Array<{ title: string; url: string; snippet: string }> = [];
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const decoded = decoder.decode(value, { stream: true });
+				buffer += decoded;
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						const data = line.slice(6);
+						if (data === '[DONE]') continue;
+
+						try {
+							const parsed = JSON.parse(data);
+
+							if (parsed.type === 'status') {
+								if (parsed.status === 'searching') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: 'searching',
+										searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'processing') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: 'searching',
+										searchQuery: undefined
+									});
+								} else if (parsed.status === 'thinking') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: undefined,
+										searchQuery: undefined
+									});
+								}
+							} else if (parsed.type === 'sources_preview') {
+								collectedSources = parsed.sources;
+								chatStore.updateMessage(conversationId, assistantMessageId, {
+									sources: parsed.sources
+								});
+							} else if (parsed.type === 'thinking_start') {
+								chatStore.updateMessage(conversationId, assistantMessageId, {
+									isThinking: true
+								});
+							} else if (parsed.type === 'thinking') {
+								chatStore.appendToThinking(conversationId, assistantMessageId, parsed.content);
+							} else if (parsed.type === 'thinking_end') {
+								chatStore.updateMessage(conversationId, assistantMessageId, {
+									isThinking: false
+								});
+							} else if (parsed.type === 'content') {
+								chatStore.appendToMessage(conversationId, assistantMessageId, parsed.content);
+							} else if (parsed.type === 'sources') {
+								collectedSources = parsed.sources;
+							} else if (parsed.type === 'error') {
+								throw new Error(parsed.error);
+							} else if (parsed.choices?.[0]?.delta?.content) {
+								chatStore.appendToMessage(conversationId, assistantMessageId, parsed.choices[0].delta.content);
+							}
+						} catch (e) {
+							if (e instanceof Error && e.message !== 'Unexpected token') {
+								throw e;
+							}
+						}
+					}
+				}
+			}
+
+			chatStore.updateMessage(conversationId, assistantMessageId, {
+				isStreaming: false,
+				isThinking: false,
+				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
+				sources: collectedSources.length > 0 ? collectedSources : undefined
+			});
+		} catch (err) {
+			if (err instanceof Error && err.name === 'AbortError') {
+				chatStore.updateMessage(conversationId, assistantMessageId, {
+					isStreaming: false
+				});
+			} else {
+				chatStore.updateMessage(conversationId, assistantMessageId, {
+					isStreaming: false,
+					error: err instanceof Error ? err.message : 'Unknown error'
+				});
+				toastStore.error(err instanceof Error ? err.message : 'Failed to get response');
+			}
+		} finally {
+			chatStore.setStreaming(false);
+		}
+	}
+
+	/**
+	 * Edit a user message and resend it
+	 */
+	async function handleEditAndResend(messageId: string, newContent: string) {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId || !selectedModel) return;
+
+		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
+		if (messageIndex === -1) return;
+
+		// Update the message content (preserves attachments)
+		chatStore.updateMessageContent(conversationId, messageId, newContent);
+
+		// Delete all messages after this one
+		chatStore.deleteMessagesFromIndex(conversationId, messageIndex + 1);
+
+		// Trigger new assistant response
+		await triggerAssistantResponse(conversationId);
+	}
+
+	/**
+	 * Resend a user message as-is (clears subsequent messages)
+	 */
+	async function handleResend(messageId: string) {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId || !selectedModel) return;
+
+		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
+		if (messageIndex === -1) return;
+
+		// Delete all messages after this one
+		chatStore.deleteMessagesFromIndex(conversationId, messageIndex + 1);
+
+		// Trigger new assistant response
+		await triggerAssistantResponse(conversationId);
+	}
+
+	/**
+	 * Regenerate an assistant response
+	 */
+	async function handleRegenerate(messageId: string) {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId || !selectedModel) return;
+
+		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
+		if (messageIndex === -1) return;
+
+		// Delete this assistant message and any messages after it
+		chatStore.deleteMessagesFromIndex(conversationId, messageIndex);
+
+		// Trigger new assistant response
+		await triggerAssistantResponse(conversationId);
+	}
 </script>
 
 <svelte:head>
@@ -494,7 +867,28 @@
 		<Sidebar onNewChat={handleNewChat} />
 
 		<!-- Main Content -->
-		<main class="flex-1 flex flex-col overflow-hidden bg-surface-950">
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<main
+			class="flex-1 flex flex-col overflow-hidden bg-surface-950 relative"
+			ondragenter={handleGlobalDragEnter}
+			ondragleave={handleGlobalDragLeave}
+			ondragover={handleGlobalDragOver}
+			ondrop={handleGlobalDrop}
+		>
+			<!-- Global drag indicator -->
+			{#if isGlobalDragging}
+				<div class="absolute inset-0 z-40 pointer-events-none">
+					<div class="absolute inset-4 border-2 border-dashed border-primary-500/40 rounded-2xl"></div>
+					<div class="absolute bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 bg-surface-800/90 backdrop-blur-sm rounded-full border border-primary-500/30 shadow-lg">
+						<span class="text-sm text-surface-300 flex items-center gap-2">
+							<svg class="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+							</svg>
+							Drop file on the input below
+						</span>
+					</div>
+				</div>
+			{/if}
 			<!-- Messages -->
 			<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 md:p-6">
 				<div class="max-w-4xl mx-auto">
@@ -519,8 +913,16 @@
 						{/if}
 
 						<!-- Current conversation messages -->
-						{#each messages as message (message.id)}
-							<ChatMessage {message} showTimestamp={settingsStore.showTimestamps} />
+						{#each messages as message, index (message.id)}
+							<ChatMessage
+								{message}
+								messageIndex={index}
+								showTimestamp={settingsStore.showTimestamps}
+								canEdit={!chatStore.isStreaming}
+								onEditAndResend={handleEditAndResend}
+								onResend={handleResend}
+								onRegenerate={handleRegenerate}
+							/>
 						{/each}
 						<!-- Summary section - shows at bottom when summary exists or is generating -->
 						{#if currentSummary || isGeneratingSummary}
@@ -529,6 +931,7 @@
 								isGenerating={isGeneratingSummary}
 								onGenerate={handleGenerateSummary}
 								onDismiss={handleDismissSummary}
+								onScrollToMessage={scrollToMessage}
 							/>
 						{/if}
 					{/if}

@@ -1,16 +1,34 @@
 <script lang="ts">
 	import { slide } from 'svelte/transition';
+	import MarkdownRenderer from './MarkdownRenderer.svelte';
+	import type { StructuredSummary, SummaryPoint } from '$lib/types/chat';
 
 	interface Props {
-		summary: string | null;
+		summary: StructuredSummary | string | null;
 		isGenerating?: boolean;
 		onGenerate: () => void;
 		onDismiss: () => void;
+		onScrollToMessage?: (index: number) => void;
 	}
 
-	let { summary, isGenerating = false, onGenerate, onDismiss }: Props = $props();
+	let { summary, isGenerating = false, onGenerate, onDismiss, onScrollToMessage }: Props = $props();
 
 	let isCollapsed = $state(false);
+
+	// Check if summary is structured format
+	let isStructured = $derived(
+		summary !== null && typeof summary === 'object' && 'points' in summary
+	);
+
+	// Get points array if structured, otherwise null
+	let summaryPoints = $derived(
+		isStructured ? (summary as StructuredSummary).points : null
+	);
+
+	// Convert legacy string summary to markdown for display
+	let legacySummary = $derived(
+		!isStructured && typeof summary === 'string' ? summary : null
+	);
 
 	function toggleCollapse() {
 		isCollapsed = !isCollapsed;
@@ -20,6 +38,20 @@
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
 			toggleCollapse();
+		}
+	}
+
+	function handlePointClick(point: SummaryPoint) {
+		if (onScrollToMessage && point.messageIndices.length > 0) {
+			// Scroll to the first referenced message
+			onScrollToMessage(point.messageIndices[0]);
+		}
+	}
+
+	function handlePointKeydown(e: KeyboardEvent, point: SummaryPoint) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			handlePointClick(point);
 		}
 	}
 </script>
@@ -93,15 +125,57 @@
 					</div>
 					<span class="text-sm text-surface-400">Analyzing conversation...</span>
 				</div>
-			{:else if summary}
-				<div class="prose prose-sm prose-invert max-w-none">
-					<ul class="space-y-1.5 text-sm text-surface-300 list-disc list-inside pl-1">
-						{#each summary.split('\n').filter(line => line.trim()) as point}
-							<li>{point.replace(/^[-•*]\s*/, '')}</li>
-						{/each}
-					</ul>
+			{:else if summaryPoints}
+				<!-- Structured summary with clickable points -->
+				<ul class="summary-points space-y-2">
+					{#each summaryPoints as point, i (i)}
+						<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+						<li
+							class="summary-point flex items-start gap-2 text-sm text-surface-300 {point.messageIndices.length > 0 ? 'cursor-pointer hover:text-surface-100' : ''}"
+							onclick={() => handlePointClick(point)}
+							onkeydown={(e) => handlePointKeydown(e, point)}
+							role={point.messageIndices.length > 0 ? 'button' : undefined}
+							tabindex={point.messageIndices.length > 0 ? 0 : undefined}
+						>
+							<span class="flex-shrink-0 mt-1">
+								{#if point.messageIndices.length > 0}
+									<!-- Link icon for clickable points -->
+									<svg class="w-3.5 h-3.5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+									</svg>
+								{:else}
+									<!-- Bullet for non-clickable points -->
+									<span class="w-1.5 h-1.5 bg-surface-500 rounded-full inline-block"></span>
+								{/if}
+							</span>
+							<span class="flex-1">{point.text}</span>
+						</li>
+					{/each}
+				</ul>
+			{:else if legacySummary}
+				<!-- Legacy string summary - render with markdown -->
+				<div class="summary-content text-sm text-surface-300">
+					<MarkdownRenderer content={legacySummary} />
 				</div>
 			{/if}
 		</div>
 	{/if}
 </div>
+
+<style>
+	.summary-point {
+		transition: all 0.15s ease;
+		padding: 0.375rem 0.5rem;
+		margin: -0.375rem -0.5rem;
+		border-radius: 0.375rem;
+	}
+
+	.summary-point:hover {
+		background-color: rgba(var(--color-surface-700), 0.5);
+	}
+
+	.summary-point:focus-visible {
+		outline: 2px solid rgba(var(--color-primary-400), 0.5);
+		outline-offset: 2px;
+	}
+</style>

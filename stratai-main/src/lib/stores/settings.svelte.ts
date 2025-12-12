@@ -3,6 +3,12 @@
  * Uses Svelte 5 runes with localStorage persistence
  */
 
+import {
+	getMaxOutputTokens,
+	modelSupportsThinking,
+	modelSupportsVision
+} from '$lib/config/model-capabilities';
+
 const STORAGE_KEY = 'strathost-settings';
 
 export interface UserSettings {
@@ -140,10 +146,68 @@ class SettingsStore {
 		return { ...this.settings };
 	}
 
+	// Capability-aware derived properties
+	/**
+	 * Check if the current model supports extended thinking
+	 */
+	get canUseExtendedThinking(): boolean {
+		return modelSupportsThinking(this.settings.selectedModel);
+	}
+
+	/**
+	 * Check if the current model supports vision/images
+	 */
+	get canUseVision(): boolean {
+		return modelSupportsVision(this.settings.selectedModel);
+	}
+
+	/**
+	 * Get the effective max tokens (minimum of setting and model limit)
+	 */
+	get effectiveMaxTokens(): number {
+		const modelMax = getMaxOutputTokens(this.settings.selectedModel);
+		return Math.min(this.settings.maxTokens, modelMax);
+	}
+
+	/**
+	 * Get the max output tokens for the current model
+	 */
+	get modelMaxOutputTokens(): number {
+		return getMaxOutputTokens(this.settings.selectedModel);
+	}
+
 	// Setters
 	setSelectedModel(model: string): void {
+		const previousModel = this.settings.selectedModel;
 		this.settings.selectedModel = model;
+
+		// Silently adjust settings for new model's capabilities
+		if (model !== previousModel) {
+			this.adjustSettingsForModel(model);
+		}
+
 		this.persist();
+	}
+
+	/**
+	 * Silently adjust settings when model changes to ensure compatibility
+	 */
+	private adjustSettingsForModel(model: string): void {
+		// Adjust max tokens if current value exceeds new model's limit
+		const newModelMaxTokens = getMaxOutputTokens(model);
+		if (this.settings.maxTokens > newModelMaxTokens) {
+			this.settings.maxTokens = newModelMaxTokens;
+		}
+
+		// Disable extended thinking if new model doesn't support it
+		if (this.settings.extendedThinkingEnabled && !modelSupportsThinking(model)) {
+			this.settings.extendedThinkingEnabled = false;
+		}
+
+		// Adjust thinking budget if it exceeds new limits
+		if (this.settings.thinkingBudgetTokens > newModelMaxTokens - 1000) {
+			this.settings.thinkingBudgetTokens = Math.max(1024, newModelMaxTokens - 1000);
+		}
 	}
 
 	setSidebarOpen(open: boolean): void {
@@ -178,8 +242,9 @@ class SettingsStore {
 	}
 
 	setMaxTokens(value: number): void {
-		// Clamp to valid range, integer only
-		this.settings.maxTokens = Math.max(256, Math.min(32000, Math.floor(value)));
+		// Clamp to valid range based on model capabilities
+		const modelMax = getMaxOutputTokens(this.settings.selectedModel);
+		this.settings.maxTokens = Math.max(256, Math.min(modelMax, Math.floor(value)));
 		this.persist();
 	}
 
@@ -217,19 +282,29 @@ class SettingsStore {
 	}
 
 	setExtendedThinkingEnabled(value: boolean): void {
+		// Only allow enabling if the current model supports thinking
+		if (value && !modelSupportsThinking(this.settings.selectedModel)) {
+			return;
+		}
 		this.settings.extendedThinkingEnabled = value;
 		this.persist();
 	}
 
 	toggleExtendedThinking(): void {
-		this.settings.extendedThinkingEnabled = !this.settings.extendedThinkingEnabled;
+		// Only allow toggling on if the model supports thinking
+		const newValue = !this.settings.extendedThinkingEnabled;
+		if (newValue && !modelSupportsThinking(this.settings.selectedModel)) {
+			return;
+		}
+		this.settings.extendedThinkingEnabled = newValue;
 		this.persist();
 	}
 
 	setThinkingBudgetTokens(value: number): void {
-		// Clamp to valid range: min 1024, max should be less than maxTokens
+		// Clamp to valid range: min 1024, max should be less than model's max output
 		const minBudget = 1024;
-		const maxBudget = Math.max(minBudget, this.settings.maxTokens - 1000);
+		const modelMax = getMaxOutputTokens(this.settings.selectedModel);
+		const maxBudget = Math.max(minBudget, modelMax - 1000);
 		this.settings.thinkingBudgetTokens = Math.max(minBudget, Math.min(maxBudget, Math.floor(value)));
 		this.persist();
 	}

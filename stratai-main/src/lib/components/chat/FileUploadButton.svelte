@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import type { FileAttachment } from '$lib/types/chat';
 
 	interface Props {
@@ -12,12 +14,50 @@
 	let isUploading = $state(false);
 	let fileInput: HTMLInputElement | undefined = $state();
 
-	const ACCEPTED_TYPES = '.pdf,.docx,.txt,.md,.csv,.json';
+	// Check if current model supports vision
+	let supportsVision = $derived(settingsStore.canUseVision);
+	let modelName = $derived(modelCapabilitiesStore.currentDisplayName);
+
+	// Dynamic accepted types based on vision support
+	const DOCUMENT_TYPES = '.pdf,.docx,.txt,.md,.csv,.json';
+	const IMAGE_TYPES = '.jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp';
+
+	let acceptedTypes = $derived(
+		supportsVision
+			? `${DOCUMENT_TYPES},${IMAGE_TYPES}`
+			: DOCUMENT_TYPES
+	);
+
+	// Tooltip text based on capabilities
+	let tooltipText = $derived.by(() => {
+		if (isUploading) return 'Uploading...';
+		if (supportsVision) {
+			return 'Attach file (Images, PDF, DOCX, TXT, MD, CSV, JSON)';
+		}
+		return `Attach file (PDF, DOCX, TXT, MD, CSV, JSON) - Images not supported by ${modelName}`;
+	});
+
+	// Check if a file is an image
+	function isImageFile(file: File): boolean {
+		return file.type.startsWith('image/') ||
+			['.jpg', '.jpeg', '.png', '.gif', '.webp'].some(ext =>
+				file.name.toLowerCase().endsWith(ext)
+			);
+	}
 
 	async function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		if (!file) return;
+
+		// Check if trying to upload image when model doesn't support vision
+		if (isImageFile(file) && !supportsVision) {
+			toastStore.warning(`${modelName} doesn't support image analysis. Please select a vision-capable model or use a document file.`);
+			if (fileInput) {
+				fileInput.value = '';
+			}
+			return;
+		}
 
 		isUploading = true;
 
@@ -64,7 +104,7 @@
 	type="file"
 	bind:this={fileInput}
 	onchange={handleFileSelect}
-	accept={ACCEPTED_TYPES}
+	accept={acceptedTypes}
 	class="hidden"
 	aria-hidden="true"
 />
@@ -78,7 +118,7 @@
 		   transition-all duration-200
 		   text-surface-400 hover:text-surface-200 hover:bg-surface-700
 		   {disabled || isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'}"
-	title={isUploading ? 'Uploading...' : 'Attach file (PDF, DOCX, TXT, MD, CSV, JSON)'}
+	title={tooltipText}
 >
 	{#if isUploading}
 		<!-- Loading spinner -->

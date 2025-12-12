@@ -4,12 +4,26 @@ export interface SearchSource {
 	snippet: string;
 }
 
+// Content types for file attachments
+export type TextContent = {
+	type: 'text';
+	data: string;
+};
+
+export type ImageContent = {
+	type: 'image';
+	mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+	data: string; // base64 encoded
+};
+
+export type AttachmentContent = TextContent | ImageContent;
+
 export interface FileAttachment {
 	id: string;
 	filename: string;
 	mimeType: string;
 	size: number;
-	content: string;
+	content: AttachmentContent;
 	truncated: boolean;
 	charCount?: number;
 	pageCount?: number;
@@ -33,6 +47,15 @@ export interface Message {
 	isThinking?: boolean;
 }
 
+export interface SummaryPoint {
+	text: string;
+	messageIndices: number[];
+}
+
+export interface StructuredSummary {
+	points: SummaryPoint[];
+}
+
 export interface Conversation {
 	id: string;
 	title: string;
@@ -41,7 +64,7 @@ export interface Conversation {
 	createdAt: number;
 	updatedAt: number;
 	pinned?: boolean;
-	summary?: string;
+	summary?: StructuredSummary | string; // Can be structured or legacy string
 	// Context compacting / session continuation fields
 	continuedFromId?: string; // ID of conversation this was continued from
 	continuationSummary?: string; // Summary used to start this conversation

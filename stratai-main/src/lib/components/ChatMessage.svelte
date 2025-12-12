@@ -9,7 +9,23 @@
 	import ThinkingDisplay from './chat/ThinkingDisplay.svelte';
 
 	// Svelte 5: Use $props instead of export let
-	let { message, showTimestamp = true }: { message: Message; showTimestamp?: boolean } = $props();
+	let {
+		message,
+		messageIndex,
+		showTimestamp = true,
+		canEdit = true,
+		onEditAndResend,
+		onResend,
+		onRegenerate
+	}: {
+		message: Message;
+		messageIndex?: number;
+		showTimestamp?: boolean;
+		canEdit?: boolean;
+		onEditAndResend?: (messageId: string, newContent: string) => void;
+		onResend?: (messageId: string) => void;
+		onRegenerate?: (messageId: string) => void;
+	} = $props();
 
 	// Svelte 5: Use $derived for computed values
 	// Message objects are now immutable (new references on each update), so these work correctly
@@ -43,6 +59,48 @@
 	let copied = $state(false);
 	let showCopyButton = $state(false);
 	let sourcesExpanded = $state(false);
+
+	// Edit mode state
+	let isEditing = $state(false);
+	let editContent = $state('');
+
+	function startEditing() {
+		editContent = message.content;
+		isEditing = true;
+	}
+
+	function cancelEditing() {
+		isEditing = false;
+		editContent = '';
+	}
+
+	function saveAndResend() {
+		if (editContent.trim() && onEditAndResend) {
+			onEditAndResend(message.id, editContent.trim());
+			isEditing = false;
+			editContent = '';
+		}
+	}
+
+	function handleResend() {
+		if (onResend) {
+			onResend(message.id);
+		}
+	}
+
+	function handleRegenerate() {
+		if (onRegenerate) {
+			onRegenerate(message.id);
+		}
+	}
+
+	function handleEditKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') {
+			cancelEditing();
+		} else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+			saveAndResend();
+		}
+	}
 
 	// Sources display logic
 	const INITIAL_SOURCES_COUNT = 3;
@@ -88,6 +146,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
+	id={messageIndex !== undefined ? `message-${messageIndex}` : undefined}
 	class="flex gap-3 mb-6 group {isUser ? 'flex-row-reverse' : 'flex-row'}"
 	in:fly={{ y: 20, duration: 300, delay: 50 }}
 	onmouseenter={() => (showCopyButton = true)}
@@ -152,9 +211,51 @@
 					{#if hasAttachments && message.attachments}
 						<AttachmentDisplay attachments={message.attachments} />
 					{/if}
-					<div class="whitespace-pre-wrap break-words leading-relaxed">
-						{displayContent}
-					</div>
+
+					{#if isEditing}
+						<!-- Inline edit mode -->
+						<div class="edit-mode w-full">
+							<textarea
+								bind:value={editContent}
+								onkeydown={handleEditKeydown}
+								class="w-full min-h-[80px] p-3 bg-surface-800 border border-surface-600 rounded-lg text-white resize-y focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/50 transition-all"
+								placeholder="Edit your message..."
+							></textarea>
+							<div class="flex items-center justify-between mt-2 gap-2">
+								<span class="text-xs text-surface-500">
+									{#if navigator?.platform?.includes('Mac')}
+										⌘+Enter to save
+									{:else}
+										Ctrl+Enter to save
+									{/if}
+								</span>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										onclick={cancelEditing}
+										class="px-3 py-1.5 text-sm rounded-lg bg-surface-700 hover:bg-surface-600 text-surface-300 hover:text-white transition-all"
+									>
+										Cancel
+									</button>
+									<button
+										type="button"
+										onclick={saveAndResend}
+										disabled={!editContent.trim()}
+										class="px-3 py-1.5 text-sm rounded-lg bg-primary-600 hover:bg-primary-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+									>
+										<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+										</svg>
+										Save & Resend
+									</button>
+								</div>
+							</div>
+						</div>
+					{:else}
+						<div class="whitespace-pre-wrap break-words leading-relaxed">
+							{displayContent}
+						</div>
+					{/if}
 				{:else}
 					<!-- Extended thinking display (Claude models) - shows FIRST -->
 					{#if hasThinking || isThinking}
@@ -261,13 +362,56 @@
 				{/if}
 			{/if}
 
-			<!-- Action buttons (copy + download) -->
-			{#if !isStreamingEmpty && !message.error && displayContent && showCopyButton}
+			<!-- Action buttons -->
+			{#if !isStreamingEmpty && !message.error && displayContent && showCopyButton && !isEditing}
 				<div
 					class="absolute -top-2 {isUser ? '-left-8' : '-right-8'} flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
 					transition:fade={{ duration: 150 }}
 				>
-					<!-- Copy button -->
+					{#if isUser}
+						<!-- User message actions: Edit, Resend, Copy -->
+						{#if canEdit && onEditAndResend}
+							<button
+								type="button"
+								class="p-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-surface-400 hover:text-white transition-all"
+								onclick={startEditing}
+								title="Edit message"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+								</svg>
+							</button>
+						{/if}
+						{#if canEdit && onResend}
+							<button
+								type="button"
+								class="p-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-surface-400 hover:text-white transition-all"
+								onclick={handleResend}
+								title="Resend message"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+								</svg>
+							</button>
+						{/if}
+					{:else}
+						<!-- Assistant message actions: Regenerate, Download -->
+						{#if canEdit && onRegenerate}
+							<button
+								type="button"
+								class="p-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-surface-400 hover:text-white transition-all"
+								onclick={handleRegenerate}
+								title="Regenerate response"
+							>
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+								</svg>
+							</button>
+						{/if}
+						<DownloadButton content={displayContent} messageId={message.id} />
+					{/if}
+
+					<!-- Copy button (for all messages) -->
 					<button
 						type="button"
 						class="p-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-surface-400 hover:text-white transition-all"
@@ -289,11 +433,6 @@
 							</svg>
 						{/if}
 					</button>
-
-					<!-- Download button (only for assistant messages) -->
-					{#if !isUser}
-						<DownloadButton content={displayContent} messageId={message.id} />
-					{/if}
 				</div>
 			{/if}
 		</div>
@@ -341,6 +480,27 @@
 			opacity: 1;
 			transform: translateY(0);
 			filter: blur(0px);
+		}
+	}
+
+	/* Message highlight animation for summary anchor navigation */
+	:global(.message-highlight) {
+		animation: messageHighlight 2s ease-out forwards;
+	}
+
+	@keyframes messageHighlight {
+		0% {
+			background-color: rgba(var(--color-primary-500), 0.3);
+			box-shadow: 0 0 0 4px rgba(var(--color-primary-500), 0.2);
+			border-radius: 0.75rem;
+		}
+		70% {
+			background-color: rgba(var(--color-primary-500), 0.15);
+			box-shadow: 0 0 0 4px rgba(var(--color-primary-500), 0.1);
+		}
+		100% {
+			background-color: transparent;
+			box-shadow: none;
 		}
 	}
 </style>

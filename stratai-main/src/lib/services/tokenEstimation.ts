@@ -1,82 +1,84 @@
 /**
  * Token Estimation Service
- * Provides utilities for estimating token usage and managing context window limits
+ * Provides utilities for token counting and managing context window limits
+ *
+ * Now uses accurate tiktoken-based counting instead of character approximation
  */
 
-// Model context window sizes (in tokens)
-export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-	'claude-opus-4-5': 200000,
-	'claude-sonnet-4-5': 200000,
-	'claude-3-5-sonnet': 200000,
-	'claude-3-5-haiku': 200000,
-	'claude-3-7-sonnet': 200000,
-	'claude-sonnet-4': 200000,
-	'claude-opus-4': 200000,
-	'claude-3-opus': 200000,
-	// Fallback for unknown models
-	default: 100000
-};
+import { getContextWindow } from '$lib/config/model-capabilities';
+import { countTokens } from './tokenCounter';
+import { getPlatformPrompt } from '$lib/config/system-prompts';
 
 // Summary model for compacting conversations (configurable here)
 export const SUMMARY_MODEL = 'claude-3-5-haiku';
 
-// Character-to-token ratio (~4 chars per token for English text)
-const CHARS_PER_TOKEN = 4;
+// Default fallback context window size
+const DEFAULT_CONTEXT_WINDOW = 128000;
 
 /**
- * Estimate token count from text using character-based approximation
- * ~4 characters per token for typical English text
+ * Count tokens in text accurately using tiktoken
+ * This replaces the old character-based approximation
  */
 export function estimateTokens(text: string): number {
-	if (!text) return 0;
-	return Math.ceil(text.length / CHARS_PER_TOKEN);
+	return countTokens(text);
 }
 
 /**
  * Get the context window size for a given model
- * Tries exact match first, then partial match, then falls back to default
+ * Uses the centralized model capabilities config
  */
 export function getContextWindowSize(model: string): number {
-	if (!model) return MODEL_CONTEXT_WINDOWS['default'];
-
-	// Try exact match first
-	if (MODEL_CONTEXT_WINDOWS[model]) {
-		return MODEL_CONTEXT_WINDOWS[model];
-	}
-
-	// Try partial match (model name might include version suffix)
-	const lowerModel = model.toLowerCase();
-	for (const [key, value] of Object.entries(MODEL_CONTEXT_WINDOWS)) {
-		if (key !== 'default' && lowerModel.includes(key)) {
-			return value;
-		}
-	}
-
-	return MODEL_CONTEXT_WINDOWS['default'];
+	if (!model) return DEFAULT_CONTEXT_WINDOW;
+	return getContextWindow(model);
 }
 
 /**
  * Calculate total tokens for a conversation
- * Includes all message content, thinking content, system prompt, and continuation summary
+ * Includes platform prompt, user system prompt, messages, thinking content, and continuation summary
+ * Now includes message formatting overhead (~4 tokens per message)
  */
 export function calculateConversationTokens(
 	messages: Array<{ content: string; thinking?: string }>,
 	systemPrompt: string = '',
-	continuationSummary: string = ''
+	continuationSummary: string = '',
+	model: string = ''
 ): number {
-	let total = estimateTokens(systemPrompt);
+	let total = 0;
+
+	// Platform system prompt (always present, varies by model)
+	const platformPrompt = getPlatformPrompt(model);
+	if (platformPrompt) {
+		total += estimateTokens(platformPrompt);
+		total += 4; // System message formatting overhead
+	}
+
+	// User's custom system prompt (appended to platform prompt)
+	if (systemPrompt) {
+		total += estimateTokens(systemPrompt);
+		// If platform prompt exists, user prompt is appended (no extra message overhead)
+		// Otherwise it's a separate message
+		if (!platformPrompt) {
+			total += 4;
+		}
+	}
 
 	// Include continuation summary if this is a continued conversation
 	if (continuationSummary) {
 		total += estimateTokens(continuationSummary);
+		total += 4; // Message overhead
 	}
 
+	// Messages with overhead
 	for (const msg of messages) {
+		total += 4; // Per-message formatting overhead (role, delimiters)
 		total += estimateTokens(msg.content);
 		if (msg.thinking) {
 			total += estimateTokens(msg.thinking);
 		}
 	}
+
+	// Assistant priming tokens
+	total += 3;
 
 	return total;
 }

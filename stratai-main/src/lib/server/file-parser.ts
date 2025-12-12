@@ -1,17 +1,33 @@
 /**
  * File Parser Service
  * Parses uploaded documents and extracts text content
+ * Also handles image files for Claude vision API
  */
 
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
+import type { AttachmentContent } from '$lib/types/chat';
+
+// Content types for parsed files
+export type ParsedTextContent = {
+	type: 'text';
+	data: string;
+};
+
+export type ParsedImageContent = {
+	type: 'image';
+	mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+	data: string; // base64 encoded
+};
+
+export type ParsedContent = ParsedTextContent | ParsedImageContent;
 
 export interface ParsedFile {
 	id: string;
 	filename: string;
 	mimeType: string;
 	size: number;
-	content: string;
+	content: ParsedContent;
 	pageCount?: number;
 	truncated: boolean;
 	charCount: number;
@@ -23,10 +39,12 @@ export interface ValidationResult {
 }
 
 // Configuration
-const MAX_CONTENT_LENGTH = 100000; // ~25k tokens
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_CONTENT_LENGTH = 100000; // ~25k tokens for text
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB for documents
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB for images (Claude API limit)
 
-const ALLOWED_TYPES: Record<string, string[]> = {
+// Document types
+const DOCUMENT_TYPES: Record<string, string[]> = {
 	'application/pdf': ['.pdf'],
 	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
 	'text/plain': ['.txt'],
@@ -36,6 +54,20 @@ const ALLOWED_TYPES: Record<string, string[]> = {
 	// Some browsers report these MIME types
 	'application/x-pdf': ['.pdf'],
 	'text/x-markdown': ['.md']
+};
+
+// Image types supported by Claude vision API
+const IMAGE_TYPES: Record<string, string[]> = {
+	'image/jpeg': ['.jpg', '.jpeg'],
+	'image/png': ['.png'],
+	'image/gif': ['.gif'],
+	'image/webp': ['.webp']
+};
+
+// Combined allowed types
+const ALLOWED_TYPES: Record<string, string[]> = {
+	...DOCUMENT_TYPES,
+	...IMAGE_TYPES
 };
 
 /**
@@ -91,7 +123,53 @@ function isAllowedType(mimeType: string, filename: string): boolean {
 		return true;
 	}
 
+	// Check images by extension
+	const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+	if (imageExtensions.includes(extension)) {
+		return true;
+	}
+
 	return false;
+}
+
+/**
+ * Check if file is an image type
+ */
+export function isImageFile(mimeType: string, filename: string): boolean {
+	const extension = getExtension(filename);
+
+	// Check by MIME type
+	if (IMAGE_TYPES[mimeType]) {
+		return true;
+	}
+
+	// Check by extension
+	const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+	return imageExtensions.includes(extension);
+}
+
+/**
+ * Get the normalized image media type
+ */
+function getImageMediaType(mimeType: string, filename: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+	const extension = getExtension(filename);
+
+	// Normalize MIME type
+	if (mimeType === 'image/jpeg' || extension === '.jpg' || extension === '.jpeg') {
+		return 'image/jpeg';
+	}
+	if (mimeType === 'image/png' || extension === '.png') {
+		return 'image/png';
+	}
+	if (mimeType === 'image/gif' || extension === '.gif') {
+		return 'image/gif';
+	}
+	if (mimeType === 'image/webp' || extension === '.webp') {
+		return 'image/webp';
+	}
+
+	// Default to jpeg if uncertain
+	return 'image/jpeg';
 }
 
 /**
@@ -102,20 +180,23 @@ export function validateFile(
 	mimeType: string,
 	size: number
 ): ValidationResult {
-	// Check file size
-	if (size > MAX_FILE_SIZE) {
-		const maxMB = MAX_FILE_SIZE / (1024 * 1024);
-		return {
-			valid: false,
-			error: `File exceeds ${maxMB}MB limit`
-		};
-	}
-
-	// Check file type
+	// Check file type first
 	if (!isAllowedType(mimeType, filename)) {
 		return {
 			valid: false,
-			error: 'Unsupported file type. Allowed: PDF, DOCX, TXT, MD, CSV, JSON'
+			error: 'Unsupported file type. Allowed: PDF, DOCX, TXT, MD, CSV, JSON, JPG, PNG, GIF, WebP'
+		};
+	}
+
+	// Check file size based on type
+	const isImage = isImageFile(mimeType, filename);
+	const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+
+	if (size > maxSize) {
+		const maxMB = maxSize / (1024 * 1024);
+		return {
+			valid: false,
+			error: `${isImage ? 'Image' : 'File'} exceeds ${maxMB}MB limit`
 		};
 	}
 
@@ -177,6 +258,24 @@ function parseText(buffer: Buffer): { content: string } {
 }
 
 /**
+ * Parse image file to base64
+ */
+function parseImage(
+	buffer: Buffer,
+	mimeType: string,
+	filename: string
+): { base64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' } {
+	try {
+		const base64 = buffer.toString('base64');
+		const mediaType = getImageMediaType(mimeType, filename);
+		return { base64, mediaType };
+	} catch (error) {
+		console.error('Image parsing error:', error);
+		throw new Error('Failed to process image file');
+	}
+}
+
+/**
  * Truncate content if it exceeds max length
  */
 function truncateContent(content: string): { content: string; truncated: boolean } {
@@ -207,6 +306,25 @@ export async function parseFile(
 	const sanitizedFilename = sanitizeFilename(filename);
 	const extension = getExtension(sanitizedFilename);
 
+	// Handle image files
+	if (isImageFile(mimeType, sanitizedFilename)) {
+		const { base64, mediaType } = parseImage(buffer, mimeType, sanitizedFilename);
+		return {
+			id: generateId(),
+			filename: sanitizedFilename,
+			mimeType,
+			size: buffer.length,
+			content: {
+				type: 'image',
+				mediaType,
+				data: base64
+			},
+			truncated: false,
+			charCount: base64.length
+		};
+	}
+
+	// Handle document files (text extraction)
 	let rawContent: string;
 	let pageCount: number | undefined;
 
@@ -242,7 +360,10 @@ export async function parseFile(
 		filename: sanitizedFilename,
 		mimeType,
 		size: buffer.length,
-		content,
+		content: {
+			type: 'text',
+			data: content
+		},
 		pageCount,
 		truncated,
 		charCount: content.length

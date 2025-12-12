@@ -1,7 +1,116 @@
 import type { RequestHandler } from './$types';
 import { createChatCompletion, createChatCompletionWithTools, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
 import { searchWeb, formatSearchResultsForLLM, isBraveSearchConfigured } from '$lib/server/brave-search';
-import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig } from '$lib/types/api';
+import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig, ChatMessage, MessageContentBlock } from '$lib/types/api';
+import { getPlatformPrompt } from '$lib/config/system-prompts';
+
+/**
+ * Check if model supports explicit cache_control (Anthropic Claude models)
+ * OpenAI handles caching automatically, so we only add cache_control for Claude
+ */
+function shouldUseCacheControl(model: string): boolean {
+	const lowerModel = model.toLowerCase();
+	return lowerModel.includes('claude') || lowerModel.includes('anthropic');
+}
+
+/**
+ * Add cache_control breakpoints to conversation history for Anthropic prompt caching
+ * This marks historical messages (all except the current user message) for caching,
+ * achieving up to 90% cost reduction on cached tokens.
+ *
+ * Cache breakpoints tell Anthropic: "cache everything up to and including this point"
+ * - System prompts: always cached
+ * - Historical messages: cached (all messages before the current user message)
+ * - Current user message: NOT cached (it's new each turn)
+ */
+function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessage[] {
+	// Only apply cache_control for Claude models
+	if (!shouldUseCacheControl(model)) {
+		return messages;
+	}
+
+	// Find the last user message index (current turn - don't cache this one)
+	let lastUserIndex = -1;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		if (messages[i].role === 'user') {
+			lastUserIndex = i;
+			break;
+		}
+	}
+
+	return messages.map((msg, index) => {
+		// Don't add cache_control to the current user message
+		if (index === lastUserIndex) {
+			return msg;
+		}
+
+		// Skip tool messages - they have special handling
+		if (msg.role === 'tool') {
+			return msg;
+		}
+
+		// Convert string content to content block with cache_control
+		if (typeof msg.content === 'string') {
+			return {
+				...msg,
+				content: [{
+					type: 'text' as const,
+					text: msg.content,
+					cache_control: { type: 'ephemeral' as const }
+				}]
+			};
+		}
+
+		// If already array, add cache_control to last block
+		if (Array.isArray(msg.content) && msg.content.length > 0) {
+			const blocks = [...msg.content] as MessageContentBlock[];
+			const lastBlock = blocks[blocks.length - 1];
+			blocks[blocks.length - 1] = {
+				...lastBlock,
+				cache_control: { type: 'ephemeral' as const }
+			};
+			return { ...msg, content: blocks };
+		}
+
+		return msg;
+	});
+}
+
+/**
+ * Inject platform-level system prompt before user messages
+ * This provides consistent baseline behavior across all conversations
+ * The platform prompt is composed with any user-provided system prompt
+ */
+function injectPlatformPrompt(messages: ChatMessage[], model: string): ChatMessage[] {
+	const platformPrompt = getPlatformPrompt(model);
+	if (!platformPrompt) return messages;
+
+	// Find the first system message (if any)
+	const systemIndex = messages.findIndex(m => m.role === 'system');
+
+	if (systemIndex >= 0) {
+		// Prepend platform prompt to existing system message
+		const existingSystem = messages[systemIndex];
+		const existingContent = typeof existingSystem.content === 'string'
+			? existingSystem.content
+			: Array.isArray(existingSystem.content)
+				? existingSystem.content.map(c => 'text' in c ? c.text : '').join('\n')
+				: '';
+
+		const updatedMessages = [...messages];
+		updatedMessages[systemIndex] = {
+			...existingSystem,
+			content: `${platformPrompt}\n\n---\n\nUser Instructions:\n${existingContent}`
+		};
+		return updatedMessages;
+	} else {
+		// Add new system message at the beginning
+		return [
+			{ role: 'system' as const, content: platformPrompt },
+			...messages
+		];
+	}
+}
 
 // Web search tool definition for Claude
 const webSearchTool: ToolDefinition = {
@@ -40,9 +149,13 @@ function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messa
 	if (systemIndex >= 0) {
 		// Augment existing system message
 		const existingSystem = result[systemIndex];
+		// System messages should always be strings, not content arrays
+		const existingContent = typeof existingSystem.content === 'string'
+			? existingSystem.content
+			: JSON.stringify(existingSystem.content);
 		result[systemIndex] = {
 			...existingSystem,
-			content: `${existingSystem.content}\n\n${searchSystemMessage}`
+			content: `${existingContent}\n\n${searchSystemMessage}`
 		};
 	} else {
 		// Add new system message at the beginning
@@ -131,14 +244,58 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		console.log('Forwarding to LiteLLM:', cleanBody.model, cleanBody.messages.length, 'messages', searchEnabled ? '(search enabled)' : '', thinkingEnabled ? '(thinking enabled)' : '');
 
+		// Log message structure for debugging vision messages
+		cleanBody.messages.forEach((msg, idx) => {
+			const contentType = Array.isArray(msg.content) ? 'array' : typeof msg.content;
+			const contentPreview = Array.isArray(msg.content)
+				? `[${msg.content.map(c => c.type).join(', ')}]`
+				: (typeof msg.content === 'string' ? msg.content.slice(0, 50) + '...' : String(msg.content));
+			console.log(`  Message ${idx}: role=${msg.role}, contentType=${contentType}, preview=${contentPreview}`);
+		});
+
 		// If search is enabled, use tool handling
 		if (searchEnabled) {
 			return await handleChatWithTools(cleanBody, thinkingEnabled);
 		}
 
+		// Inject platform system prompt (before cache breakpoints so it gets cached)
+		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages, cleanBody.model);
+
+		// Apply cache breakpoints for Claude models (conversation history caching)
+		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
+
+		// Log cache breakpoint application for debugging
+		if (shouldUseCacheControl(cleanBody.model)) {
+			const cachedCount = messagesWithCache.filter(m =>
+				Array.isArray(m.content) &&
+				m.content.some((c: MessageContentBlock) => 'cache_control' in c)
+			).length;
+			console.log(`Cache breakpoints: ${cachedCount}/${messagesWithCache.length} messages marked for caching`);
+		}
+
 		// Standard streaming response without tools
-		const litellmResponse = await createChatCompletion(cleanBody);
+		const litellmResponse = await createChatCompletion({
+			...cleanBody,
+			messages: messagesWithCache
+		});
 		console.log('LiteLLM response status:', litellmResponse.status);
+
+		// Log cache statistics if available (for monitoring prompt caching effectiveness)
+		const cacheHeader = litellmResponse.headers.get('x-litellm-cache-key');
+		if (cacheHeader) {
+			console.log('Cache key:', cacheHeader);
+		}
+
+		// Check for cache statistics in response headers (Anthropic returns these)
+		const cacheCreation = litellmResponse.headers.get('x-cache-creation-input-tokens');
+		const cacheRead = litellmResponse.headers.get('x-cache-read-input-tokens');
+		if (cacheCreation || cacheRead) {
+			console.log('Cache stats:', {
+				created: cacheCreation || '0',
+				read: cacheRead || '0',
+				savings: cacheRead ? `${Math.round(parseInt(cacheRead) * 0.9)} tokens at 90% off` : 'N/A'
+			});
+		}
 
 		if (!litellmResponse.ok) {
 			return await handleLiteLLMError(litellmResponse);
@@ -177,8 +334,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false): Promise<Response> {
 	const encoder = new TextEncoder();
 
-	// Prepare messages with search system message
-	const messagesWithSearchContext = prepareMessagesWithSearchContext(body.messages);
+	// Inject platform prompt, then cache breakpoints, then search context
+	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model);
+	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
+	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
 
 	// Create a ReadableStream for SSE
 	const stream = new ReadableStream({

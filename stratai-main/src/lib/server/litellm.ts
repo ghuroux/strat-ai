@@ -1,5 +1,11 @@
 import { env } from '$env/dynamic/private';
 import type { ChatCompletionRequest, LiteLLMModelsResponse, ThinkingConfig } from '$lib/types/api';
+import {
+	modelSupportsThinking,
+	modelSupportsVision,
+	getModelCapabilities,
+	MODEL_CAPABILITIES
+} from '$lib/config/model-capabilities';
 
 function getBaseUrl(): string {
 	return env.LITELLM_BASE_URL || 'http://localhost:4000';
@@ -10,54 +16,47 @@ function getApiKey(): string {
 }
 
 /**
- * Check if a model supports extended thinking
- * Extended thinking is available on:
- * - Claude 3.7 Sonnet (claude-3-7-sonnet-*)
- * - Claude Sonnet 4 / 4.5 (claude-sonnet-4*, claude-4-sonnet-*)
- * - Claude Opus 4 / 4.5 (claude-opus-4*, claude-4-opus-*)
- * - Claude Haiku 4.5 (claude-haiku-4-5*, claude-4-5-haiku-*)
- *
- * NOT supported on:
- * - Claude 3.5 Sonnet (claude-3-5-sonnet-*)
- * - Claude 3 Opus/Sonnet/Haiku
- * - Claude Haiku 4 (only 4.5 supports thinking)
+ * Check if a model supports extended thinking / reasoning
+ * Uses the centralized model capabilities config
  */
 export function supportsExtendedThinking(model: string): boolean {
+	// First check the capabilities config
+	if (MODEL_CAPABILITIES[model]) {
+		return modelSupportsThinking(model);
+	}
+
+	// Fallback to pattern matching for unknown models
 	const lowerModel = model.toLowerCase();
 
-	// Must be a Claude model
-	if (!lowerModel.includes('claude')) {
-		return false;
+	// Claude models with thinking support
+	if (lowerModel.includes('claude')) {
+		// Claude 3.7 Sonnet - explicitly supports thinking
+		if (lowerModel.includes('3-7') || lowerModel.includes('3.7')) {
+			return true;
+		}
+		// Claude 4 or 4.5 models (Sonnet, Opus)
+		if (lowerModel.includes('sonnet-4') || lowerModel.includes('4-sonnet') ||
+			lowerModel.includes('opus-4') || lowerModel.includes('4-opus')) {
+			return true;
+		}
+		// Claude Haiku 4.5 specifically
+		if (lowerModel.includes('haiku-4-5') || lowerModel.includes('4-5-haiku')) {
+			return true;
+		}
+		// Exclude Claude 3.5 and earlier
+		if (lowerModel.includes('3-5') || lowerModel.includes('3.5')) {
+			return false;
+		}
 	}
 
-	// Claude 3.7 Sonnet - explicitly supports thinking
-	if (lowerModel.includes('3-7') || lowerModel.includes('3.7')) {
+	// OpenAI o-series reasoning models
+	if (lowerModel.startsWith('o3') || lowerModel.startsWith('o4')) {
 		return true;
 	}
 
-	// Claude 4 or 4.5 models (Sonnet, Opus)
-	// Patterns: claude-sonnet-4, claude-4-sonnet, claude-opus-4, claude-4-opus
-	// Also: claude-sonnet-4-5, claude-4-5-sonnet, etc.
-	if (lowerModel.includes('sonnet-4') || lowerModel.includes('4-sonnet') ||
-		lowerModel.includes('sonnet4') || lowerModel.includes('4sonnet') ||
-		lowerModel.includes('opus-4') || lowerModel.includes('4-opus') ||
-		lowerModel.includes('opus4') || lowerModel.includes('4opus')) {
+	// GPT-5.x thinking models (not instant/chat-latest variants)
+	if (lowerModel.includes('gpt-5') && !lowerModel.includes('chat-latest')) {
 		return true;
-	}
-
-	// Claude Haiku 4.5 specifically (Haiku 4.0 does NOT support thinking)
-	if ((lowerModel.includes('haiku-4-5') || lowerModel.includes('4-5-haiku') ||
-		lowerModel.includes('haiku-4.5') || lowerModel.includes('haiku45'))) {
-		return true;
-	}
-
-	// Explicitly exclude Claude 3.5 and earlier models
-	// These patterns should NOT trigger thinking support
-	if (lowerModel.includes('3-5') || lowerModel.includes('3.5') ||
-		lowerModel.includes('3-0') || lowerModel.includes('3.0') ||
-		lowerModel.includes('claude-3-sonnet') || lowerModel.includes('claude-3-opus') ||
-		lowerModel.includes('claude-3-haiku')) {
-		return false;
 	}
 
 	return false;
@@ -128,7 +127,7 @@ export async function createChatCompletion(request: ChatCompletionRequest): Prom
 export function supportsInterleavedThinking(model: string): boolean {
 	const lowerModel = model.toLowerCase();
 
-	// Must be a Claude model
+	// Must be a Claude model for interleaved thinking (Anthropic-specific feature)
 	if (!lowerModel.includes('claude')) {
 		return false;
 	}
@@ -136,15 +135,48 @@ export function supportsInterleavedThinking(model: string): boolean {
 	// Only Claude 4+ models support interleaved thinking
 	// Claude 3.7 supports extended thinking but NOT interleaved thinking with tools
 	if (lowerModel.includes('sonnet-4') || lowerModel.includes('4-sonnet') ||
-		lowerModel.includes('sonnet4') || lowerModel.includes('4sonnet') ||
 		lowerModel.includes('opus-4') || lowerModel.includes('4-opus') ||
-		lowerModel.includes('opus4') || lowerModel.includes('4opus') ||
-		lowerModel.includes('haiku-4-5') || lowerModel.includes('4-5-haiku') ||
-		lowerModel.includes('haiku-4.5') || lowerModel.includes('haiku45')) {
+		lowerModel.includes('haiku-4-5') || lowerModel.includes('4-5-haiku')) {
 		return true;
 	}
 
 	return false;
+}
+
+/**
+ * Check if a model supports vision/image input
+ * Uses the centralized model capabilities config
+ */
+export function supportsVision(model: string): boolean {
+	// First check the capabilities config
+	if (MODEL_CAPABILITIES[model]) {
+		return modelSupportsVision(model);
+	}
+
+	// Fallback: most modern models support vision
+	const lowerModel = model.toLowerCase();
+
+	// o3-mini does NOT support vision
+	if (lowerModel === 'o3-mini') {
+		return false;
+	}
+
+	// All Claude models support vision
+	if (lowerModel.includes('claude')) {
+		return true;
+	}
+
+	// All GPT-4o, GPT-4.1, GPT-5.x support vision
+	if (lowerModel.includes('gpt-4o') || lowerModel.includes('gpt-4.1') || lowerModel.includes('gpt-5')) {
+		return true;
+	}
+
+	// o3 and o4-mini support vision
+	if (lowerModel === 'o3' || lowerModel === 'o4-mini') {
+		return true;
+	}
+
+	return true; // Default to true for unknown models
 }
 
 /**

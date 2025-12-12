@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { toastStore } from '$lib/stores/toast.svelte';
+	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import SearchToggle from './chat/SearchToggle.svelte';
 	import ThinkingToggle from './chat/ThinkingToggle.svelte';
 	import SummarizeButton from './chat/SummarizeButton.svelte';
@@ -49,7 +51,7 @@
 	let contextWindowSize = $derived(getContextWindowSize(currentModel));
 	let continuationSummary = $derived(chatStore.activeConversation?.continuationSummary || '');
 	let estimatedTokens = $derived(
-		calculateConversationTokens(chatStore.messages, settingsStore.systemPrompt, continuationSummary)
+		calculateConversationTokens(chatStore.messages, settingsStore.systemPrompt, continuationSummary, currentModel)
 	);
 	let contextUsagePercent = $derived(
 		getContextUsagePercent(estimatedTokens, currentModel)
@@ -62,6 +64,45 @@
 	let input = $state('');
 	let textarea: HTMLTextAreaElement | undefined = $state();
 	let isFocused = $state(false);
+
+	// Drag and drop state
+	let isDragging = $state(false);
+	let isUploading = $state(false);
+	let dragCounter = $state(0); // Track enter/leave to handle nested elements
+
+	// Vision capability check
+	let supportsVision = $derived(settingsStore.canUseVision);
+	let modelName = $derived(modelCapabilitiesStore.currentDisplayName);
+
+	// Accepted file types for drag-drop validation
+	const DOCUMENT_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md', '.csv', '.json'];
+	const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+	const ACCEPTED_EXTENSIONS = $derived(
+		supportsVision
+			? [...DOCUMENT_EXTENSIONS, ...IMAGE_EXTENSIONS]
+			: DOCUMENT_EXTENSIONS
+	);
+
+	const DOCUMENT_MIME_TYPES = [
+		'application/pdf',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		'text/plain',
+		'text/markdown',
+		'text/csv',
+		'application/json'
+	];
+	const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+	const ACCEPTED_MIME_TYPES = $derived(
+		supportsVision
+			? [...DOCUMENT_MIME_TYPES, ...IMAGE_MIME_TYPES]
+			: DOCUMENT_MIME_TYPES
+	);
+
+	// Check if a file is an image
+	function isImageFile(file: File): boolean {
+		return file.type.startsWith('image/') ||
+			IMAGE_EXTENSIONS.some(ext => file.name.toLowerCase().endsWith(ext));
+	}
 
 	let charCount = $derived(input.length);
 	let hasAttachments = $derived(pendingAttachments.length > 0);
@@ -103,14 +144,159 @@
 	function handleStop() {
 		onstop?.();
 	}
+
+	// Upload a file (shared by click upload and drag-drop)
+	async function uploadFile(file: File): Promise<void> {
+		if (disabled || chatStore.isStreaming || isUploading) return;
+
+		// Check if trying to upload image when model doesn't support vision
+		if (isImageFile(file) && !supportsVision) {
+			toastStore.warning(`${modelName} doesn't support image analysis. Please select a vision-capable model or use a document file.`);
+			return;
+		}
+
+		// Validate file type
+		const extension = '.' + file.name.split('.').pop()?.toLowerCase();
+		const isValidExtension = ACCEPTED_EXTENSIONS.includes(extension);
+		const isValidMime = ACCEPTED_MIME_TYPES.includes(file.type) || file.type === '';
+
+		if (!isValidExtension && !isValidMime) {
+			const acceptedTypes = supportsVision
+				? 'PDF, DOCX, TXT, MD, CSV, JSON, JPG, PNG, GIF, WebP'
+				: 'PDF, DOCX, TXT, MD, CSV, JSON';
+			toastStore.error(`Unsupported file type. Accepted: ${acceptedTypes}`);
+			return;
+		}
+
+		isUploading = true;
+
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+
+			const response = await fetch('/api/upload', {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (!response.ok || result.error) {
+				throw new Error(result.error?.message || 'Upload failed');
+			}
+
+			// Success - add to pending attachments
+			pendingAttachments = [...pendingAttachments, result as FileAttachment];
+			toastStore.success(`${file.name} attached`);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Failed to upload file';
+			toastStore.error(message);
+			console.error('Upload error:', err);
+		} finally {
+			isUploading = false;
+		}
+	}
+
+	// Drag and drop handlers
+	function handleDragEnter(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounter++;
+
+		// Check if dragging files
+		if (e.dataTransfer?.types.includes('Files')) {
+			isDragging = true;
+		}
+	}
+
+	function handleDragLeave(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounter--;
+
+		// Only hide drop zone when fully left the area
+		if (dragCounter === 0) {
+			isDragging = false;
+		}
+	}
+
+	function handleDragOver(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		if (e.dataTransfer) {
+			e.dataTransfer.dropEffect = 'copy';
+		}
+	}
+
+	async function handleDrop(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		isDragging = false;
+		dragCounter = 0;
+
+		if (disabled || chatStore.isStreaming) return;
+
+		const files = e.dataTransfer?.files;
+		if (!files || files.length === 0) return;
+
+		// Process each dropped file
+		for (const file of Array.from(files)) {
+			await uploadFile(file);
+		}
+	}
 </script>
 
-<div class="border-t border-surface-800 p-4 bg-surface-900/80 backdrop-blur-xl">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	class="border-t border-surface-800 p-4 bg-surface-900/80 backdrop-blur-xl relative"
+	ondragenter={handleDragEnter}
+	ondragleave={handleDragLeave}
+	ondragover={handleDragOver}
+	ondrop={handleDrop}
+>
+	<!-- Drop zone overlay -->
+	{#if isDragging || isUploading}
+		<div
+			class="absolute inset-0 z-50 flex items-center justify-center
+				   bg-gradient-to-b from-surface-900/98 to-surface-950/98 backdrop-blur-md
+				   rounded-lg transition-all duration-300 animate-fadeIn"
+		>
+			<div class="text-center">
+				{#if isUploading}
+					<!-- Uploading state -->
+					<div class="w-16 h-16 mx-auto mb-4 relative">
+						<div class="absolute inset-0 rounded-full border-2 border-surface-700"></div>
+						<div class="absolute inset-0 rounded-full border-2 border-primary-500 border-t-transparent animate-spin"></div>
+						<div class="absolute inset-3 flex items-center justify-center">
+							<svg class="w-6 h-6 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+							</svg>
+						</div>
+					</div>
+					<p class="text-lg font-medium text-surface-200">Processing file...</p>
+					<p class="text-sm text-surface-500 mt-1">Extracting content</p>
+				{:else}
+					<!-- Drag state -->
+					<div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-primary-500/20 to-accent-500/20 flex items-center justify-center border border-primary-500/30 animate-pulse-subtle">
+						<svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+					</div>
+					<p class="text-lg font-medium text-surface-100">Drop to attach</p>
+					<p class="text-sm text-surface-500 mt-2">
+						{supportsVision ? 'Images, PDF, DOCX, TXT, MD, CSV, JSON' : 'PDF, DOCX, TXT, MD, CSV, JSON'}
+					</p>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
 	<div class="max-w-4xl mx-auto">
 		<!-- Input container with gradient border on focus -->
 		<div
 			class="relative rounded-2xl transition-all duration-300
-				   {isFocused ? 'gradient-border shadow-glow' : ''}"
+				   {isFocused ? 'gradient-border shadow-glow' : ''}
+				   {isDragging ? 'ring-2 ring-primary-500/50 ring-offset-2 ring-offset-surface-900' : ''}"
 		>
 			<div class="flex items-end gap-3 bg-surface-800 rounded-2xl p-3 {isFocused ? '' : 'border border-surface-700'}">
 				<!-- File upload button -->
@@ -260,3 +446,34 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	/* Drop zone animations */
+	.animate-fadeIn {
+		animation: fadeIn 0.2s ease-out forwards;
+	}
+
+	.animate-pulse-subtle {
+		animation: pulseSublte 2s ease-in-out infinite;
+	}
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	@keyframes pulseSublte {
+		0%, 100% {
+			transform: scale(1);
+			opacity: 1;
+		}
+		50% {
+			transform: scale(1.02);
+			opacity: 0.9;
+		}
+	}
+</style>

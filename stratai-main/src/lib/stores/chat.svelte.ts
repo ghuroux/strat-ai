@@ -4,7 +4,7 @@
  */
 
 import { SvelteMap } from 'svelte/reactivity';
-import type { Message, Conversation } from '$lib/types/chat';
+import type { Message, Conversation, StructuredSummary } from '$lib/types/chat';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
@@ -338,7 +338,7 @@ class ChatStore {
 		}
 	}
 
-	setSummary(id: string, summary: string): void {
+	setSummary(id: string, summary: StructuredSummary | string): void {
 		const conv = this.conversations.get(id);
 		if (conv) {
 			this.conversations.set(id, {
@@ -379,6 +379,46 @@ class ChatStore {
 			});
 			this._version++;
 			this.schedulePersist();
+		}
+	}
+
+	// Get the index of a message in a conversation
+	getMessageIndex(conversationId: string, messageId: string): number {
+		const conv = this.conversations.get(conversationId);
+		if (!conv) return -1;
+		return conv.messages.findIndex((m) => m.id === messageId);
+	}
+
+	// Delete all messages from a given index onwards (inclusive)
+	deleteMessagesFromIndex(conversationId: string, fromIndex: number): void {
+		const conv = this.conversations.get(conversationId);
+		if (conv && fromIndex >= 0 && fromIndex < conv.messages.length) {
+			this.conversations.set(conversationId, {
+				...conv,
+				messages: conv.messages.slice(0, fromIndex),
+				updatedAt: Date.now()
+			});
+			this._version++;
+			this.schedulePersist();
+		}
+	}
+
+	// Update message content while preserving all other properties (like attachments)
+	updateMessageContent(conversationId: string, messageId: string, newContent: string): void {
+		const conv = this.conversations.get(conversationId);
+		if (conv) {
+			const msgIndex = conv.messages.findIndex((m) => m.id === messageId);
+			if (msgIndex !== -1) {
+				const updatedMessage = { ...conv.messages[msgIndex], content: newContent };
+				conv.messages = [
+					...conv.messages.slice(0, msgIndex),
+					updatedMessage,
+					...conv.messages.slice(msgIndex + 1)
+				];
+				this.conversations.set(conversationId, { ...conv });
+				this._version++;
+				this.schedulePersist();
+			}
 		}
 	}
 

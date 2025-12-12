@@ -10,9 +10,42 @@ export interface LiteLLMModelsResponse {
 	data: LiteLLMModel[];
 }
 
+// Prompt caching control (Anthropic)
+export interface CacheControl {
+	type: 'ephemeral';
+	ttl?: '5m' | '1h';
+}
+
+// Vision content block types (OpenAI format) with optional cache control
+export interface TextContentBlock {
+	type: 'text';
+	text: string;
+	cache_control?: CacheControl;
+}
+
+export interface ImageUrlContentBlock {
+	type: 'image_url';
+	image_url: {
+		url: string;
+		format?: string;
+	};
+	cache_control?: CacheControl;
+}
+
+export type MessageContentBlock = TextContentBlock | ImageUrlContentBlock;
+
 export interface ChatMessage {
-	role: 'user' | 'assistant' | 'system';
-	content: string;
+	role: 'user' | 'assistant' | 'system' | 'tool';
+	content: string | MessageContentBlock[] | null;
+	// Tool-related properties
+	tool_calls?: Array<{
+		id: string;
+		function: {
+			name: string;
+			arguments: string;
+		};
+	}>;
+	tool_call_id?: string;
 }
 
 // Extended thinking configuration for Claude models
@@ -99,4 +132,36 @@ export interface ApiError {
 		type: string;
 		code?: string;
 	};
+}
+
+// Usage statistics including cache information
+export interface UsageInfo {
+	prompt_tokens: number;
+	completion_tokens: number;
+	total_tokens: number;
+	// Cache-specific fields (Anthropic)
+	cache_creation_input_tokens?: number;
+	cache_read_input_tokens?: number;
+	// Detailed cache breakdown
+	cache_creation?: {
+		ephemeral_5m_input_tokens?: number;
+		ephemeral_1h_input_tokens?: number;
+	};
+}
+
+// Response with usage for non-streaming requests
+export interface ChatCompletionResponse {
+	id: string;
+	object: string;
+	created: number;
+	model: string;
+	choices: Array<{
+		index: number;
+		message: {
+			role: string;
+			content: string | null;
+		};
+		finish_reason: string | null;
+	}>;
+	usage?: UsageInfo;
 }

@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { marked } from 'marked';
+	import { parse as parseEmoji } from '@twemoji/parser';
+	import { getFluentEmojiUrl } from '$lib/utils/fluentEmoji';
 
 	let { content, isStreaming = false }: { content: string; isStreaming?: boolean } = $props();
+
+	let containerRef: HTMLDivElement;
 
 	// Configure marked for security and features
 	marked.setOptions({
@@ -9,23 +13,46 @@
 		gfm: true // GitHub Flavored Markdown
 	});
 
-	// Parse markdown to HTML
+	// Replace emojis with Fluent Emoji 3D images (with Twemoji SVG fallback)
+	function replaceEmojisWithFluentEmoji(text: string): string {
+		const entities = parseEmoji(text);
+		if (entities.length === 0) return text;
+
+		let result = '';
+		let lastIndex = 0;
+
+		for (const entity of entities) {
+			// Add text before the emoji
+			result += text.slice(lastIndex, entity.indices[0]);
+
+			// Get Fluent Emoji 3D URL (with Twemoji as fallback via onerror)
+			const fluentUrl = getFluentEmojiUrl(entity.text);
+			const twemojiUrl = entity.url;
+
+			// Use Fluent 3D emoji with Twemoji SVG fallback
+			result += `<img class="emoji-icon" src="${fluentUrl}" alt="${entity.text}" draggable="false" onerror="this.onerror=null;this.src='${twemojiUrl}'" />`;
+			lastIndex = entity.indices[1];
+		}
+
+		// Add remaining text after last emoji
+		result += text.slice(lastIndex);
+		return result;
+	}
+
+	// Parse markdown to HTML with Fluent Emoji
 	let htmlContent = $derived.by(() => {
 		if (!content) return '';
 		try {
-			// Parse markdown - marked.parse can return string or Promise<string>
-			// For sync operation, we use it directly
 			const result = marked.parse(content);
-			// Handle both sync (string) and async (Promise) returns
-			return typeof result === 'string' ? result : '';
+			const html = typeof result === 'string' ? result : '';
+			return replaceEmojisWithFluentEmoji(html);
 		} catch {
-			// Fallback to plain text if parsing fails
 			return content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
 		}
 	});
 </script>
 
-<div class="markdown-content prose prose-invert prose-sm max-w-none">
+<div class="markdown-content prose prose-invert prose-sm max-w-none" bind:this={containerRef}>
 	{@html htmlContent}{#if isStreaming}<span class="streaming-cursor"></span>{/if}
 </div>
 
@@ -33,6 +60,26 @@
 	/* Markdown content styles */
 	.markdown-content {
 		line-height: 1.6;
+	}
+
+	/* Emoji styling - premium Fluent 3D look, sized to blend with text */
+	.markdown-content :global(.emoji-icon) {
+		height: 1.1em;
+		width: 1.1em;
+		vertical-align: -0.1em;
+		margin: 0 0.05em;
+		display: inline-block;
+		border-radius: 0;
+		max-width: none;
+		/* Smooth rendering for 3D emojis */
+		image-rendering: -webkit-optimize-contrast;
+		transform: translateZ(0);
+		transition: transform 0.12s ease;
+	}
+
+	/* Subtle hover interaction */
+	.markdown-content :global(.emoji-icon:hover) {
+		transform: scale(1.1) translateZ(0);
 	}
 
 	/* Override prose defaults for dark theme */
