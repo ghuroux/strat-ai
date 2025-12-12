@@ -15,13 +15,15 @@ function shouldUseCacheControl(model: string): boolean {
 
 /**
  * Add cache_control breakpoints to conversation history for Anthropic prompt caching
- * This marks historical messages (all except the current user message) for caching,
- * achieving up to 90% cost reduction on cached tokens.
+ * Anthropic limits cache_control to a maximum of 4 blocks, so we strategically place them:
  *
+ * 1. System prompt (most stable, always cache)
+ * 2. Last assistant message before current user message (recent context)
+ * 3. Second-to-last assistant message if available (more context)
+ * 4. Last user message in history (not current one)
+ *
+ * This achieves optimal caching while respecting the 4-block limit.
  * Cache breakpoints tell Anthropic: "cache everything up to and including this point"
- * - System prompts: always cached
- * - Historical messages: cached (all messages before the current user message)
- * - Current user message: NOT cached (it's new each turn)
  */
 function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessage[] {
 	// Only apply cache_control for Claude models
@@ -38,9 +40,33 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
 		}
 	}
 
+	// Identify which indices should get cache_control (max 4)
+	const cacheIndices = new Set<number>();
+
+	// 1. Always cache system message if present
+	const systemIndex = messages.findIndex(m => m.role === 'system');
+	if (systemIndex >= 0) {
+		cacheIndices.add(systemIndex);
+	}
+
+	// 2. Find historical messages to cache (working backwards from current message)
+	// We want to cache the most recent historical context
+	const historicalMessages: number[] = [];
+	for (let i = lastUserIndex - 1; i >= 0; i--) {
+		if (messages[i].role !== 'system' && messages[i].role !== 'tool') {
+			historicalMessages.push(i);
+		}
+	}
+
+	// Add up to 3 more cache points (to stay within limit of 4)
+	const remainingSlots = 4 - cacheIndices.size;
+	for (let i = 0; i < Math.min(remainingSlots, historicalMessages.length); i++) {
+		cacheIndices.add(historicalMessages[i]);
+	}
+
 	return messages.map((msg, index) => {
-		// Don't add cache_control to the current user message
-		if (index === lastUserIndex) {
+		// Only add cache_control to selected indices
+		if (!cacheIndices.has(index)) {
 			return msg;
 		}
 
@@ -174,6 +200,7 @@ const searchSystemMessage = `You have access to web search. When you use the web
 /**
  * Prepare messages with search system context
  * Adds or augments the system message with search instructions
+ * Preserves cache_control if present on the system message
  */
 function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messages']): ChatCompletionRequest['messages'] {
 	const result = [...messages];
@@ -184,14 +211,40 @@ function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messa
 	if (systemIndex >= 0) {
 		// Augment existing system message
 		const existingSystem = result[systemIndex];
-		// System messages should always be strings, not content arrays
-		const existingContent = typeof existingSystem.content === 'string'
-			? existingSystem.content
-			: JSON.stringify(existingSystem.content);
-		result[systemIndex] = {
-			...existingSystem,
-			content: `${existingContent}\n\n${searchSystemMessage}`
-		};
+
+		// Handle cache_control format (content is array with cache_control)
+		if (Array.isArray(existingSystem.content) && existingSystem.content.length > 0) {
+			const blocks = [...existingSystem.content] as MessageContentBlock[];
+			const lastBlock = blocks[blocks.length - 1];
+
+			// Append search context to the last text block
+			if ('text' in lastBlock) {
+				blocks[blocks.length - 1] = {
+					...lastBlock,
+					text: `${lastBlock.text}\n\n${searchSystemMessage}`
+				};
+			} else {
+				// Add as new block (preserving cache_control on existing block)
+				blocks.push({
+					type: 'text' as const,
+					text: searchSystemMessage
+				});
+			}
+
+			result[systemIndex] = {
+				...existingSystem,
+				content: blocks
+			};
+		} else {
+			// Simple string content
+			const existingContent = typeof existingSystem.content === 'string'
+				? existingSystem.content
+				: JSON.stringify(existingSystem.content);
+			result[systemIndex] = {
+				...existingSystem,
+				content: `${existingContent}\n\n${searchSystemMessage}`
+			};
+		}
 	} else {
 		// Add new system message at the beginning
 		result.unshift({
