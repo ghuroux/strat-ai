@@ -1,12 +1,18 @@
 /**
- * Arena Store - Model comparison battle management with localStorage persistence
+ * Arena Store - Model comparison battle management with PostgreSQL persistence
  * Uses Svelte 5 runes for reactivity with SvelteMap for proper tracking
+ *
+ * Persistence strategy:
+ * - Primary: PostgreSQL via API endpoints
+ * - Cache: localStorage for fast initial loads and offline support
+ * - Sync: Background sync on battle completion, optimistic updates
  */
 
 import { SvelteMap } from 'svelte/reactivity';
+import type { ModelRanking } from '$lib/server/persistence/types';
 
 const STORAGE_KEY = 'strathost-arena-battles';
-const MAX_BATTLES = 20;
+const MAX_BATTLES = 50; // Increased limit since we have DB storage
 
 function generateId(): string {
 	return crypto.randomUUID();
@@ -82,6 +88,8 @@ export type BattleStatus = 'pending' | 'streaming' | 'complete' | 'judging' | 'j
 export interface ArenaBattle {
 	id: string;
 	prompt: string;
+	title?: string;
+	pinned?: boolean;
 	models: ArenaModel[];
 	responses: ArenaResponse[];
 	userVote?: string;
@@ -103,14 +111,22 @@ class ArenaStore {
 	// Version counter for fine-grained updates
 	_version = $state(0);
 
+	// Sync state
+	isLoading = $state(false);
+	syncError = $state<string | null>(null);
+
 	private initialized = false;
 	private persistDebounced: () => void;
+	private syncQueue: Map<string, ArenaBattle> = new Map();
+	private isSyncing = false;
 
 	constructor() {
 		this.persistDebounced = debounce(() => this.persist(), 500);
 
 		if (typeof window !== 'undefined') {
 			this.hydrate();
+			// Defer API sync to not block initial render
+			setTimeout(() => this.syncFromApi(), 100);
 		}
 	}
 
@@ -162,6 +178,126 @@ class ArenaStore {
 		this.persistDebounced();
 	}
 
+	// Sync from API (PostgreSQL) - source of truth
+	private async syncFromApi(): Promise<void> {
+		if (typeof window === 'undefined') return;
+
+		this.isLoading = true;
+		this.syncError = null;
+
+		try {
+			const response = await fetch('/api/arena/battles');
+			if (!response.ok) {
+				if (response.status === 401) {
+					// Not logged in - keep localStorage data
+					return;
+				}
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.battles) {
+				// Merge API data with local data
+				const apiBattles = new Map<string, ArenaBattle>(
+					data.battles.map((b: ArenaBattle) => [b.id, b])
+				);
+
+				// Update existing and add new from API
+				for (const [id, battle] of apiBattles) {
+					this.battles.set(id, battle);
+				}
+
+				// Check for local-only battles and sync them to server
+				for (const [id, battle] of this.battles) {
+					if (!apiBattles.has(id)) {
+						this.syncToApi(battle);
+					}
+				}
+
+				// Persist merged state to localStorage
+				this.persist();
+			}
+		} catch (e) {
+			console.warn('Failed to sync from API, using localStorage:', e);
+			this.syncError = e instanceof Error ? e.message : 'Sync failed';
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	// Sync a battle to the API
+	private async syncToApi(battle: ArenaBattle): Promise<void> {
+		if (typeof window === 'undefined') return;
+
+		this.syncQueue.set(battle.id, battle);
+		this.processSyncQueue();
+	}
+
+	private async processSyncQueue(): Promise<void> {
+		if (this.isSyncing || this.syncQueue.size === 0) return;
+
+		this.isSyncing = true;
+
+		try {
+			const [id, battle] = this.syncQueue.entries().next().value as [string, ArenaBattle];
+			this.syncQueue.delete(id);
+
+			const checkResponse = await fetch(`/api/arena/battles/${id}`);
+
+			if (checkResponse.status === 404) {
+				// Create new battle
+				await fetch('/api/arena/battles', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(battle)
+				});
+			} else if (checkResponse.ok) {
+				// Update existing battle
+				await fetch(`/api/arena/battles/${id}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(battle)
+				});
+			}
+		} catch (e) {
+			console.warn('Failed to sync battle to API:', e);
+		} finally {
+			this.isSyncing = false;
+			if (this.syncQueue.size > 0) {
+				setTimeout(() => this.processSyncQueue(), 100);
+			}
+		}
+	}
+
+	// Delete from API
+	private async deleteFromApi(id: string): Promise<void> {
+		if (typeof window === 'undefined') return;
+
+		try {
+			await fetch(`/api/arena/battles/${id}`, { method: 'DELETE' });
+		} catch (e) {
+			console.warn('Failed to delete battle from API:', e);
+		}
+	}
+
+	// Force refresh from API
+	async refresh(): Promise<void> {
+		await this.syncFromApi();
+	}
+
+	// Get rankings from API
+	async getRankings(all = false): Promise<ModelRanking[]> {
+		try {
+			const response = await fetch(`/api/arena/rankings${all ? '?all=true' : ''}`);
+			if (!response.ok) throw new Error('Failed to fetch rankings');
+			const data = await response.json();
+			return data.rankings || [];
+		} catch (e) {
+			console.warn('Failed to fetch rankings:', e);
+			return [];
+		}
+	}
+
 	// Derived values
 	activeBattle = $derived.by(() => {
 		const _ = this._version;
@@ -171,6 +307,20 @@ class ArenaStore {
 
 	battleList = $derived.by(() => {
 		return Array.from(this.battles.values()).sort((a, b) => b.createdAt - a.createdAt);
+	});
+
+	// Pinned battles (sorted by date)
+	pinnedBattles = $derived.by(() => {
+		return Array.from(this.battles.values())
+			.filter((b) => b.pinned)
+			.sort((a, b) => b.createdAt - a.createdAt);
+	});
+
+	// Unpinned battles (sorted by date)
+	unpinnedBattles = $derived.by(() => {
+		return Array.from(this.battles.values())
+			.filter((b) => !b.pinned)
+			.sort((a, b) => b.createdAt - a.createdAt);
 	});
 
 	hasBattles = $derived.by(() => {
@@ -213,6 +363,7 @@ class ArenaStore {
 		this.activeBattleId = id;
 		this._version++;
 		this.schedulePersist();
+		this.syncToApi(battle);
 		return id;
 	}
 
@@ -312,6 +463,8 @@ class ArenaStore {
 		const allComplete = battle.responses.every((r) => !r.isStreaming);
 		if (allComplete) {
 			battle.status = 'complete';
+			// Sync when battle is complete (all responses done)
+			this.syncToApi(battle);
 		}
 
 		this.battles.set(battleId, { ...battle });
@@ -366,6 +519,24 @@ class ArenaStore {
 		});
 		this._version++;
 		this.schedulePersist();
+
+		// PATCH to API (triggers ranking update on server)
+		this.patchBattle(battleId, { userVote: modelId });
+	}
+
+	// PATCH partial updates to API
+	private async patchBattle(battleId: string, updates: Record<string, unknown>): Promise<void> {
+		if (typeof window === 'undefined') return;
+
+		try {
+			await fetch(`/api/arena/battles/${battleId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(updates)
+			});
+		} catch (e) {
+			console.warn('Failed to patch battle:', e);
+		}
 	}
 
 	// Clear user vote
@@ -377,6 +548,9 @@ class ArenaStore {
 		this.battles.set(battleId, rest as ArenaBattle);
 		this._version++;
 		this.schedulePersist();
+
+		// PATCH null to API
+		this.patchBattle(battleId, { userVote: null });
 	}
 
 	// Set AI judgment
@@ -392,6 +566,9 @@ class ArenaStore {
 		this.isJudging = false;
 		this._version++;
 		this.schedulePersist();
+
+		// PATCH to API (triggers ranking update on server)
+		this.patchBattle(battleId, { aiJudgment: judgment, status: 'judged' });
 	}
 
 	// Set battle status
@@ -463,6 +640,36 @@ class ArenaStore {
 			this.activeBattleId = remaining[0] || null;
 		}
 		this.schedulePersist();
+		this.deleteFromApi(id);
+	}
+
+	// Toggle pin status
+	togglePin(id: string): void {
+		const battle = this.battles.get(id);
+		if (!battle) return;
+
+		const newPinned = !battle.pinned;
+		this.battles.set(id, { ...battle, pinned: newPinned });
+		this._version++;
+		this.schedulePersist();
+		this.patchBattle(id, { pinned: newPinned });
+	}
+
+	// Update battle title
+	updateBattleTitle(id: string, title: string): void {
+		const battle = this.battles.get(id);
+		if (!battle) return;
+
+		this.battles.set(id, { ...battle, title });
+		this._version++;
+		this.schedulePersist();
+		this.patchBattle(id, { title });
+	}
+
+	// Get display title for a battle (custom title or truncated prompt)
+	getBattleTitle(battle: ArenaBattle): string {
+		if (battle.title) return battle.title;
+		return battle.prompt.slice(0, 50) + (battle.prompt.length > 50 ? '...' : '');
 	}
 
 	// Store abort controller for a model

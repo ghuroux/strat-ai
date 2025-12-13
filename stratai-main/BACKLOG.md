@@ -4,60 +4,58 @@ This file tracks planned features and improvements, aligned with the product vis
 
 ---
 
-## Phase 0.1: POC - LLM Interaction Integrity (CURRENT)
+## Phase 0.1: POC - LLM Interaction Integrity (COMPLETE)
 
-**Goal**: Establish a rock-solid foundation for AI interactions
+**Goal**: Establish a rock-solid foundation for AI interactions ✅
 
 ### Completed
 - [x] Core chat functionality with streaming
-- [x] Multi-model support via LiteLLM
+- [x] Multi-model support via LiteLLM (27 models, 7 providers)
 - [x] Token counting with js-tiktoken
 - [x] System prompt caching (Anthropic)
 - [x] Extended thinking (Claude) / Reasoning effort (OpenAI)
 - [x] Model capability detection
 - [x] Document export (Markdown, DOCX, PDF)
 - [x] Model Arena with AI judging
+- [x] Frontend branding (StratHost → StratAI)
+- [x] AWS Bedrock integration (5 models)
+- [x] Google Gemini integration (3 models)
 
-### In Progress
-- [x] Frontend branding (StratHost → StratAI) - titles, headers, labels
-- [x] Run cleanup-legacy.sh to remove old test files
-- [ ] Codebase cleanup and standardization
-
-### Remaining
-- [ ] Backend branding (localStorage keys, README) - defer to later
-  - `strathost-settings` → `stratai-settings`
-  - `strathost-conversations` → `stratai-conversations`
-  - `strathost-arena-battles` → `stratai-arena-battles`
-  - Update README.md references
+### Deferred to Later
+- [ ] Backend branding (localStorage keys use strathost- prefix)
 - [ ] Performance baseline measurement
 - [ ] Error boundary implementation
-- [ ] Amazon Bedrock connection test
 
 ---
 
-## Phase 0.2: Persistence & History
+## Phase 0.2: Persistence & History (COMPLETE)
 
-**Goal**: Users never lose their work
+**Goal**: Users never lose their work ✅
 
 ### Database Integration
-- [ ] PostgreSQL setup (local Docker)
-- [ ] Implement PostgreSQL adapter for existing repository interfaces
-- [ ] Migration from in-memory to persistent storage
+- [x] PostgreSQL setup (local PostgreSQL 18)
+- [x] Implement PostgreSQL adapter for existing repository interfaces
+- [x] Migration from in-memory to persistent storage (hybrid: localStorage cache + PostgreSQL source of truth)
 
 ### Chat History
-- [ ] Conversation list sidebar
-- [ ] Auto-generated chat titles
-- [ ] Search across conversations
-- [ ] Delete/archive conversations
+- [x] Conversation list sidebar (Sidebar.svelte with pinned/recent sections)
+- [x] Auto-generated chat titles (from first user message)
+- [x] Search across conversations (local search in sidebar)
+- [x] Delete/archive conversations (soft delete with deleted_at)
 
 ### Data Management
-- [ ] Export conversations (JSON backup)
-- [ ] Import conversations
-- [ ] Storage usage indicators
+- [x] Export conversations (JSON via exportConversation)
+- [x] Import conversations (JSON via importConversation)
+- [ ] Storage usage indicators (deferred - nice-to-have)
+
+### Bonus: Arena Persistence
+- [x] Arena battles table with full response content
+- [x] Model rankings with Elo ratings (K=32, start 1500)
+- [x] API sync for battles, votes, judgments
 
 ---
 
-## Phase 0.3: Spaces & Templates
+## Phase 0.3: Spaces & Templates (NEXT)
 
 **Goal**: Reduce cognitive load, fast-track productivity
 
@@ -213,17 +211,17 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 
 ## Priority Matrix
 
-| Feature | Phase | Impact | Effort |
-|---------|-------|--------|--------|
-| Codebase cleanup | 0.1 | High | Low |
-| Bedrock test | 0.1 | Medium | Low |
-| PostgreSQL integration | 0.2 | Critical | Medium |
-| Chat history sidebar | 0.2 | Critical | Medium |
-| Space framework | 0.3 | High | Medium |
-| Work templates | 0.3 | High | Medium |
-| Send to Arena (context) | Arena | Medium | Medium |
-| Team management | 0.4 | High | High |
-| Policy engine | 0.5 | High | High |
+| Feature | Phase | Impact | Effort | Status |
+|---------|-------|--------|--------|--------|
+| ~~Codebase cleanup~~ | 0.1 | High | Low | ✅ |
+| ~~Bedrock integration~~ | 0.1 | Medium | Low | ✅ |
+| ~~PostgreSQL integration~~ | 0.2 | Critical | Medium | ✅ |
+| ~~Chat history sidebar~~ | 0.2 | Critical | Medium | ✅ |
+| Space framework | 0.3 | High | Medium | Next |
+| Work templates | 0.3 | High | Medium | Next |
+| Send to Arena (context) | Arena | Medium | Medium | Planned |
+| Team management | 0.4 | High | High | Planned |
+| Policy engine | 0.5 | High | High | Planned |
 
 ---
 
@@ -238,3 +236,4 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 ---
 
 *Aligned with PRODUCT_VISION.md - Last Updated: December 2024*
+*Completed: Phase 0.1, Phase 0.2 | Next: Phase 0.3 Spaces & Templates*

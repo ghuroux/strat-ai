@@ -2,6 +2,13 @@ import postgres from 'postgres';
 import { DATABASE_URL } from '$env/static/private';
 
 /**
+ * JSONValue type for postgres.js sql.json() calls
+ * Matches the expected type for JSONB serialization
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type JSONValue = any;
+
+/**
  * PostgreSQL connection pool using postgres.js
  *
  * Features:

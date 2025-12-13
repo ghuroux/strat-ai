@@ -9,7 +9,7 @@
 	import ArenaJudgment from '$lib/components/arena/ArenaJudgment.svelte';
 	import ArenaBattleList from '$lib/components/arena/ArenaBattleList.svelte';
 	import ArenaWelcome from '$lib/components/arena/ArenaWelcome.svelte';
-	import { arenaStore, type ArenaModel, type BattleSettings, type ResponseMetrics } from '$lib/stores/arena.svelte';
+	import { arenaStore, type ArenaModel, type ArenaBattle, type BattleSettings, type ResponseMetrics } from '$lib/stores/arena.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
@@ -328,6 +328,24 @@
 	function handleSelectBattle(battleId: string) {
 		arenaStore.setActiveBattle(battleId);
 	}
+
+	// Handle rerun battle (create new battle with same prompt/models/settings)
+	async function handleRerunBattle(battle: ArenaBattle) {
+		// Use the exact models from the original battle
+		const models = battle.models;
+
+		// Use the exact settings from the original battle
+		const settings = battle.settings;
+
+		// Create a new battle with the same prompt
+		const battleId = arenaStore.createBattle(battle.prompt, models, settings);
+
+		// Toast notification
+		toastStore.info('Rerunning battle with same configuration');
+
+		// Start parallel streaming for all models
+		await streamAllModels(battleId, battle.prompt, models, settings);
+	}
 </script>
 
 <svelte:head>
@@ -345,6 +363,7 @@
 			activeBattleId={activeBattle?.id || null}
 			onSelectBattle={handleSelectBattle}
 			onNewBattle={handleNewBattle}
+			onRerunBattle={handleRerunBattle}
 		/>
 
 		<!-- Main Content -->

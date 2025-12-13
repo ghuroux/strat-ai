@@ -1,6 +1,6 @@
 import type { Conversation, Message } from '$lib/types/chat';
 import type { ConversationRepository, MessageRepository, DataAccess } from './types';
-import { sql } from './db';
+import { sql, type JSONValue } from './db';
 
 /**
  * Database row type for conversations table
@@ -95,6 +95,8 @@ export const postgresConversationRepository: ConversationRepository = {
 	},
 
 	async create(conversation: Conversation, userId: string): Promise<void> {
+		// Use UPSERT to handle re-syncing soft-deleted conversations
+		// ON CONFLICT: update the record and clear deleted_at to "restore" it
 		await sql`
 			INSERT INTO conversations (
 				id, title, model, messages, pinned, summary,
@@ -104,9 +106,9 @@ export const postgresConversationRepository: ConversationRepository = {
 				${conversation.id},
 				${conversation.title},
 				${conversation.model},
-				${JSON.stringify(conversation.messages)}::jsonb,
+				${sql.json(conversation.messages as JSONValue)},
 				${conversation.pinned ?? false},
-				${conversation.summary ? JSON.stringify(conversation.summary) : null}::jsonb,
+				${conversation.summary ? sql.json(conversation.summary as JSONValue) : null},
 				${conversation.continuedFromId ?? null},
 				${conversation.continuationSummary ?? null},
 				${conversation.refreshedAt ? new Date(conversation.refreshedAt) : null},
@@ -114,6 +116,17 @@ export const postgresConversationRepository: ConversationRepository = {
 				${new Date(conversation.createdAt)},
 				${new Date(conversation.updatedAt)}
 			)
+			ON CONFLICT (id) DO UPDATE SET
+				title = EXCLUDED.title,
+				model = EXCLUDED.model,
+				messages = EXCLUDED.messages,
+				pinned = EXCLUDED.pinned,
+				summary = EXCLUDED.summary,
+				continued_from_id = EXCLUDED.continued_from_id,
+				continuation_summary = EXCLUDED.continuation_summary,
+				refreshed_at = EXCLUDED.refreshed_at,
+				updated_at = EXCLUDED.updated_at,
+				deleted_at = NULL
 		`;
 	},
 
@@ -123,9 +136,9 @@ export const postgresConversationRepository: ConversationRepository = {
 			SET
 				title = ${conversation.title},
 				model = ${conversation.model},
-				messages = ${JSON.stringify(conversation.messages)}::jsonb,
+				messages = ${sql.json(conversation.messages as JSONValue)},
 				pinned = ${conversation.pinned ?? false},
-				summary = ${conversation.summary ? JSON.stringify(conversation.summary) : null}::jsonb,
+				summary = ${conversation.summary ? sql.json(conversation.summary as JSONValue) : null},
 				continued_from_id = ${conversation.continuedFromId ?? null},
 				continuation_summary = ${conversation.continuationSummary ?? null},
 				refreshed_at = ${conversation.refreshedAt ? new Date(conversation.refreshedAt) : null},
@@ -169,7 +182,7 @@ export const postgresMessageRepository: MessageRepository = {
 		// Append message to JSONB array
 		await sql`
 			UPDATE conversations
-			SET messages = messages || ${JSON.stringify([message])}::jsonb
+			SET messages = messages || ${sql.json([message] as JSONValue)}
 			WHERE id = ${conversationId}
 				AND deleted_at IS NULL
 		`;
@@ -184,7 +197,7 @@ export const postgresMessageRepository: MessageRepository = {
 				SELECT jsonb_agg(
 					CASE
 						WHEN elem->>'id' = ${message.id}
-						THEN ${JSON.stringify(message)}::jsonb
+						THEN ${sql.json(message as JSONValue)}
 						ELSE elem
 					END
 				)

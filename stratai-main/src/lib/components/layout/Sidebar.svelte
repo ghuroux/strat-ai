@@ -13,6 +13,24 @@
 	let searchQuery = $state('');
 	let searchInputRef: HTMLInputElement | undefined = $state();
 	let isSearchFocused = $state(false);
+	let openMenuId = $state<string | null>(null);
+
+	function handleMenuToggle(id: string, isOpen: boolean) {
+		openMenuId = isOpen ? id : null;
+	}
+
+	function closeAllMenus() {
+		openMenuId = null;
+	}
+
+	// Close menu when clicking outside
+	function handleSidebarClick(e: MouseEvent) {
+		const target = e.target as HTMLElement;
+		// If click is not on a menu trigger or dropdown, close the menu
+		if (!target.closest('.menu-trigger') && !target.closest('.dropdown-menu')) {
+			closeAllMenus();
+		}
+	}
 
 	// Helper function to filter conversations by query
 	function filterByQuery(conversations: typeof chatStore.pinnedConversations, query: string) {
@@ -41,6 +59,46 @@
 
 	function handlePinConversation(id: string) {
 		chatStore.togglePin(id);
+	}
+
+	function handleRenameConversation(id: string, newTitle: string) {
+		chatStore.updateConversationTitle(id, newTitle);
+	}
+
+	function handleExportConversation(id: string) {
+		const conversation = chatStore.conversations.get(id);
+		if (!conversation) return;
+
+		// Convert conversation to markdown
+		const date = new Date(conversation.createdAt);
+		const dateStr = date.toLocaleDateString('en-US', {
+			year: 'numeric',
+			month: 'long',
+			day: 'numeric'
+		});
+
+		let markdown = `# ${conversation.title}\n\n`;
+		markdown += `**Model:** ${conversation.model}  \n`;
+		markdown += `**Date:** ${dateStr}\n\n`;
+		markdown += `---\n\n`;
+
+		for (const message of conversation.messages) {
+			const role = message.role === 'user' ? 'User' : 'Assistant';
+			markdown += `## ${role}\n\n${message.content}\n\n`;
+		}
+
+		markdown += `---\n\n*Exported from StratAI*\n`;
+
+		// Trigger download
+		const blob = new Blob([markdown], { type: 'text/markdown' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${conversation.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${date.toISOString().split('T')[0]}.md`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
 	}
 
 	function clearSearch() {
@@ -72,10 +130,12 @@
 {/if}
 
 <!-- Sidebar -->
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <aside
 	class="fixed lg:relative z-50 h-full w-[280px] bg-surface-900 border-r border-surface-800
 		   flex flex-col transform transition-transform duration-300 ease-out
 		   {settingsStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0 lg:overflow-hidden'}"
+	onclick={handleSidebarClick}
 >
 	<!-- New Chat Button -->
 	<div class="p-4 border-b border-surface-800">
@@ -188,9 +248,13 @@
 						<ConversationItem
 							{conversation}
 							active={conversation.id === chatStore.activeConversationId}
-							onclick={() => handleConversationClick(conversation.id)}
+							menuOpen={openMenuId === conversation.id}
+							onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
+							onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
 							ondelete={() => handleDeleteConversation(conversation.id)}
 							onpin={() => handlePinConversation(conversation.id)}
+							onrename={(title) => handleRenameConversation(conversation.id, title)}
+							onexport={() => handleExportConversation(conversation.id)}
 						/>
 					{/each}
 				</div>
@@ -215,9 +279,13 @@
 					<ConversationItem
 						{conversation}
 						active={conversation.id === chatStore.activeConversationId}
-						onclick={() => handleConversationClick(conversation.id)}
+						menuOpen={openMenuId === conversation.id}
+						onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
+						onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
 						ondelete={() => handleDeleteConversation(conversation.id)}
 						onpin={() => handlePinConversation(conversation.id)}
+						onrename={(title) => handleRenameConversation(conversation.id, title)}
+						onexport={() => handleExportConversation(conversation.id)}
 					/>
 				{/each}
 			{/if}

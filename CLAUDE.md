@@ -141,6 +141,100 @@ Track acknowledged issues to address later:
 
 ## Session Log
 
+### Session: 2024-12-13 (Arena Battle Management)
+**Focus**: Arena Battle menu system, persistence, and rerun feature
+
+**Completed**:
+- **Export Chat Feature** - Added markdown export for chat conversations in Sidebar
+- **Arena Battle Menu System** - Full 3-dot menu implementation:
+  - Created `ArenaBattleItem.svelte` component with actions: Rerun, Rename, Pin/Unpin, Export, Delete
+  - Inline renaming with keyboard support (Enter/Escape)
+  - Fixed menu positioning (adjacent to button, vertically centered)
+- **Database Schema** - Added `pinned` and `title` columns to arena_battles table
+  - Created `arena-schema.sql` with full schema
+  - Added `arena-postgres.ts` repository with CRUD operations
+- **Arena Store** - Extended with `togglePin()`, `updateBattleTitle()` methods
+- **API Endpoints** - Full CRUD for arena battles:
+  - `GET/POST /api/arena/battles` - List and create battles
+  - `GET/PATCH/DELETE /api/arena/battles/[id]` - Individual battle operations
+  - `GET /api/arena/rankings` - Model rankings
+- **Rerun Battle Feature** - Creates new battle with same prompt/models/settings
+- **ArenaBattleList Refactor** - Now uses ArenaBattleItem with pinned/recent sections
+- **CSS Fix** - Added standard `line-clamp` property for cross-browser compatibility
+
+**Files Created**:
+- `stratai-main/src/lib/components/arena/ArenaBattleItem.svelte` - Battle item with menu
+- `stratai-main/src/lib/server/persistence/arena-postgres.ts` - Arena repository
+- `stratai-main/src/lib/server/persistence/arena-schema.sql` - Database schema
+- `stratai-main/src/routes/api/arena/battles/+server.ts` - Battles list API
+- `stratai-main/src/routes/api/arena/battles/[id]/+server.ts` - Individual battle API
+- `stratai-main/src/routes/api/arena/rankings/+server.ts` - Rankings API
+
+**Files Modified**:
+- `stratai-main/src/lib/components/layout/Sidebar.svelte` - Export chat handler
+- `stratai-main/src/lib/components/layout/ConversationItem.svelte` - Export callback
+- `stratai-main/src/lib/components/arena/ArenaBattleList.svelte` - Refactored with sections
+- `stratai-main/src/lib/stores/arena.svelte.ts` - Pin/title methods
+- `stratai-main/src/lib/server/persistence/types.ts` - BattleRepository interface
+- `stratai-main/src/lib/server/persistence/db.ts` - Arena DB export
+- `stratai-main/src/lib/server/persistence/index.ts` - Arena repository export
+- `stratai-main/src/lib/server/persistence/postgres.ts` - DB connection pooling
+- `stratai-main/src/routes/arena/+page.svelte` - handleRerunBattle callback
+- `stratai-main/BACKLOG.md` - Updated with Arena tasks
+- `stratai-main/PRODUCT_VISION.md` - Updated Arena section
+
+**Current State**:
+- Arena battles can be pinned, renamed, exported, deleted, and rerun
+- PostgreSQL persistence for arena battles (when enabled)
+- Pinned battles appear in separate section at top of list
+
+**Next session suggestions**:
+- Test Arena persistence with PostgreSQL enabled
+- Verify rerun creates proper new battles
+- Add battle date/time display in list
+- Consider adding battle search/filter
+
+---
+
+### Session: 2024-12-13 (Phase 0.2 - PostgreSQL Fix)
+**Focus**: Fix PostgreSQL double-encoding bug causing frontend crash
+
+**Problem**: Terminal crashed during Phase 0.2 PostgreSQL setup. Frontend was crashing with:
+```
+TypeError: msgs.filter is not a function
+```
+
+**Root Cause**: `JSON.stringify()` in `postgres.ts` before `::jsonb` cast caused double-encoding.
+- Messages were stored as JSONB strings (`"[{...}]"`) instead of arrays (`[{...}]`)
+- `jsonb_typeof(messages)` returned `"string"` instead of `"array"`
+
+**Fixed**:
+1. Removed `JSON.stringify()` from `postgres.ts` (4 places in create/update functions)
+2. Migrated existing data: `UPDATE conversations SET messages = (messages #>> '{}')::jsonb`
+3. Verified all 10 conversations now have proper JSONB arrays
+
+**Files Modified**:
+- `stratai-main/src/lib/server/persistence/postgres.ts` - Removed JSON.stringify double-encoding
+
+**Database Migration** (run once):
+```sql
+UPDATE conversations SET messages = (messages #>> '{}')::jsonb WHERE jsonb_typeof(messages) = 'string';
+```
+
+**Current State**:
+- PostgreSQL 18 running with `stratai` database
+- `conversations` table with 10 conversations (user_id: admin)
+- Frontend loads without crash
+- Phase 0.2 persistence working
+
+**Next session suggestions**:
+- Test creating new conversations to verify persistence
+- Test the tester user (password: `tester123`)
+- Run TypeScript check
+- Continue Phase 0.2 work
+
+---
+
 ### Session: 2024-12-13 (Model Expansion & TypeScript Fixes)
 **Focus**: AWS Bedrock/Google models, TypeScript fixes, Model Selector UX
 

@@ -1,58 +1,146 @@
 <script lang="ts">
+	import { fly, fade } from 'svelte/transition';
 	import { arenaStore, type ArenaBattle } from '$lib/stores/arena.svelte';
+	import ArenaBattleItem from './ArenaBattleItem.svelte';
 
 	interface Props {
 		battles?: ArenaBattle[];
 		activeBattleId?: string | null;
 		onSelectBattle?: (battleId: string) => void;
 		onNewBattle?: () => void;
+		onRerunBattle?: (battle: ArenaBattle) => void;
 	}
 
-	let { battles, activeBattleId, onSelectBattle, onNewBattle }: Props = $props();
+	let { battles, activeBattleId, onSelectBattle, onNewBattle, onRerunBattle }: Props = $props();
 
-	// Get battles sorted by date (newest first)
-	// Use provided battles or fall back to store
-	let sortedBattles = $derived(
-		(battles || [...arenaStore.battles.values()]).sort((a, b) => b.createdAt - a.createdAt)
-	);
+	let openMenuId = $state<string | null>(null);
 
-	// Format relative time
-	function formatRelativeTime(timestamp: number): string {
-		const now = Date.now();
-		const diff = now - timestamp;
+	// Get battles from props or store, split by pinned status
+	let pinnedBattles = $derived.by(() => {
+		const allBattles = battles || [...arenaStore.battles.values()];
+		return allBattles.filter((b) => b.pinned).sort((a, b) => b.createdAt - a.createdAt);
+	});
 
-		const seconds = Math.floor(diff / 1000);
-		const minutes = Math.floor(seconds / 60);
-		const hours = Math.floor(minutes / 60);
-		const days = Math.floor(hours / 24);
+	let unpinnedBattles = $derived.by(() => {
+		const allBattles = battles || [...arenaStore.battles.values()];
+		return allBattles.filter((b) => !b.pinned).sort((a, b) => b.createdAt - a.createdAt);
+	});
 
-		if (days > 0) return `${days}d ago`;
-		if (hours > 0) return `${hours}h ago`;
-		if (minutes > 0) return `${minutes}m ago`;
-		return 'Just now';
+	let hasBattles = $derived(pinnedBattles.length > 0 || unpinnedBattles.length > 0);
+	let hasPinnedBattles = $derived(pinnedBattles.length > 0);
+	let totalBattles = $derived(pinnedBattles.length + unpinnedBattles.length);
+
+	function handleMenuToggle(id: string, isOpen: boolean) {
+		openMenuId = isOpen ? id : null;
 	}
 
-	// Get status badge color
-	function getStatusColor(status: ArenaBattle['status']): string {
-		switch (status) {
-			case 'streaming':
-				return 'bg-primary-500/20 text-primary-400';
-			case 'judging':
-				return 'bg-amber-500/20 text-amber-400';
-			case 'judged':
-				return 'bg-green-500/20 text-green-400';
-			case 'complete':
-				return 'bg-surface-600 text-surface-300';
-			default:
-				return 'bg-surface-700 text-surface-400';
+	function closeAllMenus() {
+		openMenuId = null;
+	}
+
+	function handleBattleClick(id: string) {
+		closeAllMenus();
+		onSelectBattle?.(id);
+	}
+
+	function handleDeleteBattle(id: string) {
+		arenaStore.deleteBattle(id);
+	}
+
+	function handlePinBattle(id: string) {
+		arenaStore.togglePin(id);
+	}
+
+	function handleRenameBattle(id: string, newTitle: string) {
+		arenaStore.updateBattleTitle(id, newTitle);
+	}
+
+	function handleRerunBattle(id: string) {
+		const battle = arenaStore.battles.get(id);
+		if (!battle) return;
+		onRerunBattle?.(battle);
+	}
+
+	function handleExportBattle(id: string) {
+		const battle = arenaStore.battles.get(id);
+		if (!battle) return;
+
+		// Convert battle to markdown
+		const date = new Date(battle.createdAt);
+		const dateStr = date.toLocaleDateString('en-US', {
+			year: 'numeric',
+			month: 'long',
+			day: 'numeric'
+		});
+
+		const title = battle.title || battle.prompt.slice(0, 50);
+		let markdown = `# Arena Battle: ${title}\n\n`;
+		markdown += `**Date:** ${dateStr}  \n`;
+		markdown += `**Models:** ${battle.models.map((m) => m.displayName).join(', ')}  \n`;
+		markdown += `**Status:** ${battle.status}\n\n`;
+		markdown += `---\n\n`;
+		markdown += `## Prompt\n\n${battle.prompt}\n\n`;
+		markdown += `---\n\n`;
+
+		// Add each model's response
+		for (const response of battle.responses) {
+			const model = battle.models.find((m) => m.id === response.modelId);
+			markdown += `## ${model?.displayName || response.modelId}\n\n`;
+
+			if (response.thinking) {
+				markdown += `### Thinking\n\n${response.thinking}\n\n`;
+			}
+
+			markdown += `### Response\n\n${response.content}\n\n`;
+
+			if (response.error) {
+				markdown += `**Error:** ${response.error}\n\n`;
+			}
+
+			markdown += `---\n\n`;
 		}
-	}
 
-	// Get winner name
-	function getWinnerName(battle: ArenaBattle): string | null {
-		if (!battle.aiJudgment?.winnerId) return null;
-		const winner = battle.models.find((m) => m.id === battle.aiJudgment?.winnerId);
-		return winner?.displayName || null;
+		// Add judgment if present
+		if (battle.aiJudgment) {
+			markdown += `## AI Judgment\n\n`;
+			if (battle.aiJudgment.winnerId) {
+				const winner = battle.models.find((m) => m.id === battle.aiJudgment?.winnerId);
+				markdown += `**Winner:** ${winner?.displayName || 'Unknown'}\n\n`;
+			} else {
+				markdown += `**Result:** Tie\n\n`;
+			}
+			markdown += `### Analysis\n\n${battle.aiJudgment.analysis}\n\n`;
+
+			if (battle.aiJudgment.scores) {
+				markdown += `### Scores\n\n`;
+				for (const [modelId, score] of Object.entries(battle.aiJudgment.scores)) {
+					const model = battle.models.find((m) => m.id === modelId);
+					markdown += `- **${model?.displayName || modelId}:** ${score}/10\n`;
+				}
+				markdown += `\n`;
+			}
+		}
+
+		// Add user vote if present
+		if (battle.userVote) {
+			const votedModel = battle.models.find((m) => m.id === battle.userVote);
+			markdown += `## User Vote\n\n`;
+			markdown += `You picked: **${votedModel?.displayName || 'Unknown'}**\n\n`;
+		}
+
+		markdown += `---\n\n*Exported from StratAI Arena*\n`;
+
+		// Trigger download
+		const blob = new Blob([markdown], { type: 'text/markdown' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		const safeTitle = title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+		a.download = `arena-battle-${safeTitle}-${date.toISOString().split('T')[0]}.md`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
 	}
 
 	function handleClearHistory() {
@@ -60,9 +148,21 @@
 			arenaStore.clearHistory();
 		}
 	}
+
+	// Close menu when clicking outside
+	function handleListClick(e: MouseEvent) {
+		const target = e.target as HTMLElement;
+		if (!target.closest('.menu-trigger') && !target.closest('.dropdown-menu')) {
+			closeAllMenus();
+		}
+	}
 </script>
 
-<div class="arena-battle-list w-64 h-full flex flex-col bg-surface-900 border-r border-surface-800">
+<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+<div
+	class="arena-battle-list w-64 h-full flex flex-col bg-surface-900 border-r border-surface-800"
+	onclick={handleListClick}
+>
 	<!-- Header with New Battle button -->
 	<div class="p-3 border-b border-surface-700">
 		<button
@@ -92,7 +192,7 @@
 			</svg>
 			History
 		</span>
-		{#if sortedBattles.length > 0}
+		{#if hasBattles}
 			<button
 				type="button"
 				onclick={handleClearHistory}
@@ -105,7 +205,7 @@
 
 	<!-- Battle List -->
 	<div class="flex-1 overflow-y-auto">
-		{#if sortedBattles.length === 0}
+		{#if !hasBattles}
 			<div class="p-4 text-center text-surface-500">
 				<svg
 					class="w-12 h-12 mx-auto mb-3 text-surface-600"
@@ -124,93 +224,89 @@
 				<p class="text-xs mt-1">Start a battle to see history</p>
 			</div>
 		{:else}
-			<div class="divide-y divide-surface-800">
-				{#each sortedBattles as battle (battle.id)}
-					<button
-						type="button"
-						onclick={() => onSelectBattle?.(battle.id)}
-						class="w-full text-left p-3 hover:bg-surface-800/50 transition-colors
-							   {activeBattleId === battle.id ? 'bg-surface-800' : ''}"
-					>
-						<!-- Prompt preview -->
-						<p class="text-sm text-surface-200 line-clamp-2 mb-2">
-							{battle.prompt}
-						</p>
+			<!-- Pinned Section -->
+			{#if hasPinnedBattles}
+				<div class="pinned-section" in:fly={{ y: -10, duration: 200 }}>
+					<div class="section-header">
+						<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+						</svg>
+						<span>Pinned</span>
+					</div>
+					{#each pinnedBattles as battle (battle.id)}
+						<ArenaBattleItem
+							{battle}
+							active={battle.id === activeBattleId}
+							menuOpen={openMenuId === battle.id}
+							onMenuToggle={(isOpen) => handleMenuToggle(battle.id, isOpen)}
+							onclick={() => handleBattleClick(battle.id)}
+							ondelete={() => handleDeleteBattle(battle.id)}
+							onpin={() => handlePinBattle(battle.id)}
+							onrename={(title) => handleRenameBattle(battle.id, title)}
+							onexport={() => handleExportBattle(battle.id)}
+							onrerun={() => handleRerunBattle(battle.id)}
+						/>
+					{/each}
+				</div>
 
-						<!-- Meta info -->
-						<div class="flex items-center justify-between text-xs">
-							<div class="flex items-center gap-2">
-								<!-- Model count -->
-								<span class="text-surface-500">
-									{battle.models.length} models
-								</span>
+				<!-- Divider -->
+				{#if unpinnedBattles.length > 0}
+					<div class="section-divider"></div>
+				{/if}
+			{/if}
 
-								<!-- Status -->
-								<span class="px-1.5 py-0.5 rounded {getStatusColor(battle.status)}">
-									{battle.status}
-								</span>
-							</div>
-
-							<!-- Time -->
-							<span class="text-surface-500">
-								{formatRelativeTime(battle.createdAt)}
-							</span>
-						</div>
-
-						<!-- Winner (if judged) -->
-						{#if battle.aiJudgment?.winnerId}
-							{@const winnerName = getWinnerName(battle)}
-							{#if winnerName}
-								<div class="mt-2 flex items-center gap-1.5 text-xs text-accent-400">
-									<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-										<path
-											d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-										/>
-									</svg>
-									{winnerName}
-								</div>
-							{/if}
-						{:else if battle.aiJudgment && !battle.aiJudgment.winnerId}
-							<div class="mt-2 flex items-center gap-1.5 text-xs text-surface-400">
-								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M8 12h.01M12 12h.01M16 12h.01"
-									/>
-								</svg>
-								Tie
-							</div>
-						{/if}
-
-						<!-- User vote indicator -->
-						{#if battle.userVote}
-							{@const votedModel = battle.models.find((m) => m.id === battle.userVote)}
-							{#if votedModel}
-								<div class="mt-1 flex items-center gap-1.5 text-xs text-primary-400">
-									<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M5 13l4 4L19 7"
-										/>
-									</svg>
-									You picked {votedModel.displayName}
-								</div>
-							{/if}
-						{/if}
-					</button>
+			<!-- Recent/Unpinned Section -->
+			{#if unpinnedBattles.length > 0}
+				{#if hasPinnedBattles}
+					<div class="section-header mt-1">
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+						<span>Recent</span>
+					</div>
+				{/if}
+				{#each unpinnedBattles as battle (battle.id)}
+					<ArenaBattleItem
+						{battle}
+						active={battle.id === activeBattleId}
+						menuOpen={openMenuId === battle.id}
+						onMenuToggle={(isOpen) => handleMenuToggle(battle.id, isOpen)}
+						onclick={() => handleBattleClick(battle.id)}
+						ondelete={() => handleDeleteBattle(battle.id)}
+						onpin={() => handlePinBattle(battle.id)}
+						onrename={(title) => handleRenameBattle(battle.id, title)}
+						onexport={() => handleExportBattle(battle.id)}
+						onrerun={() => handleRerunBattle(battle.id)}
+					/>
 				{/each}
-			</div>
+			{/if}
 		{/if}
 	</div>
 
 	<!-- Footer stats -->
-	{#if sortedBattles.length > 0}
+	{#if hasBattles}
 		<div class="px-4 py-2 border-t border-surface-800 text-xs text-surface-500">
-			{sortedBattles.length} battle{sortedBattles.length !== 1 ? 's' : ''} saved
+			{totalBattles} battle{totalBattles !== 1 ? 's' : ''} saved
 		</div>
 	{/if}
 </div>
+
+<style>
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		color: #71717a;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.section-divider {
+		height: 1px;
+		margin: 0.25rem 0.75rem;
+		background-color: #27272a;
+	}
+</style>

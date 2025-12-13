@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
-	import type { Conversation } from '$lib/types/chat';
+	import type { ArenaBattle } from '$lib/stores/arena.svelte';
 
 	interface Props {
-		conversation: Conversation;
+		battle: ArenaBattle;
 		active?: boolean;
 		menuOpen?: boolean;
 		onMenuToggle?: (isOpen: boolean) => void;
@@ -12,10 +12,11 @@
 		onpin?: () => void;
 		onrename?: (newTitle: string) => void;
 		onexport?: () => void;
+		onrerun?: () => void;
 	}
 
 	let {
-		conversation,
+		battle,
 		active = false,
 		menuOpen = false,
 		onMenuToggle,
@@ -23,7 +24,8 @@
 		ondelete,
 		onpin,
 		onrename,
-		onexport
+		onexport,
+		onrerun
 	}: Props = $props();
 
 	let isEditing = $state(false);
@@ -31,30 +33,51 @@
 	let inputRef: HTMLInputElement | undefined = $state();
 	let menuButtonRef: HTMLButtonElement | undefined = $state();
 	let menuPosition = $state({ top: 0, left: 0 });
-	let isPinned = $derived(conversation.pinned ?? false);
+	let isPinned = $derived(battle.pinned ?? false);
 
-	function formatTime(timestamp: number): string {
-		const date = new Date(timestamp);
-		const now = new Date();
-		const diff = now.getTime() - date.getTime();
-		const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+	// Get display title (custom or truncated prompt)
+	function getDisplayTitle(): string {
+		if (battle.title) return battle.title;
+		return battle.prompt.slice(0, 50) + (battle.prompt.length > 50 ? '...' : '');
+	}
 
-		if (days === 0) {
-			return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-		} else if (days === 1) {
-			return 'Yesterday';
-		} else if (days < 7) {
-			return date.toLocaleDateString([], { weekday: 'short' });
-		} else {
-			return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+	// Format relative time
+	function formatRelativeTime(timestamp: number): string {
+		const now = Date.now();
+		const diff = now - timestamp;
+
+		const seconds = Math.floor(diff / 1000);
+		const minutes = Math.floor(seconds / 60);
+		const hours = Math.floor(minutes / 60);
+		const days = Math.floor(hours / 24);
+
+		if (days > 0) return `${days}d ago`;
+		if (hours > 0) return `${hours}h ago`;
+		if (minutes > 0) return `${minutes}m ago`;
+		return 'Just now';
+	}
+
+	// Get status badge color
+	function getStatusColor(status: ArenaBattle['status']): string {
+		switch (status) {
+			case 'streaming':
+				return 'bg-primary-500/20 text-primary-400';
+			case 'judging':
+				return 'bg-amber-500/20 text-amber-400';
+			case 'judged':
+				return 'bg-green-500/20 text-green-400';
+			case 'complete':
+				return 'bg-surface-600 text-surface-300';
+			default:
+				return 'bg-surface-700 text-surface-400';
 		}
 	}
 
-	function getMessagePreview(): string {
-		if (!conversation.messages || conversation.messages.length === 0) return 'No messages yet';
-		const lastMessage = conversation.messages[conversation.messages.length - 1];
-		if (!lastMessage?.content) return 'No messages yet';
-		return lastMessage.content.slice(0, 60) + (lastMessage.content.length > 60 ? '...' : '');
+	// Get winner name
+	function getWinnerName(): string | null {
+		if (!battle.aiJudgment?.winnerId) return null;
+		const winner = battle.models.find((m) => m.id === battle.aiJudgment?.winnerId);
+		return winner?.displayName || null;
 	}
 
 	function handleItemClick() {
@@ -67,13 +90,13 @@
 		e.preventDefault();
 		e.stopPropagation();
 
-		// Calculate position for fixed dropdown
+		// Calculate position for fixed dropdown - adjacent to button
 		if (menuButtonRef && !menuOpen) {
 			const rect = menuButtonRef.getBoundingClientRect();
-			// Position menu to start above the button, so it appears adjacent
-			const menuHeight = 160; // Approximate height of dropdown
+			const menuHeight = 220; // Approximate height with rerun option
+			// Position menu so it's vertically centered on the button
 			menuPosition = {
-				top: Math.max(8, rect.top - menuHeight + rect.height),
+				top: Math.max(8, rect.top + rect.height / 2 - menuHeight / 2),
 				left: rect.right + 8
 			};
 		}
@@ -86,7 +109,7 @@
 		e.stopPropagation();
 		onMenuToggle?.(false);
 		isEditing = true;
-		editTitle = conversation.title;
+		editTitle = battle.title || battle.prompt.slice(0, 50);
 		setTimeout(() => inputRef?.focus(), 0);
 	}
 
@@ -97,13 +120,6 @@
 		onpin?.();
 	}
 
-	function doDelete(e: MouseEvent) {
-		e.preventDefault();
-		e.stopPropagation();
-		onMenuToggle?.(false);
-		ondelete?.();
-	}
-
 	function doExport(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -111,14 +127,27 @@
 		onexport?.();
 	}
 
+	function doRerun(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		onMenuToggle?.(false);
+		onrerun?.();
+	}
+
+	function doDelete(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		onMenuToggle?.(false);
+		ondelete?.();
+	}
+
 	function handleMenuMouseLeave() {
-		// Close menu when mouse leaves the dropdown
 		onMenuToggle?.(false);
 	}
 
 	function submitRename() {
 		const trimmed = editTitle.trim();
-		if (trimmed && trimmed !== conversation.title) {
+		if (trimmed && trimmed !== battle.title) {
 			onrename?.(trimmed);
 		}
 		isEditing = false;
@@ -136,7 +165,7 @@
 </script>
 
 <div
-	class="conversation-item {active ? 'active' : ''}"
+	class="battle-item {active ? 'active' : ''}"
 	role="button"
 	tabindex="0"
 	onclick={handleItemClick}
@@ -154,14 +183,38 @@
 				onblur={submitRename}
 				onclick={(e) => e.stopPropagation()}
 				class="rename-input"
-				placeholder="Chat title..."
+				placeholder="Battle title..."
 			/>
 		{:else}
-			<div class="item-header">
-				<span class="item-title">{conversation.title}</span>
-				<span class="item-time">{formatTime(conversation.updatedAt)}</span>
+			<!-- Title/Prompt preview -->
+			<p class="item-title">{getDisplayTitle()}</p>
+
+			<!-- Meta info -->
+			<div class="item-meta">
+				<span class="model-count">{battle.models.length} models</span>
+				<span class="status-badge {getStatusColor(battle.status)}">{battle.status}</span>
+				<span class="time">{formatRelativeTime(battle.createdAt)}</span>
 			</div>
-			<p class="item-preview">{getMessagePreview()}</p>
+
+			<!-- Winner or user vote -->
+			{#if battle.aiJudgment?.winnerId}
+				{@const winnerName = getWinnerName()}
+				{#if winnerName}
+					<div class="winner-indicator">
+						<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+							<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+						</svg>
+						{winnerName}
+					</div>
+				{/if}
+			{:else if battle.aiJudgment && !battle.aiJudgment.winnerId}
+				<div class="tie-indicator">
+					<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01" />
+					</svg>
+					Tie
+				</div>
+			{/if}
 		{/if}
 	</div>
 
@@ -191,7 +244,7 @@
 		</svg>
 	</button>
 
-	<!-- Dropdown menu (fixed position to escape sidebar overflow) -->
+	<!-- Dropdown menu (fixed position) -->
 	{#if menuOpen}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
@@ -200,6 +253,14 @@
 			onmouseleave={handleMenuMouseLeave}
 			transition:fade={{ duration: 100 }}
 		>
+			<button type="button" class="dropdown-item dropdown-item-primary" onclick={doRerun}>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+						d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+				</svg>
+				Rerun
+			</button>
+			<div class="dropdown-divider"></div>
 			<button type="button" class="dropdown-item" onclick={doRename}>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -237,68 +298,85 @@
 </div>
 
 <style>
-	.conversation-item {
+	.battle-item {
 		position: relative;
 		display: flex;
-		align-items: center;
-		padding: 0.75rem 1rem;
-		margin: 0 0.5rem;
-		border-radius: 0.5rem;
+		align-items: flex-start;
+		padding: 0.75rem;
 		cursor: pointer;
 		transition: background-color 0.15s ease;
 	}
 
-	.conversation-item:hover {
-		background-color: rgba(255, 255, 255, 0.05);
+	.battle-item:hover {
+		background-color: rgba(255, 255, 255, 0.03);
 	}
 
-	.conversation-item.active {
-		background-color: rgba(99, 102, 241, 0.15);
+	.battle-item.active {
+		background-color: #27272a;
 	}
 
 	.item-content {
 		flex: 1;
 		min-width: 0;
-		padding-right: 0rem;
-	}
-
-	.item-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
+		padding-right: 1.5rem;
 	}
 
 	.item-title {
 		font-size: 0.875rem;
-		font-weight: 500;
 		color: #e4e4e7;
-		white-space: nowrap;
+		line-height: 1.4;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
 		overflow: hidden;
-		text-overflow: ellipsis;
+		margin-bottom: 0.5rem;
 	}
 
-	.item-time {
+	.item-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		font-size: 0.75rem;
-		color: #71717a;
-		white-space: nowrap;
-		flex-shrink: 0;
 	}
 
-	.item-preview {
+	.model-count {
+		color: #71717a;
+	}
+
+	.status-badge {
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		font-size: 0.6875rem;
+	}
+
+	.time {
+		color: #71717a;
+		margin-left: auto;
+	}
+
+	.winner-indicator {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		margin-top: 0.5rem;
+		font-size: 0.75rem;
+		color: #a78bfa;
+	}
+
+	.tie-indicator {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		margin-top: 0.5rem;
 		font-size: 0.75rem;
 		color: #71717a;
-		margin-top: 0.125rem;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
 	.rename-input {
 		width: 100%;
 		padding: 0.25rem 0.5rem;
 		font-size: 0.875rem;
-		font-weight: 500;
 		background-color: #27272a;
 		border: 1px solid #6366f1;
 		border-radius: 0.25rem;
@@ -313,22 +391,20 @@
 	.pin-indicator {
 		position: absolute;
 		right: 1.75rem;
-		top: 50%;
-		transform: translateY(-50%);
+		top: 0.75rem;
 		color: #fbbf24;
 		opacity: 1;
 		transition: opacity 0.15s ease;
 	}
 
-	.conversation-item:hover .pin-indicator {
+	.battle-item:hover .pin-indicator {
 		opacity: 0;
 	}
 
 	.menu-trigger {
 		position: absolute;
 		right: 0.5rem;
-		top: 50%;
-		transform: translateY(-50%);
+		top: 0.75rem;
 		padding: 0.375rem;
 		border-radius: 0.375rem;
 		color: #71717a;
@@ -339,7 +415,7 @@
 		transition: all 0.15s ease;
 	}
 
-	.conversation-item:hover .menu-trigger,
+	.battle-item:hover .menu-trigger,
 	.menu-trigger[aria-expanded="true"] {
 		opacity: 1;
 	}
@@ -377,6 +453,14 @@
 
 	.dropdown-item:hover {
 		background-color: #27272a;
+	}
+
+	.dropdown-item-primary {
+		color: #60a5fa;
+	}
+
+	.dropdown-item-primary:hover {
+		background-color: rgba(96, 165, 250, 0.1);
 	}
 
 	.dropdown-item-danger {
