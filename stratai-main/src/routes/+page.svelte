@@ -67,7 +67,7 @@
 	let messages = $derived(chatStore.messages);
 	let currentSummary = $derived(chatStore.activeConversation?.summary || null);
 	let isContinuedConversation = $derived(!!chatStore.activeConversation?.continuedFromId);
-	let continuationSummary = $derived(chatStore.activeConversation?.continuationSummary || null);
+	let continuationSummary = $derived(chatStore.activeConversation?.continuationSummary ?? undefined);
 	let refreshedAt = $derived(chatStore.activeConversation?.refreshedAt || null);
 
 	// Get parent conversation messages for continued conversations
@@ -76,7 +76,10 @@
 			? chatStore.getConversation(chatStore.activeConversation.continuedFromId)
 			: null
 	);
-	let parentMessages = $derived(parentConversation?.messages || []);
+	// Filter out any messages without IDs to prevent {#each} key errors
+	let parentMessages = $derived(
+		(parentConversation?.messages || []).filter((m) => m && m.id)
+	);
 
 	// Svelte 5: Use $effect for side effects
 	$effect(() => {
@@ -868,7 +871,7 @@
 </script>
 
 <svelte:head>
-	<title>StratHost Chat</title>
+	<title>StratAI</title>
 </svelte:head>
 
 <div class="h-screen flex flex-col overflow-hidden">

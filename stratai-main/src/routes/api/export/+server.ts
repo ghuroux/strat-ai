@@ -106,7 +106,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		});
 
 		// 7. Return file with appropriate headers for download
-		return new Response(result.buffer, {
+		return new Response(new Uint8Array(result.buffer), {
 			status: 200,
 			headers: {
 				'Content-Type': result.mimeType,

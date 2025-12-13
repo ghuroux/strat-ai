@@ -37,6 +37,80 @@
 	let isOpen = $state(false);
 	let dropdownRef: HTMLDivElement | undefined = $state();
 
+	// Model family definitions for grouping
+	type ModelFamily = {
+		name: string;
+		patterns: string[];
+		isOpenSource: boolean;
+		order: number;
+	};
+
+	const MODEL_FAMILIES: ModelFamily[] = [
+		// Proprietary models
+		{ name: 'Claude', patterns: ['claude'], isOpenSource: false, order: 1 },
+		{ name: 'GPT', patterns: ['gpt-5', 'gpt-4'], isOpenSource: false, order: 2 },
+		{ name: 'OpenAI o-series', patterns: ['o3', 'o4'], isOpenSource: false, order: 3 },
+		{ name: 'Gemini', patterns: ['gemini'], isOpenSource: false, order: 4 },
+		// Open-source models
+		{ name: 'Llama', patterns: ['llama'], isOpenSource: true, order: 5 },
+		{ name: 'DeepSeek', patterns: ['deepseek'], isOpenSource: true, order: 6 },
+		{ name: 'Mistral', patterns: ['mistral'], isOpenSource: true, order: 7 },
+		{ name: 'Amazon Nova', patterns: ['nova'], isOpenSource: true, order: 8 },
+	];
+
+	// Get model family
+	function getModelFamily(modelId: string): ModelFamily | undefined {
+		const lowerModelId = modelId.toLowerCase();
+		return MODEL_FAMILIES.find(family =>
+			family.patterns.some(pattern => lowerModelId.includes(pattern))
+		);
+	}
+
+	// Check if model is open source
+	function isOpenSource(modelId: string): boolean {
+		const family = getModelFamily(modelId);
+		return family?.isOpenSource ?? false;
+	}
+
+	// Group and sort models
+	interface ModelGroup {
+		category: 'proprietary' | 'opensource';
+		family: string;
+		models: LiteLLMModel[];
+		order: number;
+	}
+
+	let groupedModels = $derived.by(() => {
+		const groups: Map<string, ModelGroup> = new Map();
+
+		for (const model of models) {
+			const family = getModelFamily(model.id);
+			const familyName = family?.name ?? 'Other';
+			const category = family?.isOpenSource ? 'opensource' : 'proprietary';
+			const key = `${category}-${familyName}`;
+
+			if (!groups.has(key)) {
+				groups.set(key, {
+					category,
+					family: familyName,
+					models: [],
+					order: family?.order ?? 99
+				});
+			}
+			groups.get(key)!.models.push(model);
+		}
+
+		// Convert to array and sort
+		const result = Array.from(groups.values());
+		result.sort((a, b) => a.order - b.order);
+
+		return result;
+	});
+
+	// Separate proprietary and open source groups
+	let proprietaryGroups = $derived(groupedModels.filter(g => g.category === 'proprietary'));
+	let opensourceGroups = $derived(groupedModels.filter(g => g.category === 'opensource'));
+
 	// Get display name from model capabilities or fallback to ID parsing
 	function getDisplayName(modelId: string): string {
 		const caps = modelCapabilitiesStore.capabilities[modelId];
@@ -71,7 +145,15 @@
 				return 'bg-orange-500/20 text-orange-400';
 			case 'openai':
 				return 'bg-green-500/20 text-green-400';
-			case 'bedrock':
+			case 'google':
+				return 'bg-blue-500/20 text-blue-400';
+			case 'meta':
+				return 'bg-indigo-500/20 text-indigo-400';
+			case 'deepseek':
+				return 'bg-cyan-500/20 text-cyan-400';
+			case 'mistral':
+				return 'bg-purple-500/20 text-purple-400';
+			case 'amazon':
 				return 'bg-yellow-500/20 text-yellow-400';
 			default:
 				return 'bg-surface-600/50 text-surface-400';
@@ -234,49 +316,118 @@
 				{#if models.length === 0}
 					<div class="px-4 py-3 text-sm text-surface-500">No models available</div>
 				{:else}
-					<div class="max-h-96 overflow-y-auto">
-						{#each models as model}
-							<button
-								type="button"
-								onclick={() => selectModel(model.id)}
-								class="w-full px-4 py-2.5 text-left flex items-center gap-3
-									   hover:bg-surface-700 transition-colors whitespace-nowrap
-									   {model.id === selectedModel ? 'bg-surface-700/50' : ''}"
-							>
-								<span class="px-1.5 py-0.5 rounded text-xs font-medium shrink-0 {getProviderColor(getProvider(model.id))}">
-									{getProvider(model.id)}
-								</span>
-								<span class="text-surface-100">{getDisplayName(model.id)}</span>
-
-								<!-- Capability badges -->
-								<div class="flex items-center gap-1.5 shrink-0 ml-auto">
-									<!-- Context window badge -->
-									<span class="text-xs text-surface-500">{getContextBadge(model.id)}</span>
-
-									{#if modelHasThinking(model.id)}
-										<span class="text-amber-400" title="Supports extended thinking">
-											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-											</svg>
-										</span>
-									{/if}
-									{#if modelHasVision(model.id)}
-										<span class="text-blue-400" title="Supports image analysis">
-											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-											</svg>
-										</span>
-									{/if}
+					<div class="max-h-[32rem] overflow-y-auto">
+						<!-- Proprietary Models Section -->
+						{#if proprietaryGroups.length > 0}
+							<div class="px-3 py-2 text-xs font-semibold text-surface-400 uppercase tracking-wider bg-surface-900/50 sticky top-0 z-10 flex items-center gap-2">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+								</svg>
+								Proprietary
+							</div>
+							{#each proprietaryGroups as group}
+								<!-- Family header -->
+								<div class="px-4 py-1.5 text-xs font-medium text-surface-500 bg-surface-850">
+									{group.family}
 								</div>
+								{#each group.models as model}
+									<button
+										type="button"
+										onclick={() => selectModel(model.id)}
+										class="w-full px-4 py-2 text-left flex items-center gap-3
+											   hover:bg-surface-700 transition-colors whitespace-nowrap
+											   {model.id === selectedModel ? 'bg-surface-700/50' : ''}"
+									>
+										<span class="px-1.5 py-0.5 rounded text-xs font-medium shrink-0 {getProviderColor(getProvider(model.id))}">
+											{getProvider(model.id)}
+										</span>
+										<span class="text-surface-100">{getDisplayName(model.id)}</span>
 
-								{#if model.id === selectedModel}
-									<svg class="w-4 h-4 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-									</svg>
-								{/if}
-							</button>
-						{/each}
+										<!-- Capability badges -->
+										<div class="flex items-center gap-1.5 shrink-0 ml-auto">
+											<span class="text-xs text-surface-500">{getContextBadge(model.id)}</span>
+											{#if modelHasThinking(model.id)}
+												<span class="text-amber-400" title="Supports extended thinking">
+													<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+													</svg>
+												</span>
+											{/if}
+											{#if modelHasVision(model.id)}
+												<span class="text-blue-400" title="Supports image analysis">
+													<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+													</svg>
+												</span>
+											{/if}
+										</div>
+
+										{#if model.id === selectedModel}
+											<svg class="w-4 h-4 text-primary-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+											</svg>
+										{/if}
+									</button>
+								{/each}
+							{/each}
+						{/if}
+
+						<!-- Open Source Models Section -->
+						{#if opensourceGroups.length > 0}
+							<div class="px-3 py-2 text-xs font-semibold text-surface-400 uppercase tracking-wider bg-surface-900/50 sticky top-0 z-10 flex items-center gap-2 mt-1 border-t border-surface-700">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+								</svg>
+								Open Source
+							</div>
+							{#each opensourceGroups as group}
+								<!-- Family header -->
+								<div class="px-4 py-1.5 text-xs font-medium text-surface-500 bg-surface-850">
+									{group.family}
+								</div>
+								{#each group.models as model}
+									<button
+										type="button"
+										onclick={() => selectModel(model.id)}
+										class="w-full px-4 py-2 text-left flex items-center gap-3
+											   hover:bg-surface-700 transition-colors whitespace-nowrap
+											   {model.id === selectedModel ? 'bg-surface-700/50' : ''}"
+									>
+										<span class="px-1.5 py-0.5 rounded text-xs font-medium shrink-0 {getProviderColor(getProvider(model.id))}">
+											{getProvider(model.id)}
+										</span>
+										<span class="text-surface-100">{getDisplayName(model.id)}</span>
+
+										<!-- Capability badges -->
+										<div class="flex items-center gap-1.5 shrink-0 ml-auto">
+											<span class="text-xs text-surface-500">{getContextBadge(model.id)}</span>
+											{#if modelHasThinking(model.id)}
+												<span class="text-amber-400" title="Supports extended thinking">
+													<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+													</svg>
+												</span>
+											{/if}
+											{#if modelHasVision(model.id)}
+												<span class="text-blue-400" title="Supports image analysis">
+													<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+													</svg>
+												</span>
+											{/if}
+										</div>
+
+										{#if model.id === selectedModel}
+											<svg class="w-4 h-4 text-primary-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+											</svg>
+										{/if}
+									</button>
+								{/each}
+							{/each}
+						{/if}
 					</div>
 				{/if}
 			</div>

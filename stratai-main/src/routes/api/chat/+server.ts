@@ -176,8 +176,9 @@ const webSearchToolOpenAI = {
 /**
  * Get the appropriate tool format for the model
  * Anthropic uses input_schema, OpenAI uses type:'function' with parameters
+ * Returns unknown[] because the format differs between providers
  */
-function getToolsForModel(model: string): unknown[] {
+function getToolsForModel(model: string): ToolDefinition[] {
 	const lowerModel = model.toLowerCase();
 
 	// Check if it's an Anthropic/Claude model
@@ -186,7 +187,8 @@ function getToolsForModel(model: string): unknown[] {
 	}
 
 	// For OpenAI and other models, use OpenAI format
-	return [webSearchToolOpenAI];
+	// Cast to unknown first, then to ToolDefinition[] to satisfy type checker
+	return [webSearchToolOpenAI] as unknown as ToolDefinition[];
 }
 
 // System message to add when search is enabled

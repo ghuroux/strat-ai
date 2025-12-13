@@ -14,8 +14,8 @@
 export interface ModelCapabilities {
 	/** Display name for the model */
 	displayName: string;
-	/** Provider (anthropic, openai) */
-	provider: 'anthropic' | 'openai';
+	/** Provider (anthropic, openai, meta, amazon, deepseek, mistral, google) */
+	provider: 'anthropic' | 'openai' | 'meta' | 'amazon' | 'deepseek' | 'mistral' | 'google';
 	/** Context window size in tokens */
 	contextWindow: number;
 	/** Maximum output tokens */
@@ -189,6 +189,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true,
 		supportsVision: true,
 		supportsTools: true,
+		reasoningEffortLevels: ['low', 'medium', 'high'],
 		description: 'Optimized for agentic coding and multi-context workflows'
 	},
 
@@ -200,6 +201,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true,
 		supportsVision: true,
 		supportsTools: true,
+		reasoningEffortLevels: ['low', 'medium', 'high'],
 		description: 'Cost-effective Codex with 4x efficiency'
 	},
 
@@ -289,7 +291,155 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
 		description: 'Latest small reasoning model with vision'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - Meta Llama
+	// ============================================
+
+	'llama-3-3-70b': {
+		displayName: 'Llama 3.3 70B',
+		provider: 'meta',
+		contextWindow: 128000,
+		maxOutputTokens: 4096,
+		supportsThinking: false,
+		supportsVision: false,
+		supportsTools: true,
+		description: 'Best open-source general purpose model'
+	},
+
+	'llama-3-1-8b': {
+		displayName: 'Llama 3.1 8B',
+		provider: 'meta',
+		contextWindow: 128000,
+		maxOutputTokens: 4096,
+		supportsThinking: false,
+		supportsVision: false,
+		supportsTools: true,
+		description: 'Fast and cost-effective open-source model'
+	},
+
+	'llama-4-scout': {
+		displayName: 'Llama 4 Scout 17B',
+		provider: 'meta',
+		contextWindow: 3500000, // 3.5M context!
+		maxOutputTokens: 8192,
+		supportsThinking: false,
+		supportsVision: false,
+		supportsTools: false, // Bedrock doesn't support tool use in streaming mode
+		description: 'Massive 3.5M context window for document processing'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - Amazon Nova
+	// ============================================
+
+	'nova-pro': {
+		displayName: 'Amazon Nova Pro',
+		provider: 'amazon',
+		contextWindow: 300000,
+		maxOutputTokens: 5000,
+		supportsThinking: false,
+		supportsVision: true,
+		supportsTools: true,
+		description: 'AWS-native multimodal model for complex tasks'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - DeepSeek
+	// ============================================
+
+	'deepseek-r1': {
+		displayName: 'DeepSeek R1',
+		provider: 'deepseek',
+		contextWindow: 128000,
+		maxOutputTokens: 8192,
+		supportsThinking: true, // Has reasoning_content blocks similar to Claude thinking
+		supportsVision: false,
+		supportsTools: true,
+		description: 'Strong reasoning model with visible thinking process'
+	},
+
+	'deepseek-v3': {
+		displayName: 'DeepSeek V3.1',
+		provider: 'deepseek',
+		contextWindow: 128000,
+		maxOutputTokens: 8192,
+		supportsThinking: true, // Has thinking/non-thinking modes
+		supportsVision: false,
+		supportsTools: false, // Tool calling not yet supported in Bedrock Converse API
+		description: 'Latest DeepSeek model with thinking mode'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - Mistral
+	// ============================================
+
+	'mistral-large-3': {
+		displayName: 'Mistral Large 3',
+		provider: 'mistral',
+		contextWindow: 256000,
+		maxOutputTokens: 8192,
+		supportsThinking: false,
+		supportsVision: true,
+		supportsTools: false, // Tool use not supported in streaming mode
+		description: 'Powerful 675B MoE model with vision'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - Meta Llama 4
+	// ============================================
+
+	'llama-4-maverick': {
+		displayName: 'Llama 4 Maverick 17B',
+		provider: 'meta',
+		contextWindow: 1000000, // 1M context
+		maxOutputTokens: 8192,
+		supportsThinking: false,
+		supportsVision: true,
+		supportsTools: false, // No streaming support at all on Bedrock
+		description: '1M context multimodal model (no streaming)'
+	},
+
+	// ============================================
+	// GOOGLE GEMINI MODELS
+	// ============================================
+
+	'gemini-3-pro': {
+		displayName: 'Gemini 3 Pro',
+		provider: 'google',
+		contextWindow: 1048576, // 1M context
+		maxOutputTokens: 65536,
+		supportsThinking: true, // Adaptive thinking, reasoning-first
+		supportsVision: true,
+		supportsTools: true,
+		description: 'Latest flagship reasoning model for complex tasks'
+	},
+
+	'gemini-2.5-pro': {
+		displayName: 'Gemini 2.5 Pro',
+		provider: 'google',
+		contextWindow: 1048576, // 1M context
+		maxOutputTokens: 65536,
+		supportsThinking: true, // Built-in reasoning
+		supportsVision: true,
+		supportsTools: true,
+		description: 'Best for complex reasoning in code, math, STEM'
+	},
+
+	'gemini-2.5-flash': {
+		displayName: 'Gemini 2.5 Flash',
+		provider: 'google',
+		contextWindow: 1048576, // 1M context
+		maxOutputTokens: 65536,
+		supportsThinking: true, // Built-in thinking with adjustable budget
+		supportsVision: true,
+		supportsTools: true,
+		description: 'Best price-performance with thinking support'
 	}
+	// Note: deep-research-pro-preview requires the Interactions API (async polling)
+	// and cannot be used through standard chat completions. Consider implementing
+	// as a separate feature if needed.
 };
 
 /**
@@ -349,11 +499,37 @@ export function getModelsWithCapability(
  * Get all models grouped by provider
  */
 export function getModelsByProvider(): Record<string, string[]> {
-	const result: Record<string, string[]> = { anthropic: [], openai: [] };
+	const result: Record<string, string[]> = {
+		anthropic: [],
+		openai: [],
+		meta: [],
+		amazon: [],
+		deepseek: [],
+		mistral: [],
+		google: []
+	};
 	for (const [id, caps] of Object.entries(MODEL_CAPABILITIES)) {
-		result[caps.provider].push(id);
+		if (result[caps.provider]) {
+			result[caps.provider].push(id);
+		}
 	}
 	return result;
+}
+
+/**
+ * Get provider display name
+ */
+export function getProviderDisplayName(provider: string): string {
+	const displayNames: Record<string, string> = {
+		anthropic: 'Anthropic',
+		openai: 'OpenAI',
+		meta: 'Meta (Llama)',
+		amazon: 'Amazon',
+		deepseek: 'DeepSeek',
+		mistral: 'Mistral AI',
+		google: 'Google'
+	};
+	return displayNames[provider] || provider;
 }
 
 /**

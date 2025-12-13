@@ -60,6 +60,9 @@
 		chatStore.messages.length > 0 && contextUsagePercent >= settingsStore.contextThresholdPercent
 	);
 
+	// Check if current model supports tool use (required for web search)
+	let modelSupportsTools = $derived(modelCapabilitiesStore.supportsTools(currentModel));
+
 	// Svelte 5: Use $state for local reactive state
 	let input = $state('');
 	let textarea: HTMLTextAreaElement | undefined = $state();
@@ -345,8 +348,8 @@
 						<ThinkingToggle disabled={disabled || chatStore.isStreaming} />
 					</div>
 
-					<!-- Web Search Toggle (only shown when feature is enabled) -->
-					{#if webSearchFeatureEnabled}
+					<!-- Web Search Toggle (only shown when feature is enabled AND model supports tools) -->
+					{#if webSearchFeatureEnabled && modelSupportsTools}
 						<div class="relative group">
 							<SearchToggle disabled={disabled || chatStore.isStreaming} />
 						</div>

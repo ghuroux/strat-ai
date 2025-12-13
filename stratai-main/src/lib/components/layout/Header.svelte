@@ -57,7 +57,7 @@
 		</button>
 
 		<!-- Logo -->
-		<div class="flex items-center gap-2">
+		<a href="/" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
 			<div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--gradient-primary);">
 				<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
@@ -68,8 +68,21 @@
 					/>
 				</svg>
 			</div>
-			<span class="font-bold text-lg text-gradient hidden sm:inline">StratHost Chat</span>
-		</div>
+			<span class="font-bold text-lg text-gradient hidden sm:inline">StratAI</span>
+		</a>
+
+		<!-- Arena Link -->
+		<a
+			href="/arena"
+			class="flex items-center gap-1.5 px-3 py-1.5 ml-2 rounded-lg text-sm font-medium
+				   bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-surface-100
+				   border border-surface-700 hover:border-surface-600 transition-all"
+		>
+			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+			</svg>
+			<span class="hidden sm:inline">Arena</span>
+		</a>
 	</div>
 
 	<!-- Center: Model Selector (only show when no messages in active conversation) -->

@@ -54,8 +54,9 @@
 	}
 
 	function getMessagePreview(): string {
+		if (!conversation.messages || conversation.messages.length === 0) return 'No messages yet';
 		const lastMessage = conversation.messages[conversation.messages.length - 1];
-		if (!lastMessage) return 'No messages yet';
+		if (!lastMessage?.content) return 'No messages yet';
 		return lastMessage.content.slice(0, 60) + (lastMessage.content.length > 60 ? '...' : '');
 	}
 </script>

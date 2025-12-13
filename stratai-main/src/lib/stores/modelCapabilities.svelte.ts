@@ -24,7 +24,7 @@ interface CapabilitiesResponse {
 
 class ModelCapabilitiesStore {
 	capabilities = $state<Record<string, ModelCapabilities>>({});
-	byProvider = $state<Record<string, string[]>>({ anthropic: [], openai: [] });
+	byProvider = $state<Record<string, string[]>>({ anthropic: [], openai: [], meta: [], amazon: [], deepseek: [], mistral: [], google: [] });
 	loading = $state(false);
 	error = $state<string | null>(null);
 	private initialized = false;
@@ -176,7 +176,7 @@ class ModelCapabilitiesStore {
 	/**
 	 * Get provider for a model
 	 */
-	getProvider(modelId: string): 'anthropic' | 'openai' {
+	getProvider(modelId: string): 'anthropic' | 'openai' | 'meta' | 'amazon' | 'deepseek' | 'mistral' | 'google' {
 		return this.getCapabilities(modelId).provider;
 	}
 

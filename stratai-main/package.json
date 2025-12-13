@@ -15,7 +15,9 @@
     "@sveltejs/adapter-auto": "^3.0.0",
     "@sveltejs/kit": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^20.0.0",
+    "@types/pdfkit": "^0.17.4",
     "autoprefixer": "^10.4.0",
     "eslint": "^9.0.0",
     "eslint-plugin-svelte": "^2.0.0",
@@ -30,12 +32,18 @@
   },
   "type": "module",
   "dependencies": {
+    "@mdit/plugin-katex": "^0.24.1",
     "@twemoji/parser": "^17.0.1",
     "docx": "^9.5.1",
+    "highlight.js": "^11.11.1",
     "js-tiktoken": "^1.0.21",
+    "jszip": "^3.10.1",
+    "katex": "^0.16.27",
     "mammoth": "^1.11.0",
+    "markdown-it": "^14.1.0",
     "marked": "^17.0.1",
     "pdf-parse": "^2.4.5",
-    "pdfkit": "^0.17.2"
+    "pdfkit": "^0.17.2",
+    "postgres": "^3.4.7"
   }
 }

@@ -216,7 +216,7 @@ async function parsePDF(buffer: Buffer): Promise<{ content: string; pageCount: n
 
 		return {
 			content: textResult.text,
-			pageCount: infoResult.numPages
+			pageCount: infoResult.total
 		};
 	} catch (error) {
 		console.error('PDF parsing error:', error);

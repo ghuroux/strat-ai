@@ -727,6 +727,88 @@
 		@apply bg-surface-200;
 	}
 
+	/* Arena specific styles */
+	.arena-page {
+		@apply min-h-screen flex flex-col;
+	}
+
+	.arena-model-selector {
+		@apply p-4 overflow-x-auto scrollbar-hide;
+	}
+
+	.arena-response-card {
+		@apply flex flex-col h-full min-h-[400px] rounded-2xl border transition-all duration-300;
+	}
+
+	.arena-response-card.winner {
+		@apply border-accent-500/50;
+		box-shadow: var(--shadow-glow-accent);
+	}
+
+	.arena-response-card.user-pick {
+		@apply border-primary-500/50;
+		box-shadow: var(--shadow-glow);
+	}
+
+	.arena-judgment {
+		@apply rounded-2xl border border-surface-700 overflow-hidden;
+	}
+
+	/* Arena glow effects */
+	.shadow-glow {
+		box-shadow: var(--shadow-glow);
+	}
+
+	.shadow-glow-accent {
+		box-shadow: var(--shadow-glow-accent);
+	}
+
+	/* Arena battle card hover state */
+	.arena-battle-card {
+		@apply cursor-pointer transition-all duration-200;
+	}
+
+	.arena-battle-card:hover {
+		@apply bg-surface-800;
+	}
+
+	/* Arena vote button pulse animation */
+	.arena-vote-pulse {
+		animation: votePulse 2s ease-in-out infinite;
+	}
+
+	@keyframes votePulse {
+		0%, 100% {
+			box-shadow: 0 0 0 0 rgba(26, 109, 255, 0.4);
+		}
+		50% {
+			box-shadow: 0 0 0 8px rgba(26, 109, 255, 0);
+		}
+	}
+
+	/* Light mode arena styles */
+	html.light .arena-response-card {
+		@apply bg-white border-surface-300;
+	}
+
+	html.light .arena-response-card.winner {
+		background-color: rgba(0, 220, 213, 0.1);
+		@apply border-accent-400;
+	}
+
+	html.light .arena-response-card.user-pick {
+		background-color: rgba(26, 109, 255, 0.1);
+		@apply border-primary-400;
+	}
+
+	html.light .arena-judgment {
+		@apply border-surface-300;
+	}
+
+	html.light .arena-battle-card:hover {
+		@apply bg-surface-100;
+	}
+
 	/* Download dropdown */
 	.download-dropdown {
 		@apply absolute right-0 top-full mt-1;

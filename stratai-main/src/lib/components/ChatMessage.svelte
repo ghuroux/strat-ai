@@ -7,6 +7,8 @@
 	import AttachmentDisplay from './chat/AttachmentDisplay.svelte';
 	import DownloadButton from './chat/DownloadButton.svelte';
 	import ThinkingDisplay from './chat/ThinkingDisplay.svelte';
+	import CodeBlockDownloader from './chat/CodeBlockDownloader.svelte';
+	import { extractCodeBlocks } from '$lib/utils/codeBlocks';
 
 	// Svelte 5: Use $props instead of export let
 	let {
@@ -41,20 +43,25 @@
 	let isThinking = $derived(!!message.isThinking);
 	let hasContent = $derived(!!message.content);
 
+	// Code blocks detection for download feature
+	let hasCodeBlocks = $derived(
+		displayContent ? extractCodeBlocks(displayContent).length > 0 : false
+	);
+
 	// Unified AI state for the indicator
 	type AIState = 'processing' | 'reasoning' | 'searching' | 'generating' | 'complete';
-	let aiState = $derived<AIState>(() => {
-		if (!message.isStreaming && !isThinking) return 'complete';
-		if (isSearching) return 'searching';
-		if (isThinking) return 'reasoning';
-		if (isStreaming) return 'generating';
-		if (isStreamingEmpty) return 'processing';
-		return 'complete';
-	});
+	let aiState = $derived<AIState>(
+		!message.isStreaming && !isThinking ? 'complete' :
+		isSearching ? 'searching' :
+		isThinking ? 'reasoning' :
+		isStreaming ? 'generating' :
+		isStreamingEmpty ? 'processing' :
+		'complete'
+	);
 
 	// Show the unified indicator (not during extended thinking - that has its own display)
 	let showUnifiedIndicator = $derived(
-		(aiState() === 'processing' || aiState() === 'searching') && !isThinking && !hasThinking
+		(aiState === 'processing' || aiState === 'searching') && !isThinking && !hasThinking
 	);
 
 	// Track if this is the first content after thinking (for animation)
@@ -201,7 +208,7 @@
 	<div class="message-container {isUser ? 'items-end' : 'items-start'} flex flex-col">
 		<!-- Role label -->
 		<span class="text-xs font-medium text-surface-500 mb-1 {isUser ? 'text-right' : 'text-left'}">
-			{isUser ? 'You' : 'StratHost AI'}
+			{isUser ? 'You' : 'StratAI'}
 		</span>
 
 		<!-- Message bubble -->
@@ -276,7 +283,7 @@
 					<!-- Unified AI Response Indicator (processing/searching states) -->
 					{#if showUnifiedIndicator}
 						<AIResponseIndicator
-							state={aiState()}
+							state={aiState}
 							searchQuery={message.searchQuery}
 							sources={message.sources || []}
 						/>
@@ -307,6 +314,11 @@
 						>
 							<MarkdownRenderer content={displayContent} {isStreaming} />
 						</div>
+
+						<!-- Code block downloads (only when streaming is complete) -->
+						{#if hasCodeBlocks && !isStreaming && !isStreamingEmpty}
+							<CodeBlockDownloader content={displayContent} />
+						{/if}
 					{/if}
 				{/if}
 

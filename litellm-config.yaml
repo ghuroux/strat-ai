@@ -148,6 +148,108 @@ model_list:
       model: openai/o4-mini
       api_key: os.environ/OPENAI_API_KEY
 
+# ============================================
+  # AWS BEDROCK MODELS - Via Cross-Region Inference Profiles
+  # Note: Use us.* prefix for cross-region inference (required for on-demand)
+  # ============================================
+
+  # Meta Llama 3.3 70B - Best open source general purpose
+  - model_name: llama-3-3-70b
+    litellm_params:
+      model: bedrock/us.meta.llama3-3-70b-instruct-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+      max_tokens: 4096
+
+  # Meta Llama 3.1 8B - Fast and cost-effective
+  - model_name: llama-3-1-8b
+    litellm_params:
+      model: bedrock/us.meta.llama3-1-8b-instruct-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+      max_tokens: 4096
+
+  # Meta Llama 4 Scout 17B - Massive context window
+  - model_name: llama-4-scout
+    litellm_params:
+      model: bedrock/us.meta.llama4-scout-17b-instruct-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+      max_tokens: 8192
+
+  # Amazon Nova Pro - Replaces Titan Premier (Titan is EOL Aug 2025)
+  - model_name: nova-pro
+    litellm_params:
+      model: bedrock/amazon.nova-pro-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+      max_tokens: 4096
+
+  # DeepSeek R1 - Strong reasoning model
+  - model_name: deepseek-r1
+    litellm_params:
+      model: bedrock/us.deepseek.r1-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+      max_tokens: 8192
+
+  # Meta Llama 4 Maverick 17B - 1M context, vision, tool use (no streaming)
+  - model_name: llama-4-maverick
+    litellm_params:
+      model: bedrock/us.meta.llama4-maverick-17b-instruct-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+      max_tokens: 8192
+
+  # Mistral Large 3 - 256K context, vision, tools (no streaming with tools)
+  - model_name: mistral-large-3
+    litellm_params:
+      model: bedrock/mistral.mistral-large-3-675b-instruct
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: os.environ/AWS_REGION_NAME
+      max_tokens: 8192
+
+  # DeepSeek V3.1 - 128K context, thinking mode (no Converse API tools)
+  - model_name: deepseek-v3
+    litellm_params:
+      model: bedrock/deepseek.v3-v1:0
+      aws_access_key_id: os.environ/AWS_ACCESS_KEY_ID
+      aws_secret_access_key: os.environ/AWS_SECRET_ACCESS_KEY
+      aws_region_name: us-west-2
+      max_tokens: 8192
+
+# ============================================
+  # GOOGLE GEMINI MODELS - Direct API
+  # ============================================
+
+  # Gemini 3 Pro - Latest flagship reasoning model
+  - model_name: gemini-3-pro
+    litellm_params:
+      model: gemini/gemini-3-pro-preview
+      api_key: os.environ/GOOGLE_API_KEY
+      max_tokens: 65536
+
+  # Gemini 2.5 Pro - Best for complex reasoning (code, math, STEM)
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GOOGLE_API_KEY
+      max_tokens: 65536
+
+  # Gemini 2.5 Flash - Best price-performance with thinking
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GOOGLE_API_KEY
+      max_tokens: 65536
+
 litellm_settings:
   drop_params: true
   set_verbose: false
@@ -159,6 +261,11 @@ router_settings:
     gpt: ["gpt-5.2", "gpt-5.2-pro", "gpt-5.1", "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"]
     codex: ["gpt-5.1-codex-max", "gpt-5.1-codex-mini"]
     reasoning: ["o3", "o3-mini", "o4-mini"]
+    llama: ["llama-3-3-70b", "llama-3-1-8b", "llama-4-scout", "llama-4-maverick"]
+    mistral: ["mistral-large-3"]
+    deepseek: ["deepseek-r1", "deepseek-v3"]
+    gemini: ["gemini-3-pro", "gemini-2.5-pro", "gemini-2.5-flash"]
+    bedrock: ["llama-3-3-70b", "llama-3-1-8b", "llama-4-scout", "llama-4-maverick", "nova-pro", "deepseek-r1", "deepseek-v3", "mistral-large-3"]
 
   fallback_models:
     claude-opus-4-5: ["claude-sonnet-4-5", "claude-sonnet-4"]

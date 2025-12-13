@@ -1,6 +1,11 @@
 /**
- * Chat Store - Conversation management with localStorage persistence
+ * Chat Store - Conversation management with PostgreSQL persistence
  * Uses Svelte 5 runes for reactivity with SvelteMap for proper tracking
+ *
+ * Persistence strategy:
+ * - Primary: PostgreSQL via API endpoints
+ * - Cache: localStorage for fast initial loads and offline support
+ * - Sync: Background sync on actions, optimistic updates
  */
 
 import { SvelteMap } from 'svelte/reactivity';
@@ -29,25 +34,31 @@ class ChatStore {
 	activeConversationId = $state<string | null>(null);
 	isStreaming = $state(false);
 	abortController = $state<AbortController | null>(null);
+	isLoading = $state(false);
+	syncError = $state<string | null>(null);
 
 	// Version counter for fine-grained updates (message content changes)
 	_version = $state(0);
 
 	private initialized = false;
 	private persistDebounced: () => void;
+	private syncQueue: Map<string, Conversation> = new Map();
+	private isSyncing = false;
 
 	constructor() {
 		// Create debounced persist function
-		this.persistDebounced = debounce(() => this.persist(), 500);
+		this.persistDebounced = debounce(() => this.persistToLocalStorage(), 500);
 
-		// Hydrate from localStorage on client
+		// Hydrate from localStorage immediately, then sync with API
 		if (typeof window !== 'undefined') {
-			this.hydrate();
+			this.hydrateFromLocalStorage();
+			// Defer API sync to not block initial render
+			setTimeout(() => this.syncFromApi(), 100);
 		}
 	}
 
-	// Hydrate state from localStorage
-	private hydrate(): void {
+	// Hydrate state from localStorage (fast, cached)
+	private hydrateFromLocalStorage(): void {
 		if (this.initialized) return;
 
 		try {
@@ -62,14 +73,125 @@ class ChatStore {
 				}
 			}
 		} catch (e) {
-			console.warn('Failed to hydrate chat store:', e);
+			console.warn('Failed to hydrate chat store from localStorage:', e);
 		}
 
 		this.initialized = true;
 	}
 
-	// Persist state to localStorage
-	private persist(): void {
+	// Sync from API (PostgreSQL) - source of truth
+	private async syncFromApi(): Promise<void> {
+		if (typeof window === 'undefined') return;
+
+		this.isLoading = true;
+		this.syncError = null;
+
+		try {
+			const response = await fetch('/api/conversations');
+			if (!response.ok) {
+				if (response.status === 401) {
+					// Not logged in - keep localStorage data
+					return;
+				}
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.conversations) {
+				// Merge API data with local data
+				// API is source of truth, but preserve any local-only conversations
+				const apiConversations = new Map<string, Conversation>(
+					data.conversations.map((c: Conversation) => [c.id, c])
+				);
+
+				// Update existing and add new from API
+				for (const [id, conv] of apiConversations) {
+					this.conversations.set(id, conv);
+				}
+
+				// Check for local-only conversations (created while offline)
+				// and sync them to the server
+				for (const [id, conv] of this.conversations) {
+					if (!apiConversations.has(id)) {
+						// This is a local-only conversation, sync it
+						this.syncToApi(conv);
+					}
+				}
+
+				// Persist merged state to localStorage
+				this.persistToLocalStorage();
+			}
+		} catch (e) {
+			console.warn('Failed to sync from API, using localStorage:', e);
+			this.syncError = e instanceof Error ? e.message : 'Sync failed';
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	// Sync a conversation to the API
+	private async syncToApi(conversation: Conversation): Promise<void> {
+		if (typeof window === 'undefined') return;
+
+		// Queue for batch processing
+		this.syncQueue.set(conversation.id, conversation);
+		this.processSyncQueue();
+	}
+
+	private async processSyncQueue(): Promise<void> {
+		if (this.isSyncing || this.syncQueue.size === 0) return;
+
+		this.isSyncing = true;
+
+		try {
+			// Process one at a time to avoid overwhelming the API
+			const [id, conversation] = this.syncQueue.entries().next().value as [string, Conversation];
+			this.syncQueue.delete(id);
+
+			// Check if conversation exists on server
+			const checkResponse = await fetch(`/api/conversations/${id}`);
+
+			if (checkResponse.status === 404) {
+				// Create new conversation
+				await fetch('/api/conversations', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(conversation)
+				});
+			} else if (checkResponse.ok) {
+				// Update existing conversation
+				await fetch(`/api/conversations/${id}`, {
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(conversation)
+				});
+			}
+		} catch (e) {
+			console.warn('Failed to sync conversation to API:', e);
+		} finally {
+			this.isSyncing = false;
+			// Process next in queue
+			if (this.syncQueue.size > 0) {
+				setTimeout(() => this.processSyncQueue(), 100);
+			}
+		}
+	}
+
+	// Delete from API
+	private async deleteFromApi(id: string): Promise<void> {
+		if (typeof window === 'undefined') return;
+
+		try {
+			await fetch(`/api/conversations/${id}`, {
+				method: 'DELETE'
+			});
+		} catch (e) {
+			console.warn('Failed to delete conversation from API:', e);
+		}
+	}
+
+	// Persist state to localStorage (cache)
+	private persistToLocalStorage(): void {
 		if (typeof window === 'undefined') return;
 
 		try {
@@ -101,29 +223,33 @@ class ChatStore {
 	});
 
 	conversationList = $derived.by(() => {
-		return Array.from(this.conversations.values()).sort((a, b) => {
-			// Pinned items first, then by updatedAt
-			if (a.pinned && !b.pinned) return -1;
-			if (!a.pinned && b.pinned) return 1;
-			return b.updatedAt - a.updatedAt;
-		});
+		return Array.from(this.conversations.values())
+			.filter((c) => c && c.id)
+			.sort((a, b) => {
+				// Pinned items first, then by updatedAt
+				if (a.pinned && !b.pinned) return -1;
+				if (!a.pinned && b.pinned) return 1;
+				return b.updatedAt - a.updatedAt;
+			});
 	});
 
 	pinnedConversations = $derived.by(() => {
 		return Array.from(this.conversations.values())
-			.filter((c) => c.pinned)
+			.filter((c) => c && c.id && c.pinned)
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
 
 	unpinnedConversations = $derived.by(() => {
 		return Array.from(this.conversations.values())
-			.filter((c) => !c.pinned)
+			.filter((c) => c && c.id && !c.pinned)
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
 
 	messages = $derived.by(() => {
 		const _ = this._version;
-		return this.activeConversation?.messages || [];
+		// Filter out any messages without IDs to prevent Svelte {#each} key errors
+		const msgs = this.activeConversation?.messages || [];
+		return msgs.filter((m) => m && m.id);
 	});
 
 	hasConversations = $derived.by(() => {
@@ -148,6 +274,7 @@ class ChatStore {
 		this.conversations.set(id, conversation);
 		this.activeConversationId = id;
 		this.schedulePersist();
+		this.syncToApi(conversation);
 		return id;
 	}
 
@@ -176,6 +303,7 @@ class ChatStore {
 		this.conversations.set(id, conversation);
 		this.activeConversationId = id;
 		this.schedulePersist();
+		this.syncToApi(conversation);
 		return id;
 	}
 
@@ -209,6 +337,7 @@ class ChatStore {
 			this.conversations.set(conversationId, { ...conv });
 			this._version++;
 			this.schedulePersist();
+			this.syncToApi(conv);
 		}
 
 		return id;
@@ -230,6 +359,7 @@ class ChatStore {
 				this.conversations.set(conversationId, { ...conv });
 				this._version++;
 				this.schedulePersist();
+				this.syncToApi(conv);
 			}
 		}
 	}
@@ -254,6 +384,7 @@ class ChatStore {
 				this.conversations.set(conversationId, { ...conv });
 				// Bump version for fine-grained updates
 				this._version++;
+				// Note: Don't sync during streaming - will sync when streaming completes
 			}
 		}
 	}
@@ -280,6 +411,7 @@ class ChatStore {
 				this.conversations.set(conversationId, { ...conv });
 				// Bump version for fine-grained updates
 				this._version++;
+				// Note: Don't sync during streaming - will sync when streaming completes
 			}
 		}
 	}
@@ -288,9 +420,13 @@ class ChatStore {
 		this.isStreaming = streaming;
 		this.abortController = controller || null;
 
-		// Persist when streaming completes
-		if (!streaming) {
-			this.schedulePersist();
+		// Persist and sync when streaming completes
+		if (!streaming && this.activeConversationId) {
+			const conv = this.conversations.get(this.activeConversationId);
+			if (conv) {
+				this.schedulePersist();
+				this.syncToApi(conv);
+			}
 		}
 	}
 
@@ -300,53 +436,68 @@ class ChatStore {
 		}
 		this.isStreaming = false;
 		this.abortController = null;
-		this.schedulePersist();
+
+		if (this.activeConversationId) {
+			const conv = this.conversations.get(this.activeConversationId);
+			if (conv) {
+				this.schedulePersist();
+				this.syncToApi(conv);
+			}
+		}
 	}
 
 	updateConversationTitle(id: string, title: string): void {
 		const conv = this.conversations.get(id);
 		if (conv) {
-			this.conversations.set(id, {
+			const updated = {
 				...conv,
 				title,
 				updatedAt: Date.now()
-			});
+			};
+			this.conversations.set(id, updated);
 			this.schedulePersist();
+			this.syncToApi(updated);
 		}
 	}
 
 	updateConversationModel(id: string, model: string): void {
 		const conv = this.conversations.get(id);
 		if (conv) {
-			this.conversations.set(id, {
+			const updated = {
 				...conv,
 				model,
 				updatedAt: Date.now()
-			});
+			};
+			this.conversations.set(id, updated);
 			this.schedulePersist();
+			this.syncToApi(updated);
 		}
 	}
 
 	togglePin(id: string): void {
 		const conv = this.conversations.get(id);
 		if (conv) {
-			this.conversations.set(id, {
+			const updated = {
 				...conv,
 				pinned: !conv.pinned
-			});
+			};
+			this.conversations.set(id, updated);
 			this.schedulePersist();
+			this.syncToApi(updated);
 		}
 	}
 
 	setSummary(id: string, summary: StructuredSummary | string): void {
 		const conv = this.conversations.get(id);
 		if (conv) {
-			this.conversations.set(id, {
+			const updated = {
 				...conv,
 				summary
-			});
+			};
+			this.conversations.set(id, updated);
 			this._version++;
 			this.schedulePersist();
+			this.syncToApi(updated);
 		}
 	}
 
@@ -354,9 +505,11 @@ class ChatStore {
 		const conv = this.conversations.get(id);
 		if (conv) {
 			const { summary: _, ...rest } = conv;
-			this.conversations.set(id, rest as typeof conv);
+			const updated = rest as typeof conv;
+			this.conversations.set(id, updated);
 			this._version++;
 			this.schedulePersist();
+			this.syncToApi(updated);
 		}
 	}
 
@@ -367,18 +520,21 @@ class ChatStore {
 			this.activeConversationId = remaining[0] || null;
 		}
 		this.schedulePersist();
+		this.deleteFromApi(id);
 	}
 
 	deleteMessage(conversationId: string, messageId: string): void {
 		const conv = this.conversations.get(conversationId);
 		if (conv) {
-			this.conversations.set(conversationId, {
+			const updated = {
 				...conv,
 				messages: conv.messages.filter((m) => m.id !== messageId),
 				updatedAt: Date.now()
-			});
+			};
+			this.conversations.set(conversationId, updated);
 			this._version++;
 			this.schedulePersist();
+			this.syncToApi(updated);
 		}
 	}
 
@@ -393,13 +549,15 @@ class ChatStore {
 	deleteMessagesFromIndex(conversationId: string, fromIndex: number): void {
 		const conv = this.conversations.get(conversationId);
 		if (conv && fromIndex >= 0 && fromIndex < conv.messages.length) {
-			this.conversations.set(conversationId, {
+			const updated = {
 				...conv,
 				messages: conv.messages.slice(0, fromIndex),
 				updatedAt: Date.now()
-			});
+			};
+			this.conversations.set(conversationId, updated);
 			this._version++;
 			this.schedulePersist();
+			this.syncToApi(updated);
 		}
 	}
 
@@ -410,19 +568,28 @@ class ChatStore {
 			const msgIndex = conv.messages.findIndex((m) => m.id === messageId);
 			if (msgIndex !== -1) {
 				const updatedMessage = { ...conv.messages[msgIndex], content: newContent };
-				conv.messages = [
-					...conv.messages.slice(0, msgIndex),
-					updatedMessage,
-					...conv.messages.slice(msgIndex + 1)
-				];
-				this.conversations.set(conversationId, { ...conv });
+				const updated = {
+					...conv,
+					messages: [
+						...conv.messages.slice(0, msgIndex),
+						updatedMessage,
+						...conv.messages.slice(msgIndex + 1)
+					]
+				};
+				this.conversations.set(conversationId, updated);
 				this._version++;
 				this.schedulePersist();
+				this.syncToApi(updated);
 			}
 		}
 	}
 
 	clearAll(): void {
+		// Delete all conversations from API
+		for (const id of this.conversations.keys()) {
+			this.deleteFromApi(id);
+		}
+
 		this.conversations = new SvelteMap();
 		this.activeConversationId = null;
 		this.isStreaming = false;
@@ -490,6 +657,7 @@ class ChatStore {
 		this.conversations.set(newId, duplicate);
 		this.activeConversationId = newId;
 		this.schedulePersist();
+		this.syncToApi(duplicate);
 		return newId;
 	}
 
@@ -516,11 +684,17 @@ class ChatStore {
 			this.conversations.set(newId, imported);
 			this.activeConversationId = newId;
 			this.schedulePersist();
+			this.syncToApi(imported);
 			return newId;
 		} catch {
 			console.error('Failed to import conversation');
 			return null;
 		}
+	}
+
+	// Force refresh from API
+	async refresh(): Promise<void> {
+		await this.syncFromApi();
 	}
 }
 

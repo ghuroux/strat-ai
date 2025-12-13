@@ -27,7 +27,7 @@
 		</div>
 
 		<!-- Welcome Text -->
-		<h2 class="text-2xl font-bold text-gradient mb-3">Welcome to StratHost Chat</h2>
+		<h2 class="text-2xl font-bold text-gradient mb-3">Welcome to StratAI</h2>
 		<p class="text-surface-400 mb-6">
 			Your AI-powered assistant for intelligent conversations.
 			Select a model and start chatting.

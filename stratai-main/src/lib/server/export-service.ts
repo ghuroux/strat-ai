@@ -19,6 +19,7 @@ import {
 } from 'docx';
 import PDFDocument from 'pdfkit';
 import { marked } from 'marked';
+import type { Token, TokensList } from 'marked';
 
 export interface ExportOptions {
 	content: string;
@@ -32,9 +33,8 @@ export interface ExportResult {
 	filename: string;
 }
 
-// Type definitions for marked tokens
-type Token = marked.Token;
-type Tokens = marked.TokensList;
+// Type alias for marked tokens
+type Tokens = TokensList;
 
 /**
  * Main export function - routes to appropriate converter
@@ -92,7 +92,7 @@ async function exportAsDocx(
 
 	const doc = new Document({
 		title,
-		creator: 'StratHost Chat',
+		creator: 'StratAI',
 		sections: [
 			{
 				properties: {},
@@ -113,8 +113,8 @@ async function exportAsDocx(
 /**
  * Convert marked tokens to DOCX paragraph elements
  */
-function tokensToDocxElements(tokens: Tokens): Paragraph[] {
-	const elements: Paragraph[] = [];
+function tokensToDocxElements(tokens: Tokens): (Paragraph | Table)[] {
+	const elements: (Paragraph | Table)[] = [];
 
 	for (const token of tokens) {
 		const converted = tokenToDocx(token);
@@ -455,7 +455,7 @@ async function exportAsPdf(
 				margin: 72, // 1 inch margins
 				info: {
 					Title: title,
-					Creator: 'StratHost Chat'
+					Creator: 'StratAI'
 				}
 			});
 
@@ -484,7 +484,7 @@ async function exportAsPdf(
 /**
  * Render markdown tokens to PDF
  */
-function renderTokensToPdf(doc: PDFKit.PDFDocument, tokens: Tokens): void {
+function renderTokensToPdf(doc: InstanceType<typeof PDFDocument>, tokens: Tokens): void {
 	const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
 	for (const token of tokens) {
@@ -495,7 +495,7 @@ function renderTokensToPdf(doc: PDFKit.PDFDocument, tokens: Tokens): void {
 /**
  * Render a single token to PDF
  */
-function renderTokenToPdf(doc: PDFKit.PDFDocument, token: Token, pageWidth: number): void {
+function renderTokenToPdf(doc: InstanceType<typeof PDFDocument>, token: Token, pageWidth: number): void {
 	switch (token.type) {
 		case 'heading':
 			renderHeading(doc, token.text, token.depth);
@@ -541,7 +541,7 @@ function renderTokenToPdf(doc: PDFKit.PDFDocument, token: Token, pageWidth: numb
 /**
  * Render a heading to PDF
  */
-function renderHeading(doc: PDFKit.PDFDocument, text: string, depth: number): void {
+function renderHeading(doc: InstanceType<typeof PDFDocument>, text: string, depth: number): void {
 	const sizeMap: Record<number, number> = {
 		1: 24,
 		2: 20,
@@ -559,7 +559,7 @@ function renderHeading(doc: PDFKit.PDFDocument, text: string, depth: number): vo
 /**
  * Render a paragraph to PDF
  */
-function renderParagraph(doc: PDFKit.PDFDocument, text: string): void {
+function renderParagraph(doc: InstanceType<typeof PDFDocument>, text: string): void {
 	// Simple text rendering - strip markdown formatting for clean output
 	const cleanText = text
 		.replace(/\*\*(.+?)\*\*/g, '$1') // bold
@@ -577,7 +577,7 @@ function renderParagraph(doc: PDFKit.PDFDocument, text: string): void {
 /**
  * Render a code block to PDF
  */
-function renderCodeBlock(doc: PDFKit.PDFDocument, code: string, pageWidth: number): void {
+function renderCodeBlock(doc: InstanceType<typeof PDFDocument>, code: string, pageWidth: number): void {
 	const x = doc.x;
 	const y = doc.y;
 	const padding = 10;
@@ -601,7 +601,7 @@ function renderCodeBlock(doc: PDFKit.PDFDocument, code: string, pageWidth: numbe
  * Render a list to PDF
  */
 function renderList(
-	doc: PDFKit.PDFDocument,
+	doc: InstanceType<typeof PDFDocument>,
 	items: Array<{ text: string }>,
 	ordered: boolean
 ): void {
@@ -618,7 +618,7 @@ function renderList(
  * Render a table to PDF
  */
 function renderTable(
-	doc: PDFKit.PDFDocument,
+	doc: InstanceType<typeof PDFDocument>,
 	header: Array<{ text: string }>,
 	rows: Array<Array<{ text: string }>>,
 	pageWidth: number
@@ -656,7 +656,7 @@ function renderTable(
 /**
  * Render a blockquote to PDF
  */
-function renderBlockquote(doc: PDFKit.PDFDocument, tokens: Token[]): void {
+function renderBlockquote(doc: InstanceType<typeof PDFDocument>, tokens: Token[]): void {
 	const x = doc.x;
 
 	// Draw left border
@@ -675,7 +675,7 @@ function renderBlockquote(doc: PDFKit.PDFDocument, tokens: Token[]): void {
 /**
  * Render a horizontal rule to PDF
  */
-function renderHorizontalRule(doc: PDFKit.PDFDocument, pageWidth: number): void {
+function renderHorizontalRule(doc: InstanceType<typeof PDFDocument>, pageWidth: number): void {
 	doc.moveDown(0.5);
 	const y = doc.y;
 	doc.moveTo(doc.x, y).lineTo(doc.x + pageWidth, y).lineWidth(1).stroke('#CCCCCC');

@@ -10,12 +10,12 @@
 </script>
 
 <svelte:head>
-	<title>Login - StratHost Chat</title>
+	<title>Login - StratAI</title>
 </svelte:head>
 
 <div class="min-h-screen flex items-center justify-center p-4">
 	<div class="w-full max-w-md p-8 bg-gray-800 rounded-xl shadow-xl">
-		<h1 class="text-2xl font-bold text-center mb-2">StratHost Chat</h1>
+		<h1 class="text-2xl font-bold text-center mb-2">StratAI</h1>
 		<p class="text-gray-400 text-center mb-8">Sign in to continue</p>
 
 		<form

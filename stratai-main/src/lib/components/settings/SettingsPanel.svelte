@@ -80,7 +80,7 @@
 			<!-- Footer -->
 			<footer class="px-6 py-4 border-t border-surface-800">
 				<p class="text-xs text-surface-500 text-center">
-					StratHost Chat v0.1.0
+					StratAI v0.1.0
 				</p>
 			</footer>
 		</aside>
