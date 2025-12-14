@@ -141,6 +141,58 @@ Track acknowledged issues to address later:
 
 ## Session Log
 
+### Session: 2024-12-13 (Phase 0.3 Planning)
+**Focus**: Strategic planning for Phase 0.3 - Spaces & Templates
+
+**Key Insights Documented**:
+- **Spaces as Productivity Environments** - Not folders, but contextual work environments with specialized tools, templates, and accumulated context
+- **Templates as Invisible Prompt Engineering** - Make AI novices into power users without them learning "prompting"
+- **The Flywheel** - Templates capture structured data → builds working context → enables temporal intelligence → provides recommendations → more engagement
+- **Enterprise-First Positioning** - B2B means rich user data from HR systems; onboarding is about activities, not identity
+- **"Spotify" Onboarding** - Ask "what activities do you want help with?" not "who are you?"
+
+**Architecture Decisions**:
+- Spaces are separate from main Chat (`/spaces/work`, `/spaces/research`)
+- Work and Research spaces for POC (Personal and Random deferred)
+- Embedded chat within each space from day 1
+- User confirmation for AI-extracted entities (action items, decisions)
+- Main chat remains context-free; spaces are opt-in productivity environments
+
+**Working Context Model**:
+- Core entities: People, Action Items, Decisions, Template Outputs
+- JSONB metadata fields for extensibility
+- `source_type`/`source_id` pattern for entity provenance
+- Space-aware throughout
+
+**Template System**:
+- 4 UX patterns: Guided Conversation, Smart Form, Intelligent Dump, Quick Action
+- 50+ templates documented across categories (Meetings, Status, Decisions, Research, Creative, Role-Specific)
+- Each template passes quality bar: better than DIY, reduces friction, captures value, feels natural
+
+**Files Created**:
+- `stratai-main/PHASE-0.3-SPACES-DESIGN.md` - Comprehensive design document
+
+**POC Scope**:
+- Space foundation with Work + Research
+- 6-8 templates (Meeting Summary, Weekly Status, Decision Log, Research Synthesis, Quick Note, Email Draft)
+- Extraction confirmation UI
+- Working context view (action items, recent outputs)
+- Context badge in header
+- Activity-based onboarding
+
+**Current State**:
+- Phase 0.2 complete
+- Phase 0.3 fully designed and documented
+- Ready to create detailed task breakdown
+
+**Next session suggestions**:
+- Create Phase 0.3 task breakdown in BACKLOG.md
+- Design template definitions for POC templates
+- Prototype guided conversation UX
+- Create database migration for new tables
+
+---
+
 ### Session: 2024-12-13 (Arena Battle Management)
 **Focus**: Arena Battle menu system, persistence, and rerun feature
 
