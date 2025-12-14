@@ -1,18 +1,20 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { Conversation } from '$lib/types/chat';
+import type { Conversation, SpaceType } from '$lib/types/chat';
 import {
 	postgresConversationRepository,
 	getConversationsPaginated,
 	searchConversations
 } from '$lib/server/persistence';
+import { isValidSpace } from '$lib/config/spaces';
 
 /**
  * GET /api/conversations
- * List all conversations with optional pagination and search
+ * List all conversations with optional pagination, search, and space filtering
  *
  * Query params:
  * - q: Search query (optional)
+ * - space: Filter by space (optional) - 'work', 'research', etc.
  * - offset: Pagination offset (default: 0)
  * - limit: Pagination limit (default: 50, max: 100)
  */
@@ -26,17 +28,25 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 	try {
 		const query = url.searchParams.get('q');
+		const spaceParam = url.searchParams.get('space');
 		const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10));
 		const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10)));
 
+		// Validate space parameter if provided
+		const space: SpaceType | undefined = spaceParam && isValidSpace(spaceParam) ? spaceParam : undefined;
+
 		if (query) {
-			// Search mode
+			// Search mode (TODO: add space filtering to search)
 			const conversations = await searchConversations(userId, query, limit);
-			return json({ conversations, total: conversations.length });
+			// Filter by space client-side for now
+			const filtered = space
+				? conversations.filter(c => c.space === space)
+				: conversations;
+			return json({ conversations: filtered, total: filtered.length });
 		}
 
-		// Paginated list mode
-		const result = await getConversationsPaginated(userId, offset, limit);
+		// Paginated list mode with optional space filter
+		const result = await getConversationsPaginated(userId, offset, limit, space);
 		return json(result);
 	} catch (err) {
 		console.error('Failed to fetch conversations:', err);

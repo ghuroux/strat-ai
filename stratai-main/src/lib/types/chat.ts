@@ -56,6 +56,17 @@ export interface StructuredSummary {
 	points: SummaryPoint[];
 }
 
+// Space types for productivity environments
+export type SpaceType = 'work' | 'research' | 'random' | 'personal';
+
+export interface SpaceConfig {
+	id: SpaceType;
+	name: string;
+	icon: string;
+	accentColor: string;
+	description: string;
+}
+
 export interface Conversation {
 	id: string;
 	title: string;
@@ -69,6 +80,9 @@ export interface Conversation {
 	continuedFromId?: string; // ID of conversation this was continued from
 	continuationSummary?: string; // Summary used to start this conversation
 	refreshedAt?: number; // Timestamp when session was refreshed
+	// Space and organization
+	space?: SpaceType | null; // Which space this conversation belongs to
+	tags?: string[]; // For template auto-tagging and filtering
 	// Future multi-tenant fields:
 	// userId: string;
 	// tenantId?: string;

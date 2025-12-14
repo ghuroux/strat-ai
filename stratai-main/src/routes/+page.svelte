@@ -8,6 +8,8 @@
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import Header from '$lib/components/layout/Header.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
+	import SecondOpinionPanel from '$lib/components/chat/SecondOpinionPanel.svelte';
+	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
@@ -35,6 +37,13 @@
 	let isGlobalDragging = $state(false);
 	let globalDragCounter = $state(0);
 	let chatInputRef: { triggerFileDrop?: (files: FileList) => void } | undefined = $state();
+
+	// Second Opinion state
+	let showModelSelector = $state(false);
+	let modelSelectorPosition = $state({ top: 0, left: 0 });
+	let pendingSecondOpinionIndex = $state<number | null>(null);
+	let secondOpinion = $derived(chatStore.secondOpinion);
+	let isSecondOpinionOpen = $derived(chatStore.isSecondOpinionOpen);
 
 	// Apply saved theme on mount
 	onMount(() => {
@@ -225,6 +234,11 @@
 	}
 
 	async function handleSend(content: string, attachments?: FileAttachment[]) {
+		// Auto-close second opinion panel when user sends a new message
+		if (chatStore.isSecondOpinionOpen) {
+			chatStore.closeSecondOpinion();
+		}
+
 		// Check if we have a valid model to use
 		// For existing conversations, use the conversation's model
 		// For new conversations, use the settings model
@@ -868,6 +882,210 @@
 		// Trigger new assistant response
 		await triggerAssistantResponse(conversationId);
 	}
+
+	/**
+	 * Second Opinion - Trigger model selector for a specific message
+	 */
+	function handleSecondOpinionTrigger(messageIndex: number, event?: MouseEvent) {
+		// Position the dropdown near the trigger button
+		if (event) {
+			const button = event.currentTarget as HTMLElement;
+			const rect = button.getBoundingClientRect();
+			modelSelectorPosition = {
+				top: rect.bottom + 8,
+				left: rect.left + rect.width / 2
+			};
+		}
+
+		pendingSecondOpinionIndex = messageIndex;
+		showModelSelector = true;
+	}
+
+	/**
+	 * Second Opinion - User selected a model
+	 */
+	async function handleSecondOpinionModelSelect(modelId: string) {
+		showModelSelector = false;
+
+		if (pendingSecondOpinionIndex === null) return;
+
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId) return;
+
+		const sourceMessage = messages[pendingSecondOpinionIndex];
+		if (!sourceMessage) return;
+
+		// Open the second opinion panel
+		chatStore.openSecondOpinion(sourceMessage.id, pendingSecondOpinionIndex, modelId);
+
+		// Stream the second opinion
+		await streamSecondOpinion(conversationId, pendingSecondOpinionIndex, modelId);
+
+		pendingSecondOpinionIndex = null;
+	}
+
+	/**
+	 * Second Opinion - Stream response from the API
+	 */
+	async function streamSecondOpinion(conversationId: string, sourceMessageIndex: number, modelId: string) {
+		const controller = new AbortController();
+		chatStore.secondOpinionAbortController = controller;
+
+		try {
+			const response = await fetch('/api/chat/second-opinion', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					conversationId,
+					sourceMessageIndex,
+					modelId,
+					thinkingEnabled: settingsStore.extendedThinkingEnabled,
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
+				}),
+				signal: controller.signal
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Failed to get second opinion');
+			}
+
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (!reader) throw new Error('No response body');
+
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const decoded = decoder.decode(value, { stream: true });
+				buffer += decoded;
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						const data = line.slice(6);
+						if (data === '[DONE]') continue;
+
+						try {
+							const parsed = JSON.parse(data);
+
+							if (parsed.type === 'thinking_start') {
+								// Thinking is starting
+							} else if (parsed.type === 'thinking') {
+								chatStore.appendToSecondOpinionThinking(parsed.content);
+							} else if (parsed.type === 'thinking_end') {
+								// Thinking complete
+							} else if (parsed.type === 'content') {
+								chatStore.appendToSecondOpinion(parsed.content);
+							} else if (parsed.type === 'error') {
+								throw new Error(parsed.error);
+							}
+						} catch (e) {
+							if (e instanceof Error && !e.message.includes('Unexpected token')) {
+								throw e;
+							}
+						}
+					}
+				}
+			}
+
+			chatStore.completeSecondOpinion();
+		} catch (err) {
+			if (err instanceof Error && err.name === 'AbortError') {
+				// User cancelled - just close
+				chatStore.closeSecondOpinion();
+			} else {
+				chatStore.setSecondOpinionError(
+					err instanceof Error ? err.message : 'Unknown error'
+				);
+			}
+		}
+	}
+
+	/**
+	 * Second Opinion - Use this answer (inject as corrective user message)
+	 * Uses extracted Key Guidance for concise, token-efficient injection
+	 */
+	function handleUseSecondOpinionAnswer() {
+		const opinion = chatStore.secondOpinion;
+		if (!opinion?.content) return;
+
+		let correctionMessage: string;
+
+		if (opinion.guidance) {
+			// Use the extracted Key Guidance section (concise, actionable)
+			correctionMessage = `Based on a second opinion, please adjust your approach:\n\n${opinion.guidance}\n\nPlease continue with this direction.`;
+		} else {
+			// Fallback to full content if no guidance section was found
+			// (shouldn't happen often, but graceful degradation)
+			correctionMessage = `I prefer this alternative approach:\n\n${opinion.content}\n\nLet's continue with this direction.`;
+		}
+
+		// Close the panel first
+		chatStore.closeSecondOpinion();
+
+		// Send as new user message (will trigger assistant response)
+		handleSend(correctionMessage);
+	}
+
+	/**
+	 * Second Opinion - Fork conversation with the second opinion model
+	 */
+	async function handleForkWithSecondOpinion() {
+		const opinion = chatStore.secondOpinion;
+		if (!opinion?.modelId || !opinion.content || opinion.sourceMessageIndex === undefined) return;
+
+		const conversation = chatStore.activeConversation;
+		if (!conversation) return;
+
+		// Close the panel
+		chatStore.closeSecondOpinion();
+
+		// Create a new conversation with the second opinion model
+		const newConversationId = chatStore.createConversation(opinion.modelId);
+
+		// Copy messages up to (and including) the user message that prompted the source response
+		const userMessageIndex = opinion.sourceMessageIndex - 1;
+		if (userMessageIndex >= 0) {
+			const messagesToCopy = conversation.messages.slice(0, userMessageIndex + 1);
+			for (const msg of messagesToCopy) {
+				chatStore.addMessage(newConversationId, {
+					role: msg.role,
+					content: msg.content,
+					attachments: msg.attachments
+				});
+			}
+		}
+
+		// Add the second opinion response as the assistant message
+		chatStore.addMessage(newConversationId, {
+			role: 'assistant',
+			content: opinion.content,
+			thinking: opinion.thinking || undefined
+		});
+
+		// Update the conversation title based on the first user message
+		const firstUserMessage = conversation.messages.find(m => m.role === 'user');
+		if (firstUserMessage) {
+			const title = firstUserMessage.content.slice(0, 50) + (firstUserMessage.content.length > 50 ? '...' : '');
+			chatStore.updateConversationTitle(newConversationId, title);
+		}
+
+		toastStore.success(`Forked conversation with ${modelCapabilitiesStore.getDisplayName(opinion.modelId)}`);
+	}
+
+	/**
+	 * Close model selector dropdown
+	 */
+	function closeModelSelector() {
+		showModelSelector = false;
+		pendingSecondOpinionIndex = null;
+	}
 </script>
 
 <svelte:head>
@@ -885,7 +1103,8 @@
 		<!-- Main Content -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<main
-			class="flex-1 flex flex-col overflow-hidden bg-surface-950 relative"
+			class="flex-1 flex flex-col overflow-hidden bg-surface-950 relative transition-all duration-300"
+			class:mr-[40vw]={isSecondOpinionOpen}
 			ondragenter={handleGlobalDragEnter}
 			ondragleave={handleGlobalDragLeave}
 			ondragover={handleGlobalDragOver}
@@ -938,6 +1157,7 @@
 								onEditAndResend={handleEditAndResend}
 								onResend={handleResend}
 								onRegenerate={handleRegenerate}
+								onSecondOpinion={(idx, e) => handleSecondOpinionTrigger(idx, e)}
 							/>
 						{/each}
 						<!-- Summary section - shows at bottom when summary exists or is generating -->
@@ -965,8 +1185,37 @@
 				disabled={!selectedModel}
 			/>
 		</main>
+
+		<!-- Second Opinion Panel (fixed right) -->
+		{#if isSecondOpinionOpen && secondOpinion}
+			<div class="fixed top-14 right-0 bottom-0 z-30">
+				<SecondOpinionPanel
+					content={secondOpinion.content}
+					thinking={secondOpinion.thinking}
+					isStreaming={secondOpinion.isStreaming}
+					modelId={secondOpinion.modelId}
+					error={secondOpinion.error}
+					onUseAnswer={handleUseSecondOpinionAnswer}
+					onFork={handleForkWithSecondOpinion}
+					onClose={() => chatStore.closeSecondOpinion()}
+				/>
+			</div>
+		{/if}
 	</div>
 </div>
+
+<!-- Second Opinion Model Selector Dropdown -->
+{#if showModelSelector}
+	<div
+		style="--dropdown-top: {modelSelectorPosition.top}px; --dropdown-left: {modelSelectorPosition.left}px;"
+	>
+		<SecondOpinionModelSelect
+			currentModel={effectiveModel}
+			onSelect={handleSecondOpinionModelSelect}
+			onClose={closeModelSelector}
+		/>
+	</div>
+{/if}
 
 <!-- Settings Panel -->
 <SettingsPanel open={settingsOpen} onclose={() => settingsOpen = false} />

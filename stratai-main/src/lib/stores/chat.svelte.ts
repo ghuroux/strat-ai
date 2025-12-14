@@ -9,7 +9,7 @@
  */
 
 import { SvelteMap } from 'svelte/reactivity';
-import type { Message, Conversation, StructuredSummary } from '$lib/types/chat';
+import type { Message, Conversation, StructuredSummary, SpaceType } from '$lib/types/chat';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
@@ -27,6 +27,19 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number): T 
 	}) as T;
 }
 
+// Second Opinion state type
+export interface SecondOpinionState {
+	isOpen: boolean;
+	isStreaming: boolean;
+	sourceMessageId: string | null;
+	sourceMessageIndex: number;
+	modelId: string | null;
+	content: string;
+	thinking: string;
+	error: string | null;
+	guidance: string | null; // Extracted "Key Guidance" section for efficient injection
+}
+
 // Svelte 5 reactive state using $state rune in a class
 class ChatStore {
 	// Use SvelteMap for automatic reactivity tracking
@@ -36,6 +49,13 @@ class ChatStore {
 	abortController = $state<AbortController | null>(null);
 	isLoading = $state(false);
 	syncError = $state<string | null>(null);
+
+	// Second Opinion state (ephemeral - not persisted)
+	secondOpinion = $state<SecondOpinionState | null>(null);
+	secondOpinionAbortController = $state<AbortController | null>(null);
+
+	// Space state (for filtering conversations by space)
+	activeSpace = $state<SpaceType | null>(null);
 
 	// Version counter for fine-grained updates (message content changes)
 	_version = $state(0);
@@ -260,7 +280,25 @@ class ChatStore {
 		return this.conversations.size;
 	});
 
-	createConversation(model: string): string {
+	// Conversations filtered by active space (for space sidebar views)
+	conversationsBySpace = $derived.by(() => {
+		if (!this.activeSpace) return this.conversationList;
+		return this.conversationList.filter((c) => c.space === this.activeSpace);
+	});
+
+	// Pinned conversations filtered by active space
+	pinnedConversationsBySpace = $derived.by(() => {
+		if (!this.activeSpace) return this.pinnedConversations;
+		return this.pinnedConversations.filter((c) => c.space === this.activeSpace);
+	});
+
+	// Unpinned conversations filtered by active space
+	unpinnedConversationsBySpace = $derived.by(() => {
+		if (!this.activeSpace) return this.unpinnedConversations;
+		return this.unpinnedConversations.filter((c) => c.space === this.activeSpace);
+	});
+
+	createConversation(model: string, space?: SpaceType): string {
 		const id = generateId();
 		const conversation: Conversation = {
 			id,
@@ -268,7 +306,9 @@ class ChatStore {
 			messages: [],
 			model,
 			createdAt: Date.now(),
-			updatedAt: Date.now()
+			updatedAt: Date.now(),
+			space: space || null,
+			tags: []
 		};
 
 		this.conversations.set(id, conversation);
@@ -307,11 +347,29 @@ class ChatStore {
 		return id;
 	}
 
-	setActiveConversation(id: string): void {
-		if (this.conversations.has(id)) {
+	setActiveConversation(id: string | null): void {
+		if (id === null) {
+			this.activeConversationId = null;
+			this.schedulePersist();
+		} else if (this.conversations.has(id)) {
 			this.activeConversationId = id;
 			this.schedulePersist();
 		}
+	}
+
+	/**
+	 * Set the active space for filtering conversations
+	 * Used by space pages to scope the sidebar view
+	 */
+	setActiveSpace(space: SpaceType | null): void {
+		this.activeSpace = space;
+	}
+
+	/**
+	 * Get count of conversations in a specific space
+	 */
+	getSpaceConversationCount(space: SpaceType): number {
+		return Array.from(this.conversations.values()).filter((c) => c.space === space).length;
 	}
 
 	addMessage(conversationId: string, message: Omit<Message, 'id' | 'timestamp'>): string {
@@ -695,6 +753,137 @@ class ChatStore {
 	// Force refresh from API
 	async refresh(): Promise<void> {
 		await this.syncFromApi();
+	}
+
+	// =====================================================
+	// Second Opinion Methods
+	// =====================================================
+
+	/**
+	 * Open second opinion panel and prepare for streaming
+	 */
+	openSecondOpinion(sourceMessageId: string, sourceMessageIndex: number, modelId: string): void {
+		// Close any existing second opinion first
+		this.closeSecondOpinion();
+
+		this.secondOpinion = {
+			isOpen: true,
+			isStreaming: true,
+			sourceMessageId,
+			sourceMessageIndex,
+			modelId,
+			content: '',
+			thinking: '',
+			error: null,
+			guidance: null
+		};
+	}
+
+	/**
+	 * Close second opinion panel and abort any streaming
+	 */
+	closeSecondOpinion(): void {
+		if (this.secondOpinionAbortController) {
+			this.secondOpinionAbortController.abort();
+			this.secondOpinionAbortController = null;
+		}
+		this.secondOpinion = null;
+	}
+
+	/**
+	 * Set the abort controller for second opinion streaming
+	 */
+	setSecondOpinionAbortController(controller: AbortController): void {
+		this.secondOpinionAbortController = controller;
+	}
+
+	/**
+	 * Append content to second opinion response
+	 */
+	appendToSecondOpinion(content: string): void {
+		if (this.secondOpinion) {
+			this.secondOpinion = {
+				...this.secondOpinion,
+				content: this.secondOpinion.content + content
+			};
+		}
+	}
+
+	/**
+	 * Append thinking content to second opinion response
+	 */
+	appendToSecondOpinionThinking(thinkingContent: string): void {
+		if (this.secondOpinion) {
+			this.secondOpinion = {
+				...this.secondOpinion,
+				thinking: this.secondOpinion.thinking + thinkingContent
+			};
+		}
+	}
+
+	/**
+	 * Set error state for second opinion
+	 */
+	setSecondOpinionError(error: string): void {
+		if (this.secondOpinion) {
+			this.secondOpinion = {
+				...this.secondOpinion,
+				isStreaming: false,
+				error
+			};
+		}
+	}
+
+	/**
+	 * Mark second opinion streaming as complete and extract guidance
+	 */
+	completeSecondOpinion(): void {
+		if (this.secondOpinion) {
+			// Extract the "Key Guidance" section from the content
+			const guidance = this.extractGuidanceSection(this.secondOpinion.content);
+
+			this.secondOpinion = {
+				...this.secondOpinion,
+				isStreaming: false,
+				guidance
+			};
+		}
+		this.secondOpinionAbortController = null;
+	}
+
+	/**
+	 * Extract the "Key Guidance" section from second opinion content
+	 * Looks for ## Key Guidance or similar headers
+	 */
+	private extractGuidanceSection(content: string): string | null {
+		if (!content) return null;
+
+		// Match "## Key Guidance" or "**Key Guidance**" or "Key Guidance:" patterns
+		const patterns = [
+			/##\s*Key\s*Guidance\s*\n([\s\S]*?)(?=\n##|$)/i,
+			/\*\*Key\s*Guidance\*\*\s*\n([\s\S]*?)(?=\n\*\*|$)/i,
+			/Key\s*Guidance:\s*\n([\s\S]*?)(?=\n[A-Z]|$)/i
+		];
+
+		for (const pattern of patterns) {
+			const match = content.match(pattern);
+			if (match && match[1]) {
+				const extracted = match[1].trim();
+				// Only return if we got meaningful content (more than just whitespace)
+				if (extracted.length > 10) {
+					return extracted;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Check if second opinion panel is open
+	 */
+	get isSecondOpinionOpen(): boolean {
+		return this.secondOpinion?.isOpen ?? false;
 	}
 }
 

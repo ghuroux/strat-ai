@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     user_id TEXT, -- Will become NOT NULL in Phase 0.4
     team_id TEXT,
     space TEXT, -- 'work', 'research', 'random', 'personal'
+    tags TEXT[] DEFAULT '{}', -- For template auto-tagging and filtering (Phase 0.3b+)
 
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -66,6 +67,16 @@ CREATE INDEX IF NOT EXISTS idx_conversations_messages_gin
 CREATE INDEX IF NOT EXISTS idx_conversations_continued_from
     ON conversations(continued_from_id)
     WHERE continued_from_id IS NOT NULL;
+
+-- Space filtering (for Phase 0.3a Spaces)
+CREATE INDEX IF NOT EXISTS idx_conversations_space
+    ON conversations(user_id, space, updated_at DESC)
+    WHERE deleted_at IS NULL AND space IS NOT NULL;
+
+-- Tags filtering with GIN index for array containment queries (Phase 0.3b+)
+CREATE INDEX IF NOT EXISTS idx_conversations_tags
+    ON conversations USING GIN (tags)
+    WHERE deleted_at IS NULL;
 
 -- Function to auto-update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

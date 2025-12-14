@@ -57,31 +57,324 @@ This file tracks planned features and improvements, aligned with the product vis
 
 ## Phase 0.3: Spaces & Templates (NEXT)
 
-**Goal**: Reduce cognitive load, fast-track productivity
+**Goal**: Reduce cognitive load, fast-track productivity through invisible prompt engineering
 
-### Space Framework
-- [ ] Space concept implementation (Work, R&D, Random, Personal)
-- [ ] Space-specific default models
-- [ ] Space-specific system prompts
-- [ ] Visual differentiation between spaces
+> **Design Reference**: See `PHASE-0.3-SPACES-DESIGN.md` for complete vision, philosophy, and technical details.
 
-### Template System
-- [ ] Template library per space
-- [ ] Template variables/placeholders
-- [ ] Quick template selection UI
-- [ ] Custom template creation
+**Core Insight**: Templates are not shortcuts—they're invisible prompt engineering that makes AI novices into power users. Spaces are not folders—they're productivity environments with accumulated context.
 
-### Work Space (Priority)
-- [ ] Meeting summary template
-- [ ] Email drafting template
-- [ ] Document review template
-- [ ] Report generation template
+This phase is broken into 7 sub-phases to ensure quality and allow course-correction.
 
-### R&D Space (Priority)
-- [ ] Research synthesis template
-- [ ] Competitive analysis template
-- [ ] Brainstorming template
-- [ ] Technical exploration template
+---
+
+### Phase 0.3a: Space Navigation Foundation
+**Goal**: Establish space infrastructure with embedded chat
+
+**Database**:
+- [ ] Add `space` column to `conversations` table
+- [ ] Create `user_spaces` table (user_id, space, default_model, settings)
+- [ ] Create migration script
+
+**Routes & Navigation**:
+- [ ] Create `/spaces` route (space selector dashboard)
+- [ ] Create `/spaces/work` route
+- [ ] Create `/spaces/research` route
+- [ ] Add space switcher to header
+- [ ] Handle space state in URL
+
+**Visual Differentiation**:
+- [ ] Space-specific accent colors (Work=blue, Research=purple)
+- [ ] Space icons and branded headers
+- [ ] Space dashboard layout (shell with empty states)
+
+**Embedded Chat**:
+- [ ] Chat component within each space page
+- [ ] Chat inherits space context (stored in conversation)
+- [ ] Space-specific system prompt additions
+- [ ] Space-aware conversation list
+
+**Success Criteria**:
+- User can navigate between main chat and spaces
+- Spaces feel visually distinct and purposeful
+- Chat works within spaces with space context
+
+**Depends on**: Phase 0.2 (PostgreSQL)
+
+---
+
+### Phase 0.3b: Template Framework
+**Goal**: Build the template system architecture
+
+**Template Definitions** (`src/lib/config/templates/`):
+- [ ] Create `Template` interface with all properties
+- [ ] Create `TemplateCategory` types
+- [ ] Create `UXPattern` types (guided, form, dump, quick)
+- [ ] Create template registry with space filtering
+- [ ] Define extraction schema types
+
+**Template UI Components**:
+- [ ] `TemplatePicker.svelte` - Quick action grid
+- [ ] `TemplateBrowser.svelte` - Full library with categories
+- [ ] `TemplateCard.svelte` - Individual template display
+- [ ] Template search/filter
+
+**Template Execution Context**:
+- [ ] Template execution store/state
+- [ ] Space + user context injection
+- [ ] Model selection per template
+
+**First Template (Dump Pattern)**:
+- [ ] "Quick Note → Structure" template
+- [ ] Paste unstructured content → get organized output
+- [ ] Validates basic execution pipeline
+
+**Success Criteria**:
+- Template picker displays available templates
+- At least one template works end-to-end
+- Architecture is extensible for other patterns
+
+**Depends on**: Phase 0.3a
+
+---
+
+### Phase 0.3c: Guided Conversation Pattern
+**Goal**: Build the signature UX innovation—conversational templates
+
+This is the core differentiator. Users answer natural questions and get power-user results without learning "prompting."
+
+**Conversation Step System**:
+- [ ] `ConversationStep` interface (question, followUp, extraction)
+- [ ] Step sequencing logic (linear + conditional)
+- [ ] Dynamic question generation based on previous answers
+- [ ] Step completion detection
+
+**Step-by-Step UI**:
+- [ ] `GuidedConversation.svelte` component
+- [ ] Question display with context
+- [ ] User response input (text, voice future)
+- [ ] Progress indication (step X of Y)
+- [ ] Back/edit previous answers
+- [ ] Final output generation
+
+**Meeting Summary Template** (Priority 1):
+- [ ] Natural question sequence:
+  - "What was this meeting about?"
+  - "Who was there?"
+  - "What were the key decisions?"
+  - "Any action items or next steps?"
+- [ ] Professional output formatting
+- [ ] Attendee/action item extraction hints
+
+**Success Criteria**:
+- Meeting Summary feels like natural conversation
+- Output quality exceeds freestyle prompting
+- Users get power-user results without prompting knowledge
+
+**Depends on**: Phase 0.3b
+
+---
+
+### Phase 0.3d: Form Pattern + Core Templates
+**Goal**: Complete template variety with structured input
+
+**Form-Based Template UI**:
+- [ ] `FormTemplate.svelte` component
+- [ ] Field type renderers (text, textarea, select, multiselect, date)
+- [ ] Form validation (required, format)
+- [ ] Submit → generate flow
+- [ ] Preview before generation
+
+**Weekly Status Update** (Work Space):
+- [ ] Form fields: Accomplishments, In Progress, Blockers, Next Week
+- [ ] Role/team-aware output formatting
+- [ ] Professional structure
+
+**Decision Log** (Work Space):
+- [ ] Form fields: Decision, Rationale, Stakeholders, Date
+- [ ] Clear documentation output
+- [ ] Future-proof format for searching
+
+**Research Synthesis** (Research Space - Guided):
+- [ ] Question sequence for research topics
+- [ ] Source tracking
+- [ ] Findings → implications flow
+
+**Email Draft** (Work Space - Guided):
+- [ ] Recipient, purpose, key points
+- [ ] Tone selection
+- [ ] Professional output
+
+**Success Criteria**:
+- Form and guided patterns both functional
+- At least 5 templates available across spaces
+- Clear value over freestyle prompting
+
+**Depends on**: Phase 0.3c
+
+---
+
+### Phase 0.3e: Entity Extraction System
+**Goal**: Extract structured data from template outputs
+
+**Database Schema**:
+- [ ] Create `context_people` table
+- [ ] Create `context_action_items` table
+- [ ] Create `context_decisions` table
+- [ ] Create `template_outputs` table
+- [ ] Indexes for temporal queries
+- [ ] Migration script
+
+**Extraction Pipeline**:
+- [ ] AI extraction prompts per entity type
+- [ ] Extraction from template outputs (post-generation)
+- [ ] Entity parsing and normalization
+- [ ] Person deduplication (name matching)
+
+**Extraction Types**:
+- [ ] **Action Items**: title, assignee, due date, priority
+- [ ] **Decisions**: title, rationale, stakeholders, status
+- [ ] **People**: name, role, team, relationship type
+
+**Integration with Templates**:
+- [ ] Add `extractionSchema` to template definitions
+- [ ] Trigger extraction after template completion
+- [ ] Store raw extraction results
+
+**Success Criteria**:
+- Entities are extracted from Meeting Summary and Decision Log
+- Extraction quality is reliable (>80% accuracy)
+- Data is ready for confirmation UI
+
+**Depends on**: Phase 0.3d
+
+---
+
+### Phase 0.3f: Confirmation & Working Context
+**Goal**: User control over extracted entities + visible accumulated context
+
+**Confirmation UI**:
+- [ ] `ExtractionConfirmation.svelte` component
+- [ ] Display extracted entities post-template
+- [ ] Checkboxes to include/exclude items
+- [ ] Inline editing before save
+- [ ] "Save All" / "Save Selected" / "Skip" actions
+- [ ] Clear messaging: "I found X items—confirm what to save"
+
+**Entity Persistence**:
+- [ ] Save confirmed entities to database
+- [ ] Link entities to source template output
+- [ ] Update person interaction counts
+- [ ] Handle edit-before-save changes
+
+**Action Items View**:
+- [ ] `ActionItemsList.svelte` component
+- [ ] Filter by status (pending, in_progress, completed)
+- [ ] Filter by due date (overdue, today, this week)
+- [ ] Mark complete / edit / delete
+- [ ] Sort options
+
+**Recent Outputs View**:
+- [ ] Template outputs list per space
+- [ ] Quick re-view capability
+- [ ] Link to original conversation
+
+**Context Statistics**:
+- [ ] "X open items, Y completed this week"
+- [ ] Per-space statistics
+- [ ] Productivity indicators
+
+**Context Badge** (Header):
+- [ ] "🔴 3" indicator for open action items
+- [ ] Click to expand quick view
+- [ ] First glimpse of temporal awareness
+
+**Success Criteria**:
+- Users feel in control of what gets saved
+- Extraction errors don't pollute data
+- Users can see and manage their accumulated context
+- Value of the system becomes visible
+
+**Depends on**: Phase 0.3e
+
+---
+
+### Phase 0.3g: Onboarding & Polish (Stretch)
+**Goal**: Personalized experience and refinement
+
+**Activity Selection (Spotify Approach)**:
+- [ ] First-run onboarding flow
+- [ ] "What activities do you want help with?" (pick 3-5)
+- [ ] Activity icons and descriptions
+- [ ] Store selections in user profile
+
+**Suggested Activities**:
+1. 📝 Summarize meetings
+2. ✉️ Draft emails
+3. 📊 Write status updates
+4. 📋 Track decisions & actions
+5. 🔍 Research topics
+6. 📄 Review documents
+7. 💡 Brainstorm ideas
+8. 📈 Analyze data
+9. 📝 Write specs & docs
+10. 🎯 Plan projects
+11. 👥 Prep for 1:1s
+12. 📣 Create presentations
+
+**Template Recommendations**:
+- [ ] Surface relevant templates based on activities
+- [ ] "Recommended for you" section on dashboard
+- [ ] Prioritize quick actions per user
+
+**User Profile Storage**:
+- [ ] Create `user_profiles` table (or extend existing)
+- [ ] Store selected activities
+- [ ] Store onboarding completion status
+- [ ] Optional role/team info
+
+**Polish Items**:
+- [ ] Empty states for all views
+- [ ] Error handling and recovery
+- [ ] Loading states and transitions
+- [ ] Mobile responsiveness for space views
+- [ ] Keyboard shortcuts for common actions
+
+**Success Criteria**:
+- New users get personalized template recommendations
+- Dashboard feels curated, not overwhelming
+- Overall experience is polished and production-ready
+
+**Depends on**: Phase 0.3f
+
+---
+
+### Phase 0.3 Summary
+
+| Sub-Phase | Focus | Key Deliverable | Effort |
+|-----------|-------|-----------------|--------|
+| 0.3a | Space Foundation | Spaces with embedded chat | Medium |
+| 0.3b | Template Framework | Architecture + first template | Medium |
+| 0.3c | Guided Conversations | Meeting Summary template | High |
+| 0.3d | Form Pattern | Status Update, Decision Log | Medium |
+| 0.3e | Entity Extraction | Action items, decisions, people | High |
+| 0.3f | Confirmation + Context | User control + visibility | High |
+| 0.3g | Onboarding (Stretch) | Personalization | Low |
+
+**Total POC Templates**:
+1. Quick Note → Structure (dump)
+2. Meeting Summary (guided)
+3. Weekly Status Update (form)
+4. Decision Log (form)
+5. Research Synthesis (guided)
+6. Email Draft (guided)
+
+**What Phase 0.3 Proves**:
+- ✅ Template → Structured Data pipeline works
+- ✅ Working Context accumulates value
+- ✅ Spaces feel like environments, not folders
+- ✅ AI novices become power users invisibly
+- ✅ Foundation for temporal agents is visible
+- ✅ Path to integrations is clear
 
 ---
 
@@ -104,6 +397,11 @@ This file tracks planned features and improvements, aligned with the product vis
 - [ ] Per-user token usage
 - [ ] Per-team token usage
 - [ ] Usage history/trends
+- [ ] **Second Opinion Feature Governance**:
+  - [ ] Track Second Opinion usage per user/team
+  - [ ] Configurable monthly allowance (unlimited by default)
+  - [ ] Usage dashboard showing Second Opinion cost breakdown
+  - [ ] Admin controls to enable/disable or set limits per team
 
 ---
 
@@ -122,6 +420,65 @@ This file tracks planned features and improvements, aligned with the product vis
 - [ ] Usage analytics
 - [ ] Policy management UI
 - [ ] Audit logging
+
+---
+
+## Phase 0.6: Temporal Intelligence (Future)
+
+**Goal**: Proactive AI that understands time and context
+
+> This phase builds on the Working Context from Phase 0.3 to provide intelligent, time-aware assistance.
+
+### Smart Context Injection (RAG)
+- [ ] Generate embeddings for template outputs
+- [ ] pgvector extension for similarity search
+- [ ] "Find relevant past context" for conversations
+- [ ] Automatic context injection based on conversation topic
+
+### Proactive Features
+- [ ] Morning briefing ("3 items due today, 2 meetings")
+- [ ] Smart reminders ("Deadline for X is tomorrow")
+- [ ] Pattern detection ("Recurring theme in your meetings: deployment delays")
+- [ ] Stale item alerts ("5 action items pending >2 weeks")
+
+### Database Considerations
+- [ ] Add embedding columns to template_outputs (pgvector)
+- [ ] Consider external vector DB if scale requires it
+- [ ] Optimize for temporal queries (date ranges, recency)
+
+---
+
+## Phase 0.7: Collaboration & Knowledge Graph (Future)
+
+**Goal**: Team-aware productivity with relationship intelligence
+
+> This phase extends individual productivity to team collaboration.
+
+### Entity Relationships Table
+- [ ] Generic `entity_relationships` table for graph-like queries:
+  ```sql
+  entity_relationships (
+    source_type, source_id,
+    target_type, target_id,
+    relationship,  -- 'assigned_to', 'stakeholder_of', 'mentioned_in'
+    strength, metadata
+  )
+  ```
+- [ ] Relationship extraction from templates
+- [ ] Recursive CTE queries for multi-hop traversal
+- [ ] Consider Apache AGE or Neo4j if complexity warrants
+
+### Team Features
+- [ ] Shared spaces (team-level, not just user-level)
+- [ ] Collaborative template outputs (multiple contributors)
+- [ ] Action items assigned across team members
+- [ ] Decision notifications to stakeholders
+- [ ] Team dashboards with collective context
+
+### Knowledge Graph Queries
+- [ ] "Who worked on things related to Project X?"
+- [ ] "What decisions led to this outcome?"
+- [ ] "Find colleagues with similar work patterns"
 
 ---
 
@@ -217,11 +574,18 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 | ~~Bedrock integration~~ | 0.1 | Medium | Low | ✅ |
 | ~~PostgreSQL integration~~ | 0.2 | Critical | Medium | ✅ |
 | ~~Chat history sidebar~~ | 0.2 | Critical | Medium | ✅ |
-| Space framework | 0.3 | High | Medium | Next |
-| Work templates | 0.3 | High | Medium | Next |
+| Space navigation foundation | 0.3a | High | Medium | **Next** |
+| Template framework | 0.3b | High | Medium | Planned |
+| Guided conversations | 0.3c | Critical | High | Planned |
+| Form templates | 0.3d | High | Medium | Planned |
+| Entity extraction | 0.3e | High | High | Planned |
+| Confirmation + context | 0.3f | High | High | Planned |
+| Onboarding (stretch) | 0.3g | Medium | Low | Stretch |
 | Send to Arena (context) | Arena | Medium | Medium | Planned |
-| Team management | 0.4 | High | High | Planned |
-| Policy engine | 0.5 | High | High | Planned |
+| Team management | 0.4 | High | High | Future |
+| Policy engine | 0.5 | High | High | Future |
+| Temporal intelligence (RAG) | 0.6 | High | High | Future |
+| Knowledge graph / collaboration | 0.7 | Medium | High | Future |
 
 ---
 
@@ -235,5 +599,5 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 
 ---
 
-*Aligned with PRODUCT_VISION.md - Last Updated: December 2024*
-*Completed: Phase 0.1, Phase 0.2 | Next: Phase 0.3 Spaces & Templates*
+*Aligned with PRODUCT_VISION.md - Last Updated: December 14, 2024*
+*Completed: Phase 0.1, Phase 0.2 | Next: Phase 0.3a Space Navigation Foundation*

@@ -141,6 +141,97 @@ Track acknowledged issues to address later:
 
 ## Session Log
 
+### Session: 2024-12-14 (Second Opinion Feature + Key Guidance + Spaces Preview)
+**Focus**: Implement "Second Opinion" feature with Key Guidance extraction system
+
+**Completed**:
+
+**1. Second Opinion Feature** - Claude artifacts-style side panel for alternative perspectives:
+- **Chat Store State** - Added `SecondOpinionState` interface and management methods:
+  - `openSecondOpinion()`, `closeSecondOpinion()`, `appendToSecondOpinion()`, `appendToSecondOpinionThinking()`
+  - `setSecondOpinionError()`, `completeSecondOpinion()`, `isSecondOpinionOpen` getter
+- **API Endpoint** - `POST /api/chat/second-opinion`:
+  - Accepts conversationId, sourceMessageIndex, modelId
+  - Builds context from conversation history
+  - Custom system prompt for independent perspective
+  - Streams response with extended thinking support
+- **SecondOpinionPanel Component** - Side panel that slides in from right (40% viewport):
+  - Model badge with provider colors
+  - Markdown rendering with thinking display
+  - Action buttons: "Use This Answer", "Continue with [Model]" (fork), "Close"
+  - Error and loading states
+  - Auto-close on Escape key
+- **SecondOpinionModelSelect Component** - Model dropdown grouped by provider (excludes current model)
+- **ChatMessage Integration** - Added "Get second opinion" button to assistant messages
+- **Main Page Integration**:
+  - Panel layout with smooth fly transition
+  - Auto-close panel when user sends new message
+  - "Use This Answer" injects guidance as corrective user message
+  - "Fork" creates new conversation with second opinion model
+
+**2. Key Guidance System** - Smart, token-efficient injection:
+- System prompt instructs second opinion model to include "## Key Guidance" section
+- Extraction logic parses the concise guidance from full response
+- "Use This Answer" injects only the guidance (not full response) - token efficient
+- Falls back to full content if parsing fails
+
+**3. Database Compatibility Fix**:
+- Removed `tags` column from SQL queries in postgres.ts
+- The `tags` column is Phase 0.3b+ feature not yet in production DB
+- All SELECT/INSERT/UPDATE queries now omit `tags` for backwards compatibility
+
+**4. Spaces Preview** (WIP for Phase 0.3):
+- Created `SpaceIcon.svelte` component
+- Created `spaces.ts` configuration file
+- Set up `/spaces/` routes structure (layout, index, [space] dynamic route)
+- Updated WelcomeScreen with space card previews
+- Updated Header with spaces navigation
+
+**Files Created**:
+- `src/lib/components/chat/SecondOpinionPanel.svelte` - Side panel component
+- `src/lib/components/chat/SecondOpinionModelSelect.svelte` - Model selector dropdown
+- `src/routes/api/chat/second-opinion/+server.ts` - API endpoint
+- `src/lib/components/SpaceIcon.svelte` - Space icon component
+- `src/lib/config/spaces.ts` - Spaces configuration
+- `src/routes/spaces/+layout.svelte` - Spaces layout
+- `src/routes/spaces/+page.svelte` - Spaces index page
+- `src/routes/spaces/[space]/+page.svelte` - Dynamic space page
+
+**Files Modified**:
+- `src/lib/stores/chat.svelte.ts` - Added secondOpinion state and methods
+- `src/lib/components/ChatMessage.svelte` - Added trigger button with event propagation
+- `src/routes/+page.svelte` - Layout integration, handlers, auto-close behavior
+- `src/lib/server/persistence/postgres.ts` - Removed tags column from queries
+- `src/lib/server/persistence/schema.sql` - Schema updates
+- `src/lib/config/system-prompts.ts` - Added second opinion prompt
+- `src/lib/types/chat.ts` - Added SecondOpinionState type
+- `src/lib/components/chat/WelcomeScreen.svelte` - Space cards preview
+- `src/lib/components/layout/Header.svelte` - Spaces navigation
+- `src/routes/api/conversations/+server.ts` - Query compatibility
+- `BACKLOG.md` - Added Second Opinion governance to Phase 0.4
+
+**Architecture Decisions**:
+- Panel is ephemeral (not persisted) - simpler implementation, cleaner UX
+- Uses same streaming format as main chat for consistency
+- System prompt encourages independent thinking while acknowledging context
+- Auto-close on new message to maintain clean conversation flow
+- Key Guidance extraction keeps injected context minimal
+
+**Current State**:
+- Second Opinion feature fully functional
+- Database queries compatible with current production schema
+- Spaces routes set up (UI preview only, not functional yet)
+
+**Commit**: `c90cb0a` - feat: Add Second Opinion feature with Key Guidance extraction
+
+**Next session suggestions**:
+- Test second opinion feature with various models
+- Consider adding keyboard shortcut (e.g., Option+S) to trigger second opinion
+- Continue Spaces implementation (Phase 0.3)
+- Add second opinion usage to Phase 0.4 governance features (track which models give best second opinions)
+
+---
+
 ### Session: 2024-12-13 (Phase 0.3 Planning)
 **Focus**: Strategic planning for Phase 0.3 - Spaces & Templates
 

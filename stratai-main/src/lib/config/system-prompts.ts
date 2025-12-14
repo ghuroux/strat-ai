@@ -8,6 +8,8 @@
  * - Reasoning models (o1/o3/o4): Prefer minimal prompts; avoid "think step by step"
  */
 
+import type { SpaceType } from '$lib/types/chat';
+
 /**
  * Claude 4.x optimized prompt (Opus 4.5, Sonnet 4.5, Haiku 4.5)
  *
@@ -260,4 +262,77 @@ export function getPromptInfo(model: string): { family: ModelFamily; promptLengt
 		family,
 		promptLength: prompt.length
 	};
+}
+
+/**
+ * Space-specific prompt additions
+ * These are appended to the platform prompt when the user is in a specific space
+ */
+export const SPACE_PROMPT_ADDITIONS: Record<SpaceType, string> = {
+	work: `
+<space_context>
+## Work Space Context
+You are assisting in a professional work environment. Adjust your responses accordingly:
+- Be concise and action-oriented - time is valuable
+- Focus on productivity and practical outcomes
+- Use professional language appropriate for workplace communication
+- Prioritize clarity and efficiency in explanations
+- When drafting communications, maintain professional tone
+- For meeting notes and status updates, structure information clearly
+</space_context>`,
+
+	research: `
+<space_context>
+## Research Space Context
+You are assisting with research and exploration. Adjust your approach accordingly:
+- Be thorough and consider multiple perspectives
+- Provide nuanced analysis with supporting evidence
+- Cite sources and note limitations when relevant
+- Encourage deeper exploration of topics
+- Synthesize information from multiple angles
+- Balance depth with accessibility in explanations
+</space_context>`,
+
+	random: `
+<space_context>
+## Experimental Space Context
+This is a space for experimentation and casual exploration:
+- Feel free to be more creative and playful
+- Experiment with ideas without constraints
+- Explore tangential thoughts and what-ifs
+- Less structure is fine - go with the flow
+</space_context>`,
+
+	personal: `
+<space_context>
+## Personal Space Context
+This is a personal, private space for the user:
+- Be supportive and conversational
+- Maintain discretion and privacy awareness
+- Adapt to personal preferences over time
+- Balance helpfulness with respect for boundaries
+</space_context>`
+};
+
+/**
+ * Get the space-specific prompt addition for a given space
+ */
+export function getSpacePromptAddition(space: SpaceType | null | undefined): string {
+	if (!space) return '';
+	return SPACE_PROMPT_ADDITIONS[space] || '';
+}
+
+/**
+ * Get the full system prompt for a model and optional space context
+ * Combines platform-optimized prompt with space-specific additions
+ */
+export function getFullSystemPrompt(model: string, space?: SpaceType | null): string {
+	const platformPrompt = getPlatformPrompt(model);
+	const spaceAddition = getSpacePromptAddition(space);
+
+	if (!spaceAddition) {
+		return platformPrompt;
+	}
+
+	return `${platformPrompt}\n${spaceAddition}`;
 }
