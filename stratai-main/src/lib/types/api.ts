@@ -66,6 +66,8 @@ export interface ChatCompletionRequest {
 	thinking?: ThinkingConfig;
 	thinkingEnabled?: boolean;
 	thinkingBudgetTokens?: number;
+	// Space context for space-aware prompts
+	space?: 'work' | 'research' | 'random' | 'personal' | null;
 }
 
 // Tool use types for Claude

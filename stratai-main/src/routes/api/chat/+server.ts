@@ -2,7 +2,8 @@ import type { RequestHandler } from './$types';
 import { createChatCompletion, createChatCompletionWithTools, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
 import { searchWeb, formatSearchResultsForLLM, isBraveSearchConfigured } from '$lib/server/brave-search';
 import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig, ChatMessage, MessageContentBlock } from '$lib/types/api';
-import { getPlatformPrompt } from '$lib/config/system-prompts';
+import { getFullSystemPrompt } from '$lib/config/system-prompts';
+import type { SpaceType } from '$lib/types/chat';
 
 /**
  * Check if model supports explicit cache_control (Anthropic Claude models)
@@ -106,9 +107,10 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
  * Inject platform-level system prompt before user messages
  * This provides consistent baseline behavior across all conversations
  * The platform prompt is composed with any user-provided system prompt
+ * When a space is provided, space-specific context is appended
  */
-function injectPlatformPrompt(messages: ChatMessage[], model: string): ChatMessage[] {
-	const platformPrompt = getPlatformPrompt(model);
+function injectPlatformPrompt(messages: ChatMessage[], model: string, space?: SpaceType | null): ChatMessage[] {
+	const platformPrompt = getFullSystemPrompt(model, space);
 	if (!platformPrompt) return messages;
 
 	// Find the first system message (if any)
@@ -320,8 +322,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		budgetTokens: body.thinkingBudgetTokens
 	});
 
+	// Extract space for prompt context (before removing client fields)
+	const space = body.space as SpaceType | null | undefined;
+
 	// Remove client-specific fields before forwarding to LiteLLM
-	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, ...cleanBody } = body;
+	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, ...cleanBody } = body;
 
 	// Add thinking config if enabled
 	if (thinkingEnabled) {
@@ -345,11 +350,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// If search is enabled, use tool handling
 		if (searchEnabled) {
-			return await handleChatWithTools(cleanBody, thinkingEnabled);
+			return await handleChatWithTools(cleanBody, thinkingEnabled, space);
 		}
 
-		// Inject platform system prompt (before cache breakpoints so it gets cached)
-		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages, cleanBody.model);
+		// Inject platform system prompt with space context (before cache breakpoints so it gets cached)
+		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages, cleanBody.model, space);
 
 		// Apply cache breakpoints for Claude models (conversation history caching)
 		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
@@ -421,11 +426,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null): Promise<Response> {
 	const encoder = new TextEncoder();
 
-	// Inject platform prompt, then cache breakpoints, then search context
-	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model);
+	// Inject platform prompt with space context, then cache breakpoints, then search context
+	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space);
 	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
 

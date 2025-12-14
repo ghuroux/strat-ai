@@ -412,7 +412,8 @@
 					max_tokens: settingsStore.effectiveMaxTokens,
 					searchEnabled: settingsStore.webSearchEnabled,
 					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
-					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
+					space: currentSpace
 				}),
 				signal: controller.signal
 			});

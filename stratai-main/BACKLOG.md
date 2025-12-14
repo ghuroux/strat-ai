@@ -1,6 +1,9 @@
 # StratAI Development Backlog
 
-This file tracks planned features and improvements, aligned with the product vision in `PRODUCT_VISION.md`.
+This file tracks planned features and improvements, aligned with the product vision.
+
+> **Vision Reference**: See `VISION-WORK-OS.md` for the full Work Operating System vision.
+> **Spaces Design**: See `PHASE-0.3-SPACES-DESIGN.md` for Phase 0.3 implementation details.
 
 ---
 
@@ -67,36 +70,33 @@ This phase is broken into 7 sub-phases to ensure quality and allow course-correc
 
 ---
 
-### Phase 0.3a: Space Navigation Foundation
-**Goal**: Establish space infrastructure with embedded chat
+### Phase 0.3a: Space Navigation Foundation (COMPLETE)
+**Goal**: Establish space infrastructure with embedded chat ✅
 
 **Database**:
-- [ ] Add `space` column to `conversations` table
-- [ ] Create `user_spaces` table (user_id, space, default_model, settings)
-- [ ] Create migration script
+- [x] `space` column exists in `conversations` table
+- [x] `tags` column added for future project tagging
+- [x] Indexes for space and tags queries
 
 **Routes & Navigation**:
-- [ ] Create `/spaces` route (space selector dashboard)
-- [ ] Create `/spaces/work` route
-- [ ] Create `/spaces/research` route
-- [ ] Add space switcher to header
-- [ ] Handle space state in URL
+- [x] `/spaces` route (space selector dashboard)
+- [x] `/spaces/work` route with embedded chat
+- [x] `/spaces/research` route with embedded chat
+- [x] Space switcher in header
+- [x] Dynamic `[space]` route handling
 
 **Visual Differentiation**:
-- [ ] Space-specific accent colors (Work=blue, Research=purple)
-- [ ] Space icons and branded headers
-- [ ] Space dashboard layout (shell with empty states)
+- [x] Space-specific accent colors (Work=blue, Research=purple)
+- [x] Premium SVG icons (SpaceIcon component)
+- [x] Space-aware welcome screens with tailored copy
+- [x] CSS custom properties for theming
 
 **Embedded Chat**:
-- [ ] Chat component within each space page
-- [ ] Chat inherits space context (stored in conversation)
-- [ ] Space-specific system prompt additions
-- [ ] Space-aware conversation list
-
-**Success Criteria**:
-- User can navigate between main chat and spaces
-- Spaces feel visually distinct and purposeful
-- Chat works within spaces with space context
+- [x] Full chat functionality within each space
+- [x] Conversations tagged with space on creation
+- [x] Space-aware sidebar (shows only space conversations)
+- [x] Active conversation cleared when entering different space
+- [x] Space-specific system prompt additions (defined, ready to wire)
 
 **Depends on**: Phase 0.2 (PostgreSQL)
 
@@ -378,7 +378,96 @@ This is the core differentiator. Users answer natural questions and get power-us
 
 ---
 
-## Phase 0.4: Team Management
+## Phase 0.4: Contexts & Projects
+
+**Goal**: Lightweight persistent containers within spaces
+
+> See `VISION-WORK-OS.md` for full context on how this fits the Work OS vision.
+
+### Context/Project Model
+- [ ] `contexts` table (id, user_id, space, name, description, created_at)
+- [ ] Link conversations to contexts (conversation.context_id)
+- [ ] Context creation through chat ("Create context: Q4 Planning")
+- [ ] AI-suggested context creation when topic doesn't fit existing
+
+### Context UI
+- [ ] Context filter in space sidebar
+- [ ] Context badge on conversations
+- [ ] Quick context switcher
+- [ ] Context-scoped conversation list
+
+### Context Intelligence
+- [ ] Context-specific system prompt injection
+- [ ] Context summary/description auto-generated
+- [ ] Related documents/artifacts (future: file attachments)
+
+**Success Criteria**:
+- Users can create contexts through natural conversation
+- Conversations belong to contexts, carrying persistent knowledge
+- Context switching is filtering, not navigation
+
+**Depends on**: Phase 0.3
+
+---
+
+## Phase 0.5: Tasks & Meetings
+
+**Goal**: First-class entities with lifecycle
+
+> Meetings and tasks are not just data—they have lifecycles and intelligence.
+
+### Task Entity
+- [ ] `tasks` table (id, user_id, context_id, title, status, due_date, priority)
+- [ ] Chat-first task creation ("I need to write the Q4 doc")
+- [ ] Task status (pending, in_progress, completed)
+- [ ] Task-to-context linking
+
+### Meeting Entity
+- [ ] `meetings` table (id, user_id, title, start_time, attendees, status)
+- [ ] Meeting lifecycle: prep → during → follow-up
+- [ ] Pre-meeting intelligence (research, previous notes, attendee profiles)
+- [ ] Post-meeting outcome capture
+- [ ] Action items extracted to tasks
+
+### Calendar Integration
+- [ ] Read-only calendar sync (Google/Outlook)
+- [ ] Meeting auto-population from calendar
+- [ ] Today's meetings view
+
+**Success Criteria**:
+- Tasks created through conversation, not forms
+- Meetings have AI-enriched prep available
+- Outcomes flow naturally into tasks
+
+**Depends on**: Phase 0.4
+
+---
+
+## Phase 0.6: Home Dashboard
+
+**Goal**: Command center for the workday
+
+### Dashboard Components
+- [ ] Today's meetings (with prep status)
+- [ ] Today's tasks (actual + AI-recommended)
+- [ ] Needs attention section (overdue, stale items)
+- [ ] Quick actions (common templates)
+
+### Intelligence Layer
+- [ ] AI-recommended task prioritization
+- [ ] Meeting prep alerts ("Johnson call in 2 hours—review prep?")
+- [ ] Pattern-based suggestions
+
+**Success Criteria**:
+- Users start their day from Home
+- Relevant context is surfaced, not hunted for
+- Reduces "what should I work on?" friction
+
+**Depends on**: Phase 0.5
+
+---
+
+## Phase 0.7: Team Management
 
 **Goal**: Multi-user enterprise foundation
 
@@ -388,24 +477,20 @@ This is the core differentiator. Users answer natural questions and get power-us
 - [ ] Session management improvements
 
 ### Team Structure
-- [ ] Team creation
-- [ ] User invitations
+- [ ] Team creation and invitations
 - [ ] Role definitions (admin, member)
 - [ ] LiteLLM virtual keys per team
 
 ### Usage Tracking
-- [ ] Per-user token usage
-- [ ] Per-team token usage
-- [ ] Usage history/trends
-- [ ] **Second Opinion Feature Governance**:
-  - [ ] Track Second Opinion usage per user/team
-  - [ ] Configurable monthly allowance (unlimited by default)
-  - [ ] Usage dashboard showing Second Opinion cost breakdown
-  - [ ] Admin controls to enable/disable or set limits per team
+- [ ] Per-user/team token usage
+- [ ] Usage history and trends
+- [ ] Second Opinion governance controls
+
+**Depends on**: Phase 0.6
 
 ---
 
-## Phase 0.5: Policy Engine
+## Phase 0.8: Policy Engine
 
 **Goal**: Enterprise AI governance
 
@@ -413,17 +498,17 @@ This is the core differentiator. Users answer natural questions and get power-us
 - [ ] Model access control per team
 - [ ] Usage limits and quotas
 - [ ] Content filtering rules
-- [ ] Allowed/blocked features per team
 
 ### Admin Dashboard
-- [ ] Team overview
-- [ ] Usage analytics
+- [ ] Team overview and analytics
 - [ ] Policy management UI
 - [ ] Audit logging
 
+**Depends on**: Phase 0.7
+
 ---
 
-## Phase 0.6: Temporal Intelligence (Future)
+## Phase 0.9: Temporal Intelligence
 
 **Goal**: Proactive AI that understands time and context
 
