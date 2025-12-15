@@ -141,6 +141,83 @@ Track acknowledged issues to address later:
 
 ## Session Log
 
+### Session: 2024-12-15 (Phase 0.3b Complete - Assists Framework)
+**Focus**: Implement Assists Framework for structured task management in Work space
+
+**Completed**:
+
+**1. Assists Framework Foundation**:
+- Created `assists.ts` config with assist definitions and phase-specific prompts
+- Created `assists.ts` types for phases (collecting, confirming, prioritizing, focused) and tasks
+- Added `assistId` and `assistPhase` to `ChatCompletionRequest` API type
+
+**2. Phased UX Flow**:
+- Designed flow to avoid overwhelming novice users:
+  - **Collecting**: User dumps tasks/concerns into chat
+  - **Confirming**: AI helps clarify and structure the list
+  - **Prioritizing**: User ranks tasks by importance
+  - **Focused**: Work on one task at a time
+- Phase-based prompt injection in chat API adapts AI behavior
+
+**3. Task Extraction System**:
+- Created `task-extraction.ts` utility for parsing AI responses
+- Extracts numbered/bulleted tasks from AI markdown responses
+- Handles various formats (numbered lists, bullet points, task descriptions)
+
+**4. UI Components**:
+- **AssistDropdown.svelte**: "Help me with..." dropdown in Work space header
+- **WorkingPanel.svelte**: Complete rewrite with task list UI
+  - Shows extracted tasks with priority indicators
+  - Collapsible panel with status badges
+  - Phase-aware content display
+
+**5. Store Integration**:
+- Extended `chat.svelte.ts` with task management methods:
+  - `setExtractedTasks()`, `clearExtractedTasks()`
+  - `setAssistPhase()`, `getExtractedTasks()`, `getAssistPhase()`
+
+**6. API Enhancements**:
+- Updated `/api/chat/+server.ts` to inject assist-specific system prompts
+- Phase context passed through request for appropriate AI guidance
+
+**Files Created**:
+- `src/lib/components/assists/AssistDropdown.svelte` - Assist picker dropdown
+- `src/lib/components/assists/WorkingPanel.svelte` - Task list panel (rewritten)
+- `src/lib/config/assists.ts` - Assist definitions and prompts
+- `src/lib/types/assists.ts` - Phase and task types
+- `src/lib/utils/task-extraction.ts` - AI response parsing
+- `src/routes/api/assist/+server.ts` - Assist API endpoint
+
+**Files Modified**:
+- `src/lib/types/api.ts` - Added assistId, assistPhase to request type
+- `src/lib/stores/chat.svelte.ts` - Task management methods
+- `src/lib/components/ChatInput.svelte` - Minor adjustments
+- `src/lib/components/chat/WelcomeScreen.svelte` - Space-aware updates
+- `src/routes/api/chat/+server.ts` - Phase-based prompt injection
+- `src/routes/spaces/[space]/+page.svelte` - Task extraction, assist handlers
+- `BACKLOG.md` - Marked Phase 0.3b complete
+
+**Architecture Decisions**:
+- **Phased approach over feature-dump**: Users guided through natural workflow
+- **Prompts adapt per phase**: System prompts change based on assist phase
+- **Tasks extracted client-side**: Avoids additional API calls, uses existing response
+
+**Current State**:
+- Phase 0.3b COMPLETE
+- First assist "What's on your plate?" available in Work space
+- Phased UX flow implemented
+- Task extraction working
+
+**Commit**: `3b62283` - feat: Complete Phase 0.3b - Assists Framework with task breakdown
+
+**Next session suggestions**:
+- Test full flow: start assist -> collect tasks -> confirm -> prioritize -> focus
+- Add more assists (Decision Helper, Meeting Prep)
+- Consider task persistence to database
+- Add keyboard shortcuts for assist actions
+
+---
+
 ### Session: 2024-12-14 (Phase 0.3a Complete - Space Navigation Foundation)
 **Focus**: Complete Phase 0.3a - Space-aware chat with visual theming and prompts
 

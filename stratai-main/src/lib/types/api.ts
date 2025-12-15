@@ -68,6 +68,12 @@ export interface ChatCompletionRequest {
 	thinkingBudgetTokens?: number;
 	// Space context for space-aware prompts
 	space?: 'work' | 'research' | 'random' | 'personal' | null;
+	// Assist context for assist-specific system prompts
+	assistId?: string | null;
+	// Assist phase and task context
+	assistPhase?: 'collecting' | 'confirming' | 'prioritizing' | 'focused' | null;
+	assistTasks?: string[] | null; // Task names for context
+	assistFocusedTask?: string | null; // Name of the currently focused task
 }
 
 // Tool use types for Claude

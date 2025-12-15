@@ -102,36 +102,49 @@ This phase is broken into 7 sub-phases to ensure quality and allow course-correc
 
 ---
 
-### Phase 0.3b: Template Framework
-**Goal**: Build the template system architecture
+### Phase 0.3b: Assists Framework (COMPLETE)
+**Goal**: Build "Help me with..." productivity assists ✅
 
-**Template Definitions** (`src/lib/config/templates/`):
-- [ ] Create `Template` interface with all properties
-- [ ] Create `TemplateCategory` types
-- [ ] Create `UXPattern` types (guided, form, dump, quick)
-- [ ] Create template registry with space filtering
-- [ ] Define extraction schema types
+> **Design Reference**: See `.claude/plans/replicated-brewing-flask.md` for full Assists design.
 
-**Template UI Components**:
-- [ ] `TemplatePicker.svelte` - Quick action grid
-- [ ] `TemplateBrowser.svelte` - Full library with categories
-- [ ] `TemplateCard.svelte` - Individual template display
-- [ ] Template search/filter
+**Core Insight**: Instead of template pickers, use focused "Assist" modes that guide users through specific tasks with a phased UX flow.
 
-**Template Execution Context**:
-- [ ] Template execution store/state
-- [ ] Space + user context injection
-- [ ] Model selection per template
+**Assists Architecture**:
+- [x] `Assist` interface with phases (collecting, confirming, prioritizing, focused)
+- [x] `AssistState` with task tracking and phase management
+- [x] Assist registry with space filtering (`src/lib/config/assists.ts`)
+- [x] Phase-specific system prompt injection
 
-**First Template (Dump Pattern)**:
-- [ ] "Quick Note → Structure" template
-- [ ] Paste unstructured content → get organized output
-- [ ] Validates basic execution pipeline
+**Assists UI Components**:
+- [x] `AssistDropdown.svelte` - "Help me with..." dropdown in header
+- [x] `WorkingPanel.svelte` - Right-side panel for structured output
+- [x] Task list with confirm/edit/add/remove capabilities
+- [x] Phase-aware UI (different messaging per phase)
+
+**First Assist: "What's on your plate?" (Task Breakdown)**:
+- [x] Simplified extraction-focused system prompt
+- [x] Task extraction from AI responses (`src/lib/utils/task-extraction.ts`)
+- [x] User confirms task list in WorkingPanel
+- [x] Priority check after confirmation
+- [x] Task-focused conversations (click task to dive in)
+
+**UX Flow**:
+```
+Brain dump → AI extracts tasks → Confirm in WorkingPanel → Priority check → Click task to focus
+```
+
+**Visual Mode Shift**:
+- [x] Sidebar hides when assist active
+- [x] Amber glow on chat input
+- [x] Subtle background tint
+- [x] WorkingPanel slides in from right
 
 **Success Criteria**:
-- Template picker displays available templates
-- At least one template works end-to-end
-- Architecture is extensible for other patterns
+- ✅ "Help me with..." dropdown works
+- ✅ Task breakdown extracts and displays tasks
+- ✅ Users confirm tasks before proceeding
+- ✅ Task-specific conversations are scoped
+- ✅ Architecture extensible for more assists
 
 **Depends on**: Phase 0.3a
 

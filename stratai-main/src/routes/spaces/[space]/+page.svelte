@@ -14,13 +14,16 @@
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
 	import ModelSelector from '$lib/components/ModelSelector.svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
+	import AssistDropdown from '$lib/components/assists/AssistDropdown.svelte';
+	import WorkingPanel from '$lib/components/assists/WorkingPanel.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import { modelSupportsVision } from '$lib/config/model-capabilities';
 	import { SPACES, isValidSpace, type ENABLED_SPACES } from '$lib/config/spaces';
-	import type { SpaceType, FileAttachment } from '$lib/types/chat';
+	import { extractTasksFromContent, contentLooksLikeTaskList, contentAsksForConfirmation } from '$lib/utils/task-extraction';
+	import type { SpaceType, FileAttachment, Conversation, Message } from '$lib/types/chat';
 
 	// Get space from route param
 	let spaceParam = $derived($page.params.space);
@@ -81,6 +84,10 @@
 	let secondOpinion = $derived(chatStore.secondOpinion);
 	let isSecondOpinionOpen = $derived(chatStore.isSecondOpinionOpen);
 
+	// Assist state
+	let assistState = $derived(chatStore.assistState);
+	let isAssistActive = $derived(chatStore.isAssistActive);
+
 	// Messages and conversation state
 	let messages = $derived(chatStore.messages);
 	let currentSummary = $derived(chatStore.activeConversation?.summary || null);
@@ -97,13 +104,22 @@
 		(parentConversation?.messages || []).filter((m) => m && m.id)
 	);
 
+	// Filter function defined first to avoid circular reference
+	function filterByQuery(conversations: Conversation[], query: string): Conversation[] {
+		const lowerQuery = query.toLowerCase();
+		return conversations.filter((conv: Conversation) => {
+			if (conv.title.toLowerCase().includes(lowerQuery)) return true;
+			return conv.messages.some((m: Message) => m.content.toLowerCase().includes(lowerQuery));
+		});
+	}
+
 	// Space-filtered conversations
-	let filteredPinned = $derived.by(() => {
+	let filteredPinned = $derived.by((): Conversation[] => {
 		const pinned = chatStore.pinnedConversationsBySpace;
 		if (!searchQuery.trim()) return pinned;
 		return filterByQuery(pinned, searchQuery);
 	});
-	let filteredUnpinned = $derived.by(() => {
+	let filteredUnpinned = $derived.by((): Conversation[] => {
 		const unpinned = chatStore.unpinnedConversationsBySpace;
 		if (!searchQuery.trim()) return unpinned;
 		return filterByQuery(unpinned, searchQuery);
@@ -113,14 +129,6 @@
 	let spaceConversationCount = $derived(
 		currentSpace ? chatStore.getSpaceConversationCount(currentSpace) : 0
 	);
-
-	function filterByQuery(conversations: typeof filteredPinned, query: string) {
-		const lowerQuery = query.toLowerCase();
-		return conversations.filter((conv) => {
-			if (conv.title.toLowerCase().includes(lowerQuery)) return true;
-			return conv.messages.some((m) => m.content.toLowerCase().includes(lowerQuery));
-		});
-	}
 
 	// Apply saved theme on mount
 	onMount(() => {
@@ -339,6 +347,8 @@
 
 	// Chat handlers
 	async function handleSend(content: string, attachments?: FileAttachment[]) {
+		// Note: Assist mode uses normal chat flow - the assist prompt is added via the API
+
 		if (chatStore.isSecondOpinionOpen) {
 			chatStore.closeSecondOpinion();
 		}
@@ -402,6 +412,11 @@
 				apiMessages.push({ role: 'user', content: visionContent });
 			}
 
+			// Prepare assist context if active
+			const selectedTask = assistState?.selectedTaskId
+				? assistState.tasks.find(t => t.id === assistState.selectedTaskId)
+				: null;
+
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -413,7 +428,11 @@
 					searchEnabled: settingsStore.webSearchEnabled,
 					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
 					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
-					space: currentSpace
+					space: currentSpace,
+					assistId: assistState?.assistId || null,
+					assistPhase: assistState?.phase || null,
+					assistTasks: assistState?.tasks.map(t => t.text) || null,
+					assistFocusedTask: selectedTask?.text || null
 				}),
 				signal: controller.signal
 			});
@@ -495,6 +514,22 @@
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
 				sources: collectedSources.length > 0 ? collectedSources : undefined
 			});
+
+			// Task extraction for assist mode
+			if (assistState?.isActive && assistState.phase === 'collecting') {
+				// Get the completed message content
+				const completedMessage = chatStore.getConversation(conversationId!)?.messages.find(m => m.id === assistantMessageId);
+				if (completedMessage?.content) {
+					// Check if the response looks like a task list
+					if (contentLooksLikeTaskList(completedMessage.content)) {
+						const extractedTasks = extractTasksFromContent(completedMessage.content);
+						if (extractedTasks.length > 0) {
+							// Set tasks in assist state (this moves to 'confirming' phase)
+							chatStore.setAssistTasks(extractedTasks);
+						}
+					}
+				}
+			}
 		} catch (err) {
 			if (err instanceof Error && err.name === 'AbortError') {
 				chatStore.updateMessage(conversationId!, assistantMessageId, { isStreaming: false });
@@ -723,6 +758,120 @@
 		showModelSelector = false;
 		pendingSecondOpinionIndex = null;
 	}
+
+	// Assist handlers
+	function handleAssistSelect(assistId: string) {
+		if (!currentSpace) return;
+		chatStore.activateAssist(assistId);
+	}
+
+	function handleAssistClose() {
+		chatStore.deactivateAssist();
+	}
+
+	function handleConfirmTasks() {
+		chatStore.confirmAssistTasks();
+		// Optionally inject a priority question into the chat
+		// For now, the AI prompt will handle asking about priority
+	}
+
+	function handleSelectTask(taskId: string) {
+		chatStore.selectAssistTask(taskId);
+		// The next message will use the focused phase prompt
+	}
+
+	async function handleAssistSend(content: string, attachments?: FileAttachment[]) {
+		if (!assistState?.assistId || !currentSpace) return;
+
+		const modelToUse = settingsStore.selectedModel;
+		if (!modelToUse) {
+			toastStore.error('Please select a model first');
+			return;
+		}
+
+		// Set streaming state
+		const controller = new AbortController();
+		chatStore.setAssistStreaming(true, controller);
+
+		try {
+			// Build messages for the assist API
+			const apiMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [
+				{ role: 'user', content }
+			];
+
+			const response = await fetch('/api/assist', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					assistId: assistState.assistId,
+					messages: apiMessages,
+					model: modelToUse,
+					space: currentSpace,
+					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
+				}),
+				signal: controller.signal
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Request failed');
+			}
+
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (!reader) throw new Error('No response body');
+
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const decoded = decoder.decode(value, { stream: true });
+				buffer += decoded;
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						const data = line.slice(6);
+						if (data === '[DONE]') continue;
+
+						try {
+							const parsed = JSON.parse(data);
+
+							if (parsed.type === 'thinking_start') {
+								// Thinking started
+							} else if (parsed.type === 'thinking') {
+								chatStore.appendToAssistThinking(parsed.content);
+							} else if (parsed.type === 'thinking_end') {
+								// Thinking ended
+							} else if (parsed.type === 'content') {
+								chatStore.appendToAssistContent(parsed.content);
+							} else if (parsed.type === 'error') {
+								throw new Error(parsed.error);
+							}
+						} catch (e) {
+							if (e instanceof Error && !e.message.includes('Unexpected token')) {
+								throw e;
+							}
+						}
+					}
+				}
+			}
+
+			chatStore.completeAssist();
+		} catch (err) {
+			if (err instanceof Error && err.name === 'AbortError') {
+				chatStore.deactivateAssist();
+			} else {
+				chatStore.setAssistError(err instanceof Error ? err.message : 'Unknown error');
+				toastStore.error(err instanceof Error ? err.message : 'Failed to get response');
+			}
+		}
+	}
 </script>
 
 <svelte:head>
@@ -783,6 +932,9 @@
 				<SpaceIcon space={currentSpace} size="sm" />
 				<span class="hidden sm:inline">{spaceConfig.name}</span>
 			</div>
+
+			<!-- Assist Dropdown -->
+			<AssistDropdown space={currentSpace} onSelect={handleAssistSelect} />
 		{/if}
 
 		<!-- Spaces Link -->
@@ -854,12 +1006,12 @@
 		></button>
 	{/if}
 
-	<!-- Space-aware Sidebar -->
+	<!-- Space-aware Sidebar (hidden when assist is active) -->
 	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 	<aside
 		class="fixed lg:relative z-50 h-full w-[280px] bg-surface-900 border-r border-surface-800
 			   flex flex-col transform transition-transform duration-300 ease-out
-			   {settingsStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0 lg:overflow-hidden'}"
+			   {isAssistActive ? 'hidden' : settingsStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0 lg:overflow-hidden'}"
 		onclick={handleSidebarClick}
 	>
 		<!-- New Chat Button (with space accent) -->
@@ -1005,7 +1157,8 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<main
 		class="flex-1 flex flex-col overflow-hidden bg-surface-950 relative transition-all duration-300"
-		class:mr-[40vw]={isSecondOpinionOpen}
+		class:mr-[40vw]={isSecondOpinionOpen || (isAssistActive && assistState && (assistState.tasks.length > 0 || assistState.error))}
+		class:assist-mode={isAssistActive}
 		ondragenter={handleGlobalDragEnter}
 		ondragleave={handleGlobalDragLeave}
 		ondragover={handleGlobalDragOver}
@@ -1030,7 +1183,7 @@
 		<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 md:p-6">
 			<div class="max-w-4xl mx-auto">
 				{#if messages.length === 0 && parentMessages.length === 0}
-					<WelcomeScreen hasModel={!!selectedModel} onNewChat={handleNewChat} space={currentSpace} />
+					<WelcomeScreen hasModel={!!selectedModel} onNewChat={handleNewChat} space={currentSpace} activeAssist={assistState?.assist} />
 				{:else}
 					{#if isContinuedConversation && parentMessages.length > 0}
 						<div class="parent-messages opacity-70">
@@ -1105,6 +1258,21 @@
 			/>
 		</div>
 	{/if}
+
+	<!-- Working Panel (Assists) - show when there are tasks or errors -->
+	{#if isAssistActive && assistState && (assistState.tasks.length > 0 || assistState.error)}
+		<div class="fixed top-16 right-0 bottom-0 z-30">
+			<WorkingPanel
+				assistState={assistState}
+				onClose={handleAssistClose}
+				onConfirmTasks={handleConfirmTasks}
+				onSelectTask={handleSelectTask}
+				onUpdateTask={(taskId, text) => chatStore.updateAssistTaskText(taskId, text)}
+				onRemoveTask={(taskId) => chatStore.removeAssistTask(taskId)}
+				onAddTask={(text) => chatStore.addAssistTask(text)}
+			/>
+		</div>
+	{/if}
 </div>
 
 <!-- Second Opinion Model Selector -->
@@ -1120,3 +1288,60 @@
 
 <!-- Settings Panel -->
 <SettingsPanel open={settingsOpen} onclose={() => settingsOpen = false} />
+
+<style>
+	/* Subtle background tint when in assist mode */
+	:global(main.assist-mode) {
+		background: linear-gradient(
+			135deg,
+			rgba(59, 130, 246, 0.03) 0%,
+			rgba(59, 130, 246, 0.01) 50%,
+			transparent 100%
+		);
+	}
+
+	/* For Work space (blue accent) - enhance the tint */
+	:global(main.assist-mode::before) {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			ellipse at bottom center,
+			rgba(59, 130, 246, 0.05) 0%,
+			transparent 70%
+		);
+		z-index: 0;
+	}
+
+	/* Ensure content is above the tint */
+	:global(main.assist-mode > *) {
+		position: relative;
+		z-index: 1;
+	}
+
+	/* Amber glow on the actual chat input field when in assist mode (not focused) */
+	:global(main.assist-mode .chat-input-field:not(:focus-within)) {
+		border-color: rgba(251, 191, 36, 0.5) !important;
+		box-shadow:
+			0 0 0 1px rgba(251, 191, 36, 0.3),
+			0 0 12px rgba(251, 191, 36, 0.2),
+			0 0 24px rgba(251, 191, 36, 0.1);
+		animation: amber-border-pulse 2.5s ease-in-out infinite;
+	}
+
+	@keyframes amber-border-pulse {
+		0%, 100% {
+			box-shadow:
+				0 0 0 1px rgba(251, 191, 36, 0.3),
+				0 0 12px rgba(251, 191, 36, 0.2),
+				0 0 24px rgba(251, 191, 36, 0.1);
+		}
+		50% {
+			box-shadow:
+				0 0 0 1px rgba(251, 191, 36, 0.5),
+				0 0 18px rgba(251, 191, 36, 0.3),
+				0 0 30px rgba(251, 191, 36, 0.15);
+		}
+	}
+</style>

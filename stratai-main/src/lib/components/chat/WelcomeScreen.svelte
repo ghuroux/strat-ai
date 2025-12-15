@@ -2,14 +2,22 @@
 	import { fade } from 'svelte/transition';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import type { SpaceType } from '$lib/types/chat';
+	import type { Assist } from '$lib/types/assists';
+	import { ASSIST_ICONS } from '$lib/config/assists';
 
 	interface Props {
 		hasModel: boolean;
 		onNewChat: () => void;
 		space?: SpaceType | null;
+		activeAssist?: Assist | null;
 	}
 
-	let { hasModel, onNewChat, space = null }: Props = $props();
+	let { hasModel, onNewChat, space = null, activeAssist = null }: Props = $props();
+
+	// Get icon path for assist
+	function getAssistIconPath(iconName: string): string {
+		return ASSIST_ICONS[iconName] || ASSIST_ICONS.tasks;
+	}
 
 	// Space-specific content
 	const spaceContent = {
@@ -88,78 +96,145 @@
 
 <div class="h-full flex items-center justify-center min-h-[60vh]" in:fade={{ duration: 300 }}>
 	<div class="text-center max-w-md">
-		<!-- Logo/Icon -->
-		{#if space}
-			<!-- Space-specific icon -->
+		{#if activeAssist}
+			<!-- ASSIST MODE: Show assist-specific welcome -->
 			<div
-				class="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center"
-				style="background: var(--space-accent-muted); border: 1px solid var(--space-accent-ring);"
+				class="w-24 h-24 mx-auto mb-6 rounded-2xl flex items-center justify-center assist-icon-glow"
+				style="background: var(--space-accent-muted); border: 2px solid var(--space-accent-ring);"
 			>
-				<div style="color: var(--space-accent);">
-					<SpaceIcon {space} size="xl" class="w-10 h-10" />
-				</div>
-			</div>
-		{:else}
-			<!-- Default StratAI icon -->
-			<div
-				class="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center animate-glow"
-				style="background: var(--gradient-primary);"
-			>
-				<svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="1.5"
-						d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-					/>
+				<svg
+					class="w-12 h-12"
+					style="color: var(--space-accent);"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={getAssistIconPath(activeAssist.icon)} />
 				</svg>
 			</div>
-		{/if}
 
-		<!-- Welcome Text -->
-		{#if content}
-			<h2 class="text-2xl font-bold mb-3" style="color: var(--space-accent);">{content.title}</h2>
+			<h2 class="text-2xl font-bold mb-3" style="color: var(--space-accent);">{activeAssist.name}</h2>
 			<p class="text-surface-400 mb-6 leading-relaxed">
-				{content.subtitle}
+				{activeAssist.description}
 			</p>
-		{:else}
-			<h2 class="text-2xl font-bold text-gradient mb-3">Welcome to StratAI</h2>
-			<p class="text-surface-400 mb-6">
-				Your AI-powered assistant for intelligent conversations.
-				Select a model and start chatting.
-			</p>
-		{/if}
 
-		<!-- Quick Actions -->
-		<div class="flex flex-col gap-3">
-			{#if !hasModel}
-				<div class="flex items-center justify-center gap-2 text-sm text-surface-500">
-					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<!-- Assist guidance - improved -->
+			<div class="mb-8 p-5 rounded-2xl border bg-gradient-to-br from-surface-800/80 to-surface-900/80 backdrop-blur-sm" style="border-color: var(--space-accent-ring);">
+				<div class="space-y-4">
+					<!-- Step 1 -->
+					<div class="flex items-start gap-3">
+						<div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--space-accent); color: white;">1</div>
+						<div class="text-left">
+							<p class="text-sm text-surface-200">Brain dump everything on your mind</p>
+							<p class="text-xs text-surface-500 mt-0.5">Meetings, deadlines, ideas—just let it flow</p>
+						</div>
+					</div>
+					<!-- Step 2 -->
+					<div class="flex items-start gap-3">
+						<div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--space-accent); color: white;">2</div>
+						<div class="text-left">
+							<p class="text-sm text-surface-200">I'll organize it into clear tasks</p>
+							<p class="text-xs text-surface-500 mt-0.5">Prioritized, with dependencies noted</p>
+						</div>
+					</div>
+					<!-- Step 3 -->
+					<div class="flex items-start gap-3">
+						<div class="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold" style="background: var(--space-accent); color: white;">3</div>
+						<div class="text-left">
+							<p class="text-sm text-surface-200">Get a clear action plan</p>
+							<p class="text-xs text-surface-500 mt-0.5">Know exactly what to tackle first</p>
+						</div>
+					</div>
+				</div>
+
+				<!-- Example hint -->
+				<div class="mt-4 pt-4 border-t border-surface-700/50">
+					<p class="text-xs text-surface-500 italic">"I have a roadmap to finish, need to email Sarah, standup at 10, and should probably start performance reviews..."</p>
+				</div>
+			</div>
+
+			<!-- Visual pointer to chat input -->
+			<div class="flex flex-col items-center gap-2 text-surface-500 animate-subtle-bounce">
+				<span class="text-sm">Start typing below</span>
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+				</svg>
+			</div>
+		{:else}
+			<!-- NORMAL MODE: Logo/Icon -->
+			{#if space}
+				<!-- Space-specific icon -->
+				<div
+					class="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center"
+					style="background: var(--space-accent-muted); border: 1px solid var(--space-accent-ring);"
+				>
+					<div style="color: var(--space-accent);">
+						<SpaceIcon {space} size="xl" class="w-10 h-10" />
+					</div>
+				</div>
+			{:else}
+				<!-- Default StratAI icon -->
+				<div
+					class="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center animate-glow"
+					style="background: var(--gradient-primary);"
+				>
+					<svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							stroke-width="2"
-							d="M7 11l5-5m0 0l5 5m-5-5v12"
+							stroke-width="1.5"
+							d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
 						/>
 					</svg>
-					<span>Select a model above to get started</span>
 				</div>
-			{:else}
-				<button
-					type="button"
-					onclick={onNewChat}
-					class="mx-auto px-6 py-2.5 rounded-xl font-medium transition-all duration-200"
-					style={space
-						? 'background: var(--space-accent); color: white;'
-						: 'background: var(--gradient-primary); color: white;'}
-				>
-					{content?.buttonText || 'Start New Chat'}
-				</button>
 			{/if}
-		</div>
 
-		<!-- Feature hints -->
-		<div class="mt-8 grid grid-cols-2 gap-4 text-left">
+			<!-- Welcome Text -->
+			{#if content}
+				<h2 class="text-2xl font-bold mb-3" style="color: var(--space-accent);">{content.title}</h2>
+				<p class="text-surface-400 mb-6 leading-relaxed">
+					{content.subtitle}
+				</p>
+			{:else}
+				<h2 class="text-2xl font-bold text-gradient mb-3">Welcome to StratAI</h2>
+				<p class="text-surface-400 mb-6">
+					Your AI-powered assistant for intelligent conversations.
+					Select a model and start chatting.
+				</p>
+			{/if}
+		{/if}
+
+		<!-- Quick Actions (hidden in assist mode) -->
+		{#if !activeAssist}
+			<div class="flex flex-col gap-3">
+				{#if !hasModel}
+					<div class="flex items-center justify-center gap-2 text-sm text-surface-500">
+						<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M7 11l5-5m0 0l5 5m-5-5v12"
+							/>
+						</svg>
+						<span>Select a model above to get started</span>
+					</div>
+				{:else}
+					<button
+						type="button"
+						onclick={onNewChat}
+						class="mx-auto px-6 py-2.5 rounded-xl font-medium transition-all duration-200"
+						style={space
+							? 'background: var(--space-accent); color: white;'
+							: 'background: var(--gradient-primary); color: white;'}
+					>
+						{content?.buttonText || 'Start New Chat'}
+					</button>
+				{/if}
+			</div>
+
+			<!-- Feature hints (hidden in assist mode) -->
+			<div class="mt-8 grid grid-cols-2 gap-4 text-left">
 			{#if content}
 				<!-- Space-specific features -->
 				{#each content.features as feature}
@@ -244,5 +319,36 @@
 				</div>
 			{/if}
 		</div>
+		{/if}
 	</div>
 </div>
+
+<style>
+	/* Subtle glow animation for assist icon */
+	.assist-icon-glow {
+		animation: assist-glow 2s ease-in-out infinite;
+	}
+
+	@keyframes assist-glow {
+		0%, 100% {
+			box-shadow: 0 0 20px rgba(var(--space-accent-rgb, 59, 130, 246), 0.2);
+		}
+		50% {
+			box-shadow: 0 0 30px rgba(var(--space-accent-rgb, 59, 130, 246), 0.4);
+		}
+	}
+
+	/* Subtle bounce animation for pointer */
+	.animate-subtle-bounce {
+		animation: subtle-bounce 2s ease-in-out infinite;
+	}
+
+	@keyframes subtle-bounce {
+		0%, 100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(6px);
+		}
+	}
+</style>

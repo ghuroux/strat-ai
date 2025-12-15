@@ -251,7 +251,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="border-t border-surface-800 p-4 bg-surface-900/80 backdrop-blur-xl relative"
+	class="chat-input-container border-t border-surface-800 p-4 bg-surface-900/80 backdrop-blur-xl relative"
 	ondragenter={handleDragEnter}
 	ondragleave={handleDragLeave}
 	ondragover={handleDragOver}
@@ -301,7 +301,7 @@
 				   {isFocused ? 'gradient-border shadow-glow' : ''}
 				   {isDragging ? 'ring-2 ring-primary-500/50 ring-offset-2 ring-offset-surface-900' : ''}"
 		>
-			<div class="flex items-end gap-3 bg-surface-800 rounded-2xl p-3 {isFocused ? '' : 'border border-surface-700'}">
+			<div class="chat-input-field flex items-end gap-3 bg-surface-800 rounded-2xl p-3 {isFocused ? '' : 'border border-surface-700'}">
 				<!-- File upload button -->
 				<FileUploadButton
 					disabled={disabled || chatStore.isStreaming}

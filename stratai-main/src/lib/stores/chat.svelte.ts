@@ -10,6 +10,8 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import type { Message, Conversation, StructuredSummary, SpaceType } from '$lib/types/chat';
+import type { AssistState } from '$lib/types/assists';
+import { ASSISTS } from '$lib/config/assists';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
@@ -53,6 +55,10 @@ class ChatStore {
 	// Second Opinion state (ephemeral - not persisted)
 	secondOpinion = $state<SecondOpinionState | null>(null);
 	secondOpinionAbortController = $state<AbortController | null>(null);
+
+	// Assist state (ephemeral - not persisted)
+	assistState = $state<AssistState | null>(null);
+	assistAbortController = $state<AbortController | null>(null);
 
 	// Space state (for filtering conversations by space)
 	activeSpace = $state<SpaceType | null>(null);
@@ -884,6 +890,266 @@ class ChatStore {
 	 */
 	get isSecondOpinionOpen(): boolean {
 		return this.secondOpinion?.isOpen ?? false;
+	}
+
+	// =====================================================
+	// Assist Methods
+	// =====================================================
+
+	/**
+	 * Activate an assist - enters assist mode
+	 */
+	activateAssist(assistId: string): void {
+		// Close any existing assist first
+		this.deactivateAssist();
+
+		const assist = ASSISTS[assistId];
+		if (!assist) {
+			console.error(`Assist not found: ${assistId}`);
+			return;
+		}
+
+		this.assistState = {
+			isActive: true,
+			assistId,
+			assist,
+			phase: 'collecting',
+			tasks: [],
+			selectedTaskId: null,
+			isStreaming: false,
+			content: '',
+			thinking: '',
+			error: null,
+			sourceConversationId: this.activeConversationId
+		};
+	}
+
+	/**
+	 * Deactivate assist - exits assist mode
+	 */
+	deactivateAssist(): void {
+		if (this.assistAbortController) {
+			this.assistAbortController.abort();
+			this.assistAbortController = null;
+		}
+		this.assistState = null;
+	}
+
+	/**
+	 * Set streaming state for assist
+	 */
+	setAssistStreaming(streaming: boolean, controller?: AbortController): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				isStreaming: streaming
+			};
+		}
+		this.assistAbortController = controller || null;
+	}
+
+	/**
+	 * Append content to assist response
+	 */
+	appendToAssistContent(content: string): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				content: this.assistState.content + content
+			};
+		}
+	}
+
+	/**
+	 * Append to assist thinking
+	 */
+	appendToAssistThinking(thinkingContent: string): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				thinking: this.assistState.thinking + thinkingContent
+			};
+		}
+	}
+
+	/**
+	 * Set assist error
+	 */
+	setAssistError(error: string): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				isStreaming: false,
+				error
+			};
+		}
+	}
+
+	/**
+	 * Complete assist streaming
+	 */
+	completeAssist(): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				isStreaming: false
+			};
+		}
+		this.assistAbortController = null;
+	}
+
+	/**
+	 * Check if assist mode is active
+	 */
+	get isAssistActive(): boolean {
+		return this.assistState?.isActive ?? false;
+	}
+
+	// =====================================================
+	// Task Management Methods (for task-breakdown assist)
+	// =====================================================
+
+	/**
+	 * Set extracted tasks from AI response
+	 */
+	setAssistTasks(tasks: Array<{ id: string; text: string }>): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				tasks: tasks.map((t) => ({
+					id: t.id,
+					text: t.text,
+					status: 'pending' as const
+				})),
+				phase: 'confirming'
+			};
+		}
+	}
+
+	/**
+	 * Confirm all pending tasks
+	 */
+	confirmAssistTasks(): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				tasks: this.assistState.tasks.map((t) => ({
+					...t,
+					status: 'confirmed' as const
+				})),
+				phase: 'prioritizing'
+			};
+		}
+	}
+
+	/**
+	 * Set assist phase
+	 */
+	setAssistPhase(phase: 'collecting' | 'confirming' | 'prioritizing' | 'focused'): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				phase
+			};
+		}
+	}
+
+	/**
+	 * Select a task to focus on
+	 */
+	selectAssistTask(taskId: string): void {
+		if (this.assistState) {
+			// Mark the selected task as in_progress
+			const updatedTasks = this.assistState.tasks.map((t) => ({
+				...t,
+				status: t.id === taskId ? ('in_progress' as const) : t.status
+			}));
+
+			this.assistState = {
+				...this.assistState,
+				selectedTaskId: taskId,
+				tasks: updatedTasks,
+				phase: 'focused'
+			};
+		}
+	}
+
+	/**
+	 * Update a task's text
+	 */
+	updateAssistTaskText(taskId: string, text: string): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				tasks: this.assistState.tasks.map((t) => (t.id === taskId ? { ...t, text } : t))
+			};
+		}
+	}
+
+	/**
+	 * Remove a task
+	 */
+	removeAssistTask(taskId: string): void {
+		if (this.assistState) {
+			this.assistState = {
+				...this.assistState,
+				tasks: this.assistState.tasks.filter((t) => t.id !== taskId)
+			};
+		}
+	}
+
+	/**
+	 * Add a new task
+	 */
+	addAssistTask(text: string): void {
+		if (this.assistState) {
+			const newTask = {
+				id: generateId(),
+				text,
+				status: 'pending' as const
+			};
+			this.assistState = {
+				...this.assistState,
+				tasks: [...this.assistState.tasks, newTask]
+			};
+		}
+	}
+
+	/**
+	 * Reorder tasks (for priority)
+	 */
+	reorderAssistTasks(fromIndex: number, toIndex: number): void {
+		if (this.assistState) {
+			const tasks = [...this.assistState.tasks];
+			const [removed] = tasks.splice(fromIndex, 1);
+			tasks.splice(toIndex, 0, removed);
+
+			// Update priority based on new order
+			const reorderedTasks = tasks.map((t, i) => ({
+				...t,
+				priority: i + 1
+			}));
+
+			this.assistState = {
+				...this.assistState,
+				tasks: reorderedTasks
+			};
+		}
+	}
+
+	/**
+	 * Get the currently selected task
+	 */
+	get selectedAssistTask() {
+		if (!this.assistState?.selectedTaskId) return null;
+		return this.assistState.tasks.find((t) => t.id === this.assistState?.selectedTaskId) || null;
+	}
+
+	/**
+	 * Get task names as array (for prompts)
+	 */
+	get assistTaskNames(): string[] {
+		return this.assistState?.tasks.map((t) => t.text) || [];
 	}
 }
 
