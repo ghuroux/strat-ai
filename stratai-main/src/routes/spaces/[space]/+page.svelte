@@ -910,10 +910,21 @@
 		showTaskPanel = true;
 	}
 
-	function handleStartPlanMode() {
-		if (focusedTask) {
-			taskStore.startPlanMode(focusedTask.id);
-		}
+	async function handleStartPlanMode() {
+		if (!focusedTask) return;
+
+		// Start plan mode
+		taskStore.startPlanMode(focusedTask.id);
+
+		// Auto-send initial message to kick off planning conversation
+		// This gives the user immediate feedback and starts the elicitation
+		const kickoffMessage = `I'd like help breaking down this task into manageable subtasks. The task is: "${focusedTask.title}". Please help me plan this effectively.`;
+
+		// Give a brief moment for the UI to update
+		await tick();
+
+		// Send the kickoff message (this will include planMode context via the API)
+		await handleSend(kickoffMessage);
 	}
 
 	function handleExitPlanMode() {
@@ -1228,7 +1239,7 @@
 	<aside
 		class="fixed lg:relative z-50 h-full w-[280px] bg-surface-900 border-r border-surface-800
 			   flex flex-col transform transition-transform duration-300 ease-out
-			   {isAssistActive ? 'hidden' : settingsStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0 lg:overflow-hidden'}"
+			   {isAssistActive || planMode ? 'hidden' : settingsStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0 lg:overflow-hidden'}"
 		onclick={handleSidebarClick}
 	>
 		<!-- New Chat Button (with space accent) -->
@@ -1374,8 +1385,9 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<main
 		class="flex-1 flex flex-col overflow-hidden bg-surface-950 relative transition-all duration-300"
-		class:mr-[40vw]={isSecondOpinionOpen || (isAssistActive && assistState && (assistState.tasks.length > 0 || assistState.error)) || (showTaskPanel && !isAssistActive)}
+		class:mr-[40vw]={isSecondOpinionOpen || (isAssistActive && assistState && (assistState.tasks.length > 0 || assistState.error)) || (showTaskPanel && !isAssistActive) || planMode}
 		class:assist-mode={isAssistActive}
+		class:plan-mode={planMode}
 		ondragenter={handleGlobalDragEnter}
 		ondragleave={handleGlobalDragLeave}
 		ondragover={handleGlobalDragOver}
@@ -1400,7 +1412,7 @@
 		<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 md:p-6">
 			<div class="max-w-4xl mx-auto">
 				{#if messages.length === 0 && parentMessages.length === 0}
-					{#if focusedTask && !isAssistActive}
+					{#if focusedTask && !isAssistActive && !planMode}
 						<!-- Focused Task Welcome - replaces standard welcome when task is focused -->
 						<FocusedTaskWelcome
 							task={focusedTask}
@@ -1608,5 +1620,35 @@
 				0 0 18px rgba(251, 191, 36, 0.3),
 				0 0 30px rgba(251, 191, 36, 0.15);
 		}
+	}
+
+	/* Subtle background tint when in plan mode - uses space accent */
+	:global(main.plan-mode) {
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--space-accent) 3%, transparent) 0%,
+			color-mix(in srgb, var(--space-accent) 1%, transparent) 50%,
+			transparent 100%
+		);
+	}
+
+	/* Radial glow for plan mode */
+	:global(main.plan-mode::before) {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(
+			ellipse at bottom center,
+			color-mix(in srgb, var(--space-accent) 5%, transparent) 0%,
+			transparent 70%
+		);
+		z-index: 0;
+	}
+
+	/* Ensure content is above the tint in plan mode */
+	:global(main.plan-mode > *) {
+		position: relative;
+		z-index: 1;
 	}
 </style>
