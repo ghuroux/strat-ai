@@ -9,9 +9,16 @@
 #
 # Usage:
 #   chmod +x scripts/setup-database.sh
-#   ./scripts/setup-database.sh
+#   ./scripts/setup-database.sh           # Normal setup (preserves data)
+#   ./scripts/setup-database.sh --fresh   # Drop all tables first (loses data!)
 
 set -e
+
+# Parse arguments
+FRESH_INSTALL=false
+if [ "$1" = "--fresh" ] || [ "$1" = "-f" ]; then
+    FRESH_INSTALL=true
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -23,6 +30,20 @@ echo "=========================================="
 echo "  StratAI Database Setup"
 echo "=========================================="
 echo ""
+
+# Warn about fresh install
+if [ "$FRESH_INSTALL" = true ]; then
+    echo -e "${RED}⚠️  FRESH INSTALL MODE${NC}"
+    echo -e "${RED}   This will DROP ALL TABLES and lose all data!${NC}"
+    echo ""
+    read -p "Are you sure you want to continue? (y/N) " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+    echo ""
+fi
 
 # Configuration
 DB_NAME="stratai"
@@ -81,6 +102,25 @@ else
 fi
 
 echo ""
+
+# Fresh install: drop existing tables
+if [ "$FRESH_INSTALL" = true ]; then
+    echo -e "${YELLOW}Fresh install requested - dropping existing tables...${NC}"
+    $PSQL -d $DB_NAME -q <<EOF
+        -- Drop tables in correct order (respecting foreign keys)
+        DROP TABLE IF EXISTS arena_battle_models CASCADE;
+        DROP TABLE IF EXISTS model_rankings CASCADE;
+        DROP TABLE IF EXISTS arena_battles CASCADE;
+        DROP TABLE IF EXISTS tasks CASCADE;
+        DROP TABLE IF EXISTS conversations CASCADE;
+
+        -- Drop functions
+        DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
+        DROP FUNCTION IF EXISTS update_tasks_updated_at() CASCADE;
+EOF
+    echo -e "${GREEN}Existing tables dropped${NC}"
+    echo ""
+fi
 
 # Run schema files
 echo "Running schema migrations..."
