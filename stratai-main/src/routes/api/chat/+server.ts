@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { createChatCompletion, createChatCompletionWithTools, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
 import { searchWeb, formatSearchResultsForLLM, isBraveSearchConfigured } from '$lib/server/brave-search';
 import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig, ChatMessage, MessageContentBlock } from '$lib/types/api';
-import { getFullSystemPrompt } from '$lib/config/system-prompts';
+import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, type FocusedTaskInfo, type PlanModePhase } from '$lib/config/system-prompts';
 import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists';
 import type { SpaceType } from '$lib/types/chat';
 
@@ -111,46 +111,18 @@ interface AssistContext {
 	assistFocusedTask?: string | null;
 }
 
+interface PlanModeContext {
+	taskId: string;
+	taskTitle: string;
+	phase: PlanModePhase;
+}
+
 /**
- * Inject platform-level system prompt before user messages
- * This provides consistent baseline behavior across all conversations
- * The platform prompt is composed with any user-provided system prompt
- * When a space is provided, space-specific context is appended
- * When an assistId is provided, the assist's system prompt is also included
- * Phase-specific prompts are added for task-breakdown assist flow
+ * Helper to inject a system prompt into messages
+ * Either prepends to existing system message or adds new one at start
  */
-function injectPlatformPrompt(messages: ChatMessage[], model: string, space?: SpaceType | null, assistContext?: AssistContext | null): ChatMessage[] {
-	let fullPrompt = getFullSystemPrompt(model, space);
-
-	// If assist is active, append the assist-specific prompt
-	if (assistContext?.assistId) {
-		const assist = getAssistById(assistContext.assistId);
-		if (assist?.systemPromptAddition) {
-			fullPrompt = fullPrompt
-				? `${fullPrompt}\n\n---\n\n${assist.systemPromptAddition}`
-				: assist.systemPromptAddition;
-		}
-
-		// Add phase-specific prompts for task-breakdown assist
-		if (assistContext.assistId === 'task-breakdown') {
-			const phase = assistContext.assistPhase;
-			const tasks = assistContext.assistTasks || [];
-			const focusedTask = assistContext.assistFocusedTask;
-
-			if (phase === 'prioritizing') {
-				fullPrompt = fullPrompt
-					? `${fullPrompt}\n\n${TASK_BREAKDOWN_PHASE_PROMPTS.prioritizing}`
-					: TASK_BREAKDOWN_PHASE_PROMPTS.prioritizing;
-			} else if (phase === 'focused' && focusedTask) {
-				const focusedPrompt = TASK_BREAKDOWN_PHASE_PROMPTS.focused(focusedTask, tasks);
-				fullPrompt = fullPrompt
-					? `${fullPrompt}\n\n${focusedPrompt}`
-					: focusedPrompt;
-			}
-		}
-	}
-
-	if (!fullPrompt) return messages;
+function injectSystemPrompt(messages: ChatMessage[], prompt: string): ChatMessage[] {
+	if (!prompt) return messages;
 
 	// Find the first system message (if any)
 	const systemIndex = messages.findIndex(m => m.role === 'system');
@@ -167,16 +139,87 @@ function injectPlatformPrompt(messages: ChatMessage[], model: string, space?: Sp
 		const updatedMessages = [...messages];
 		updatedMessages[systemIndex] = {
 			...existingSystem,
-			content: `${fullPrompt}\n\n---\n\nUser Instructions:\n${existingContent}`
+			content: `${prompt}\n\n---\n\nUser Instructions:\n${existingContent}`
 		};
 		return updatedMessages;
 	} else {
 		// Add new system message at the beginning
 		return [
-			{ role: 'system' as const, content: fullPrompt },
+			{ role: 'system' as const, content: prompt },
 			...messages
 		];
 	}
+}
+
+/**
+ * Inject platform-level system prompt before user messages
+ * This provides consistent baseline behavior across all conversations
+ * The platform prompt is composed with any user-provided system prompt
+ * When a space is provided, space-specific context is appended
+ * When an assistId is provided, the assist's system prompt is also included
+ * Phase-specific prompts are added for task-breakdown assist flow
+ * When a focusedTask is provided (persistent focus mode), task context is added
+ * When planMode is active, Plan Mode prompts take precedence over other contexts
+ */
+function injectPlatformPrompt(
+	messages: ChatMessage[],
+	model: string,
+	space?: SpaceType | null,
+	assistContext?: AssistContext | null,
+	focusedTask?: FocusedTaskInfo | null,
+	planModeContext?: PlanModeContext | null
+): ChatMessage[] {
+	// Plan Mode takes precedence - use specialized Plan Mode prompts
+	if (planModeContext) {
+		const fullPrompt = getFullSystemPromptForPlanMode(
+			model,
+			space,
+			planModeContext.taskTitle,
+			planModeContext.phase
+		);
+		return injectSystemPrompt(messages, fullPrompt);
+	}
+
+	let fullPrompt = getFullSystemPrompt(model, space);
+
+	// If assist is active, append the assist-specific prompt
+	if (assistContext?.assistId) {
+		const assist = getAssistById(assistContext.assistId);
+		if (assist?.systemPromptAddition) {
+			fullPrompt = fullPrompt
+				? `${fullPrompt}\n\n---\n\n${assist.systemPromptAddition}`
+				: assist.systemPromptAddition;
+		}
+
+		// Add phase-specific prompts for task-breakdown assist
+		if (assistContext.assistId === 'task-breakdown') {
+			const phase = assistContext.assistPhase;
+			const tasks = assistContext.assistTasks || [];
+			const assistFocusedTask = assistContext.assistFocusedTask;
+
+			if (phase === 'prioritizing') {
+				fullPrompt = fullPrompt
+					? `${fullPrompt}\n\n${TASK_BREAKDOWN_PHASE_PROMPTS.prioritizing}`
+					: TASK_BREAKDOWN_PHASE_PROMPTS.prioritizing;
+			} else if (phase === 'focused' && assistFocusedTask) {
+				const focusedPrompt = TASK_BREAKDOWN_PHASE_PROMPTS.focused(assistFocusedTask, tasks);
+				fullPrompt = fullPrompt
+					? `${fullPrompt}\n\n${focusedPrompt}`
+					: focusedPrompt;
+			}
+		}
+	}
+
+	// Add persistent task focus context (takes precedence when no assist is active)
+	// This is for when a user has focused on a task from the task badge, not from an assist flow
+	if (focusedTask && !assistContext?.assistFocusedTask) {
+		const taskPrompt = getFocusedTaskPrompt(focusedTask);
+		fullPrompt = fullPrompt
+			? `${fullPrompt}\n${taskPrompt}`
+			: taskPrompt;
+	}
+
+	return injectSystemPrompt(messages, fullPrompt);
 }
 
 // Web search tool definition - Anthropic format (input_schema)
@@ -361,7 +404,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		budgetTokens: body.thinkingBudgetTokens
 	});
 
-	// Extract space and assist context (before removing client fields)
+	// Extract space, assist context, focused task, and plan mode (before removing client fields)
 	const space = body.space;
 	const assistContext: AssistContext | null = body.assistId ? {
 		assistId: body.assistId,
@@ -369,9 +412,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		assistTasks: body.assistTasks,
 		assistFocusedTask: body.assistFocusedTask
 	} : null;
+	const focusedTask: FocusedTaskInfo | null = body.focusedTask ?? null;
+	const planModeContext: PlanModeContext | null = body.planMode ?? null;
 
 	// Remove client-specific fields before forwarding to LiteLLM
-	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, ...cleanBody } = body;
+	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, ...cleanBody } = body;
 
 	// Add thinking config if enabled
 	if (thinkingEnabled) {
@@ -395,11 +440,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// If search is enabled, use tool handling
 		if (searchEnabled) {
-			return await handleChatWithTools(cleanBody, thinkingEnabled, space, assistContext);
+			return await handleChatWithTools(cleanBody, thinkingEnabled, space, assistContext, focusedTask, planModeContext);
 		}
 
 		// Inject platform system prompt with space context (before cache breakpoints so it gets cached)
-		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext);
+		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTask, planModeContext);
 
 		// Apply cache breakpoints for Claude models (conversation history caching)
 		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
@@ -471,11 +516,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null): Promise<Response> {
 	const encoder = new TextEncoder();
 
 	// Inject platform prompt with space context (and assist if active), then cache breakpoints, then search context
-	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext);
+	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext);
 	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
 

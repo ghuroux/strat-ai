@@ -150,10 +150,190 @@ Brain dump → AI extracts tasks → Confirm in WorkingPanel → Priority check 
 
 ---
 
-### Phase 0.3c: Guided Conversation Pattern
-**Goal**: Build the signature UX innovation—conversational templates
+### Phase 0.3c: Task Lifecycle Foundation (COMPLETE)
+**Goal**: Make "What's on your plate?" a daily-use productivity tool ✅
 
-This is the core differentiator. Users answer natural questions and get power-user results without learning "prompting."
+> **Core Insight**: The task assist is the CENTRAL HUB of the productivity OS. All other assists (Meeting Summary, Email Draft, etc.) will feed into or pull from the task list.
+
+**Database Schema** ✅:
+- [x] `tasks` table with full schema (id, user_id, space, title, description, status, priority, due_date, due_date_type, color, source fields, timestamps)
+- [x] Indexes for user, status, due_date, space
+- [x] Migration script (`tasks-schema.sql`)
+
+**Task Persistence** ✅:
+- [x] API endpoints: GET/POST `/api/tasks`, PATCH/DELETE `/api/tasks/[id]`, POST `/api/tasks/[id]/complete`
+- [x] Task repository with PostgreSQL adapter (`tasks-postgres.ts`)
+- [x] Task store with reactivity (`tasks.svelte.ts`)
+- [x] Load tasks on space entry
+
+**Intelligent Greeting** ✅:
+- [x] Detect returning user (has existing tasks)
+- [x] AI-generated greeting message (via `generateGreeting` utility)
+- [x] Task summary in greeting (count, priority, due dates)
+- [x] Action buttons: [Focus on priority] [Review all] [Something else]
+- [x] Greeting is ephemeral (not persisted)
+
+**Header Components** ✅:
+- [x] `TaskBadge` - Shows pending task count, click opens TaskPanel
+- [x] `FocusIndicator` - Shows focused task name with dropdown actions
+
+**Focus Mode** ✅:
+- [x] Header indicator when focused: `🎯 [Task name] ▼`
+- [x] Dropdown actions: Mark done, Add note, Switch task, Exit focus
+- [x] Task color theming via CSS variable `--task-accent`
+- [x] Smooth color transitions
+- [x] Focus context in system prompt (AI knows current task)
+
+**Task Color System** ✅:
+- [x] 8-color palette (Indigo, Teal, Amber, Rose, Violet, Emerald, Cyan, Orange)
+- [x] Color assigned on task creation (rotating)
+- [x] When focused: header border, input ring, background tint
+
+**Due Dates** ✅:
+- [x] Optional due date with hard/soft type
+- [x] Subtle display (not anxiety-inducing)
+- [x] Overdue indicator (visual, not aggressive)
+
+**TaskPanel CRUD** ✅:
+- [x] Full task list with inline edit
+- [x] Complete with optional notes
+- [x] Edit title, due date, priority
+- [x] Delete with confirmation
+- [x] Add new task (manual entry)
+
+**Depends on**: Phase 0.3b
+
+---
+
+### Phase 0.3c+: Enhanced Focus Mode Experience (COMPLETE)
+**Goal**: Transform focus mode into a complete context shift ✅
+
+> **Core Insight**: A task isn't a single conversation—it's a collaboration that may span multiple conversations, model changes, or fresh approaches. The task is the anchor, conversations are attempts.
+
+**FocusedTaskWelcome Component** ✅:
+- [x] `FocusedTaskWelcome.svelte` replaces WelcomeScreen when task is focused
+- [x] Task header with title in task color, priority badge, due date
+- [x] Guidance cards with example prompts for new tasks
+- [x] "Edit" button opens TaskPanel, "×" exits focus mode
+- [x] Non-anxious due date display (overdue/due soon indicators)
+
+**Space Page Integration** ✅:
+- [x] Conditional rendering: chat → focused-welcome → greeting → welcome
+- [x] FocusedTaskWelcome shows when task focused + no messages
+
+**Task-Conversation Linking** ✅:
+- [x] `linked_conversation_ids` column in tasks table (TEXT[])
+- [x] Repository methods: `linkConversation`, `unlinkConversation`, `getTaskByConversation`
+- [x] API endpoint: POST/DELETE `/api/tasks/[id]/link`
+- [x] Store methods: `linkConversation`, `unlinkConversation`, `getTaskForConversation`
+
+**Auto-Link Behavior** ✅:
+- [x] First message while focused on task auto-links conversation
+- [x] Only links if conversation not already linked to another task
+- [x] Subtle toast notification: "Linked to [task name]"
+
+**Sidebar Task Pill** ✅:
+- [x] Task pill shows on conversations linked to tasks
+- [x] Pill styled with task color (background + text)
+- [x] Click pill focuses that task
+- [x] Truncated task title with hover for full name
+
+**Success Criteria**:
+- ✅ FocusedTaskWelcome shows when task focused + no messages
+- ✅ Task header displays title in task color with icon
+- ✅ New tasks show guidance cards with example prompts
+- ✅ First message auto-links conversation to focused task
+- ✅ Task pill shows in sidebar for linked conversations
+- ✅ Clicking task pill focuses that task
+
+**Depends on**: Phase 0.3c
+
+---
+
+### Phase 0.3d++: Subtasks & Plan Mode (COMPLETE)
+**Goal**: Transform tasks into structured collaborations with guided breakdown ✅
+
+> **Core Insight**: Users have the knowledge but lack the process. Plan Mode provides scaffolding to overcome analysis paralysis. Subtasks are focused conversations with specific outcomes, not checklist items.
+
+> **Design Reference**: See `.claude/plans/sharded-honking-toast.md` for full design.
+
+**Database Schema** ✅:
+- [x] `parent_task_id` column for subtask hierarchy (one level max)
+- [x] `subtask_type` column ('conversation' | 'action')
+- [x] `subtask_order` column for ordering
+- [x] `context_summary` column for inherited context
+- [x] Index on parent_task_id for efficient queries
+
+**Subtask Types** ✅:
+- [x] `SubtaskType` = 'conversation' | 'action'
+- [x] `CreateSubtaskInput` interface
+- [x] `PlanModeState` interface (taskId, taskTitle, phase, proposedSubtasks)
+- [x] `ProposedSubtask` interface (id, title, type, confirmed)
+
+**Repository & API** ✅:
+- [x] `getSubtasks(parentId)` - List subtasks for a parent task
+- [x] `createSubtask(input)` - Create subtask under parent
+- [x] `canHaveSubtasks(taskId)` - Enforce one-level hierarchy
+- [x] `getSubtaskCount(taskId)` - Count subtasks
+- [x] API endpoints: GET/POST `/api/tasks/[id]/subtasks`
+
+**Store Integration** ✅:
+- [x] `expandedTasks` state for expand/collapse UI
+- [x] `planMode` state for Plan Mode workflow
+- [x] Subtask methods: `createSubtask`, `getSubtasksForTask`, `hasSubtasks`
+- [x] Plan Mode methods: `startPlanMode`, `exitPlanMode`, `setPlanModePhase`
+- [x] Proposed subtask management: `setProposedSubtasks`, `toggleProposedSubtask`, etc.
+- [x] `createSubtasksFromPlanMode()` - Bulk create confirmed subtasks
+
+**TaskPanel Subtask Display** ✅:
+- [x] Parent tasks shown in main list (subtasks hidden)
+- [x] Expand/collapse chevron on tasks with subtasks
+- [x] Subtask count badge showing completed/total
+- [x] Subtask list with indent when expanded
+- [x] Inline subtask creation form
+- [x] "Subtask" button in task actions
+
+**Plan Mode Foundation** ✅:
+- [x] "Help me plan this" button on FocusedTaskWelcome
+- [x] Plan Mode system prompts per phase (eliciting, proposing, confirming)
+- [x] Chat API wired to use Plan Mode prompts when active
+- [x] Progressive elicitation: AI asks 3-5 clarifying questions
+
+**Plan Mode UI** ✅:
+- [x] `PlanModePanel.svelte` component (slides in from right)
+- [x] Shows proposed subtasks with checkboxes
+- [x] Edit/toggle/remove individual subtasks
+- [x] Add custom subtasks
+- [x] "Create Subtasks" button for bulk creation
+
+**Subtask Extraction** ✅:
+- [x] `subtask-extraction.ts` utility
+- [x] `contentContainsProposal()` - Detect when AI proposes subtasks
+- [x] `extractProposedSubtasks()` - Parse numbered list into subtasks
+- [x] Auto-transition to confirming phase when proposal detected
+
+**Success Criteria**:
+- ✅ Tasks can have subtasks (one level only)
+- ✅ Subtasks display indented in TaskPanel with expand/collapse
+- ✅ "Help me plan this" button starts Plan Mode
+- ✅ AI asks clarifying questions progressively (eliciting phase)
+- ✅ AI proposes 3-5 subtasks after elicitation (proposing phase)
+- ✅ User can edit/confirm proposed subtasks in PlanModePanel
+- ✅ Confirmed subtasks are created automatically
+
+**Deferred to Future**:
+- [ ] Slice 6: Context inheritance (parent context summary in subtask prompts)
+- [ ] Slice 7: AI suggestions in chat ("Next Step:" → "+ Add as subtask" button)
+- [ ] Slice 8: Action-only subtasks (checkbox without conversation)
+
+**Depends on**: Phase 0.3c+
+
+---
+
+### Phase 0.3d: Meeting Summary & Guided Conversations (DEFERRED)
+**Goal**: Build the signature conversational UX pattern + first integration with tasks
+
+> **Key Integration**: Meeting Summary extracts action items → injects into task list from 0.3c
 
 **Conversation Step System**:
 - [ ] `ConversationStep` interface (question, followUp, extraction)
@@ -164,7 +344,7 @@ This is the core differentiator. Users answer natural questions and get power-us
 **Step-by-Step UI**:
 - [ ] `GuidedConversation.svelte` component
 - [ ] Question display with context
-- [ ] User response input (text, voice future)
+- [ ] User response input
 - [ ] Progress indication (step X of Y)
 - [ ] Back/edit previous answers
 - [ ] Final output generation
@@ -176,18 +356,88 @@ This is the core differentiator. Users answer natural questions and get power-us
   - "What were the key decisions?"
   - "Any action items or next steps?"
 - [ ] Professional output formatting
-- [ ] Attendee/action item extraction hints
+- [ ] Action item extraction → creates tasks
+- [ ] User confirms extracted tasks before adding
+
+**Task Integration**:
+- [ ] Meeting Summary → extracts action items
+- [ ] Confirmation UI: "I found 3 action items. Add to your plate?"
+- [ ] Each action item becomes a task with source='meeting'
+- [ ] Tasks link back to meeting summary conversation
+
+**Email Draft Template**:
+- [ ] Recipient, purpose, key points
+- [ ] Tone selection
+- [ ] Can reference tasks: "about [task name]"
 
 **Success Criteria**:
 - Meeting Summary feels like natural conversation
+- Action items flow seamlessly into task list
 - Output quality exceeds freestyle prompting
 - Users get power-user results without prompting knowledge
 
-**Depends on**: Phase 0.3b
+**Depends on**: Phase 0.3c
 
 ---
 
-### Phase 0.3d: Form Pattern + Core Templates
+### Phase 0.3e: Temporal Awareness & Day Intelligence
+**Goal**: The system understands time and proactively helps manage work
+
+> **Core Insight**: Knowledge workers need help managing their time, not just their tasks. The AI should know when it's a new day, when tasks are stale, and when to offer help.
+
+**Day Change Detection**:
+- [ ] Store `lastSessionDate` in user preferences
+- [ ] Detect new day on space entry
+- [ ] Detect Monday (start of work week)
+- [ ] Configure week start (Sunday/Monday)
+
+**Greeting Variations**:
+- [ ] Normal day: "Morning! 4 tasks on your plate..."
+- [ ] Monday: "Happy Monday! Quick check on your week..."
+- [ ] Overdue items: "Heads up - 2 items slipped past their dates..."
+- [ ] Stale items: "Some tasks have been sitting a while..."
+
+**Stale Task Detection**:
+- [ ] Track `lastActivityAt` on tasks
+- [ ] Define stale threshold (e.g., 2 weeks no activity)
+- [ ] Due date passed = overdue
+- [ ] Surface stale/overdue in greeting
+
+**Cleanup Offer**:
+- [ ] When conditions met (Monday, 2+ overdue, stale items)
+- [ ] Offer: "Want to do a quick cleanup? Takes a minute."
+- [ ] [Clean up my list] [Skip for now]
+
+**Guided Cleanup Flow**:
+- [ ] AI walks through stale/overdue items one by one
+- [ ] For each: [✓ Done] [📅 Reschedule] [🗑️ Remove]
+- [ ] Reschedule options: Today, Tomorrow, This Friday, Next week, No deadline
+- [ ] Summary at end: "All cleaned up! 3 active, 1 completed, 0 removed"
+
+**Cleanup Frequency Control**:
+- [ ] Max 1 cleanup offer per week
+- [ ] Store `lastCleanupOfferedDate`
+- [ ] User can disable cleanup prompts
+- [ ] Don't nag if skipped
+
+**Snooze/Remind Functionality**:
+- [ ] "Remind me next week" on tasks
+- [ ] `snoozedUntil` field in task schema
+- [ ] Snoozed tasks hidden until date
+- [ ] Return to active list automatically
+
+**Success Criteria**:
+- ✅ System knows when it's a new day/Monday
+- ✅ Stale tasks are surfaced, not buried
+- ✅ Cleanup is helpful, not nagging
+- ✅ Users feel in control of their time
+- ✅ Task list stays current and actionable
+
+**Depends on**: Phase 0.3d
+
+---
+
+### Phase 0.3f: Form Pattern + Additional Templates
 **Goal**: Complete template variety with structured input
 
 **Form-Based Template UI**:
@@ -199,43 +449,36 @@ This is the core differentiator. Users answer natural questions and get power-us
 
 **Weekly Status Update** (Work Space):
 - [ ] Form fields: Accomplishments, In Progress, Blockers, Next Week
+- [ ] Can pull from completed tasks this week
 - [ ] Role/team-aware output formatting
-- [ ] Professional structure
 
 **Decision Log** (Work Space):
 - [ ] Form fields: Decision, Rationale, Stakeholders, Date
+- [ ] Can create follow-up tasks
 - [ ] Clear documentation output
-- [ ] Future-proof format for searching
 
 **Research Synthesis** (Research Space - Guided):
 - [ ] Question sequence for research topics
 - [ ] Source tracking
 - [ ] Findings → implications flow
 
-**Email Draft** (Work Space - Guided):
-- [ ] Recipient, purpose, key points
-- [ ] Tone selection
-- [ ] Professional output
-
 **Success Criteria**:
 - Form and guided patterns both functional
 - At least 5 templates available across spaces
-- Clear value over freestyle prompting
+- Templates integrate with task system where appropriate
 
-**Depends on**: Phase 0.3c
+**Depends on**: Phase 0.3e
 
 ---
 
-### Phase 0.3e: Entity Extraction System
-**Goal**: Extract structured data from template outputs
+### Phase 0.3g: Entity Extraction & Working Context
+**Goal**: Extract structured data from all template outputs
 
 **Database Schema**:
 - [ ] Create `context_people` table
-- [ ] Create `context_action_items` table
 - [ ] Create `context_decisions` table
 - [ ] Create `template_outputs` table
 - [ ] Indexes for temporal queries
-- [ ] Migration script
 
 **Extraction Pipeline**:
 - [ ] AI extraction prompts per entity type
@@ -243,75 +486,23 @@ This is the core differentiator. Users answer natural questions and get power-us
 - [ ] Entity parsing and normalization
 - [ ] Person deduplication (name matching)
 
-**Extraction Types**:
-- [ ] **Action Items**: title, assignee, due date, priority
-- [ ] **Decisions**: title, rationale, stakeholders, status
-- [ ] **People**: name, role, team, relationship type
-
-**Integration with Templates**:
-- [ ] Add `extractionSchema` to template definitions
-- [ ] Trigger extraction after template completion
-- [ ] Store raw extraction results
-
-**Success Criteria**:
-- Entities are extracted from Meeting Summary and Decision Log
-- Extraction quality is reliable (>80% accuracy)
-- Data is ready for confirmation UI
-
-**Depends on**: Phase 0.3d
-
----
-
-### Phase 0.3f: Confirmation & Working Context
-**Goal**: User control over extracted entities + visible accumulated context
-
 **Confirmation UI**:
-- [ ] `ExtractionConfirmation.svelte` component
-- [ ] Display extracted entities post-template
-- [ ] Checkboxes to include/exclude items
+- [ ] "I found X items—confirm what to save"
+- [ ] Checkboxes to include/exclude
 - [ ] Inline editing before save
-- [ ] "Save All" / "Save Selected" / "Skip" actions
-- [ ] Clear messaging: "I found X items—confirm what to save"
+- [ ] User controls what gets persisted
 
-**Entity Persistence**:
-- [ ] Save confirmed entities to database
-- [ ] Link entities to source template output
-- [ ] Update person interaction counts
-- [ ] Handle edit-before-save changes
-
-**Action Items View**:
-- [ ] `ActionItemsList.svelte` component
-- [ ] Filter by status (pending, in_progress, completed)
-- [ ] Filter by due date (overdue, today, this week)
-- [ ] Mark complete / edit / delete
-- [ ] Sort options
-
-**Recent Outputs View**:
-- [ ] Template outputs list per space
+**Working Context View**:
+- [ ] Recent template outputs per space
+- [ ] People mentioned frequently
+- [ ] Decisions log
 - [ ] Quick re-view capability
-- [ ] Link to original conversation
 
-**Context Statistics**:
-- [ ] "X open items, Y completed this week"
-- [ ] Per-space statistics
-- [ ] Productivity indicators
-
-**Context Badge** (Header):
-- [ ] "🔴 3" indicator for open action items
-- [ ] Click to expand quick view
-- [ ] First glimpse of temporal awareness
-
-**Success Criteria**:
-- Users feel in control of what gets saved
-- Extraction errors don't pollute data
-- Users can see and manage their accumulated context
-- Value of the system becomes visible
-
-**Depends on**: Phase 0.3e
+**Depends on**: Phase 0.3f
 
 ---
 
-### Phase 0.3g: Onboarding & Polish (Stretch)
+### Phase 0.3h: Onboarding & Polish (Stretch)
 **Goal**: Personalized experience and refinement
 
 **Activity Selection (Spotify Approach)**:
@@ -339,17 +530,10 @@ This is the core differentiator. Users answer natural questions and get power-us
 - [ ] "Recommended for you" section on dashboard
 - [ ] Prioritize quick actions per user
 
-**User Profile Storage**:
-- [ ] Create `user_profiles` table (or extend existing)
-- [ ] Store selected activities
-- [ ] Store onboarding completion status
-- [ ] Optional role/team info
-
 **Polish Items**:
 - [ ] Empty states for all views
 - [ ] Error handling and recovery
 - [ ] Loading states and transitions
-- [ ] Mobile responsiveness for space views
 - [ ] Keyboard shortcuts for common actions
 
 **Success Criteria**:
@@ -357,37 +541,44 @@ This is the core differentiator. Users answer natural questions and get power-us
 - Dashboard feels curated, not overwhelming
 - Overall experience is polished and production-ready
 
-**Depends on**: Phase 0.3f
+**Depends on**: Phase 0.3g
 
 ---
 
 ### Phase 0.3 Summary
 
-| Sub-Phase | Focus | Key Deliverable | Effort |
+| Sub-Phase | Focus | Key Deliverable | Status |
 |-----------|-------|-----------------|--------|
-| 0.3a | Space Foundation | Spaces with embedded chat | Medium |
-| 0.3b | Template Framework | Architecture + first template | Medium |
-| 0.3c | Guided Conversations | Meeting Summary template | High |
-| 0.3d | Form Pattern | Status Update, Decision Log | Medium |
-| 0.3e | Entity Extraction | Action items, decisions, people | High |
-| 0.3f | Confirmation + Context | User control + visibility | High |
-| 0.3g | Onboarding (Stretch) | Personalization | Low |
+| 0.3a | Space Foundation | Spaces with embedded chat | ✅ Complete |
+| 0.3b | Assists Framework | Architecture + task breakdown | ✅ Complete |
+| 0.3c | Task Lifecycle | Persistent tasks, daily use | ✅ Complete |
+| 0.3c+ | Enhanced Focus Mode | FocusedTaskWelcome, task-conversation linking | ✅ Complete |
+| 0.3d++ | Subtasks & Plan Mode | Guided task breakdown with subtasks | ✅ Complete |
+| 0.3d | Meeting Summary | Guided conversation + task integration | Deferred |
+| 0.3e | Temporal Awareness | Day detection, stale cleanup | Planned |
+| 0.3f | Form Templates | Status Update, Decision Log | Planned |
+| 0.3g | Entity Extraction | People, decisions, context | Planned |
+| 0.3h | Onboarding | Personalization (stretch) | Stretch |
 
 **Total POC Templates**:
-1. Quick Note → Structure (dump)
-2. Meeting Summary (guided)
-3. Weekly Status Update (form)
-4. Decision Log (form)
-5. Research Synthesis (guided)
+1. What's on your plate? (dump → tasks) ✅
+2. Plan Mode (guided task breakdown → subtasks) ✅
+3. Meeting Summary (guided → tasks) - Deferred
+4. Weekly Status Update (form)
+5. Decision Log (form → tasks)
 6. Email Draft (guided)
+7. Research Synthesis (guided)
 
 **What Phase 0.3 Proves**:
+- ✅ Tasks are the central hub of productivity
+- ✅ Subtasks enable structured collaboration within tasks
+- ✅ Plan Mode overcomes analysis paralysis
+- ✅ Assists feed into and pull from task list
+- ✅ Temporal awareness makes the system proactive
 - ✅ Template → Structured Data pipeline works
 - ✅ Working Context accumulates value
 - ✅ Spaces feel like environments, not folders
 - ✅ AI novices become power users invisibly
-- ✅ Foundation for temporal agents is visible
-- ✅ Path to integrations is clear
 
 ---
 
@@ -521,7 +712,132 @@ This is the core differentiator. Users answer natural questions and get power-us
 
 ---
 
-## Phase 0.9: Temporal Intelligence
+## Phase 0.9: Data Anonymization & Privacy Shield
+
+**Goal**: Protect sensitive information from third-party LLM providers
+
+> Enterprise customers need confidence that confidential information (company names, client names, deal details, legal matters) never reaches external AI providers in identifiable form.
+
+### Core Concept
+
+```
+User Input:    "Spur is facing a lawsuit from Acme Corp about IP theft"
+                ↓ (pre-processing - anonymize)
+To LLM:        "Company_A is facing a lawsuit from Company_B about IP theft"
+                ↓ (LLM responds)
+From LLM:      "Company_A should consider these legal strategies..."
+                ↓ (post-processing - de-anonymize)
+To User:       "Spur should consider these legal strategies..."
+```
+
+### Phase 0.9a: User-Defined Dictionary (v1)
+**Goal**: Simple, predictable, user-controlled anonymization
+
+**Dictionary Management**:
+- [ ] `anonymization_rules` table (id, user_id, space, original, placeholder, case_insensitive)
+- [ ] Per-conversation dictionary (ephemeral, session-only option)
+- [ ] Per-space dictionary (persisted, applies to all conversations in space)
+- [ ] Global user dictionary (applies everywhere)
+- [ ] Quick-add: highlight text in chat → "Add to anonymization"
+
+**AI-Suggested Variations** (user confirms):
+- [ ] User enters base term (e.g., "Spur")
+- [ ] AI suggests variations to include:
+  - Case variations: SPUR, spur, SpUr
+  - Common suffixes: Spur Inc, Spur Inc., Spur Corporation, Spur Ltd
+  - Compound forms: SpurTech, Spur-Tech, Spur Tech
+  - Possessives: Spur's, Spur's
+  - Domain/handles: spur.com, @spur, #spur
+  - Abbreviations: if known (e.g., "Microsoft" → "MSFT", "MS")
+- [ ] User confirms which variations to include (checkboxes)
+- [ ] One-click "Select All Suggested"
+- [ ] User can add custom variations not suggested
+
+**Anonymization Engine**:
+- [ ] Pre-process user messages before sending to LLM
+- [ ] Handle case variations (Spur, SPUR, spur → Company_A)
+- [ ] Handle partial matches (SpurTech, Spur Inc → Company_A variants)
+- [ ] Maintain consistent mapping across conversation turns
+- [ ] Apply to system prompts if they contain sensitive terms
+
+**De-anonymization Engine**:
+- [ ] Post-process LLM responses before displaying to user
+- [ ] Preserve original case context where possible
+- [ ] Handle plural forms (Company_A's, Company_As)
+
+**UI Components**:
+- [ ] Anonymization panel in conversation settings
+- [ ] "Shield active" indicator when rules are in effect
+- [ ] Quick-view of active mappings
+- [ ] Toggle to see anonymized vs. original view
+
+**Success Criteria**:
+- Users can define sensitive terms and see them anonymized
+- LLM never receives original sensitive data
+- Response is seamlessly de-anonymized for readability
+
+---
+
+### Phase 0.9b: Smart Detection (v2)
+**Goal**: AI-assisted entity detection with user confirmation
+
+**Entity Detection**:
+- [ ] Named Entity Recognition (NER) for companies, people, locations
+- [ ] Pattern detection for project names, codenames
+- [ ] Domain-specific patterns (case numbers, deal names)
+
+**Confirmation Flow**:
+- [ ] "I detected these potentially sensitive terms..." UI
+- [ ] User confirms which to anonymize
+- [ ] One-click "anonymize all detected"
+- [ ] Learn from user confirmations over time
+
+**Context Leakage Prevention**:
+- [ ] Detect indirect identifiers ("the Austin-based fintech")
+- [ ] Flag potential leakage for user review
+- [ ] Suggest additional anonymization
+
+---
+
+### Phase 0.9c: Team & Admin Controls (v3)
+**Goal**: Enterprise-wide data protection policies
+
+**Admin Controls**:
+- [ ] Mandatory anonymization rules per team
+- [ ] Blocked terms list (always anonymize, no override)
+- [ ] Audit log of what was anonymized
+- [ ] Compliance reports
+
+**Team Dictionaries**:
+- [ ] Shared team anonymization rules
+- [ ] Team-level sensitive terms (client names, project codes)
+- [ ] Inheritance: team rules + personal rules
+
+**Depends on**: Phase 0.7 (Team Management)
+
+---
+
+### Technical Considerations
+
+**Performance**:
+- Regex-based replacement is fast
+- NER adds latency (~100-200ms) - consider async
+- Cache compiled patterns per conversation
+
+**Edge Cases**:
+- Acronyms: "MSFT" vs "Microsoft" - handle as separate entries
+- Pronouns: "They announced..." - can't anonymize without losing context
+- Embedded mentions: "I met with John-from-Spur" - partial match handling
+- Numbers: Case #12345 - pattern-based anonymization
+
+**Storage**:
+- Anonymized version sent to LLM (never stored)
+- Original user input stored locally (with user consent)
+- Mapping table ephemeral by default, optionally persisted
+
+---
+
+## Phase 0.10: Temporal Intelligence
 
 **Goal**: Proactive AI that understands time and context
 
@@ -672,18 +988,22 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 | ~~Bedrock integration~~ | 0.1 | Medium | Low | ✅ |
 | ~~PostgreSQL integration~~ | 0.2 | Critical | Medium | ✅ |
 | ~~Chat history sidebar~~ | 0.2 | Critical | Medium | ✅ |
-| Space navigation foundation | 0.3a | High | Medium | **Next** |
-| Template framework | 0.3b | High | Medium | Planned |
-| Guided conversations | 0.3c | Critical | High | Planned |
-| Form templates | 0.3d | High | Medium | Planned |
-| Entity extraction | 0.3e | High | High | Planned |
-| Confirmation + context | 0.3f | High | High | Planned |
-| Onboarding (stretch) | 0.3g | Medium | Low | Stretch |
+| ~~Space navigation~~ | 0.3a | High | Medium | ✅ |
+| ~~Assists framework~~ | 0.3b | High | Medium | ✅ |
+| ~~Task Lifecycle Foundation~~ | 0.3c | Critical | High | ✅ |
+| ~~Enhanced Focus Mode~~ | 0.3c+ | High | Medium | ✅ |
+| ~~Subtasks & Plan Mode~~ | 0.3d++ | High | Medium | ✅ |
+| Meeting Summary + Guided | 0.3d | High | High | Deferred |
+| Temporal Awareness | 0.3e | High | Medium | **NEXT** |
+| Form templates | 0.3f | Medium | Medium | Planned |
+| Entity extraction | 0.3g | High | High | Planned |
+| Onboarding (stretch) | 0.3h | Medium | Low | Stretch |
 | Send to Arena (context) | Arena | Medium | Medium | Planned |
-| Team management | 0.4 | High | High | Future |
-| Policy engine | 0.5 | High | High | Future |
-| Temporal intelligence (RAG) | 0.6 | High | High | Future |
-| Knowledge graph / collaboration | 0.7 | Medium | High | Future |
+| Team management | 0.7 | High | High | Future |
+| Policy engine | 0.8 | High | High | Future |
+| Data anonymization (Privacy Shield) | 0.9 | High | Medium | Future |
+| Temporal intelligence (RAG) | 0.10 | High | High | Future |
+| Knowledge graph / collaboration | Future | Medium | High | Future |
 
 ---
 
@@ -694,8 +1014,9 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 - **No bloat**: Every feature must earn its place
 - **Speed matters**: Optimize for time-to-first-token
 - **Guide users**: Many are AI novices, help them succeed
+- **Tasks are central**: All assists feed into the task hub
 
 ---
 
-*Aligned with PRODUCT_VISION.md - Last Updated: December 14, 2024*
-*Completed: Phase 0.1, Phase 0.2 | Next: Phase 0.3a Space Navigation Foundation*
+*Aligned with PRODUCT_VISION.md - Last Updated: December 16, 2024*
+*Completed: Phase 0.1, Phase 0.2, Phase 0.3a, Phase 0.3b, Phase 0.3c, Phase 0.3c+, Phase 0.3d++ | Next: Phase 0.3e Temporal Awareness*

@@ -900,3 +900,77 @@
 		opacity: 1;
 	}
 }
+
+/* ==========================================
+   Task Focus Mode
+   ========================================== */
+
+/* Focus mode CSS custom properties are set dynamically:
+   --task-accent: The focused task's color
+   --task-accent-muted: 15% opacity version for backgrounds
+   --task-accent-ring: 40% opacity version for borders/rings
+*/
+
+/* Smooth transition for all elements that use task accent */
+html.task-focus-mode {
+	--focus-transition: 300ms ease;
+}
+
+/* Focus mode indicator glow on chat input */
+html.task-focus-mode .chat-input-container {
+	transition: box-shadow var(--focus-transition), border-color var(--focus-transition);
+}
+
+html.task-focus-mode .chat-input-field:not(:focus-within) {
+	border-color: var(--task-accent-ring, transparent) !important;
+	box-shadow:
+		0 0 0 1px var(--task-accent-ring, transparent),
+		0 0 12px var(--task-accent-muted, transparent),
+		0 0 24px color-mix(in srgb, var(--task-accent, transparent) 5%, transparent);
+}
+
+/* Subtle background tint when in focus mode */
+html.task-focus-mode main {
+	background: linear-gradient(
+		135deg,
+		color-mix(in srgb, var(--task-accent, transparent) 3%, transparent) 0%,
+		color-mix(in srgb, var(--task-accent, transparent) 1%, transparent) 50%,
+		transparent 100%
+	);
+}
+
+html.task-focus-mode main::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: radial-gradient(
+		ellipse at bottom center,
+		color-mix(in srgb, var(--task-accent, transparent) 5%, transparent) 0%,
+		transparent 70%
+	);
+	z-index: 0;
+}
+
+/* Header focus indicator uses task color */
+html.task-focus-mode .focus-indicator {
+	transition: all var(--focus-transition);
+}
+
+/* Focus mode pulse animation for high-priority tasks */
+@keyframes focus-pulse {
+	0%, 100% {
+		box-shadow:
+			0 0 0 1px var(--task-accent-ring, transparent),
+			0 0 12px var(--task-accent-muted, transparent);
+	}
+	50% {
+		box-shadow:
+			0 0 0 2px var(--task-accent-ring, transparent),
+			0 0 20px var(--task-accent-muted, transparent);
+	}
+}
+
+html.task-focus-mode.high-priority .chat-input-field:not(:focus-within) {
+	animation: focus-pulse 2s ease-in-out infinite;
+}

@@ -16,14 +16,25 @@
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import AssistDropdown from '$lib/components/assists/AssistDropdown.svelte';
 	import WorkingPanel from '$lib/components/assists/WorkingPanel.svelte';
+	import TaskBadge from '$lib/components/tasks/TaskBadge.svelte';
+	import FocusIndicator from '$lib/components/tasks/FocusIndicator.svelte';
+	import TaskPanel from '$lib/components/tasks/TaskPanel.svelte';
+	import FocusedTaskWelcome from '$lib/components/tasks/FocusedTaskWelcome.svelte';
+	import PlanModePanel from '$lib/components/tasks/PlanModePanel.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
+	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import { modelSupportsVision } from '$lib/config/model-capabilities';
 	import { SPACES, isValidSpace, type ENABLED_SPACES } from '$lib/config/spaces';
 	import { extractTasksFromContent, contentLooksLikeTaskList, contentAsksForConfirmation } from '$lib/utils/task-extraction';
+	import { contentContainsProposal, extractProposedSubtasks } from '$lib/utils/subtask-extraction';
+	import { applyFocusColor } from '$lib/utils/focus-mode';
+	import { generateGreeting } from '$lib/utils/greeting';
+	import GreetingMessage from '$lib/components/chat/GreetingMessage.svelte';
 	import type { SpaceType, FileAttachment, Conversation, Message } from '$lib/types/chat';
+	import type { GreetingData, Task } from '$lib/types/tasks';
 
 	// Get space from route param
 	let spaceParam = $derived($page.params.space);
@@ -88,6 +99,22 @@
 	let assistState = $derived(chatStore.assistState);
 	let isAssistActive = $derived(chatStore.isAssistActive);
 
+	// Task state
+	let focusedTask = $derived(taskStore.focusedTask);
+	let hasTasks = $derived(taskStore.hasTasks);
+	let planMode = $derived(taskStore.planMode);
+	let showTaskPanel = $state(false);
+
+	// Greeting state
+	let greeting = $state<GreetingData | null>(null);
+	let greetingDismissed = $state(false);
+	let showGreeting = $derived(
+		greeting !== null &&
+		!greetingDismissed &&
+		!chatStore.activeConversation && // Only show on welcome screen
+		currentSpace === 'work' // Only in work space
+	);
+
 	// Messages and conversation state
 	let messages = $derived(chatStore.messages);
 	let currentSummary = $derived(chatStore.activeConversation?.summary || null);
@@ -140,7 +167,42 @@
 			}
 		};
 		mediaQuery.addEventListener('change', handleChange);
-		return () => mediaQuery.removeEventListener('change', handleChange);
+
+		// Clean up focus mode on unmount
+		return () => {
+			mediaQuery.removeEventListener('change', handleChange);
+			applyFocusColor(null);
+		};
+	});
+
+	// Load tasks when space changes
+	$effect(() => {
+		if (currentSpace) {
+			taskStore.loadTasks(currentSpace);
+		}
+	});
+
+	// Generate greeting when tasks are loaded (only for work space)
+	$effect(() => {
+		if (currentSpace === 'work' && !taskStore.isLoading && taskStore.taskList.length > 0) {
+			const greetingData = generateGreeting(taskStore.taskList, currentSpace);
+			greeting = greetingData;
+		} else if (currentSpace !== 'work' || taskStore.taskList.length === 0) {
+			greeting = null;
+		}
+	});
+
+	// Apply focus mode color when focused task changes
+	$effect(() => {
+		const color = focusedTask?.color ?? null;
+		applyFocusColor(color);
+
+		// Add high-priority class for enhanced animation
+		if (focusedTask?.priority === 'high') {
+			document.documentElement.classList.add('high-priority');
+		} else {
+			document.documentElement.classList.remove('high-priority');
+		}
 	});
 
 	function applyTheme(theme: 'dark' | 'light' | 'system') {
@@ -158,6 +220,30 @@
 	$effect(() => {
 		if (messages.length) {
 			scrollToBottom();
+		}
+	});
+
+	// Detect AI subtask proposals in Plan Mode
+	$effect(() => {
+		// Only run when Plan Mode is active and in eliciting/proposing phase
+		if (!planMode || planMode.phase === 'confirming') return;
+
+		// Get the last assistant message
+		const lastMessage = messages[messages.length - 1];
+		if (!lastMessage || lastMessage.role !== 'assistant') return;
+
+		const content = typeof lastMessage.content === 'string' ? lastMessage.content : '';
+		if (!content) return;
+
+		// Check if the content contains a subtask proposal
+		if (contentContainsProposal(content)) {
+			// Extract proposed subtasks
+			const proposedSubtasks = extractProposedSubtasks(content);
+			if (proposedSubtasks.length >= 2) {
+				// Set the proposed subtasks and transition to confirming phase
+				taskStore.setProposedSubtasks(proposedSubtasks);
+				taskStore.setPlanModePhase('confirming');
+			}
 		}
 	});
 
@@ -367,9 +453,22 @@
 		}
 
 		let conversationId = chatStore.activeConversation?.id;
+		const isNewConversation = !conversationId;
 		if (!conversationId) {
 			// Create new conversation WITH current space
 			conversationId = chatStore.createConversation(settingsStore.selectedModel, currentSpace || undefined);
+		}
+
+		// Auto-link conversation to focused task (if applicable)
+		if (focusedTask && conversationId) {
+			const isFirstMessage = isNewConversation || (chatStore.getConversation(conversationId)?.messages.length ?? 0) === 0;
+			const isAlreadyLinked = taskStore.isConversationLinked(conversationId);
+
+			if (isFirstMessage && !isAlreadyLinked) {
+				// Link this conversation to the focused task
+				taskStore.linkConversation(focusedTask.id, conversationId);
+				toastStore.success(`Linked to "${focusedTask.title}"`);
+			}
 		}
 
 		chatStore.addMessage(conversationId, { role: 'user', content, attachments });
@@ -417,6 +516,21 @@
 				? assistState.tasks.find(t => t.id === assistState.selectedTaskId)
 				: null;
 
+			// Prepare focused task context (persistent task focus from taskStore)
+			const focusedTaskContext = focusedTask ? {
+				title: focusedTask.title,
+				priority: focusedTask.priority,
+				dueDate: focusedTask.dueDate?.toISOString().split('T')[0],
+				dueDateType: focusedTask.dueDateType
+			} : null;
+
+			// Prepare Plan Mode context if active
+			const planModeContext = planMode ? {
+				taskId: planMode.taskId,
+				taskTitle: planMode.taskTitle,
+				phase: planMode.phase
+			} : null;
+
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -432,7 +546,9 @@
 					assistId: assistState?.assistId || null,
 					assistPhase: assistState?.phase || null,
 					assistTasks: assistState?.tasks.map(t => t.text) || null,
-					assistFocusedTask: selectedTask?.text || null
+					assistFocusedTask: selectedTask?.text || null,
+					focusedTask: focusedTaskContext,
+					planMode: planModeContext
 				}),
 				signal: controller.signal
 			});
@@ -759,6 +875,92 @@
 		pendingSecondOpinionIndex = null;
 	}
 
+	// Task handlers
+	function handleFocusTask(taskId: string) {
+		taskStore.setFocusedTask(taskId);
+
+		// Clear active conversation if it's not linked to this task
+		// This ensures a clean context when focusing on a new task
+		const activeConv = chatStore.activeConversation;
+		if (activeConv) {
+			const linkedTask = taskStore.getTaskForConversation(activeConv.id);
+			if (!linkedTask || linkedTask.id !== taskId) {
+				chatStore.setActiveConversation(null);
+			}
+		}
+	}
+
+	async function handleCompleteTask(taskId: string, notes?: string) {
+		const task = await taskStore.completeTask(taskId, notes);
+		if (task) {
+			toastStore.success(`Completed: ${task.title}`);
+		}
+	}
+
+	function handleSwitchTask() {
+		// Open task panel to let user select a different task
+		showTaskPanel = true;
+	}
+
+	function handleExitFocus() {
+		taskStore.exitFocusMode();
+	}
+
+	function handleOpenTaskPanel() {
+		showTaskPanel = true;
+	}
+
+	function handleStartPlanMode() {
+		if (focusedTask) {
+			taskStore.startPlanMode(focusedTask.id);
+		}
+	}
+
+	function handleExitPlanMode() {
+		taskStore.exitPlanMode();
+	}
+
+	async function handleCreateSubtasksFromPlan() {
+		try {
+			await taskStore.createSubtasksFromPlanMode();
+			toastStore.addToast('success', 'Subtasks created successfully');
+		} catch (error) {
+			console.error('Failed to create subtasks:', error);
+			toastStore.addToast('error', 'Failed to create subtasks');
+		}
+	}
+
+	function handleUpdateProposedSubtask(id: string, title: string) {
+		taskStore.updateProposedSubtask(id, title);
+	}
+
+	function handleToggleProposedSubtask(id: string) {
+		taskStore.toggleProposedSubtask(id);
+	}
+
+	function handleRemoveProposedSubtask(id: string) {
+		taskStore.removeProposedSubtask(id);
+	}
+
+	function handleAddProposedSubtask() {
+		taskStore.addProposedSubtask('New subtask');
+	}
+
+	// Greeting handlers
+	function handleGreetingFocusTask(task: Task) {
+		handleFocusTask(task.id); // Reuse focus logic (clears unlinked conversations)
+		greetingDismissed = true;
+	}
+
+	function handleGreetingOpenPanel() {
+		showTaskPanel = true;
+		greetingDismissed = true;
+	}
+
+	function handleGreetingDismiss() {
+		greetingDismissed = true;
+	}
+
 	// Assist handlers
 	function handleAssistSelect(assistId: string) {
 		if (!currentSpace) return;
@@ -964,6 +1166,21 @@
 
 	<!-- Right: Actions -->
 	<div class="flex items-center gap-2">
+		<!-- Task Badge (only in Work space for now) -->
+		{#if currentSpace === 'work'}
+			<FocusIndicator
+				onCompleteTask={handleCompleteTask}
+				onSwitchTask={handleSwitchTask}
+				onExitFocus={handleExitFocus}
+			/>
+			<TaskBadge
+				space={currentSpace}
+				onOpenPanel={handleOpenTaskPanel}
+				onFocusTask={handleFocusTask}
+				onCompleteTask={(id) => handleCompleteTask(id)}
+			/>
+		{/if}
+
 		{#if chatStore.messages && chatStore.messages.length > 0 && chatStore.activeConversation}
 			<span class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-800 rounded-lg text-xs text-surface-400">
 				<span class="w-2 h-2 rounded-full" style="background: var(--space-accent);"></span>
@@ -1157,7 +1374,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<main
 		class="flex-1 flex flex-col overflow-hidden bg-surface-950 relative transition-all duration-300"
-		class:mr-[40vw]={isSecondOpinionOpen || (isAssistActive && assistState && (assistState.tasks.length > 0 || assistState.error))}
+		class:mr-[40vw]={isSecondOpinionOpen || (isAssistActive && assistState && (assistState.tasks.length > 0 || assistState.error)) || (showTaskPanel && !isAssistActive)}
 		class:assist-mode={isAssistActive}
 		ondragenter={handleGlobalDragEnter}
 		ondragleave={handleGlobalDragLeave}
@@ -1183,7 +1400,29 @@
 		<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 md:p-6">
 			<div class="max-w-4xl mx-auto">
 				{#if messages.length === 0 && parentMessages.length === 0}
-					<WelcomeScreen hasModel={!!selectedModel} onNewChat={handleNewChat} space={currentSpace} activeAssist={assistState?.assist} />
+					{#if focusedTask && !isAssistActive}
+						<!-- Focused Task Welcome - replaces standard welcome when task is focused -->
+						<FocusedTaskWelcome
+							task={focusedTask}
+							onExitFocus={handleExitFocus}
+							onOpenPanel={handleOpenTaskPanel}
+							onStartPlanMode={handleStartPlanMode}
+						/>
+					{:else}
+						<WelcomeScreen hasModel={!!selectedModel} onNewChat={handleNewChat} space={currentSpace} activeAssist={assistState?.assist} />
+
+						<!-- Greeting for returning users with tasks -->
+						{#if showGreeting && greeting}
+							<div class="mt-6 border-t border-surface-800 pt-6">
+								<GreetingMessage
+									{greeting}
+									onFocusTask={handleGreetingFocusTask}
+									onOpenPanel={handleGreetingOpenPanel}
+									onDismiss={handleGreetingDismiss}
+								/>
+							</div>
+						{/if}
+					{/if}
 				{:else}
 					{#if isContinuedConversation && parentMessages.length > 0}
 						<div class="parent-messages opacity-70">
@@ -1270,6 +1509,32 @@
 				onUpdateTask={(taskId, text) => chatStore.updateAssistTaskText(taskId, text)}
 				onRemoveTask={(taskId) => chatStore.removeAssistTask(taskId)}
 				onAddTask={(text) => chatStore.addAssistTask(text)}
+			/>
+		</div>
+	{/if}
+
+	<!-- Task Panel (CRUD mode) - show when user opens from badge -->
+	{#if showTaskPanel && currentSpace && !isAssistActive}
+		<div class="fixed top-16 right-0 bottom-0 z-30">
+			<TaskPanel
+				space={currentSpace}
+				onClose={() => showTaskPanel = false}
+				onFocusTask={handleFocusTask}
+			/>
+		</div>
+	{/if}
+
+	<!-- Plan Mode Panel - show when Plan Mode is active -->
+	{#if planMode}
+		<div class="fixed top-16 right-0 bottom-0 z-30">
+			<PlanModePanel
+				planMode={planMode}
+				onClose={handleExitPlanMode}
+				onCreateSubtasks={handleCreateSubtasksFromPlan}
+				onUpdateSubtask={handleUpdateProposedSubtask}
+				onToggleSubtask={handleToggleProposedSubtask}
+				onRemoveSubtask={handleRemoveProposedSubtask}
+				onAddSubtask={handleAddProposedSubtask}
 			/>
 		</div>
 	{/if}

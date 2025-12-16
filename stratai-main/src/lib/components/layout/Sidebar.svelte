@@ -2,6 +2,7 @@
 	import { fly, fade } from 'svelte/transition';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { taskStore } from '$lib/stores/tasks.svelte';
 	import ConversationItem from './ConversationItem.svelte';
 
 	interface Props {
@@ -63,6 +64,10 @@
 
 	function handleRenameConversation(id: string, newTitle: string) {
 		chatStore.updateConversationTitle(id, newTitle);
+	}
+
+	function handleFocusTask(taskId: string) {
+		taskStore.setFocusedTask(taskId);
 	}
 
 	function handleExportConversation(id: string) {
@@ -255,6 +260,7 @@
 							onpin={() => handlePinConversation(conversation.id)}
 							onrename={(title) => handleRenameConversation(conversation.id, title)}
 							onexport={() => handleExportConversation(conversation.id)}
+							onFocusTask={handleFocusTask}
 						/>
 					{/each}
 				</div>
@@ -286,6 +292,7 @@
 						onpin={() => handlePinConversation(conversation.id)}
 						onrename={(title) => handleRenameConversation(conversation.id, title)}
 						onexport={() => handleExportConversation(conversation.id)}
+						onFocusTask={handleFocusTask}
 					/>
 				{/each}
 			{/if}

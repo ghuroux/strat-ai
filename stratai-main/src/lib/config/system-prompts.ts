@@ -336,3 +336,178 @@ export function getFullSystemPrompt(model: string, space?: SpaceType | null): st
 
 	return `${platformPrompt}\n${spaceAddition}`;
 }
+
+/**
+ * Focused task information for context injection
+ */
+export interface FocusedTaskInfo {
+	title: string;
+	priority: 'normal' | 'high';
+	dueDate?: string;
+	dueDateType?: 'hard' | 'soft';
+}
+
+/**
+ * Generate prompt addition for focused task context
+ * This helps the AI understand what the user is working on and provide relevant assistance
+ */
+export function getFocusedTaskPrompt(task: FocusedTaskInfo): string {
+	const priorityNote = task.priority === 'high' ? ' (high priority)' : '';
+	let dueDateNote = '';
+
+	if (task.dueDate) {
+		const type = task.dueDateType === 'hard' ? 'hard deadline' : 'target';
+		dueDateNote = `\nDue: ${task.dueDate} (${type})`;
+	}
+
+	return `
+<focus_context>
+## Current Task Focus
+The user is focused on: "${task.title}"${priorityNote}${dueDateNote}
+
+**Your role:**
+- Help them make progress on "${task.title}" specifically
+- Be concise and action-oriented
+- Ask clarifying questions only if needed to move forward
+- If they seem stuck, offer a concrete next step
+- Keep responses focused on this task unless they change topics
+
+**Do NOT:**
+- Ask about other tasks or projects
+- Provide lengthy explanations unless requested
+- Overwhelm with multiple options
+</focus_context>`;
+}
+
+/**
+ * Get the full system prompt including focus task context
+ * Used when a user is focused on a specific task
+ */
+export function getFullSystemPromptWithTask(
+	model: string,
+	space: SpaceType | null | undefined,
+	focusedTask: FocusedTaskInfo | null | undefined
+): string {
+	let prompt = getFullSystemPrompt(model, space);
+
+	if (focusedTask) {
+		prompt += '\n' + getFocusedTaskPrompt(focusedTask);
+	}
+
+	return prompt;
+}
+
+/**
+ * Plan Mode prompts for guided task breakdown
+ * Used when user clicks "Help me plan this" on a focused task
+ */
+export type PlanModePhase = 'eliciting' | 'proposing' | 'confirming';
+
+/**
+ * Get Plan Mode system prompt based on current phase
+ *
+ * Phases:
+ * - eliciting: Ask clarifying questions to understand scope
+ * - proposing: Generate 3-5 actionable subtasks
+ * - confirming: Await user confirmation (minimal AI involvement)
+ */
+export function getPlanModePrompt(taskTitle: string, phase: PlanModePhase): string {
+	const baseContext = `
+<plan_mode>
+## Planning Mode
+You are helping the user break down their task: "${taskTitle}"
+
+This is a planning session, not a working session. Your goal is to help them organize their approach.
+</plan_mode>`;
+
+	switch (phase) {
+		case 'eliciting':
+			return `${baseContext}
+
+<elicitation_rules>
+## Elicitation Phase - Gather Context
+
+**Your approach:**
+- Ask ONE clarifying question at a time
+- Keep questions SHORT (one sentence is ideal)
+- Focus on understanding scope, constraints, and priorities
+- After 3-5 questions, you should have enough context to propose subtasks
+
+**Question types to consider:**
+- What's the end goal or deliverable?
+- What constraints exist (time, resources, dependencies)?
+- What's the most challenging part?
+- Is there a particular approach they're leaning toward?
+
+**DO NOT:**
+- Ask multiple questions at once
+- Give lengthy explanations
+- Start proposing solutions yet
+- Ask vague open-ended questions like "tell me more"
+
+**Format:**
+Just ask your ONE question directly. Keep it conversational.
+</elicitation_rules>`;
+
+		case 'proposing':
+			return `${baseContext}
+
+<proposal_rules>
+## Proposal Phase - Suggest Subtasks
+
+Based on the context gathered, propose 3-5 concrete subtasks.
+
+**Format your proposal as:**
+Based on what we've discussed, here's how I'd break this down:
+
+1. [First subtask title - actionable, starts with verb]
+2. [Second subtask title]
+3. [Third subtask title]
+...
+
+Would you like to adjust any of these before we create them?
+
+**Rules:**
+- Each subtask should be completable in one focused session
+- Start each title with an action verb (Write, Research, Draft, Review, etc.)
+- Keep titles under 50 characters
+- Order them logically (dependencies first, or by priority)
+- Subtask count: minimum 2, maximum 5
+
+**DO NOT:**
+- Include vague items like "Other tasks" or "Miscellaneous"
+- Make subtasks too granular (no "Open the file" level items)
+- Make subtasks too broad (no "Complete the entire project" items)
+- Number more than 5 subtasks
+</proposal_rules>`;
+
+		case 'confirming':
+			// Minimal prompt - user is editing in UI, AI just needs to acknowledge
+			return `${baseContext}
+
+<confirmation_rules>
+## Confirmation Phase
+
+The user is reviewing and editing the proposed subtasks in the UI.
+
+If they ask for changes, help them refine the subtask list.
+If they confirm, acknowledge and wish them well on their focused work.
+</confirmation_rules>`;
+	}
+}
+
+/**
+ * Get the full system prompt for Plan Mode
+ * Combines model-specific base + space context + plan mode instructions
+ */
+export function getFullSystemPromptForPlanMode(
+	model: string,
+	space: SpaceType | null | undefined,
+	taskTitle: string,
+	phase: PlanModePhase
+): string {
+	const basePrompt = getFullSystemPrompt(model, space);
+	const planModePrompt = getPlanModePrompt(taskTitle, phase);
+
+	return `${basePrompt}\n${planModePrompt}`;
+}

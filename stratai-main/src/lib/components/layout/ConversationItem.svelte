@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
 	import type { Conversation } from '$lib/types/chat';
+	import { taskStore } from '$lib/stores/tasks.svelte';
 
 	interface Props {
 		conversation: Conversation;
@@ -12,6 +13,7 @@
 		onpin?: () => void;
 		onrename?: (newTitle: string) => void;
 		onexport?: () => void;
+		onFocusTask?: (taskId: string) => void;
 	}
 
 	let {
@@ -23,7 +25,8 @@
 		ondelete,
 		onpin,
 		onrename,
-		onexport
+		onexport,
+		onFocusTask
 	}: Props = $props();
 
 	let isEditing = $state(false);
@@ -32,6 +35,9 @@
 	let menuButtonRef: HTMLButtonElement | undefined = $state();
 	let menuPosition = $state({ top: 0, left: 0 });
 	let isPinned = $derived(conversation.pinned ?? false);
+
+	// Get linked task for this conversation
+	let linkedTask = $derived(taskStore.getTaskForConversation(conversation.id));
 
 	function formatTime(timestamp: number): string {
 		const date = new Date(timestamp);
@@ -133,6 +139,14 @@
 			isEditing = false;
 		}
 	}
+
+	function handleTaskPillClick(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		if (linkedTask) {
+			onFocusTask?.(linkedTask.id);
+		}
+	}
 </script>
 
 <div
@@ -162,6 +176,20 @@
 				<span class="item-time">{formatTime(conversation.updatedAt)}</span>
 			</div>
 			<p class="item-preview">{getMessagePreview()}</p>
+			{#if linkedTask}
+				<button
+					type="button"
+					class="task-pill"
+					style="background: color-mix(in srgb, {linkedTask.color} 20%, transparent); color: {linkedTask.color};"
+					onclick={handleTaskPillClick}
+					title="Focus on: {linkedTask.title}"
+				>
+					<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+					</svg>
+					<span class="task-pill-text">{linkedTask.title}</span>
+				</button>
+			{/if}
 		{/if}
 	</div>
 
@@ -391,5 +419,31 @@
 		height: 1px;
 		margin: 0.25rem 0;
 		background-color: #3f3f46;
+	}
+
+	.task-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-top: 0.375rem;
+		padding: 0.125rem 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		border-radius: 9999px;
+		border: none;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		max-width: 100%;
+	}
+
+	.task-pill:hover {
+		filter: brightness(1.2);
+	}
+
+	.task-pill-text {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		max-width: 140px;
 	}
 </style>

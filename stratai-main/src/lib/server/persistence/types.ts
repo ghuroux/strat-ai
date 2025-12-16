@@ -1,9 +1,10 @@
-import type { Conversation, Message } from '$lib/types/chat';
+import type { Conversation, Message, SpaceType } from '$lib/types/chat';
 import type {
 	ArenaBattle,
 	ArenaJudgment,
 	BattleStatus
 } from '$lib/stores/arena.svelte';
+import type { Task, CreateTaskInput, UpdateTaskInput, TaskListFilter, CreateSubtaskInput } from '$lib/types/tasks';
 
 /**
  * Repository interface for Conversation entities
@@ -99,4 +100,34 @@ export interface ModelRankingsRepository {
 export interface ArenaDataAccess {
 	battles: BattleRepository;
 	rankings: ModelRankingsRepository;
+}
+
+// =====================================================
+// Task Types
+// =====================================================
+
+/**
+ * Repository interface for Task entities
+ */
+export interface TaskRepository {
+	findAll(userId: string, filter?: TaskListFilter): Promise<Task[]>;
+	findById(id: string, userId: string): Promise<Task | null>;
+	create(input: CreateTaskInput, userId: string): Promise<Task>;
+	createBulk(inputs: CreateTaskInput[], userId: string): Promise<Task[]>;
+	update(id: string, updates: UpdateTaskInput, userId: string): Promise<Task | null>;
+	complete(id: string, userId: string, notes?: string): Promise<Task | null>;
+	delete(id: string, userId: string): Promise<void>;
+	count(userId: string, filter?: TaskListFilter): Promise<number>;
+	getActiveBySpace(userId: string, space: SpaceType): Promise<Task[]>;
+	// Task-conversation linking
+	linkConversation(taskId: string, conversationId: string, userId: string): Promise<void>;
+	unlinkConversation(taskId: string, conversationId: string, userId: string): Promise<void>;
+	getTaskByConversation(conversationId: string, userId: string): Promise<Task | null>;
+	// Subtask methods (Phase 0.3d++)
+	getSubtasks(parentId: string, userId: string): Promise<Task[]>;
+	createSubtask(input: CreateSubtaskInput, userId: string): Promise<Task>;
+	canHaveSubtasks(taskId: string, userId: string): Promise<boolean>;
+	getSubtaskCount(taskId: string, userId: string): Promise<number>;
+	reorderSubtasks(parentId: string, subtaskIds: string[], userId: string): Promise<void>;
+	updateSubtaskContext(taskId: string, contextSummary: string, userId: string): Promise<void>;
 }

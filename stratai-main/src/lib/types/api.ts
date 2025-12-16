@@ -74,6 +74,19 @@ export interface ChatCompletionRequest {
 	assistPhase?: 'collecting' | 'confirming' | 'prioritizing' | 'focused' | null;
 	assistTasks?: string[] | null; // Task names for context
 	assistFocusedTask?: string | null; // Name of the currently focused task
+	// Persistent task focus (from task store, not assist flow)
+	focusedTask?: {
+		title: string;
+		priority: 'normal' | 'high';
+		dueDate?: string;
+		dueDateType?: 'hard' | 'soft';
+	} | null;
+	// Plan Mode for guided task breakdown
+	planMode?: {
+		taskId: string;
+		taskTitle: string;
+		phase: 'eliciting' | 'proposing' | 'confirming';
+	} | null;
 }
 
 // Tool use types for Claude

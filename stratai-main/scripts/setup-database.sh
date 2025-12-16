@@ -91,13 +91,16 @@ $PSQL -d $DB_NAME -f "$SCHEMA_DIR/schema.sql" -q
 echo "  - Arena schema..."
 $PSQL -d $DB_NAME -f "$SCHEMA_DIR/arena-schema.sql" -q
 
+echo "  - Tasks schema..."
+$PSQL -d $DB_NAME -f "$SCHEMA_DIR/tasks-schema.sql" -q
+
 echo ""
 echo -e "${GREEN}=========================================="
 echo "  Database setup complete!"
 echo "==========================================${NC}"
 echo ""
 echo "Tables created:"
-$PSQL -d $DB_NAME -c "\dt" 2>/dev/null | grep -E "(conversations|arena_battles|model_rankings|arena_battle_models)" || echo "  (tables created successfully)"
+$PSQL -d $DB_NAME -c "\dt" 2>/dev/null | grep -E "(conversations|arena_battles|model_rankings|arena_battle_models|tasks)" || echo "  (tables created successfully)"
 echo ""
 echo "Next steps:"
 echo "  1. Copy .env.example to .env"

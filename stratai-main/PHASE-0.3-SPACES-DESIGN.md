@@ -483,6 +483,297 @@ Same input. Dramatically smarter output.
 
 ---
 
+## Task Lifecycle (Central Hub)
+
+> **Core Insight (December 2024)**: The "What's on your plate?" assist isn't just *a* template—it's the **central hub** of the productivity OS. Meeting notes, email drafts, decisions—they all ultimately feed into or pull from the task list.
+
+### Why Tasks Are Central
+
+Traditional productivity tools treat tasks as one feature among many. In StratAI, tasks are **the organizing principle**:
+
+| Assist | Relationship to Tasks |
+|--------|----------------------|
+| What's on your plate? | Creates tasks from brain dump |
+| Meeting Summary | Extracts action items → tasks |
+| Decision Log | Creates follow-up tasks |
+| Email Draft | Can reference tasks, may create tasks |
+| Weekly Status | Pulls from completed tasks |
+
+Every assist either **creates tasks**, **references tasks**, or **reports on tasks**.
+
+### The Full Task Lifecycle
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           TASK LIFECYCLE                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ENTRY POINTS (how tasks appear)                                           │
+│   ├── Brain dump ("What's on your plate?" assist)                           │
+│   ├── Meeting extraction (Meeting Summary → action items)                   │
+│   ├── Chat capture ("I need to write the spec")                             │
+│   ├── Decision outcomes ("Decision made: You'll own the spec")              │
+│   └── Manual add (click + in panel)                                         │
+│                                                                             │
+│   DAILY RHYTHM                                                              │
+│   ├── Morning: AI greeting with task summary                                │
+│   │            "Morning! 4 tasks, 1 priority, spec due Friday"              │
+│   ├── During:  Focus mode, complete tasks, new ones appear                  │
+│   │            AI knows current focus, helps with that task                 │
+│   └── Evening: Review, defer, close out                                     │
+│                                                                             │
+│   OVER TIME                                                                 │
+│   ├── Completed → history (what did I accomplish?)                          │
+│   ├── Stale → surface ("this has been sitting for 2 weeks")                 │
+│   └── Patterns → insights ("you always have meeting prep tasks")            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Task Schema
+
+```typescript
+interface Task {
+  id: string;
+  userId: string;
+  space: SpaceType;
+
+  // Content
+  title: string;
+  description?: string;
+
+  // Status
+  status: 'active' | 'completed' | 'deferred';
+  priority: 'normal' | 'high';
+
+  // Timing
+  dueDate?: Date;
+  dueDateType?: 'hard' | 'soft';  // Actual deadline vs. preference
+  snoozedUntil?: Date;            // "Remind me next week"
+
+  // Visual
+  color: string;  // Auto-assigned from palette
+
+  // Source tracking (for integrations)
+  source: {
+    type: 'assist' | 'meeting' | 'chat' | 'manual';
+    assistId?: string;
+    conversationId?: string;
+    messageIndex?: number;
+  };
+
+  // Completion
+  completedAt?: Date;
+  completionNotes?: string;
+
+  // Temporal
+  lastActivityAt: Date;  // For stale detection
+  createdAt: Date;
+  updatedAt: Date;
+}
+```
+
+### Focus Mode & Task Colors
+
+Each task has an auto-assigned accent color. When focused on a task, the space subtly shifts to that color—a visual signal that context has changed.
+
+**Color Palette** (rotating assignment):
+```
+1. Indigo   (#6366f1)    5. Violet   (#8b5cf6)
+2. Teal     (#14b8a6)    6. Emerald  (#10b981)
+3. Amber    (#f59e0b)    7. Cyan     (#06b6d4)
+4. Rose     (#f43f5e)    8. Orange   (#f97316)
+```
+
+**What changes when focused**:
+- Header shows focus indicator with task color
+- Chat input border/ring uses task color
+- Subtle background tint (very subtle)
+- Smooth 300ms CSS transition on color change
+
+```css
+:root {
+  --space-accent: #3b82f6;     /* Work blue */
+  --task-accent: var(--space-accent);  /* Falls back to space */
+}
+
+.focused {
+  --task-accent: #14b8a6;  /* Task's assigned color */
+}
+```
+
+### The Daily Experience
+
+**First Visit (no tasks):**
+```
+┌────────────────────────────────────────────────────────────────┐
+│  Welcome to your Work space.                                   │
+│                                                                │
+│  What would you like help with?                                │
+│                                                                │
+│  [📋 What's on your plate?]  [📝 Meeting notes]                │
+│  [✉️ Draft an email]         [💬 Just chat]                    │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Return Visit (has tasks):**
+```
+┌────────────────────────────────────────────────────────────────┐
+│  AI: "Morning! You've got 4 things on your plate:              │
+│                                                                │
+│       ⭐ Split payments spec (Friday - client waiting)         │
+│       • Loyalty platform                                       │
+│       • WorkOS setup                                           │
+│       • Food for the Hungry proposal                           │
+│                                                                │
+│       The spec looks like today's priority.                    │
+│       Ready to focus on that?"                                 │
+│                                                                │
+│       [Focus on spec] [See everything] [Different plan]        │
+└────────────────────────────────────────────────────────────────┘
+```
+
+**Focus Mode Active:**
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  [Work]    🎯 Split payments spec ▼              [📋 4]    [⚙️]     │
+│  ═══════════════════════════════════════════════ (amber accent)     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Chat continues with AI knowing the focus...                        │
+│  AI: "Let's tackle the spec. What's the current status?"            │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Due Dates: Non-Anxious Design
+
+Due dates are important but dangerous. We avoid the "wall of red" that creates guilt and avoidance.
+
+**Principles:**
+1. **Optional, not required** - Not every task needs a deadline
+2. **Natural language capture** - "by Friday", "next week", "end of month"
+3. **Hard vs. soft** - Client deadline ≠ self-imposed goal
+4. **Intelligent surfacing** - AI triages, doesn't just list
+
+**Bad (creates anxiety):**
+```
+❌ OVERDUE (5)
+⚠️ TODAY (3)
+📅 THIS WEEK (2)
+```
+
+**Good (helpful, not overwhelming):**
+```
+Today's focus:
+• Split payments spec (Friday deadline)
+• Follow up with Sarah
+
+Also on your plate:
+• WorkOS setup
+• Food for the Hungry proposal
+```
+
+The AI prioritizes intelligently and acknowledges reality: not everything gets done.
+
+### Temporal Awareness (Future: Phase 0.3e)
+
+The system will eventually understand time and proactively help:
+
+**Day Detection:**
+- New day → Fresh greeting with task summary
+- Monday → Weekly review prompt
+- Overdue items → "Heads up, 2 items slipped..."
+
+**Stale Task Cleanup:**
+```
+AI: "Been a bit since we looked at some of these:
+
+     • 'Research competitors' - 2 weeks, no activity
+     • 'Update docs' - 10 days, no activity
+
+     Still need these, or should we clean house?
+
+     [Clean up my list] [They're still needed]"
+```
+
+**Guided Cleanup Flow:**
+- AI walks through stale items one by one
+- For each: [✓ Done] [📅 Reschedule] [🗑️ Remove]
+- Summary at end: "All cleaned up!"
+
+**Frequency Control:**
+- Max 1 cleanup offer per week
+- Don't nag if user skips
+- User can disable entirely
+
+### WorkingPanel Modes
+
+The WorkingPanel adapts to context:
+
+**CRUD Mode** (via header badge click):
+```
+┌─────────────────────────────┐
+│ Your Tasks                  │
+│ ─────────────────────────── │
+│ ⭐ Split payments (Fri)     │
+│    [✓] [✏️] [...]           │
+│                             │
+│ • WorkOS setup              │
+│    [✓] [✏️] [...]           │
+│                             │
+│ [+ Add task]                │
+└─────────────────────────────┘
+```
+
+**Focus Mode** (when focused on task):
+```
+┌─────────────────────────────┐
+│ 🎯 Split payments spec      │
+│ ─────────────────────────── │
+│ Due: Friday (client)        │
+│ Priority: High              │
+│                             │
+│ [✓ Done] [Add note] [Exit]  │
+│ ─────────────────────────── │
+│ Other tasks (3)         [▼] │
+└─────────────────────────────┘
+```
+
+**Assist Mode** (during assist flow):
+```
+┌─────────────────────────────┐
+│ Confirm Your Tasks          │
+│ ─────────────────────────── │
+│ ☑ Split payments spec       │
+│ ☑ WorkOS setup              │
+│ ☑ Loyalty platform          │
+│                             │
+│ [Looks right!] [Edit]       │
+└─────────────────────────────┘
+```
+
+### Completion Flow
+
+When completing a task:
+
+**Quick tasks:** Simple celebration
+```
+[✓] → "Done! ✨"
+```
+
+**Substantial tasks:** Brief prompt
+```
+AI: "Done with the split payments spec!
+     Any notes before I file it?"
+
+     [No notes, just done] [Add a note]
+```
+
+Future enhancement: "Should we let Sarah know it's done?"
+
+---
+
 ## Enterprise Integration
 
 ### The B2B Advantage
@@ -1147,18 +1438,33 @@ Since enterprises provide team data:
 | 2024-12-13 | User confirmation for AI extraction | Trust but verify, builds confidence |
 | 2024-12-13 | Context-free chat outside spaces | Spaces are opt-in productivity environments |
 | 2024-12-13 | JSONB metadata fields in schema | Extensibility without migrations |
+| 2024-12-16 | Tasks as central hub, not just a feature | All assists feed into/from tasks; build lifecycle before more templates |
+| 2024-12-16 | AI greeting on return (not static dashboard) | "Let me do your work for you" feel, chat-first |
+| 2024-12-16 | Task colors with focus mode shift | Visual context change when switching tasks (rotating 8-color palette) |
+| 2024-12-16 | Due dates: hard vs. soft, non-anxious display | Avoid guilt/overwhelm; AI triages intelligently |
+| 2024-12-16 | WorkingPanel visible only during flow | Chat is primary; panel via header badge for CRUD |
+| 2024-12-16 | Header badge for quick task access | `📋 N` badge with dropdown, 2-click CRUD |
+| 2024-12-16 | Temporal awareness in 0.3e (not 0.3c) | Day detection, stale cleanup deferred; focus on core lifecycle first |
+| 2024-12-16 | Meeting Summary deferred to 0.3d | Tasks must be solid before assists inject into them |
 
 ---
 
 ## Next Steps
 
-1. **Review this document** with stakeholders
-2. **Create detailed POC task breakdown** in BACKLOG.md
-3. **Design template definitions** for POC templates
-4. **Prototype guided conversation UX** for Meeting Summary
-5. **Create database migration** for new tables
-6. **Build Space foundation** (routes, navigation, visual differentiation)
+**Phase 0.3c: Task Lifecycle Foundation (NEXT)**
+1. **Database**: Create `tasks` table with full schema
+2. **API**: Task CRUD endpoints (`/api/tasks`)
+3. **Store**: Task state management in Svelte store
+4. **Greeting**: AI message for returning users with tasks
+5. **Header Badge**: `📋 N` with dropdown quick-view
+6. **Focus Mode**: Header indicator, color shift, system prompt injection
+7. **WorkingPanel**: CRUD mode, focus mode (extend existing)
+8. **Due Dates**: Optional capture, subtle display
+9. **Completion**: Basic flow with optional notes
+
+**Then Phase 0.3d**: Meeting Summary + Guided Conversation (with task integration)
 
 ---
 
 *This document is a living artifact. Update as decisions are made and learnings emerge.*
+*Last updated: December 16, 2024*
