@@ -56,6 +56,15 @@ services:
     networks:
       - stratai_network
 
+bifrost:
+    image: maximhq/bifrost:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      # Mounts a local directory named 'data' to store Bifrost's data persistently
+      - ./data:/app/data
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     driver: local
