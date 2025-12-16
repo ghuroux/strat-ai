@@ -56,14 +56,18 @@ services:
     networks:
       - stratai_network
 
-bifrost:
+  # Bifrost - Agent framework
+  bifrost:
     image: maximhq/bifrost:latest
+    container_name: bifrost
     ports:
       - "8080:8080"
     volumes:
       # Mounts a local directory named 'data' to store Bifrost's data persistently
       - ./data:/app/data
     restart: unless-stopped
+    networks:
+      - stratai_network
 
 volumes:
   postgres_data:
