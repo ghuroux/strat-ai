@@ -141,6 +141,56 @@ Track acknowledged issues to address later:
 
 ## Session Log
 
+### Session: 2025-12-20 (Plan Mode UX Improvements)
+**Focus**: Fix Plan Mode UX flow issues for smoother task planning experience
+
+**Completed**:
+
+**1. Sidebar Management**:
+- Sidebar now hides when Plan Mode is active (consistent with Assist mode behavior)
+- Prevents distraction and maintains focus on the planning conversation
+
+**2. FocusedTaskWelcome Visibility**:
+- FocusedTaskWelcome component now hides when Plan Mode is active
+- Avoids redundant UI elements during active planning
+
+**3. Layout Improvements**:
+- Added margin for PlanModePanel to prevent content overlap with chat area
+- Ensures clean visual separation between main chat and planning panel
+
+**4. Auto-Send Initial AI Message**:
+- System now automatically sends a kickoff message when Plan Mode starts
+- The AI immediately begins the planning conversation with clarifying questions
+- Users no longer need to manually initiate the planning dialogue
+
+**5. Visual Theming**:
+- Added `plan-mode` CSS class with subtle space-accent background styling
+- Visual feedback that user is in a special planning context
+
+**Plan Mode UX Flow** (after improvements):
+1. User focuses on task -> sees FocusedTaskWelcome with "Help me plan this" button
+2. Clicks button -> Plan Mode activates, sidebar hides, PlanModePanel appears on right
+3. AI immediately receives request and starts responding with clarifying questions
+4. User chats naturally in the normal chat area to plan the task
+5. When AI proposes subtasks, they appear in the panel for confirmation/editing
+
+**Files Modified**:
+- `src/routes/spaces/[space]/+page.svelte` - All Plan Mode UX improvements
+
+**Current State**:
+- Plan Mode has smooth, intuitive UX flow
+- All changes committed and pushed to GitHub
+
+**Commit**: `91b53f9` - fix: Improve Plan Mode UX flow
+
+**Next session suggestions**:
+- Test Plan Mode end-to-end with real task planning scenarios
+- Consider adding keyboard shortcut to exit Plan Mode
+- Add ability to save/persist planned subtasks to database
+- Consider adding progress indicator during planning phase
+
+---
+
 ### Session: 2024-12-15 (Phase 0.3b Complete - Assists Framework)
 **Focus**: Implement Assists Framework for structured task management in Work space
 
