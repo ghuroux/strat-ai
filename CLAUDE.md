@@ -141,6 +141,124 @@ Track acknowledged issues to address later:
 
 ## Session Log
 
+### Session: 2025-12-30 (Cascading Delete + Context System + Spaces Infrastructure)
+**Focus**: Implement cascading delete for tasks, fix postgres.js bugs, build context and spaces infrastructure
+
+**Completed**:
+
+**1. Fixed postgres.js camelCase Transformation Bug**:
+- Discovered that `SELECT MAX(subtask_order) as max_order` was being transformed to `maxOrder` by postgres.js
+- Fixed property access in `tasks-postgres.ts`, `focus-areas-postgres.ts`, `spaces-postgres.ts`, and `documents-postgres.ts`
+
+**2. Database Cleanup**:
+- Cleaned up 11 orphaned subtasks in the database
+- Fixed 17 subtasks that had incorrect `subtask_order = 0` by running migration SQL
+
+**3. Cascading Delete Feature**:
+- Added `deleteSubtasks()` method to TaskRepository interface and implementation
+- Enhanced DELETE API endpoint (`/api/tasks/[id]/+server.ts`) to cascade delete subtasks and optionally conversations
+- Updated `taskStore.deleteTask()` to accept options and properly remove subtasks from local store
+- Added `getTaskDeletionInfo()` method to the store
+
+**4. DeleteTaskModal Component**:
+- New modal component showing task title, subtask count warning, and optional conversation deletion checkbox
+- Proper loading states and keyboard handling (Escape to close)
+- Integrated into TaskPanel replacing inline delete confirmation
+
+**5. Spaces Infrastructure** (new):
+- Created `spaces-schema.sql` and `spaces-postgres.ts` repository
+- Added `SpaceModal.svelte` component
+- Created `/api/spaces/` endpoints
+- Added `spaces.svelte.ts` store
+
+**6. Focus Areas Infrastructure** (new):
+- Created `focus-areas-schema.sql` and `focus-areas-postgres.ts` repository
+- Added `FocusAreaModal.svelte`, `FocusAreaPills.svelte`, `ContextPanel.svelte` components
+- Created `/api/focus-areas/` endpoints
+- Added `focusAreas.svelte.ts` store
+
+**7. Task Context System** (new):
+- Created `TaskContextSection.svelte` for displaying related tasks/documents
+- Added `AddContextModal.svelte` and `ManageContextModal.svelte`
+- Created `/api/tasks/[id]/context/`, `/api/tasks/[id]/documents/`, `/api/tasks/[id]/related/`, `/api/tasks/[id]/planning/` endpoints
+- Added `context-builder.ts` utility
+
+**8. Documents Infrastructure** (new):
+- Created `documents-schema.sql` and `documents-postgres.ts` repository
+- Added `documents.svelte.ts` store and `documents.ts` types
+- Created `/api/documents/` endpoints
+
+**9. Design Documentation**:
+- Created `DESIGN-CHAT-CONTEXT-AWARENESS.md` - Chat context awareness design
+- Created `DESIGN-SPACES-AND-FOCUS-AREAS.md` - Spaces and focus areas design
+
+**Files Created** (38 new files):
+- `src/lib/components/tasks/DeleteTaskModal.svelte`
+- `src/lib/components/tasks/AddContextModal.svelte`
+- `src/lib/components/tasks/ManageContextModal.svelte`
+- `src/lib/components/tasks/TaskContextSection.svelte`
+- `src/lib/components/focus-areas/ContextPanel.svelte`
+- `src/lib/components/focus-areas/FocusAreaModal.svelte`
+- `src/lib/components/focus-areas/FocusAreaPills.svelte`
+- `src/lib/components/spaces/SpaceModal.svelte`
+- `src/lib/components/chat/BringToContextModal.svelte`
+- `src/lib/server/persistence/spaces-postgres.ts`
+- `src/lib/server/persistence/spaces-schema.sql`
+- `src/lib/server/persistence/focus-areas-postgres.ts`
+- `src/lib/server/persistence/focus-areas-schema.sql`
+- `src/lib/server/persistence/documents-postgres.ts`
+- `src/lib/server/persistence/documents-schema.sql`
+- `src/lib/server/persistence/tool-cache-postgres.ts`
+- `src/lib/server/persistence/tool-cache-schema.sql`
+- `src/lib/stores/spaces.svelte.ts`
+- `src/lib/stores/focusAreas.svelte.ts`
+- `src/lib/stores/documents.svelte.ts`
+- `src/lib/types/spaces.ts`
+- `src/lib/types/focus-areas.ts`
+- `src/lib/types/documents.ts`
+- `src/lib/utils/context-builder.ts`
+- `src/lib/utils/plan-mode-validation.ts`
+- `src/routes/api/spaces/+server.ts`
+- `src/routes/api/spaces/[id]/+server.ts`
+- `src/routes/api/focus-areas/+server.ts`
+- `src/routes/api/focus-areas/[id]/+server.ts`
+- `src/routes/api/documents/+server.ts`
+- `src/routes/api/documents/[id]/+server.ts`
+- `src/routes/api/tasks/[id]/context/+server.ts`
+- `src/routes/api/tasks/[id]/documents/+server.ts`
+- `src/routes/api/tasks/[id]/planning/+server.ts`
+- `src/routes/api/tasks/[id]/related/+server.ts`
+- Database migrations in `src/lib/server/persistence/migrations/`
+
+**Files Modified** (34 files):
+- `src/lib/server/persistence/tasks-postgres.ts` - deleteSubtasks method, camelCase fix
+- `src/lib/server/persistence/types.ts` - TaskRepository interface updates
+- `src/routes/api/tasks/[id]/+server.ts` - Enhanced DELETE endpoint with cascading
+- `src/lib/stores/tasks.svelte.ts` - deleteTask options, getTaskDeletionInfo
+- `src/lib/components/tasks/TaskPanel.svelte` - Modal integration
+- Many others for spaces/focus areas integration
+
+**Architecture Notes**:
+- postgres.js auto-transforms column aliases to camelCase - use `maxOrder` not `max_order` when accessing results
+- Cascading delete implemented at API level, not database level (for flexibility)
+- Context system allows tasks to reference other tasks and documents
+
+**Current State**:
+- TypeScript check passes with 0 errors
+- All infrastructure in place for spaces, focus areas, documents, and task context
+- Cascading delete fully functional with confirmation modal
+
+**Commit**: `8737302` - feat: Add task cascading delete, context system, and spaces infrastructure
+
+**Next session suggestions**:
+- Run the new schema migrations on the database
+- Test spaces and focus areas UI end-to-end
+- Wire up focus areas to the header/sidebar
+- Consider adding bulk delete for multiple tasks
+- Test document upload and attachment to tasks
+
+---
+
 ### Session: 2025-12-20 (Plan Mode UX Improvements)
 **Focus**: Fix Plan Mode UX flow issues for smoother task planning experience
 
