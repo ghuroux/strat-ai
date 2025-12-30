@@ -80,13 +80,24 @@ export interface ChatCompletionRequest {
 		priority: 'normal' | 'high';
 		dueDate?: string;
 		dueDateType?: 'hard' | 'soft';
+		// Subtask context for injecting planning conversation
+		isSubtask?: boolean;
+		parentTaskTitle?: string;
+		sourceConversationId?: string; // Plan Mode conversation ID for context injection
 	} | null;
 	// Plan Mode for guided task breakdown
 	planMode?: {
 		taskId: string;
 		taskTitle: string;
 		phase: 'eliciting' | 'proposing' | 'confirming';
+		exchangeCount?: number; // Tracks conversation depth for prompt selection
+		priority?: 'normal' | 'high';
+		dueDate?: string | null;
+		dueDateType?: 'hard' | 'soft' | null;
+		createdAt?: string;
 	} | null;
+	// Focus Area context (specialized context within a space)
+	focusAreaId?: string | null;
 }
 
 // Tool use types for Claude

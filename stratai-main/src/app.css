@@ -508,6 +508,17 @@
 		@apply text-surface-500;
 	}
 
+	/* Collapsible section header (Phase C) */
+	.section-header-collapsible {
+		@apply w-full cursor-pointer transition-colors duration-150;
+		@apply hover:text-surface-300 hover:bg-surface-800/50;
+		@apply border-none bg-transparent;
+	}
+
+	.section-count {
+		@apply ml-auto text-surface-600 font-normal;
+	}
+
 	.section-divider {
 		@apply mx-4 my-2 border-t border-surface-800;
 	}

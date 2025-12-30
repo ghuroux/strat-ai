@@ -2,7 +2,7 @@
 	import { tick, onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { fly, fade } from 'svelte/transition';
+	import { fly, fade, slide } from 'svelte/transition';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import WelcomeScreen from '$lib/components/chat/WelcomeScreen.svelte';
@@ -21,15 +21,27 @@
 	import TaskPanel from '$lib/components/tasks/TaskPanel.svelte';
 	import FocusedTaskWelcome from '$lib/components/tasks/FocusedTaskWelcome.svelte';
 	import PlanModePanel from '$lib/components/tasks/PlanModePanel.svelte';
+	import AddContextModal from '$lib/components/tasks/AddContextModal.svelte';
+	import ManageContextModal from '$lib/components/tasks/ManageContextModal.svelte';
+	import { FocusAreaPills, FocusAreaModal } from '$lib/components/focus-areas';
+	import { SpaceModal } from '$lib/components/spaces';
+	import BringToContextModal from '$lib/components/chat/BringToContextModal.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { documentStore } from '$lib/stores/documents.svelte';
+	import { focusAreaStore } from '$lib/stores/focusAreas.svelte';
+	import { spacesStore } from '$lib/stores/spaces.svelte';
+	import type { FocusArea, CreateFocusAreaInput, UpdateFocusAreaInput } from '$lib/types/focus-areas';
+	import type { DocumentContextRole } from '$lib/types/documents';
+	import type { TaskRelationshipType } from '$lib/types/tasks';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import { modelSupportsVision } from '$lib/config/model-capabilities';
-	import { SPACES, isValidSpace, type ENABLED_SPACES } from '$lib/config/spaces';
+	import { SPACES, isValidSpace } from '$lib/config/spaces';
 	import { extractTasksFromContent, contentLooksLikeTaskList, contentAsksForConfirmation } from '$lib/utils/task-extraction';
 	import { contentContainsProposal, extractProposedSubtasks } from '$lib/utils/subtask-extraction';
+	import { detectUserReadiness } from '$lib/utils/plan-mode-validation';
 	import { applyFocusColor } from '$lib/utils/focus-mode';
 	import { generateGreeting } from '$lib/utils/greeting';
 	import GreetingMessage from '$lib/components/chat/GreetingMessage.svelte';
@@ -38,36 +50,120 @@
 
 	// Get space from route param
 	let spaceParam = $derived($page.params.space);
+
+	// Get space from store (handles both system and custom spaces)
+	let spaceFromStore = $derived.by(() => {
+		if (!spaceParam) return null;
+		return spacesStore.getSpaceBySlug(spaceParam);
+	});
+
+	// For backwards compatibility, also check system space config
 	let currentSpace = $derived.by(() => {
 		if (spaceParam && isValidSpace(spaceParam)) {
 			return spaceParam as SpaceType;
 		}
+		// For custom spaces, use the slug as the "space" identifier
+		if (spaceFromStore?.type === 'custom') {
+			return spaceFromStore.slug as SpaceType;
+		}
 		return null;
 	});
-	let spaceConfig = $derived(currentSpace ? SPACES[currentSpace] : null);
 
-	// Validate space and redirect if invalid
+	let spaceConfig = $derived.by(() => {
+		// Try system space config first
+		if (currentSpace && SPACES[currentSpace as keyof typeof SPACES]) {
+			return SPACES[currentSpace as keyof typeof SPACES];
+		}
+		// For custom spaces, create a config from store data
+		if (spaceFromStore) {
+			return {
+				id: spaceFromStore.slug,
+				name: spaceFromStore.name,
+				icon: spaceFromStore.icon || '📁',
+				accentColor: 'custom',
+				description: spaceFromStore.context || 'Custom space'
+			};
+		}
+		return null;
+	});
+
+	// Apply custom space color if available (for custom spaces not covered by layout)
 	$effect(() => {
-		if (spaceParam && !isValidSpace(spaceParam)) {
+		if (spaceFromStore?.type === 'custom' && spaceFromStore?.color) {
+			const color = spaceFromStore.color;
+			// Set all space-related CSS variables for custom spaces
+			document.documentElement.style.setProperty('--space-accent', color);
+			document.documentElement.style.setProperty('--space-accent-muted', `color-mix(in srgb, ${color} 15%, transparent)`);
+			document.documentElement.style.setProperty('--space-accent-ring', `color-mix(in srgb, ${color} 40%, transparent)`);
+		}
+		return () => {
+			// Cleanup: remove custom space CSS variables when leaving
+			document.documentElement.style.removeProperty('--space-accent');
+			document.documentElement.style.removeProperty('--space-accent-muted');
+			document.documentElement.style.removeProperty('--space-accent-ring');
+		};
+	});
+
+	// Validate space and redirect if invalid (after spaces are loaded)
+	$effect(() => {
+		// Wait for spaces to load before validating
+		if (!spacesStore.isLoaded()) return;
+
+		if (spaceParam && !isValidSpace(spaceParam) && !spaceFromStore) {
 			goto('/spaces');
 		}
+	});
+
+	// Load spaces on mount
+	onMount(() => {
+		spacesStore.loadSpaces();
 	});
 
 	// Set active space in store when entering/leaving
 	// Also clear active conversation if it doesn't belong to this space
 	$effect(() => {
 		if (currentSpace) {
-			chatStore.setActiveSpace(currentSpace);
+			chatStore.setActiveSpaceId(currentSpace);
 
 			// If active conversation doesn't belong to this space, clear it
 			const activeConv = chatStore.activeConversation;
-			if (activeConv && activeConv.space !== currentSpace) {
+			if (activeConv && activeConv.spaceId !== currentSpace) {
 				chatStore.setActiveConversation(null);
 			}
 		}
 		return () => {
-			chatStore.setActiveSpace(null);
+			chatStore.setActiveSpaceId(null);
 		};
+	});
+
+	// Track previous conversation ID to detect actual conversation changes
+	// This prevents selectedFocusAreaId from being reset on every conversation update (e.g., during streaming)
+	let previousConversationId: string | null = null;
+
+	// Sync focus area selection with active conversation
+	// Only sync when conversation CHANGES, not on every update
+	$effect(() => {
+		const activeConv = chatStore.activeConversation;
+		if (activeConv) {
+			// Only sync focus area when conversation actually changes (different ID)
+			const conversationChanged = activeConv.id !== previousConversationId;
+			if (conversationChanged) {
+				previousConversationId = activeConv.id;
+				selectedFocusAreaId = activeConv.focusAreaId ?? null;
+			}
+
+			// Auto-focus on task if conversation is linked to one (Phase C navigation)
+			// This handles the case when navigating from main to a task-linked conversation
+			if (activeConv.taskId && !focusedTask) {
+				const linkedTask = taskStore.getTaskForConversation(activeConv.id);
+				if (linkedTask) {
+					taskStore.setFocusedTask(linkedTask.id);
+					chatStore.setFocusedTaskId(linkedTask.id);
+				}
+			}
+		} else {
+			previousConversationId = null;
+		}
 	});
 
 	// Sidebar state
@@ -103,7 +199,51 @@
 	let focusedTask = $derived(taskStore.focusedTask);
 	let hasTasks = $derived(taskStore.hasTasks);
 	let planMode = $derived(taskStore.planMode);
+	let planningTask = $derived(taskStore.planningTask); // Full task for metadata access
 	let showTaskPanel = $state(false);
+
+	// Focus Area state
+	let selectedFocusAreaId = $state<string | null>(null);
+	let showFocusAreaModal = $state(false);
+	let editingFocusArea = $state<ReturnType<typeof focusAreaStore.getFocusAreaById> | null>(null);
+	let focusAreas = $derived.by(() => {
+		if (!currentSpace) return [];
+		return focusAreaStore.getFocusAreasForSpace(currentSpace);
+	});
+	let selectedFocusArea = $derived.by(() => {
+		if (!selectedFocusAreaId) return null;
+		return focusAreaStore.getFocusAreaById(selectedFocusAreaId) ?? null;
+	});
+
+	// Space modal state
+	let showSpaceModal = $state(false);
+
+	// Context modal state
+	let showAddContextModal = $state(false);
+	let contextModalTaskId = $state<string | null>(null);
+
+	// Manage Context modal state
+	let showManageContextModal = $state(false);
+
+	// BringToContext modal state (Phase C - cross-context navigation)
+	let showBringToContextModal = $state(false);
+	let bringToContextConversation = $state<Conversation | null>(null);
+
+	// Get context for focused task
+	let taskDocuments = $derived.by(() => {
+		if (!focusedTask) return [];
+		return documentStore.getDocumentsForTask(focusedTask.id);
+	});
+
+	let taskRelatedTasks = $derived.by(() => {
+		if (!focusedTask) return [];
+		return taskStore.getRelatedTasks(focusedTask.id);
+	});
+
+	let taskContext = $derived.by(() => {
+		if (!focusedTask) return undefined;
+		return taskStore.getTaskContext(focusedTask.id);
+	});
 
 	// Greeting state
 	let greeting = $state<GreetingData | null>(null);
@@ -140,22 +280,42 @@
 		});
 	}
 
-	// Space-filtered conversations
+	// Context-aware grouped conversations (Phase C)
+	let grouped = $derived(chatStore.groupedConversations);
+
+	// Space-filtered conversations with context awareness
 	let filteredPinned = $derived.by((): Conversation[] => {
-		const pinned = chatStore.pinnedConversationsBySpace;
+		const pinned = grouped.pinned;
 		if (!searchQuery.trim()) return pinned;
 		return filterByQuery(pinned, searchQuery);
 	});
-	let filteredUnpinned = $derived.by((): Conversation[] => {
-		const unpinned = chatStore.unpinnedConversationsBySpace;
-		if (!searchQuery.trim()) return unpinned;
-		return filterByQuery(unpinned, searchQuery);
+	let filteredCurrent = $derived.by((): Conversation[] => {
+		const current = grouped.current;
+		if (!searchQuery.trim()) return current;
+		return filterByQuery(current, searchQuery);
 	});
-	let hasResults = $derived(filteredPinned.length > 0 || filteredUnpinned.length > 0);
+	let filteredOtherInSpace = $derived.by((): Conversation[] => {
+		const otherInSpace = grouped.otherInSpace;
+		if (!searchQuery.trim()) return otherInSpace;
+		return filterByQuery(otherInSpace, searchQuery);
+	});
+	let filteredOtherContexts = $derived.by((): Conversation[] => {
+		const other = grouped.otherContexts;
+		if (!searchQuery.trim()) return other;
+		return filterByQuery(other, searchQuery);
+	});
+	let hasResults = $derived(filteredPinned.length > 0 || filteredCurrent.length > 0 || filteredOtherInSpace.length > 0 || filteredOtherContexts.length > 0);
 	let hasPinnedResults = $derived(filteredPinned.length > 0);
+	let hasCurrentResults = $derived(filteredCurrent.length > 0);
+	let hasOtherInSpace = $derived(filteredOtherInSpace.length > 0);
+	let hasOtherContexts = $derived(filteredOtherContexts.length > 0);
 	let spaceConversationCount = $derived(
 		currentSpace ? chatStore.getSpaceConversationCount(currentSpace) : 0
 	);
+
+	// Collapsible state for sidebar sections
+	let otherInSpaceExpanded = $state(false);
+	let otherContextsExpanded = $state(false);
 
 	// Apply saved theme on mount
 	onMount(() => {
@@ -182,6 +342,15 @@
 		}
 	});
 
+	// Load focus areas when space changes
+	$effect(() => {
+		if (currentSpace) {
+			focusAreaStore.loadFocusAreas(currentSpace);
+			// Clear selection when changing spaces
+			selectedFocusAreaId = null;
+		}
+	});
+
 	// Generate greeting when tasks are loaded (only for work space)
 	$effect(() => {
 		if (currentSpace === 'work' && !taskStore.isLoading && taskStore.taskList.length > 0) {
@@ -205,6 +374,15 @@
 		}
 	});
 
+	// Load context when focused task changes
+	$effect(() => {
+		if (focusedTask) {
+			documentStore.loadDocumentsForTask(focusedTask.id);
+			taskStore.loadRelatedTasks(focusedTask.id);
+			taskStore.loadTaskContext(focusedTask.id);
+		}
+	});
+
 	function applyTheme(theme: 'dark' | 'light' | 'system') {
 		const root = document.documentElement;
 		if (theme === 'system') {
@@ -223,10 +401,16 @@
 		}
 	});
 
+	// Guard to prevent reactive loop during proposal processing
+	let processingProposal = false;
+
 	// Detect AI subtask proposals in Plan Mode
 	$effect(() => {
 		// Only run when Plan Mode is active and in eliciting/proposing phase
 		if (!planMode || planMode.phase === 'confirming') return;
+
+		// Prevent re-entry during async processing
+		if (processingProposal) return;
 
 		// Get the last assistant message
 		const lastMessage = messages[messages.length - 1];
@@ -240,9 +424,16 @@
 			// Extract proposed subtasks
 			const proposedSubtasks = extractProposedSubtasks(content);
 			if (proposedSubtasks.length >= 2) {
+				// Set guard before async operations
+				processingProposal = true;
+
 				// Set the proposed subtasks and transition to confirming phase
-				taskStore.setProposedSubtasks(proposedSubtasks);
-				taskStore.setPlanModePhase('confirming');
+				Promise.all([
+					taskStore.setProposedSubtasks(proposedSubtasks),
+					taskStore.setPlanModePhase('confirming')
+				]).finally(() => {
+					processingProposal = false;
+				});
 			}
 		}
 	});
@@ -284,7 +475,28 @@
 	}
 
 	function handleConversationClick(id: string) {
-		chatStore.setActiveConversation(id);
+		const conversation = chatStore.conversations.get(id);
+		if (!conversation) return;
+
+		// Check if conversation is in current context (Phase C)
+		const inContext = chatStore.isConversationInCurrentContext(conversation);
+
+		if (inContext) {
+			// Open directly
+			chatStore.setActiveConversation(id);
+
+			// If conversation is linked to a task, enter deep work mode
+			if (conversation.taskId) {
+				const linkedTask = taskStore.getTaskForConversation(id);
+				if (linkedTask) {
+					handleFocusTask(linkedTask.id);
+				}
+			}
+		} else {
+			// Show "Bring to Context" modal
+			bringToContextConversation = conversation;
+			showBringToContextModal = true;
+		}
 	}
 
 	function handleDeleteConversation(id: string) {
@@ -432,7 +644,19 @@
 	}
 
 	// Chat handlers
-	async function handleSend(content: string, attachments?: FileAttachment[]) {
+	// Define plan mode context type for explicit overrides
+	interface ExplicitPlanModeContext {
+		taskId: string;
+		taskTitle: string;
+		phase: 'eliciting' | 'proposing' | 'confirming';
+		exchangeCount: number;
+		priority: 'normal' | 'high';
+		dueDate: string | null;
+		dueDateType: 'hard' | 'soft' | null;
+		createdAt: string;
+	}
+
+	async function handleSend(content: string, attachments?: FileAttachment[], explicitPlanModeContext?: ExplicitPlanModeContext) {
 		// Note: Assist mode uses normal chat flow - the assist prompt is added via the API
 
 		if (chatStore.isSecondOpinionOpen) {
@@ -455,8 +679,12 @@
 		let conversationId = chatStore.activeConversation?.id;
 		const isNewConversation = !conversationId;
 		if (!conversationId) {
-			// Create new conversation WITH current space
-			conversationId = chatStore.createConversation(settingsStore.selectedModel, currentSpace || undefined);
+			// Create new conversation WITH current space and context
+			conversationId = chatStore.createConversation(settingsStore.selectedModel, {
+				spaceId: currentSpace || undefined,
+				focusAreaId: selectedFocusAreaId || undefined,
+				taskId: focusedTask?.id || undefined
+			});
 		}
 
 		// Auto-link conversation to focused task (if applicable)
@@ -469,6 +697,12 @@
 				taskStore.linkConversation(focusedTask.id, conversationId);
 				toastStore.success(`Linked to "${focusedTask.title}"`);
 			}
+		}
+
+		// Plan Mode: Check for user readiness signals to transition to proposing phase
+		if (planMode && planMode.phase === 'eliciting' && detectUserReadiness(content)) {
+			console.log('[Plan Mode] User signaled readiness, transitioning to proposing phase');
+			await taskStore.setPlanModePhase('proposing');
 		}
 
 		chatStore.addMessage(conversationId, { role: 'user', content, attachments });
@@ -517,19 +751,54 @@
 				: null;
 
 			// Prepare focused task context (persistent task focus from taskStore)
+			// For subtasks, include parent task info and source conversation ID for context injection
+			const parentTask = focusedTask?.parentTaskId ? taskStore.getParentTask(focusedTask.id) : null;
 			const focusedTaskContext = focusedTask ? {
 				title: focusedTask.title,
 				priority: focusedTask.priority,
 				dueDate: focusedTask.dueDate?.toISOString().split('T')[0],
-				dueDateType: focusedTask.dueDateType
+				dueDateType: focusedTask.dueDateType,
+				// Subtask context for planning conversation injection
+				isSubtask: !!focusedTask.parentTaskId,
+				parentTaskTitle: parentTask?.title,
+				sourceConversationId: focusedTask.source?.conversationId
 			} : null;
 
-			// Prepare Plan Mode context if active
-			const planModeContext = planMode ? {
-				taskId: planMode.taskId,
-				taskTitle: planMode.taskTitle,
-				phase: planMode.phase
-			} : null;
+			// Prepare Plan Mode context if active (includes task metadata for time/date awareness)
+			// Use explicit override if provided (for kickoff message to avoid race condition)
+			// Otherwise derive from store state
+			let planModeContext: ExplicitPlanModeContext | null = null;
+
+			// Debug: Log the current state of planMode and planningTask
+			console.log('[Page] handleSend - Checking plan mode state:');
+			console.log('[Page]   explicitPlanModeContext:', explicitPlanModeContext ? 'PROVIDED' : 'null');
+			console.log('[Page]   planMode:', planMode ? `ACTIVE (phase=${planMode.phase}, taskId=${planMode.taskId})` : 'null');
+			console.log('[Page]   planningTask:', planningTask ? `FOUND (id=${planningTask.id}, status=${planningTask.status})` : 'null');
+
+			if (explicitPlanModeContext) {
+				// Use the explicitly passed context (avoids race condition on kickoff)
+				planModeContext = explicitPlanModeContext;
+				console.log('[Page] Using EXPLICIT planModeContext:', planModeContext.phase);
+			} else if (planMode && planningTask) {
+				// Derive from store state (for subsequent messages)
+				planModeContext = {
+					taskId: planMode.taskId,
+					taskTitle: planMode.taskTitle,
+					phase: planMode.phase,
+					exchangeCount: planMode.exchangeCount || 0,
+					priority: planningTask.priority,
+					dueDate: planningTask.dueDate?.toISOString() ?? null,
+					dueDateType: planningTask.dueDateType ?? null,
+					createdAt: planningTask.createdAt.toISOString()
+				};
+				console.log('[Page] Using DERIVED planModeContext:', planModeContext.phase, 'exchangeCount:', planModeContext.exchangeCount);
+			} else {
+				console.log('[Page] WARNING: No plan mode context available!');
+				if (!planMode) console.log('[Page]   - planMode is falsy');
+				if (!planningTask) console.log('[Page]   - planningTask is falsy');
+			}
+
+			console.log('[Page] Final planModeContext being sent:', planModeContext ? 'YES' : 'NO');
 
 			const response = await fetch('/api/chat', {
 				method: 'POST',
@@ -543,6 +812,7 @@
 					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
 					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
 					space: currentSpace,
+					focusAreaId: conv?.focusAreaId ?? focusedTask?.focusAreaId, // Use conversation's focusAreaId, or fall back to task's focusAreaId
 					assistId: assistState?.assistId || null,
 					assistPhase: assistState?.phase || null,
 					assistTasks: assistState?.tasks.map(t => t.text) || null,
@@ -587,6 +857,10 @@
 								if (parsed.status === 'searching') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: 'searching', searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'reading_document') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'reading_document', searchQuery: parsed.query
 									});
 								} else if (parsed.status === 'processing') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
@@ -646,6 +920,12 @@
 					}
 				}
 			}
+
+			// Plan Mode: Increment exchange count after successful AI response
+			if (planMode && planMode.phase === 'eliciting') {
+				await taskStore.incrementExchangeCount(planMode.taskId);
+				console.log(`[Plan Mode] Exchange count incremented to ${(planMode.exchangeCount || 0) + 1}`);
+			}
 		} catch (err) {
 			if (err instanceof Error && err.name === 'AbortError') {
 				chatStore.updateMessage(conversationId!, assistantMessageId, { isStreaming: false });
@@ -670,8 +950,12 @@
 			toastStore.warning('Please select a model first');
 			return;
 		}
-		// Create conversation with current space
-		chatStore.createConversation(selectedModel, currentSpace || undefined);
+		// Create conversation with current space and context
+		chatStore.createConversation(selectedModel, {
+			spaceId: currentSpace || undefined,
+			focusAreaId: selectedFocusAreaId || undefined,
+			taskId: focusedTask?.id || undefined
+		});
 	}
 
 	function handleModelChange(model: string) {
@@ -717,6 +1001,162 @@
 		if (conversation) {
 			chatStore.clearSummary(conversation.id);
 		}
+	}
+
+	/**
+	 * Trigger a new assistant response for an existing conversation
+	 * Used by resend/regenerate to get a new response without adding a new user message
+	 */
+	async function triggerAssistantResponse(conversationId: string) {
+		const modelToUse = chatStore.activeConversation?.model || settingsStore.selectedModel;
+		if (!modelToUse) return;
+
+		const assistantMessageId = chatStore.addMessage(conversationId, {
+			role: 'assistant',
+			content: '',
+			isStreaming: true
+		});
+
+		const controller = new AbortController();
+		chatStore.setStreaming(true, controller);
+
+		try {
+			const conv = chatStore.getConversation(conversationId);
+			const allMessages = (conv?.messages || []).filter((m) => !m.isStreaming && !m.error);
+			const systemPrompt = settingsStore.systemPrompt?.trim();
+
+			const apiMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string | Array<unknown> }> = [];
+
+			if (systemPrompt) {
+				apiMessages.push({ role: 'system', content: systemPrompt });
+			}
+
+			for (const m of allMessages) {
+				apiMessages.push({ role: m.role, content: m.content });
+			}
+
+			// Prepare focused task context (persistent task focus from taskStore)
+			// For subtasks, include parent task info and source conversation ID for context injection
+			const parentTask = focusedTask?.parentTaskId ? taskStore.getParentTask(focusedTask.id) : null;
+			const focusedTaskContext = focusedTask ? {
+				title: focusedTask.title,
+				priority: focusedTask.priority,
+				dueDate: focusedTask.dueDate?.toISOString().split('T')[0],
+				dueDateType: focusedTask.dueDateType,
+				// Subtask context for planning conversation injection
+				isSubtask: !!focusedTask.parentTaskId,
+				parentTaskTitle: parentTask?.title,
+				sourceConversationId: focusedTask.source?.conversationId
+			} : null;
+
+			const response = await fetch('/api/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					model: modelToUse,
+					messages: apiMessages,
+					temperature: settingsStore.temperature,
+					max_tokens: settingsStore.effectiveMaxTokens,
+					searchEnabled: settingsStore.webSearchEnabled,
+					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
+					space: currentSpace,
+					focusAreaId: conv?.focusAreaId, // Use conversation's saved focusAreaId
+					focusedTask: focusedTaskContext
+				}),
+				signal: controller.signal
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Request failed');
+			}
+
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+
+			if (!reader) throw new Error('No response body');
+
+			let buffer = '';
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const decoded = decoder.decode(value, { stream: true });
+				buffer += decoded;
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (!line.startsWith('data: ')) continue;
+					const data = line.slice(6);
+					if (data === '[DONE]') continue;
+
+					try {
+						const parsed = JSON.parse(data);
+						if (parsed.type === 'thinking_start') {
+							chatStore.updateMessage(conversationId, assistantMessageId, { isThinking: true });
+						} else if (parsed.type === 'thinking' && parsed.content) {
+							chatStore.appendToThinking(conversationId, assistantMessageId, parsed.content);
+						} else if (parsed.type === 'thinking_end') {
+							chatStore.updateMessage(conversationId, assistantMessageId, { isThinking: false });
+						} else if (parsed.type === 'content' && parsed.content) {
+							chatStore.appendToMessage(conversationId, assistantMessageId, parsed.content);
+						}
+					} catch {
+						// Skip invalid JSON
+					}
+				}
+			}
+
+			// Mark message as complete
+			chatStore.updateMessage(conversationId, assistantMessageId, { isStreaming: false, isThinking: false });
+		} catch (err) {
+			if ((err as Error).name !== 'AbortError') {
+				chatStore.updateMessage(conversationId, assistantMessageId, {
+					isStreaming: false,
+					error: (err as Error).message
+				});
+				toastStore.error((err as Error).message);
+			}
+		} finally {
+			chatStore.setStreaming(false);
+		}
+	}
+
+	/**
+	 * Resend a user message - deletes subsequent messages and triggers new response
+	 */
+	async function handleResend(messageId: string) {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId || !effectiveModel) return;
+
+		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
+		if (messageIndex === -1) return;
+
+		// Delete all messages after this one
+		chatStore.deleteMessagesFromIndex(conversationId, messageIndex + 1);
+
+		// Trigger new assistant response
+		await triggerAssistantResponse(conversationId);
+	}
+
+	/**
+	 * Regenerate an assistant response - deletes this message and gets new response
+	 */
+	async function handleRegenerate(messageId: string) {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId || !effectiveModel) return;
+
+		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
+		if (messageIndex === -1) return;
+
+		// Delete this assistant message and any messages after it
+		chatStore.deleteMessagesFromIndex(conversationId, messageIndex);
+
+		// Trigger new assistant response
+		await triggerAssistantResponse(conversationId);
 	}
 
 	// Second Opinion handlers (simplified)
@@ -841,7 +1281,11 @@
 
 		chatStore.closeSecondOpinion();
 
-		const newConversationId = chatStore.createConversation(opinion.modelId, currentSpace || undefined);
+		const newConversationId = chatStore.createConversation(opinion.modelId, {
+			spaceId: currentSpace || undefined,
+			focusAreaId: selectedFocusAreaId || undefined,
+			taskId: focusedTask?.id || undefined
+		});
 
 		const userMessageIndex = opinion.sourceMessageIndex - 1;
 		if (userMessageIndex >= 0) {
@@ -879,6 +1323,16 @@
 	function handleFocusTask(taskId: string) {
 		taskStore.setFocusedTask(taskId);
 
+		// Enable deep work mode in sidebar (Phase C)
+		chatStore.setFocusedTaskId(taskId);
+
+		// Auto-select the task's focus area (if it has one)
+		const task = taskStore.getTask(taskId);
+		if (task?.focusAreaId) {
+			selectedFocusAreaId = task.focusAreaId;
+			focusAreaStore.selectFocusArea(currentSpace!, task.focusAreaId);
+		}
+
 		// Clear active conversation if it's not linked to this task
 		// This ensures a clean context when focusing on a new task
 		const activeConv = chatStore.activeConversation;
@@ -904,6 +1358,8 @@
 
 	function handleExitFocus() {
 		taskStore.exitFocusMode();
+		// Disable deep work mode in sidebar (Phase C)
+		chatStore.setFocusedTaskId(null);
 	}
 
 	function handleOpenTaskPanel() {
@@ -913,48 +1369,201 @@
 	async function handleStartPlanMode() {
 		if (!focusedTask) return;
 
-		// Start plan mode
-		taskStore.startPlanMode(focusedTask.id);
+		// Start plan mode (async - persists to database)
+		const success = await taskStore.startPlanMode(focusedTask.id);
+		if (!success) {
+			toastStore.error(taskStore.error || 'Failed to start plan mode');
+			return;
+		}
 
-		// Auto-send initial message to kick off planning conversation
-		// This gives the user immediate feedback and starts the elicitation
-		const kickoffMessage = `I'd like help breaking down this task into manageable subtasks. The task is: "${focusedTask.title}". Please help me plan this effectively.`;
+		// Build a natural kickoff message that invites elicitation
+		// The system prompt instructs the AI to ask clarifying questions first
+		let kickoffMessage = `I want to plan this out: "${focusedTask.title}"`;
+
+		// Add context about urgency if there's a due date
+		if (focusedTask.dueDate) {
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			const due = new Date(focusedTask.dueDate);
+			due.setHours(0, 0, 0, 0);
+			const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+			if (diffDays < 0) {
+				kickoffMessage += ` (this was due ${Math.abs(diffDays)} days ago)`;
+			} else if (diffDays === 0) {
+				kickoffMessage += ` (due today)`;
+			} else if (diffDays === 1) {
+				kickoffMessage += ` (due tomorrow)`;
+			} else if (diffDays <= 3) {
+				kickoffMessage += ` (due in ${diffDays} days)`;
+			}
+		}
+
+		kickoffMessage += `. Help me think through this.`;
 
 		// Give a brief moment for the UI to update
 		await tick();
 
-		// Send the kickoff message (this will include planMode context via the API)
-		await handleSend(kickoffMessage);
+		// Build explicit plan mode context to avoid race condition with derived state
+		// We know the exact state at kickoff: phase is 'eliciting', exchangeCount is 0
+		const explicitContext: ExplicitPlanModeContext = {
+			taskId: focusedTask.id,
+			taskTitle: focusedTask.title,
+			phase: 'eliciting', // Always eliciting at kickoff
+			exchangeCount: 0, // Always 0 at kickoff
+			priority: focusedTask.priority,
+			dueDate: focusedTask.dueDate?.toISOString() ?? null,
+			dueDateType: focusedTask.dueDateType ?? null,
+			createdAt: focusedTask.createdAt.toISOString()
+		};
+
+		// Send the kickoff message with explicit plan mode context
+		await handleSend(kickoffMessage, undefined, explicitContext);
 	}
 
-	function handleExitPlanMode() {
-		taskStore.exitPlanMode();
+	async function handleExitPlanMode() {
+		const success = await taskStore.exitPlanMode();
+		if (!success) {
+			toastStore.error(taskStore.error || 'Failed to exit plan mode');
+		}
 	}
 
 	async function handleCreateSubtasksFromPlan() {
 		try {
 			await taskStore.createSubtasksFromPlanMode();
-			toastStore.addToast('success', 'Subtasks created successfully');
+			toastStore.success('Subtasks created successfully');
 		} catch (error) {
 			console.error('Failed to create subtasks:', error);
-			toastStore.addToast('error', 'Failed to create subtasks');
+			toastStore.error('Failed to create subtasks');
 		}
 	}
 
-	function handleUpdateProposedSubtask(id: string, title: string) {
-		taskStore.updateProposedSubtask(id, title);
+	async function handleUpdateProposedSubtask(id: string, title: string) {
+		await taskStore.updateProposedSubtask(id, { title });
 	}
 
-	function handleToggleProposedSubtask(id: string) {
-		taskStore.toggleProposedSubtask(id);
+	async function handleToggleProposedSubtask(id: string) {
+		await taskStore.toggleProposedSubtask(id);
 	}
 
-	function handleRemoveProposedSubtask(id: string) {
-		taskStore.removeProposedSubtask(id);
+	async function handleRemoveProposedSubtask(id: string) {
+		await taskStore.removeProposedSubtask(id);
 	}
 
-	function handleAddProposedSubtask() {
-		taskStore.addProposedSubtask('New subtask');
+	async function handleAddProposedSubtask() {
+		await taskStore.addProposedSubtask('New subtask');
+	}
+
+	/**
+	 * Handle user requesting to move to proposal phase from PlanModePanel
+	 * User clicked "Ready for suggestions" button
+	 */
+	async function handleRequestProposal() {
+		if (!planMode || !planningTask) return;
+
+		// Transition to proposing phase
+		await taskStore.setPlanModePhase('proposing');
+
+		// Build explicit context with 'proposing' phase to avoid race condition
+		const explicitContext: ExplicitPlanModeContext = {
+			taskId: planMode.taskId,
+			taskTitle: planMode.taskTitle,
+			phase: 'proposing', // We just transitioned to proposing
+			exchangeCount: planMode.exchangeCount || 0,
+			priority: planningTask.priority,
+			dueDate: planningTask.dueDate?.toISOString() ?? null,
+			dueDateType: planningTask.dueDateType ?? null,
+			createdAt: planningTask.createdAt.toISOString()
+		};
+
+		// Send a message to trigger the proposal with explicit context
+		await handleSend('Go ahead and suggest a breakdown.', undefined, explicitContext);
+	}
+
+	// Context handlers
+	function handleOpenAddContext() {
+		if (!focusedTask) return;
+		contextModalTaskId = focusedTask.id;
+		showAddContextModal = true;
+	}
+
+	function handleTaskPanelAddContext(taskId: string) {
+		contextModalTaskId = taskId;
+		showAddContextModal = true;
+	}
+
+	function handleCloseAddContext() {
+		showAddContextModal = false;
+		contextModalTaskId = null;
+	}
+
+	async function handleLinkDocument(docId: string, role: DocumentContextRole) {
+		const taskId = contextModalTaskId || focusedTask?.id;
+		if (!taskId) return;
+		await documentStore.linkToTask(docId, taskId, role);
+		// Reload context for Plan Mode
+		if (taskId === focusedTask?.id) {
+			taskStore.clearTaskContext(taskId);
+			await taskStore.loadTaskContext(taskId);
+		}
+	}
+
+	async function handleUnlinkDocument(docId: string) {
+		if (!focusedTask) return;
+		await documentStore.unlinkFromTask(docId, focusedTask.id);
+		// Reload context for Plan Mode
+		taskStore.clearTaskContext(focusedTask.id);
+		await taskStore.loadTaskContext(focusedTask.id);
+	}
+
+	async function handleLinkRelatedTask(targetId: string, type: TaskRelationshipType) {
+		const taskId = contextModalTaskId || focusedTask?.id;
+		if (!taskId) return;
+		await taskStore.linkRelatedTask(taskId, targetId, type);
+		// Reload context for Plan Mode
+		if (taskId === focusedTask?.id) {
+			taskStore.clearTaskContext(taskId);
+			await taskStore.loadTaskContext(taskId);
+		}
+	}
+
+	async function handleUnlinkRelatedTask(targetId: string) {
+		if (!focusedTask) return;
+		await taskStore.unlinkRelatedTask(focusedTask.id, targetId);
+		// Reload context for Plan Mode
+		taskStore.clearTaskContext(focusedTask.id);
+		await taskStore.loadTaskContext(focusedTask.id);
+	}
+
+	function handleDocumentUploaded() {
+		showAddContextModal = false;
+		contextModalTaskId = null;
+	}
+
+	// Manage Context handlers
+	function handleOpenManageContext() {
+		showManageContextModal = true;
+	}
+
+	function handleCloseManageContext() {
+		showManageContextModal = false;
+	}
+
+	async function handleUpdateTaskFocusArea(focusAreaId: string | null) {
+		if (!focusedTask) return;
+
+		// Update the task's focus area
+		await taskStore.updateTask(focusedTask.id, { focusAreaId });
+
+		// Update ALL conversations linked to this task
+		// This ensures context consistency across all task-related chats
+		const linkedConversations = chatStore.getConversationsForTask(focusedTask.id);
+		for (const conv of linkedConversations) {
+			chatStore.updateConversationContext(conv.id, { focusAreaId });
+		}
+
+		// Update local focus area selection
+		selectedFocusAreaId = focusAreaId;
 	}
 
 	// Greeting handlers
@@ -970,6 +1579,124 @@
 
 	function handleGreetingDismiss() {
 		greetingDismissed = true;
+	}
+
+	// Focus Area handlers
+	function handleFocusAreaSelect(id: string | null) {
+		selectedFocusAreaId = id;
+		focusAreaStore.selectFocusArea(currentSpace!, id);
+	}
+
+	function handleAddFocusArea() {
+		editingFocusArea = null;
+		showFocusAreaModal = true;
+	}
+
+	function handleEditFocusArea(focusArea?: FocusArea) {
+		// Accept focusArea from pill edit button, or fall back to selectedFocusArea
+		const fa = focusArea || selectedFocusArea;
+		if (fa) {
+			editingFocusArea = fa;
+			showFocusAreaModal = true;
+		}
+	}
+
+	async function handleCreateFocusArea(input: CreateFocusAreaInput) {
+		const created = await focusAreaStore.createFocusArea(input);
+		if (created) {
+			// Auto-select the newly created focus area
+			selectedFocusAreaId = created.id;
+			toastStore.success(`Created "${created.name}"`);
+		}
+	}
+
+	async function handleUpdateFocusArea(id: string, input: UpdateFocusAreaInput) {
+		const updated = await focusAreaStore.updateFocusArea(id, input);
+		if (updated) {
+			toastStore.success(`Updated "${updated.name}"`);
+		}
+	}
+
+	async function handleDeleteFocusArea(id: string) {
+		const focusArea = focusAreaStore.getFocusAreaById(id);
+		const success = await focusAreaStore.deleteFocusArea(id);
+		if (success) {
+			// Clear selection if we deleted the selected focus area
+			if (selectedFocusAreaId === id) {
+				selectedFocusAreaId = null;
+			}
+			toastStore.success(`Deleted "${focusArea?.name}"`);
+		}
+	}
+
+	function handleCloseFocusAreaModal() {
+		showFocusAreaModal = false;
+		editingFocusArea = null;
+	}
+
+	// Space handlers
+	async function handleUpdateSpace(id: string, input: import('$lib/types/spaces').UpdateSpaceInput) {
+		const updated = await spacesStore.updateSpace(id, input);
+		if (updated) {
+			toastStore.success('Space context updated');
+		}
+	}
+
+	// BringToContext handlers (Phase C - cross-context navigation)
+	function handleOpenInOrigin() {
+		if (!bringToContextConversation) return;
+
+		const conv = bringToContextConversation;
+		showBringToContextModal = false;
+		bringToContextConversation = null;
+
+		// Navigate to the conversation's original context
+		if (conv.spaceId) {
+			// Navigate to the space and set the conversation active
+			goto(`/spaces/${conv.spaceId}`);
+			// Small delay to let the navigation complete
+			setTimeout(() => {
+				chatStore.setActiveConversation(conv.id);
+				// If conversation is linked to a task, enter deep work mode
+				if (conv.taskId) {
+					const linkedTask = taskStore.getTaskForConversation(conv.id);
+					if (linkedTask) {
+						taskStore.setFocusedTask(linkedTask.id);
+						chatStore.setFocusedTaskId(linkedTask.id);
+					}
+				}
+			}, 100);
+		} else {
+			// Conversation is from main (no space)
+			goto('/');
+			setTimeout(() => {
+				chatStore.setActiveConversation(conv.id);
+			}, 100);
+		}
+	}
+
+	function handleBringHere() {
+		if (!bringToContextConversation) return;
+
+		const conv = bringToContextConversation;
+		showBringToContextModal = false;
+		bringToContextConversation = null;
+
+		// Update conversation's context to current space/focus area
+		chatStore.updateConversationContext(conv.id, {
+			spaceId: currentSpace || null,
+			focusAreaId: selectedFocusAreaId,
+			taskId: focusedTask?.id || null
+		});
+
+		// Now open it
+		chatStore.setActiveConversation(conv.id);
+		toastStore.success(`Moved "${conv.title}" to ${spaceConfig?.name || 'this context'}`);
+	}
+
+	function handleCloseBringToContext() {
+		showBringToContextModal = false;
+		bringToContextConversation = null;
 	}
 
 	// Assist handlers
@@ -1019,7 +1746,8 @@
 					assistId: assistState.assistId,
 					messages: apiMessages,
 					model: modelToUse,
-					space: currentSpace,
+					spaceId: currentSpace,
+					focusAreaId: selectedFocusAreaId,
 					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
 					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
 				}),
@@ -1136,14 +1864,28 @@
 			<span class="font-bold text-lg text-gradient hidden sm:inline">StratAI</span>
 		</a>
 
-		<!-- Space Badge -->
+		<!-- Space Badge with Edit Button -->
 		{#if spaceConfig && currentSpace}
-			<div
-				class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border"
-				style="background: var(--space-accent-muted); border-color: var(--space-accent-ring); color: var(--space-accent);"
-			>
-				<SpaceIcon space={currentSpace} size="sm" />
-				<span class="hidden sm:inline">{spaceConfig.name}</span>
+			<div class="flex items-center gap-1">
+				<div
+					class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border"
+					style="background: var(--space-accent-muted); border-color: var(--space-accent-ring); color: var(--space-accent);"
+				>
+					<SpaceIcon space={currentSpace} size="sm" />
+					<span class="hidden sm:inline">{spaceConfig.name}</span>
+				</div>
+				<!-- Edit Space Context Button -->
+				<button
+					type="button"
+					class="p-1.5 rounded-md text-surface-400 hover:text-surface-200 hover:bg-surface-700 transition-all"
+					title="Edit space context"
+					onclick={() => showSpaceModal = true}
+				>
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+					</svg>
+				</button>
 			</div>
 
 			<!-- Assist Dropdown -->
@@ -1183,9 +1925,10 @@
 				onCompleteTask={handleCompleteTask}
 				onSwitchTask={handleSwitchTask}
 				onExitFocus={handleExitFocus}
+				onManageContext={handleOpenManageContext}
 			/>
 			<TaskBadge
-				space={currentSpace}
+				spaceId={currentSpace}
 				onOpenPanel={handleOpenTaskPanel}
 				onFocusTask={handleFocusTask}
 				onCompleteTask={(id) => handleCompleteTask(id)}
@@ -1221,6 +1964,20 @@
 		</form>
 	</div>
 </header>
+
+<!-- Focus Area Pills Bar (always show so users can add first focus area) -->
+{#if currentSpace}
+	<div class="focus-area-bar">
+		<FocusAreaPills
+			{focusAreas}
+			selectedId={selectedFocusAreaId}
+			onSelect={handleFocusAreaSelect}
+			onAdd={handleAddFocusArea}
+			onEdit={handleEditFocusArea}
+			spaceColor={spaceConfig?.accentColor || '#6b7280'}
+		/>
+	</div>
+{/if}
 
 <div class="flex-1 flex overflow-hidden">
 	<!-- Mobile backdrop -->
@@ -1320,6 +2077,7 @@
 					{/if}
 				</div>
 			{:else}
+				<!-- Pinned Section -->
 				{#if hasPinnedResults}
 					<div class="pinned-section" in:fly={{ y: -10, duration: 200 }}>
 						<div class="section-header">
@@ -1339,15 +2097,17 @@
 								onpin={() => handlePinConversation(conversation.id)}
 								onrename={(title) => handleRenameConversation(conversation.id, title)}
 								onexport={() => handleExportConversation(conversation.id)}
+								onFocusTask={handleFocusTask}
 							/>
 						{/each}
 					</div>
-					{#if filteredUnpinned.length > 0}
+					{#if hasCurrentResults}
 						<div class="section-divider"></div>
 					{/if}
 				{/if}
 
-				{#if filteredUnpinned.length > 0}
+				<!-- Current Context Section -->
+				{#if hasCurrentResults}
 					{#if hasPinnedResults}
 						<div class="section-header mt-1">
 							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1356,7 +2116,7 @@
 							<span>Recent</span>
 						</div>
 					{/if}
-					{#each filteredUnpinned as conversation (conversation.id)}
+					{#each filteredCurrent as conversation (conversation.id)}
 						<ConversationItem
 							{conversation}
 							active={conversation.id === chatStore.activeConversationId}
@@ -1367,8 +2127,95 @@
 							onpin={() => handlePinConversation(conversation.id)}
 							onrename={(title) => handleRenameConversation(conversation.id, title)}
 							onexport={() => handleExportConversation(conversation.id)}
+							onFocusTask={handleFocusTask}
 						/>
 					{/each}
+				{/if}
+
+				<!-- Other In Space Section (collapsible) - Phase C: shown when focus area selected -->
+				{#if hasOtherInSpace}
+					<div class="section-divider"></div>
+					<button
+						type="button"
+						class="section-header section-header-collapsible"
+						onclick={() => (otherInSpaceExpanded = !otherInSpaceExpanded)}
+					>
+						<svg
+							class="w-3.5 h-3.5 transform transition-transform duration-200"
+							class:rotate-90={otherInSpaceExpanded}
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+						</svg>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+						</svg>
+						<span>Other in {spaceConfig?.name || 'Space'}</span>
+						<span class="section-count">{filteredOtherInSpace.length}</span>
+					</button>
+					{#if otherInSpaceExpanded}
+						<div transition:slide={{ duration: 200 }}>
+							{#each filteredOtherInSpace as conversation (conversation.id)}
+								<ConversationItem
+									{conversation}
+									active={conversation.id === chatStore.activeConversationId}
+									menuOpen={openMenuId === conversation.id}
+									onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
+									onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+									ondelete={() => handleDeleteConversation(conversation.id)}
+									onpin={() => handlePinConversation(conversation.id)}
+									onrename={(title) => handleRenameConversation(conversation.id, title)}
+									onexport={() => handleExportConversation(conversation.id)}
+									onFocusTask={handleFocusTask}
+								/>
+							{/each}
+						</div>
+					{/if}
+				{/if}
+
+				<!-- Other Contexts Section (collapsible) - Phase C -->
+				{#if hasOtherContexts}
+					<div class="section-divider"></div>
+					<button
+						type="button"
+						class="section-header section-header-collapsible"
+						onclick={() => (otherContextsExpanded = !otherContextsExpanded)}
+					>
+						<svg
+							class="w-3.5 h-3.5 transform transition-transform duration-200"
+							class:rotate-90={otherContextsExpanded}
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+						</svg>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+						</svg>
+						<span>From Other Contexts</span>
+						<span class="section-count">{filteredOtherContexts.length}</span>
+					</button>
+					{#if otherContextsExpanded}
+						<div transition:slide={{ duration: 200 }}>
+							{#each filteredOtherContexts as conversation (conversation.id)}
+								<ConversationItem
+									{conversation}
+									active={conversation.id === chatStore.activeConversationId}
+									menuOpen={openMenuId === conversation.id}
+									onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
+									onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+									ondelete={() => handleDeleteConversation(conversation.id)}
+									onpin={() => handlePinConversation(conversation.id)}
+									onrename={(title) => handleRenameConversation(conversation.id, title)}
+									onexport={() => handleExportConversation(conversation.id)}
+									onFocusTask={handleFocusTask}
+								/>
+							{/each}
+						</div>
+					{/if}
 				{/if}
 			{/if}
 		</div>
@@ -1416,9 +2263,14 @@
 						<!-- Focused Task Welcome - replaces standard welcome when task is focused -->
 						<FocusedTaskWelcome
 							task={focusedTask}
+							documents={taskDocuments}
+							relatedTasks={taskRelatedTasks}
 							onExitFocus={handleExitFocus}
 							onOpenPanel={handleOpenTaskPanel}
 							onStartPlanMode={handleStartPlanMode}
+							onAddContext={handleOpenAddContext}
+							onRemoveDocument={handleUnlinkDocument}
+							onRemoveRelatedTask={handleUnlinkRelatedTask}
 						/>
 					{:else}
 						<WelcomeScreen hasModel={!!selectedModel} onNewChat={handleNewChat} space={currentSpace} activeAssist={assistState?.assist} />
@@ -1454,17 +2306,17 @@
 							messageIndex={index}
 							showTimestamp={settingsStore.showTimestamps}
 							canEdit={!chatStore.isStreaming}
-							onEditAndResend={(messageId: string, newContent: string) => {
+							onEditAndResend={async (messageId: string, newContent: string) => {
 								const conv = chatStore.activeConversation;
 								if (!conv) return;
 								const msgIndex = chatStore.getMessageIndex(conv.id, messageId);
 								if (msgIndex === -1) return;
 								chatStore.updateMessageContent(conv.id, messageId, newContent);
 								chatStore.deleteMessagesFromIndex(conv.id, msgIndex + 1);
-								// Trigger response handled by effect
+								await triggerAssistantResponse(conv.id);
 							}}
-							onResend={() => {}}
-							onRegenerate={() => {}}
+							onResend={handleResend}
+							onRegenerate={handleRegenerate}
 							onSecondOpinion={(idx, e) => handleSecondOpinionTrigger(idx, e)}
 						/>
 					{/each}
@@ -1492,6 +2344,13 @@
 			{isCompacting}
 			disabled={!selectedModel}
 		/>
+
+		<!-- Plan Mode hint below chat input -->
+		{#if planMode && planMode.phase === 'eliciting'}
+			<p class="text-xs text-surface-500 mt-1 ml-2 mb-2">
+				Share context about your task. Say "go ahead" when ready for suggestions.
+			</p>
+		{/if}
 	</main>
 
 	<!-- Second Opinion Panel -->
@@ -1529,9 +2388,11 @@
 	{#if showTaskPanel && currentSpace && !isAssistActive}
 		<div class="fixed top-16 right-0 bottom-0 z-30">
 			<TaskPanel
-				space={currentSpace}
+				spaceId={currentSpace}
+				focusAreaId={selectedFocusAreaId}
 				onClose={() => showTaskPanel = false}
 				onFocusTask={handleFocusTask}
+				onAddContext={handleTaskPanelAddContext}
 			/>
 		</div>
 	{/if}
@@ -1541,12 +2402,14 @@
 		<div class="fixed top-16 right-0 bottom-0 z-30">
 			<PlanModePanel
 				planMode={planMode}
+				context={taskContext}
 				onClose={handleExitPlanMode}
 				onCreateSubtasks={handleCreateSubtasksFromPlan}
 				onUpdateSubtask={handleUpdateProposedSubtask}
 				onToggleSubtask={handleToggleProposedSubtask}
 				onRemoveSubtask={handleRemoveProposedSubtask}
 				onAddSubtask={handleAddProposedSubtask}
+				onRequestProposal={handleRequestProposal}
 			/>
 		</div>
 	{/if}
@@ -1566,7 +2429,81 @@
 <!-- Settings Panel -->
 <SettingsPanel open={settingsOpen} onclose={() => settingsOpen = false} />
 
+<!-- Focus Area Modal -->
+{#if currentSpace}
+	<FocusAreaModal
+		open={showFocusAreaModal}
+		focusArea={editingFocusArea}
+		spaceId={currentSpace}
+		onClose={handleCloseFocusAreaModal}
+		onCreate={handleCreateFocusArea}
+		onUpdate={handleUpdateFocusArea}
+		onDelete={handleDeleteFocusArea}
+	/>
+{/if}
+
+<!-- Space Context Modal -->
+{#if spaceFromStore}
+	<SpaceModal
+		open={showSpaceModal}
+		space={spaceFromStore}
+		onClose={() => showSpaceModal = false}
+		onCreate={async () => {}}
+		onUpdate={handleUpdateSpace}
+	/>
+{/if}
+
+<!-- Add Context Modal -->
+{#if showAddContextModal && contextModalTaskId && currentSpace}
+	<AddContextModal
+		open={showAddContextModal}
+		taskId={contextModalTaskId}
+		spaceId={currentSpace}
+		currentDocumentIds={taskDocuments.map(d => d.documentId)}
+		currentRelatedTaskIds={taskRelatedTasks.map(t => t.task.id)}
+		onClose={handleCloseAddContext}
+		onLinkDocument={handleLinkDocument}
+		onLinkRelatedTask={handleLinkRelatedTask}
+		onUploadComplete={handleDocumentUploaded}
+	/>
+{/if}
+
+<!-- Manage Context Modal -->
+{#if showManageContextModal && focusedTask && currentSpace}
+	<ManageContextModal
+		open={showManageContextModal}
+		taskId={focusedTask.id}
+		spaceId={currentSpace}
+		currentFocusAreaId={focusedTask.focusAreaId || null}
+		onClose={handleCloseManageContext}
+		onUpdateFocusArea={handleUpdateTaskFocusArea}
+		onAddContext={handleOpenAddContext}
+	/>
+{/if}
+
+<!-- BringToContext Modal (Phase C - cross-context navigation) -->
+{#if showBringToContextModal && bringToContextConversation}
+	<BringToContextModal
+		conversation={bringToContextConversation}
+		currentContext={{
+			spaceId: currentSpace,
+			focusAreaId: selectedFocusAreaId,
+			taskId: focusedTask?.id
+		}}
+		onOpenInOrigin={handleOpenInOrigin}
+		onBringHere={handleBringHere}
+		onClose={handleCloseBringToContext}
+	/>
+{/if}
+
 <style>
+	/* Focus Area Pills Bar */
+	.focus-area-bar {
+		padding: 0.5rem 1rem;
+		background: rgba(0, 0, 0, 0.2);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
 	/* Subtle background tint when in assist mode */
 	:global(main.assist-mode) {
 		background: linear-gradient(

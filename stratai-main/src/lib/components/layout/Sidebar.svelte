@@ -1,20 +1,24 @@
 <script lang="ts">
-	import { fly, fade } from 'svelte/transition';
+	import { fly, fade, slide } from 'svelte/transition';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import ConversationItem from './ConversationItem.svelte';
 
 	interface Props {
 		onNewChat: () => void;
+		onConversationClick?: (id: string) => void;
+		onShowBringToContext?: (conversation: typeof chatStore.conversationList[0]) => void;
 	}
 
-	let { onNewChat }: Props = $props();
+	let { onNewChat, onConversationClick, onShowBringToContext }: Props = $props();
 
 	let searchQuery = $state('');
 	let searchInputRef: HTMLInputElement | undefined = $state();
 	let isSearchFocused = $state(false);
 	let openMenuId = $state<string | null>(null);
+	let otherContextsExpanded = $state(false);
 
 	function handleMenuToggle(id: string, isOpen: boolean) {
 		openMenuId = isOpen ? id : null;
@@ -43,15 +47,44 @@
 		});
 	}
 
-	// Filtered conversations split into pinned and unpinned
-	// Using $derived.by to ensure proper reactivity with searchQuery
-	let filteredPinned = $derived.by(() => filterByQuery(chatStore.pinnedConversations, searchQuery));
-	let filteredUnpinned = $derived.by(() => filterByQuery(chatStore.unpinnedConversations, searchQuery));
-	let hasResults = $derived(filteredPinned.length > 0 || filteredUnpinned.length > 0);
+	// Context-aware grouped conversations (Phase C)
+	let grouped = $derived(chatStore.groupedConversations);
+
+	// Filtered by search query
+	let filteredPinned = $derived.by(() => filterByQuery(grouped.pinned, searchQuery));
+	let filteredCurrent = $derived.by(() => filterByQuery(grouped.current, searchQuery));
+	let filteredOtherContexts = $derived.by(() => filterByQuery(grouped.otherContexts, searchQuery));
+
+	let hasResults = $derived(
+		filteredPinned.length > 0 || filteredCurrent.length > 0 || filteredOtherContexts.length > 0
+	);
 	let hasPinnedResults = $derived(filteredPinned.length > 0);
+	let hasCurrentResults = $derived(filteredCurrent.length > 0);
+	let hasOtherContexts = $derived(filteredOtherContexts.length > 0);
 
 	function handleConversationClick(id: string) {
-		chatStore.setActiveConversation(id);
+		const conversation = chatStore.conversations.get(id);
+		if (!conversation) return;
+
+		// Check if conversation is in current context
+		const inContext = chatStore.isConversationInCurrentContext(conversation);
+
+		if (inContext) {
+			// Open directly
+			if (onConversationClick) {
+				onConversationClick(id);
+			} else {
+				chatStore.setActiveConversation(id);
+			}
+		} else {
+			// Show bring to context modal
+			if (onShowBringToContext) {
+				onShowBringToContext(conversation);
+			} else {
+				// Fallback: just open it
+				chatStore.setActiveConversation(id);
+			}
+		}
 	}
 
 	function handleDeleteConversation(id: string) {
@@ -265,14 +298,14 @@
 					{/each}
 				</div>
 
-				<!-- Divider between pinned and recent -->
-				{#if filteredUnpinned.length > 0}
+				<!-- Divider between pinned and current -->
+				{#if hasCurrentResults}
 					<div class="section-divider"></div>
 				{/if}
 			{/if}
 
-			<!-- Recent/Unpinned Section -->
-			{#if filteredUnpinned.length > 0}
+			<!-- Current Context Section -->
+			{#if hasCurrentResults}
 				{#if hasPinnedResults}
 					<div class="section-header mt-1">
 						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -281,7 +314,7 @@
 						<span>Recent</span>
 					</div>
 				{/if}
-				{#each filteredUnpinned as conversation (conversation.id)}
+				{#each filteredCurrent as conversation (conversation.id)}
 					<ConversationItem
 						{conversation}
 						active={conversation.id === chatStore.activeConversationId}
@@ -295,6 +328,49 @@
 						onFocusTask={handleFocusTask}
 					/>
 				{/each}
+			{/if}
+
+			<!-- Other Contexts Section (collapsible) -->
+			{#if hasOtherContexts}
+				<div class="section-divider"></div>
+				<button
+					type="button"
+					class="section-header section-header-collapsible"
+					onclick={() => (otherContextsExpanded = !otherContextsExpanded)}
+				>
+					<svg
+						class="w-3.5 h-3.5 transform transition-transform duration-200"
+						class:rotate-90={otherContextsExpanded}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+					</svg>
+					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+					</svg>
+					<span>From Spaces</span>
+					<span class="section-count">{filteredOtherContexts.length}</span>
+				</button>
+				{#if otherContextsExpanded}
+					<div transition:slide={{ duration: 200 }}>
+						{#each filteredOtherContexts as conversation (conversation.id)}
+							<ConversationItem
+								{conversation}
+								active={conversation.id === chatStore.activeConversationId}
+								menuOpen={openMenuId === conversation.id}
+								onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
+								onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+								ondelete={() => handleDeleteConversation(conversation.id)}
+								onpin={() => handlePinConversation(conversation.id)}
+								onrename={(title) => handleRenameConversation(conversation.id, title)}
+								onexport={() => handleExportConversation(conversation.id)}
+								onFocusTask={handleFocusTask}
+							/>
+						{/each}
+					</div>
+				{/if}
 			{/if}
 		{/if}
 	</div>

@@ -9,7 +9,6 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { CreateTaskInput, TaskListFilter, TaskStatus } from '$lib/types/tasks';
-import type { SpaceType } from '$lib/types/chat';
 
 // Default user ID for POC (will be replaced with auth in Phase 0.4)
 const DEFAULT_USER_ID = 'admin';
@@ -17,13 +16,15 @@ const DEFAULT_USER_ID = 'admin';
 /**
  * GET /api/tasks
  * Query params:
- * - space: Filter by space (work, research, etc.)
+ * - spaceId: Filter by space ID
+ * - focusAreaId: Filter by focus area ID
  * - status: Filter by status (active, completed, deferred) - can be comma-separated
  * - includeCompleted: Include completed tasks (default: false)
  */
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		const space = url.searchParams.get('space') as SpaceType | null;
+		const spaceId = url.searchParams.get('spaceId') ?? undefined;
+		const focusAreaId = url.searchParams.get('focusAreaId');
 		const statusParam = url.searchParams.get('status');
 		const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
 
@@ -31,8 +32,13 @@ export const GET: RequestHandler = async ({ url }) => {
 			includeCompleted
 		};
 
-		if (space) {
-			filter.space = space;
+		if (spaceId) {
+			filter.spaceId = spaceId;
+		}
+
+		// Handle focusAreaId filter (null means no focus area, undefined means any)
+		if (focusAreaId !== null) {
+			filter.focusAreaId = focusAreaId === 'null' ? null : focusAreaId || undefined;
 		}
 
 		if (statusParam) {
@@ -55,8 +61,8 @@ export const GET: RequestHandler = async ({ url }) => {
 /**
  * POST /api/tasks
  * Body can be:
- * - Single task: { title, space, priority?, dueDate?, dueDateType?, source? }
- * - Bulk tasks: { tasks: [...], space, source? }
+ * - Single task: { title, spaceId, focusAreaId?, priority?, dueDate?, dueDateType?, source? }
+ * - Bulk tasks: { tasks: [...], spaceId, focusAreaId?, source? }
  */
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -64,9 +70,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Check if bulk create
 		if (body.tasks && Array.isArray(body.tasks)) {
-			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string }) => ({
+			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string; focusAreaId?: string }) => ({
 				title: t.title,
-				space: body.space as SpaceType,
+				spaceId: body.spaceId as string,
+				focusAreaId: t.focusAreaId ?? body.focusAreaId, // Per-task or bulk level
 				priority: t.priority,
 				dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
 				dueDateType: t.dueDateType,
@@ -81,16 +88,17 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Single task create
 		const input: CreateTaskInput = {
 			title: body.title,
-			space: body.space as SpaceType,
+			spaceId: body.spaceId as string,
+			focusAreaId: body.focusAreaId,
 			priority: body.priority,
 			dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
 			dueDateType: body.dueDateType,
 			source: body.source
 		};
 
-		if (!input.title || !input.space) {
+		if (!input.title || !input.spaceId) {
 			return json(
-				{ error: 'Missing required fields: title and space' },
+				{ error: 'Missing required fields: title and spaceId' },
 				{ status: 400 }
 			);
 		}

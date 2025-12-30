@@ -1,4 +1,4 @@
-import type { Conversation, Message, SpaceType } from '$lib/types/chat';
+import type { Conversation, Message } from '$lib/types/chat';
 import type { ConversationRepository, MessageRepository, DataAccess } from './types';
 import { sql, type JSONValue } from './db';
 
@@ -17,7 +17,9 @@ interface ConversationRow {
 	refreshedAt: Date | null;
 	userId: string | null;
 	teamId: string | null;
-	space: string | null;
+	spaceId: string | null;
+	focusAreaId: string | null;
+	taskId: string | null;
 	tags: string[] | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -51,7 +53,9 @@ function rowToConversation(row: ConversationRow): Conversation {
 		continuedFromId: row.continuedFromId ?? undefined,
 		continuationSummary: row.continuationSummary ?? undefined,
 		refreshedAt: toTimestamp(row.refreshedAt),
-		space: (row.space as SpaceType) ?? null,
+		spaceId: row.spaceId ?? null,
+		focusAreaId: row.focusAreaId ?? null,
+		taskId: row.taskId ?? null,
 		tags: row.tags ?? [],
 		createdAt: toTimestamp(row.createdAt) ?? Date.now(),
 		updatedAt: toTimestamp(row.updatedAt) ?? Date.now()
@@ -68,12 +72,11 @@ function rowToConversation(row: ConversationRow): Conversation {
  */
 export const postgresConversationRepository: ConversationRepository = {
 	async findAll(userId: string): Promise<Conversation[]> {
-		// Note: tags column is Phase 0.3b+ - omitted for backwards compatibility
 		const rows = await sql<ConversationRow[]>`
 			SELECT
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
-				user_id, team_id, space,
+				user_id, team_id, space_id, focus_area_id, task_id,
 				created_at, updated_at, deleted_at
 			FROM conversations
 			WHERE user_id = ${userId}
@@ -84,12 +87,11 @@ export const postgresConversationRepository: ConversationRepository = {
 	},
 
 	async findById(id: string, userId: string): Promise<Conversation | null> {
-		// Note: tags column is Phase 0.3b+ - omitted for backwards compatibility
 		const rows = await sql<ConversationRow[]>`
 			SELECT
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
-				user_id, team_id, space,
+				user_id, team_id, space_id, focus_area_id, task_id,
 				created_at, updated_at, deleted_at
 			FROM conversations
 			WHERE id = ${id}
@@ -102,12 +104,11 @@ export const postgresConversationRepository: ConversationRepository = {
 	async create(conversation: Conversation, userId: string): Promise<void> {
 		// Use UPSERT to handle re-syncing soft-deleted conversations
 		// ON CONFLICT: update the record and clear deleted_at to "restore" it
-		// Note: tags column is Phase 0.3b+ - omitted for backwards compatibility
 		await sql`
 			INSERT INTO conversations (
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
-				user_id, space, created_at, updated_at
+				user_id, space_id, focus_area_id, task_id, created_at, updated_at
 			) VALUES (
 				${conversation.id},
 				${conversation.title},
@@ -119,7 +120,9 @@ export const postgresConversationRepository: ConversationRepository = {
 				${conversation.continuationSummary ?? null},
 				${conversation.refreshedAt ? new Date(conversation.refreshedAt) : null},
 				${userId},
-				${conversation.space ?? null},
+				${conversation.spaceId ?? null},
+				${conversation.focusAreaId ?? null},
+				${conversation.taskId ?? null},
 				${new Date(conversation.createdAt)},
 				${new Date(conversation.updatedAt)}
 			)
@@ -132,14 +135,15 @@ export const postgresConversationRepository: ConversationRepository = {
 				continued_from_id = EXCLUDED.continued_from_id,
 				continuation_summary = EXCLUDED.continuation_summary,
 				refreshed_at = EXCLUDED.refreshed_at,
-				space = EXCLUDED.space,
+				space_id = EXCLUDED.space_id,
+				focus_area_id = EXCLUDED.focus_area_id,
+				task_id = EXCLUDED.task_id,
 				updated_at = EXCLUDED.updated_at,
 				deleted_at = NULL
 		`;
 	},
 
 	async update(conversation: Conversation, userId: string): Promise<void> {
-		// Note: tags column is Phase 0.3b+ - omitted for backwards compatibility
 		await sql`
 			UPDATE conversations
 			SET
@@ -151,7 +155,9 @@ export const postgresConversationRepository: ConversationRepository = {
 				continued_from_id = ${conversation.continuedFromId ?? null},
 				continuation_summary = ${conversation.continuationSummary ?? null},
 				refreshed_at = ${conversation.refreshedAt ? new Date(conversation.refreshedAt) : null},
-				space = ${conversation.space ?? null},
+				space_id = ${conversation.spaceId ?? null},
+				focus_area_id = ${conversation.focusAreaId ?? null},
+				task_id = ${conversation.taskId ?? null},
 				updated_at = NOW()
 			WHERE id = ${conversation.id}
 				AND user_id = ${userId}
@@ -248,22 +254,21 @@ export const postgresDataAccess: DataAccess = {
 };
 
 /**
- * Find conversations by space
+ * Find conversations by space ID
  */
-export async function findBySpace(
+export async function findBySpaceId(
 	userId: string,
-	space: SpaceType
+	spaceId: string
 ): Promise<Conversation[]> {
-	// Note: tags column is Phase 0.3b+ - omitted for backwards compatibility
 	const rows = await sql<ConversationRow[]>`
 		SELECT
 			id, title, model, messages, pinned, summary,
 			continued_from_id, continuation_summary, refreshed_at,
-			user_id, team_id, space,
+			user_id, team_id, space_id, focus_area_id, task_id, tags,
 			created_at, updated_at, deleted_at
 		FROM conversations
 		WHERE user_id = ${userId}
-			AND space = ${space}
+			AND space_id = ${spaceId}
 			AND deleted_at IS NULL
 		ORDER BY pinned DESC, updated_at DESC
 	`;
@@ -279,12 +284,11 @@ export async function searchConversations(
 	query: string,
 	limit = 20
 ): Promise<Conversation[]> {
-	// Note: tags column is Phase 0.3b+ - omitted for backwards compatibility
 	const rows = await sql<ConversationRow[]>`
 		SELECT
 			id, title, model, messages, pinned, summary,
 			continued_from_id, continuation_summary, refreshed_at,
-			user_id, team_id, space,
+			user_id, team_id, space_id, focus_area_id, task_id, tags,
 			created_at, updated_at, deleted_at
 		FROM conversations
 		WHERE user_id = ${userId}
@@ -309,21 +313,20 @@ export async function getConversationsPaginated(
 	userId: string,
 	offset = 0,
 	limit = 50,
-	space?: SpaceType
+	spaceId?: string
 ): Promise<{ conversations: Conversation[]; total: number }> {
 	// Build query with optional space filter
-	// Note: tags column is Phase 0.3b+ - omitted for backwards compatibility
 	const [rows, countResult] = await Promise.all([
-		space
+		spaceId
 			? sql<ConversationRow[]>`
 				SELECT
 					id, title, model, messages, pinned, summary,
 					continued_from_id, continuation_summary, refreshed_at,
-					user_id, team_id, space,
+					user_id, team_id, space_id, focus_area_id, task_id, tags,
 					created_at, updated_at, deleted_at
 				FROM conversations
 				WHERE user_id = ${userId}
-					AND space = ${space}
+					AND space_id = ${spaceId}
 					AND deleted_at IS NULL
 				ORDER BY pinned DESC, updated_at DESC
 				OFFSET ${offset}
@@ -333,7 +336,7 @@ export async function getConversationsPaginated(
 				SELECT
 					id, title, model, messages, pinned, summary,
 					continued_from_id, continuation_summary, refreshed_at,
-					user_id, team_id, space,
+					user_id, team_id, space_id, focus_area_id, task_id, tags,
 					created_at, updated_at, deleted_at
 				FROM conversations
 				WHERE user_id = ${userId}
@@ -342,12 +345,12 @@ export async function getConversationsPaginated(
 				OFFSET ${offset}
 				LIMIT ${limit}
 			`,
-		space
+		spaceId
 			? sql<{ count: string }[]>`
 				SELECT COUNT(*) as count
 				FROM conversations
 				WHERE user_id = ${userId}
-					AND space = ${space}
+					AND space_id = ${spaceId}
 					AND deleted_at IS NULL
 			`
 			: sql<{ count: string }[]>`

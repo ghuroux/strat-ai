@@ -1,10 +1,52 @@
-import type { Conversation, Message, SpaceType } from '$lib/types/chat';
+import type { Conversation, Message } from '$lib/types/chat';
 import type {
 	ArenaBattle,
 	ArenaJudgment,
 	BattleStatus
 } from '$lib/stores/arena.svelte';
-import type { Task, CreateTaskInput, UpdateTaskInput, TaskListFilter, CreateSubtaskInput } from '$lib/types/tasks';
+import type {
+	Task,
+	CreateTaskInput,
+	UpdateTaskInput,
+	TaskListFilter,
+	CreateSubtaskInput,
+	TaskRelationshipType,
+	RelatedTaskInfo,
+	PlanningData
+} from '$lib/types/tasks';
+import type {
+	Document,
+	CreateDocumentInput,
+	UpdateDocumentInput,
+	TaskDocument,
+	DocumentContextRole,
+	DocumentWithTaskInfo
+} from '$lib/types/documents';
+import type {
+	FocusArea,
+	CreateFocusAreaInput,
+	UpdateFocusAreaInput
+} from '$lib/types/focus-areas';
+import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
+
+// =====================================================
+// Tool Cache Types (for document reading, etc.)
+// =====================================================
+
+export interface ToolCacheEntry {
+	id: string;
+	conversationId: string;
+	userId: string;
+	toolName: string;
+	paramsHash: string;
+	fullResult: string;
+	summary: string | null;
+	tokenCount: number | null;
+	accessCount: number;
+	createdAt: Date;
+	lastAccessedAt: Date;
+	expiresAt: Date;
+}
 
 /**
  * Repository interface for Conversation entities
@@ -116,9 +158,10 @@ export interface TaskRepository {
 	createBulk(inputs: CreateTaskInput[], userId: string): Promise<Task[]>;
 	update(id: string, updates: UpdateTaskInput, userId: string): Promise<Task | null>;
 	complete(id: string, userId: string, notes?: string): Promise<Task | null>;
+	updatePlanningData(id: string, planningData: PlanningData | null, userId: string): Promise<Task | null>;
 	delete(id: string, userId: string): Promise<void>;
 	count(userId: string, filter?: TaskListFilter): Promise<number>;
-	getActiveBySpace(userId: string, space: SpaceType): Promise<Task[]>;
+	getActiveBySpaceId(userId: string, spaceId: string): Promise<Task[]>;
 	// Task-conversation linking
 	linkConversation(taskId: string, conversationId: string, userId: string): Promise<void>;
 	unlinkConversation(taskId: string, conversationId: string, userId: string): Promise<void>;
@@ -130,4 +173,128 @@ export interface TaskRepository {
 	getSubtaskCount(taskId: string, userId: string): Promise<number>;
 	reorderSubtasks(parentId: string, subtaskIds: string[], userId: string): Promise<void>;
 	updateSubtaskContext(taskId: string, contextSummary: string, userId: string): Promise<void>;
+	deleteSubtasks(parentId: string, userId: string): Promise<number>;
+	// Related task methods (Task Context System)
+	linkRelatedTask(
+		sourceTaskId: string,
+		targetTaskId: string,
+		relationshipType: TaskRelationshipType,
+		userId: string
+	): Promise<void>;
+	unlinkRelatedTask(sourceTaskId: string, targetTaskId: string, userId: string): Promise<void>;
+	getRelatedTasks(taskId: string, userId: string): Promise<RelatedTaskInfo[]>;
+}
+
+// =====================================================
+// Document Types (Task Context System)
+// =====================================================
+
+/**
+ * Repository interface for Document entities
+ */
+export interface DocumentRepository {
+	findAll(userId: string, spaceId?: string): Promise<Document[]>;
+	findById(id: string, userId: string): Promise<Document | null>;
+	findByHash(contentHash: string, userId: string): Promise<Document | null>;
+	create(input: CreateDocumentInput, userId: string): Promise<Document>;
+	update(id: string, updates: UpdateDocumentInput, userId: string): Promise<Document | null>;
+	delete(id: string, userId: string): Promise<void>;
+	// Task-document linking
+	linkToTask(
+		documentId: string,
+		taskId: string,
+		role: DocumentContextRole,
+		userId: string,
+		note?: string
+	): Promise<TaskDocument>;
+	unlinkFromTask(documentId: string, taskId: string, userId: string): Promise<void>;
+	getDocumentsForTask(taskId: string, userId: string): Promise<DocumentWithTaskInfo[]>;
+	getTaskIdsForDocument(documentId: string, userId: string): Promise<string[]>;
+}
+
+// =====================================================
+// Focus Area Types
+// =====================================================
+
+/**
+ * Repository interface for Focus Area entities
+ */
+export interface FocusAreaRepository {
+	findAll(userId: string, spaceId?: string): Promise<FocusArea[]>;
+	findById(id: string, userId: string): Promise<FocusArea | null>;
+	findByName(spaceId: string, name: string, userId: string): Promise<FocusArea | null>;
+	create(input: CreateFocusAreaInput, userId: string): Promise<FocusArea>;
+	update(id: string, updates: UpdateFocusAreaInput, userId: string): Promise<FocusArea | null>;
+	delete(id: string, userId: string): Promise<boolean>;
+	reorder(spaceId: string, orderedIds: string[], userId: string): Promise<void>;
+	getTaskCount(id: string, userId: string): Promise<number>;
+	getConversationCount(id: string, userId: string): Promise<number>;
+}
+
+// =====================================================
+// Space Types
+// =====================================================
+
+/**
+ * Repository interface for Space entities
+ */
+export interface SpaceRepository {
+	findAll(userId: string): Promise<Space[]>;
+	findBySlug(slug: string, userId: string): Promise<Space | null>;
+	findById(id: string, userId: string): Promise<Space | null>;
+	create(input: CreateSpaceInput, userId: string): Promise<Space>;
+	update(id: string, updates: UpdateSpaceInput, userId: string): Promise<Space | null>;
+	delete(id: string, userId: string): Promise<boolean>;
+	ensureSystemSpaces(userId: string): Promise<void>;
+	reorder(orderedIds: string[], userId: string): Promise<void>;
+	getCustomSpaceCount(userId: string): Promise<number>;
+}
+
+// =====================================================
+// Tool Cache Types
+// =====================================================
+
+/**
+ * Repository interface for Tool Result Cache
+ * Caches tool results (like read_document) for token efficiency
+ */
+export interface ToolCacheRepository {
+	/**
+	 * Find a cached result by tool name and params hash
+	 * Returns null if not found or expired
+	 */
+	findByParams(
+		conversationId: string,
+		toolName: string,
+		paramsHash: string,
+		userId: string
+	): Promise<ToolCacheEntry | null>;
+
+	/**
+	 * Store a new tool result in cache
+	 */
+	create(
+		conversationId: string,
+		toolName: string,
+		paramsHash: string,
+		fullResult: string,
+		summary: string | null,
+		tokenCount: number | null,
+		userId: string
+	): Promise<ToolCacheEntry>;
+
+	/**
+	 * Update access tracking and refresh TTL
+	 */
+	touch(id: string, userId: string): Promise<void>;
+
+	/**
+	 * Delete all cache entries for a conversation
+	 */
+	deleteByConversation(conversationId: string, userId: string): Promise<void>;
+
+	/**
+	 * Clean up expired entries
+	 */
+	cleanupExpired(): Promise<number>;
 }

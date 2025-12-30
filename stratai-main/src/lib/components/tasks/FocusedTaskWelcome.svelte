@@ -1,16 +1,33 @@
 <script lang="ts">
 	import { fade, fly, slide } from 'svelte/transition';
-	import type { Task } from '$lib/types/tasks';
+	import type { Task, RelatedTaskInfo } from '$lib/types/tasks';
+	import type { TaskDocumentLink } from '$lib/stores/documents.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import TaskContextSection from './TaskContextSection.svelte';
 
 	interface Props {
 		task: Task;
+		documents?: TaskDocumentLink[];
+		relatedTasks?: RelatedTaskInfo[];
 		onExitFocus: () => void;
 		onOpenPanel: () => void;
 		onStartPlanMode?: () => void;
+		onAddContext?: () => void;
+		onRemoveDocument?: (id: string) => void;
+		onRemoveRelatedTask?: (id: string) => void;
 	}
 
-	let { task, onExitFocus, onOpenPanel, onStartPlanMode }: Props = $props();
+	let {
+		task,
+		documents = [],
+		relatedTasks = [],
+		onExitFocus,
+		onOpenPanel,
+		onStartPlanMode,
+		onAddContext,
+		onRemoveDocument,
+		onRemoveRelatedTask
+	}: Props = $props();
 
 	// Subtask state
 	let subtasks = $derived(taskStore.getSubtasksForTask(task.id));
@@ -18,6 +35,14 @@
 	let completedSubtasks = $derived(subtasks.filter(s => s.status === 'completed').length);
 	let isSubtask = $derived(!!task.parentTaskId);
 	let parentTask = $derived(isSubtask ? taskStore.getParentTask(task.id) : null);
+
+	// Plan completion state - shows celebratory UI after Plan Mode creates subtasks
+	let planJustCompleted = $derived(taskStore.planJustCompleted);
+	let isPlanComplete = $derived(planJustCompleted?.taskId === task.id);
+	let firstSubtask = $derived(isPlanComplete && planJustCompleted?.firstSubtaskId
+		? subtasks.find(s => s.id === planJustCompleted.firstSubtaskId) || subtasks[0]
+		: subtasks[0]
+	);
 
 	// Format due date for display
 	function formatDueDate(date: Date): string {
@@ -60,6 +85,16 @@
 		if (parentTask) {
 			taskStore.setFocusedTask(parentTask.id);
 		}
+	}
+
+	// Start a subtask from Plan Complete screen (clears the completion state)
+	function startSubtask(subtaskId: string) {
+		taskStore.startSubtaskFromPlanComplete(subtaskId);
+	}
+
+	// Dismiss the Plan Complete celebration and show normal subtask list
+	function dismissPlanComplete() {
+		taskStore.clearPlanJustCompleted();
 	}
 </script>
 
@@ -177,8 +212,83 @@
 			</nav>
 		{/if}
 
-		{#if hasSubtasks}
-			<!-- Subtask List -->
+		{#if isPlanComplete && hasSubtasks}
+			<!-- Plan Complete Celebration -->
+			<div class="space-y-6" in:fly={{ y: 20, duration: 400 }}>
+				<!-- Success Card -->
+				<div class="p-6 rounded-2xl border-2 border-green-500/30 bg-green-500/5 text-center plan-complete-glow">
+					<!-- Success Icon -->
+					<div class="w-16 h-16 rounded-full bg-green-500/20 mx-auto mb-4 flex items-center justify-center">
+						<svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+						</svg>
+					</div>
+
+					<h3 class="text-xl font-semibold text-green-400 mb-2">Plan Created</h3>
+					<p class="text-surface-400 mb-6">
+						{planJustCompleted?.subtaskCount} subtask{planJustCompleted?.subtaskCount === 1 ? '' : 's'} ready to work on
+					</p>
+
+					<!-- Primary CTA: Start First Subtask -->
+					{#if firstSubtask}
+						<button
+							type="button"
+							class="w-full py-3.5 px-6 rounded-xl font-medium text-white transition-all duration-200 flex items-center justify-center gap-3 mb-4"
+							style="background: var(--space-accent, #3b82f6);"
+							onclick={() => startSubtask(firstSubtask.id)}
+						>
+							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							Start: {firstSubtask.title}
+						</button>
+					{/if}
+				</div>
+
+				<!-- Other Subtasks -->
+				{#if subtasks.length > 1}
+					<div class="p-4 rounded-xl border bg-surface-800/50 border-surface-700 text-left">
+						<p class="text-xs text-surface-500 uppercase tracking-wider mb-3">Or start with a different subtask</p>
+						<div class="space-y-2">
+							{#each subtasks as subtask (subtask.id)}
+								{#if subtask.id !== firstSubtask?.id}
+									<button
+										type="button"
+										class="w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left bg-surface-700/50 hover:bg-surface-700"
+										onclick={() => startSubtask(subtask.id)}
+									>
+										{#if subtask.subtaskType === 'action'}
+											<div class="w-5 h-5 rounded border border-surface-500 flex items-center justify-center"></div>
+										{:else}
+											<svg class="w-5 h-5 text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+											</svg>
+										{/if}
+										<span class="flex-1 text-sm text-surface-200">{subtask.title}</span>
+										<svg class="w-4 h-4 text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+										</svg>
+									</button>
+								{/if}
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Dismiss / Chat Option -->
+				<div class="text-center">
+					<button
+						type="button"
+						class="text-sm text-surface-500 hover:text-surface-300 transition-colors"
+						onclick={dismissPlanComplete}
+					>
+						Or continue chatting about this task
+					</button>
+				</div>
+			</div>
+		{:else if hasSubtasks}
+			<!-- Normal Subtask List (when not just completing plan mode) -->
 			<div class="space-y-4" in:fly={{ y: 20, duration: 300, delay: 100 }}>
 				<div class="p-5 rounded-xl border bg-surface-800/50 border-surface-700 text-left">
 					<div class="flex items-center justify-between mb-4">
@@ -237,8 +347,22 @@
 				</div>
 			</div>
 		{:else if !isSubtask && !hasLinkedConversations}
+			<!-- Context Section -->
+			{#if onAddContext}
+				<div class="mb-6" in:fly={{ y: 20, duration: 300, delay: 100 }}>
+					<TaskContextSection
+						taskId={task.id}
+						{documents}
+						{relatedTasks}
+						{onAddContext}
+						{onRemoveDocument}
+						{onRemoveRelatedTask}
+					/>
+				</div>
+			{/if}
+
 			<!-- Plan Mode Action Buttons (for parent tasks without subtasks) -->
-			<div class="space-y-6" in:fly={{ y: 20, duration: 300, delay: 100 }}>
+			<div class="space-y-6" in:fly={{ y: 20, duration: 300, delay: 150 }}>
 				<!-- Plan Mode CTA -->
 				<div class="p-5 rounded-xl border bg-surface-800/50 border-surface-700 text-center">
 					<div class="w-12 h-12 rounded-xl mx-auto mb-4 flex items-center justify-center bg-primary-500/20">
@@ -319,6 +443,27 @@
 	/* Subtle glow based on task color */
 	.task-header-glow {
 		box-shadow: 0 0 40px color-mix(in srgb, var(--task-accent, #3b82f6) 15%, transparent);
+	}
+
+	/* Green glow for plan completion celebration */
+	.plan-complete-glow {
+		box-shadow: 0 0 60px rgba(34, 197, 94, 0.15);
+		animation: plan-complete-pulse 2s ease-in-out;
+	}
+
+	@keyframes plan-complete-pulse {
+		0% {
+			box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+			transform: scale(0.98);
+		}
+		50% {
+			box-shadow: 0 0 80px rgba(34, 197, 94, 0.2);
+			transform: scale(1);
+		}
+		100% {
+			box-shadow: 0 0 60px rgba(34, 197, 94, 0.15);
+			transform: scale(1);
+		}
 	}
 
 	/* Subtle bounce animation for pointer */

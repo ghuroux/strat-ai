@@ -40,10 +40,10 @@ export const SPACES: Record<SpaceType, SpaceConfig> = {
 };
 
 /**
- * Spaces enabled for the current phase (POC)
- * Only Work and Research are available initially
+ * System spaces enabled for the application
+ * All four system spaces are now available
  */
-export const ENABLED_SPACES: SpaceType[] = ['work', 'research'];
+export const ENABLED_SPACES: SpaceType[] = ['work', 'research', 'random', 'personal'];
 
 /**
  * Get space config by ID, returns undefined if not found or not enabled

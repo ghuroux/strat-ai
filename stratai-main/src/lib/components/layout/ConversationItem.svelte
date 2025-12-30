@@ -2,6 +2,7 @@
 	import { fly, fade } from 'svelte/transition';
 	import type { Conversation } from '$lib/types/chat';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { spacesStore } from '$lib/stores/spaces.svelte';
 
 	interface Props {
 		conversation: Conversation;
@@ -38,6 +39,13 @@
 
 	// Get linked task for this conversation
 	let linkedTask = $derived(taskStore.getTaskForConversation(conversation.id));
+
+	// Get space color for border indicator (Phase C: Chat Context Awareness)
+	let spaceColor = $derived.by(() => {
+		if (!conversation.spaceId) return null;
+		const space = spacesStore.getSpaceById(conversation.spaceId);
+		return space?.color || null;
+	});
 
 	function formatTime(timestamp: number): string {
 		const date = new Date(timestamp);
@@ -150,12 +158,13 @@
 </script>
 
 <div
-	class="conversation-item {active ? 'active' : ''}"
+	class="conversation-item {active ? 'active' : ''} {spaceColor ? 'has-space-indicator' : ''}"
 	role="button"
 	tabindex="0"
 	onclick={handleItemClick}
 	onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && handleItemClick()}
 	in:fly={{ x: -20, duration: 200 }}
+	style:--space-indicator-color={spaceColor || 'transparent'}
 >
 	<!-- Content -->
 	<div class="item-content">
@@ -273,7 +282,13 @@
 		margin: 0 0.5rem;
 		border-radius: 0.5rem;
 		cursor: pointer;
-		transition: background-color 0.15s ease;
+		transition: background-color 0.15s ease, border-color 0.15s ease;
+		/* Space indicator border */
+		border-left: 3px solid transparent;
+	}
+
+	.conversation-item.has-space-indicator {
+		border-left-color: var(--space-indicator-color);
 	}
 
 	.conversation-item:hover {

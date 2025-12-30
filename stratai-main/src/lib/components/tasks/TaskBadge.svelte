@@ -2,23 +2,22 @@
 	import { fly, fade } from 'svelte/transition';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import type { Task } from '$lib/types/tasks';
-	import type { SpaceType } from '$lib/types/chat';
 
 	interface Props {
-		space: SpaceType;
+		spaceId: string;
 		onOpenPanel?: () => void;
 		onFocusTask?: (taskId: string) => void;
 		onCompleteTask?: (taskId: string) => void;
 	}
 
-	let { space, onOpenPanel, onFocusTask, onCompleteTask }: Props = $props();
+	let { spaceId, onOpenPanel, onFocusTask, onCompleteTask }: Props = $props();
 
 	// State
 	let isOpen = $state(false);
 	let dropdownRef: HTMLDivElement | undefined = $state();
 
 	// Derived
-	let tasks = $derived(taskStore.getPendingTasksForSpace(space));
+	let tasks = $derived(taskStore.getPendingTasksForSpaceId(spaceId));
 	let count = $derived(tasks.length);
 	let hasHighPriority = $derived(tasks.some(t => t.priority === 'high'));
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import WelcomeScreen from '$lib/components/chat/WelcomeScreen.svelte';
@@ -10,13 +11,15 @@
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
 	import SecondOpinionPanel from '$lib/components/chat/SecondOpinionPanel.svelte';
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
+	import BringToContextModal from '$lib/components/chat/BringToContextModal.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
+	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { modelSupportsVision } from '$lib/config/model-capabilities';
 	import type { ChatCompletionChunk } from '$lib/types/api';
-	import type { FileAttachment } from '$lib/types/chat';
+	import type { FileAttachment, Conversation } from '$lib/types/chat';
 
 	// Svelte 5: Use $state for local reactive state
 	let messagesContainer: HTMLElement | undefined = $state();
@@ -44,6 +47,10 @@
 	let pendingSecondOpinionIndex = $state<number | null>(null);
 	let secondOpinion = $derived(chatStore.secondOpinion);
 	let isSecondOpinionOpen = $derived(chatStore.isSecondOpinionOpen);
+
+	// Bring to Context Modal state (Phase C)
+	let showBringToContextModal = $state(false);
+	let bringToContextConversation = $state<Conversation | null>(null);
 
 	// Apply saved theme on mount
 	onMount(() => {
@@ -460,6 +467,57 @@
 			return;
 		}
 		chatStore.createConversation(selectedModel);
+	}
+
+	// Phase C: Cross-context navigation handlers
+	function handleShowBringToContext(conversation: Conversation) {
+		bringToContextConversation = conversation;
+		showBringToContextModal = true;
+	}
+
+	function handleOpenInOrigin() {
+		if (!bringToContextConversation) return;
+
+		const conv = bringToContextConversation;
+		showBringToContextModal = false;
+		bringToContextConversation = null;
+
+		// Navigate to the conversation's origin space
+		if (conv.spaceId) {
+			const space = spacesStore.getSpaceById(conv.spaceId);
+			if (space) {
+				// Set active conversation before navigating
+				chatStore.setActiveConversation(conv.id);
+				goto(`/spaces/${space.slug}`);
+			}
+		} else {
+			// Already in main, just open the conversation
+			chatStore.setActiveConversation(conv.id);
+		}
+	}
+
+	function handleBringHere() {
+		if (!bringToContextConversation) return;
+
+		const conv = bringToContextConversation;
+		showBringToContextModal = false;
+		bringToContextConversation = null;
+
+		// Update conversation context to current (main = no space)
+		chatStore.updateConversationContext(conv.id, {
+			spaceId: null,
+			focusAreaId: null,
+			taskId: null
+		});
+
+		// Open the conversation
+		chatStore.setActiveConversation(conv.id);
+		toastStore.success('Moved conversation to Main');
+	}
+
+	function handleCloseBringToContext() {
+		showBringToContextModal = false;
+		bringToContextConversation = null;
 	}
 
 	function handleModelChange(model: string) {
@@ -1098,7 +1156,7 @@
 
 	<div class="flex-1 flex overflow-hidden">
 		<!-- Sidebar -->
-		<Sidebar onNewChat={handleNewChat} />
+		<Sidebar onNewChat={handleNewChat} onShowBringToContext={handleShowBringToContext} />
 
 		<!-- Main Content -->
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -1219,3 +1277,14 @@
 
 <!-- Settings Panel -->
 <SettingsPanel open={settingsOpen} onclose={() => settingsOpen = false} />
+
+<!-- Bring to Context Modal (Phase C) -->
+{#if showBringToContextModal && bringToContextConversation}
+	<BringToContextModal
+		conversation={bringToContextConversation}
+		currentContext={{ spaceId: null, focusAreaId: null, taskId: null }}
+		onOpenInOrigin={handleOpenInOrigin}
+		onBringHere={handleBringHere}
+		onClose={handleCloseBringToContext}
+	/>
+{/if}

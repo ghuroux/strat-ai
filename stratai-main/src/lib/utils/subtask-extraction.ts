@@ -9,63 +9,210 @@ import type { ProposedSubtask, SubtaskType } from '$lib/types/tasks';
 
 /**
  * Pattern to match numbered list items (subtask proposals)
- * Matches: "1. Do something" or "1) Do something"
+ * Matches: "1. Do something" or "1) Do something" or "1.1. Do something"
  */
-const NUMBERED_LIST_PATTERN = /^(?:\s*)(\d+)[.)]\s+(.+)$/gm;
+const NUMBERED_LIST_PATTERN = /^(?:\s*)(\d+(?:\.\d+)?)[.)]\s+(.+)$/gm;
+
+/**
+ * Pattern to match markdown table rows with numbered subtasks
+ * Matches: "| 1 | Task name |" or "| 1.1 | Task name |" or "| 2A | Task name |"
+ */
+const TABLE_ROW_PATTERN = /^\|\s*(\d+(?:\.\d+)?|[A-Za-z0-9]+)\s*\|\s*([^|]+)/gm;
+
+/**
+ * Pattern to match markdown checkbox items
+ * Matches: "- [ ] Task name" or "- [x] Task name" or "* [ ] Task name"
+ */
+const CHECKBOX_PATTERN = /^[-*]\s*\[[ xX]?\]\s+(.+)$/gm;
 
 /**
  * Detect if content contains a subtask proposal
  * Used to trigger the "confirming" phase
  */
 export function contentContainsProposal(content: string): boolean {
-	// Look for patterns like "here's how I'd break this down" or numbered lists
+	// Look for patterns indicating a task breakdown or plan
 	const proposalIndicators = [
 		/here'?s?\s+how\s+(?:I'?d?|we\s+(?:can|could))\s+break\s+(?:this|it)\s+down/i,
-		/proposed\s+(?:breakdown|subtasks)/i,
+		/proposed\s+(?:breakdown|subtasks|plan)/i,
 		/break(?:ing)?\s+(?:this|it)\s+down\s+(?:into|as)/i,
-		/suggested\s+subtasks/i,
+		/suggested\s+(?:subtasks|breakdown|plan)/i,
+		/(?:here'?s?|this\s+is)\s+(?:your|the)\s+(?:finalized\s+)?(?:plan|breakdown)/i,
+		/task\s+breakdown/i,
+		/breakdown\s+(?:of|for)/i,
+		/(?:here\s+are|these\s+are)\s+(?:the\s+)?(?:subtasks|tasks|steps)/i,
+		/structured\s+breakdown/i,
+		/(?:revised|updated)\s+phases/i,
+		/phase\s+\d+:/i, // "Phase 1:" headers
 	];
 
 	// Check for proposal indicators
 	const hasIndicator = proposalIndicators.some((pattern) => pattern.test(content));
 
-	// Check for at least 2 numbered items
-	const matches = content.match(NUMBERED_LIST_PATTERN);
-	const hasNumberedList = matches && matches.length >= 2;
+	// Check for at least 2 numbered items (list format)
+	const listMatches = content.match(NUMBERED_LIST_PATTERN);
+	const hasNumberedList = listMatches && listMatches.length >= 2;
 
-	return hasIndicator && Boolean(hasNumberedList);
+	// Check for at least 2 table rows with numbers
+	const tableMatches = content.match(TABLE_ROW_PATTERN);
+	const hasTable = tableMatches && tableMatches.length >= 2;
+
+	// Check for at least 3 checkbox items
+	const checkboxMatches = content.match(CHECKBOX_PATTERN);
+	const hasCheckboxes = checkboxMatches && checkboxMatches.length >= 3;
+
+	return hasIndicator && (Boolean(hasNumberedList) || Boolean(hasTable) || Boolean(hasCheckboxes));
 }
 
 /**
  * Extract proposed subtasks from AI response content
  * Returns an array of ProposedSubtask objects
+ * Supports numbered lists, markdown tables, and checkbox lists
  */
 export function extractProposedSubtasks(content: string): ProposedSubtask[] {
 	const subtasks: ProposedSubtask[] = [];
+	const seenTitles = new Set<string>();
+
+	// Try extracting from numbered list format first
+	extractFromPattern(content, NUMBERED_LIST_PATTERN, subtasks, seenTitles, 2);
+
+	// Also try extracting from table format
+	extractFromPattern(content, TABLE_ROW_PATTERN, subtasks, seenTitles, 2);
+
+	// Also try extracting from checkbox format (title is in group 1)
+	extractFromPattern(content, CHECKBOX_PATTERN, subtasks, seenTitles, 1);
+
+	// Limit to 20 subtasks maximum (reasonable for planning)
+	return subtasks.slice(0, 20);
+}
+
+/**
+ * Extract subtasks from content using a given regex pattern
+ * @param titleGroupIndex - which capture group contains the title (1 or 2)
+ */
+function extractFromPattern(
+	content: string,
+	pattern: RegExp,
+	subtasks: ProposedSubtask[],
+	seenTitles: Set<string>,
+	titleGroupIndex: number = 2
+): void {
 	let match;
+	let matchIndex = 0;
 
 	// Reset lastIndex for global regex
-	NUMBERED_LIST_PATTERN.lastIndex = 0;
+	pattern.lastIndex = 0;
 
-	while ((match = NUMBERED_LIST_PATTERN.exec(content)) !== null) {
-		const title = match[2].trim();
+	while ((match = pattern.exec(content)) !== null) {
+		matchIndex++;
+		const rawTitle = match[titleGroupIndex]?.trim();
 
-		// Skip if title is too short or too long
-		if (title.length < 3 || title.length > 100) continue;
+		if (!rawTitle) continue;
+
+		// Skip if raw title is too short
+		if (rawTitle.length < 3) continue;
 
 		// Skip common non-subtask patterns
-		if (isNonSubtaskLine(title)) continue;
+		if (isNonSubtaskLine(rawTitle)) continue;
+
+		// Skip table header rows
+		if (isTableHeader(rawTitle)) continue;
+
+		// Clean the title: strip markdown and extract main title (before em-dash description)
+		const cleanedTitle = cleanSubtaskTitle(rawTitle);
+
+		// Skip if cleaned title is too short
+		if (cleanedTitle.length < 3) continue;
+
+		// Skip duplicates (same title from different formats)
+		const titleKey = cleanedTitle.toLowerCase();
+		if (seenTitles.has(titleKey)) continue;
+		seenTitles.add(titleKey);
 
 		subtasks.push({
 			id: crypto.randomUUID(),
-			title,
-			type: inferSubtaskType(title),
+			title: cleanedTitle,
+			type: inferSubtaskType(cleanedTitle),
 			confirmed: true, // Default to confirmed, user can uncheck
 		});
 	}
+}
 
-	// Limit to 5 subtasks maximum
-	return subtasks.slice(0, 5);
+/**
+ * Check if text looks like a table header (e.g., "Subtask", "Task", "#")
+ */
+function isTableHeader(text: string): boolean {
+	const trimmed = text.trim().toLowerCase();
+	const headerPatterns = [
+		/^#$/,
+		/^subtask$/i,
+		/^task$/i,
+		/^description$/i,
+		/^output$/i,
+		/^deadline$/i,
+		/^status$/i,
+		/^priority$/i,
+		/^purpose$/i,
+		/^owner$/i,
+		/^details$/i,
+		/^participants$/i,
+		/^timing$/i,
+		/^activity$/i,
+		/^section$/i,
+		/^content$/i,
+		/^reuse\s+value$/i,
+		/^asset$/i,
+		/^-+$/, // Separator row like "---"
+		/^owner\/stakeholder$/i,
+	];
+	// Also check for common header words
+	if (
+		trimmed === 'stakeholder' ||
+		trimmed === 'stakeholders' ||
+		trimmed === 'owner' ||
+		trimmed === 'owners'
+	) {
+		return true;
+	}
+	return headerPatterns.some((p) => p.test(trimmed));
+}
+
+/**
+ * Clean a subtask title by stripping markdown and extracting the main title
+ * Handles patterns like: "**Define the template** — description here..."
+ * Returns just: "Define the template"
+ */
+function cleanSubtaskTitle(rawTitle: string): string {
+	let title = rawTitle;
+
+	// Strip markdown bold markers (**text**)
+	title = title.replace(/\*\*/g, '');
+
+	// Strip markdown italic markers (*text* or _text_)
+	title = title.replace(/(?<!\*)\*(?!\*)([^*]+)\*(?!\*)/g, '$1');
+	title = title.replace(/(?<!_)_(?!_)([^_]+)_(?!_)/g, '$1');
+
+	// Extract main title before em-dash (—) or regular dash with spaces ( - )
+	// This separates "Task title — description" into just "Task title"
+	const dashMatch = title.match(/^([^—–]+?)(?:\s*[—–]\s*.+)?$/);
+	if (dashMatch && dashMatch[1]) {
+		title = dashMatch[1].trim();
+	}
+
+	// Also handle " - " pattern for descriptions
+	const hyphenMatch = title.match(/^([^-]+?)(?:\s+-\s+.+)?$/);
+	if (hyphenMatch && hyphenMatch[1] && hyphenMatch[1].length > 5) {
+		title = hyphenMatch[1].trim();
+	}
+
+	// Remove trailing periods or colons
+	title = title.replace(/[.:]+$/, '');
+
+	// Capitalize first letter if lowercase
+	if (title.length > 0 && /^[a-z]/.test(title)) {
+		title = title.charAt(0).toUpperCase() + title.slice(1);
+	}
+
+	return title.trim();
 }
 
 /**

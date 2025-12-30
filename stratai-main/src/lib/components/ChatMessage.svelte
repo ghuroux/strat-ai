@@ -37,6 +37,7 @@
 	let isStreamingEmpty = $derived(message.isStreaming && !message.content);
 	let isStreaming = $derived(message.isStreaming && !!message.content);
 	let isSearching = $derived(message.searchStatus === 'searching');
+	let isReadingDocument = $derived(message.searchStatus === 'reading_document');
 	let hasSources = $derived(message.sources && message.sources.length > 0);
 	let hasAttachments = $derived(message.attachments && message.attachments.length > 0);
 	let displayContent = $derived(message.content);
@@ -51,10 +52,11 @@
 	);
 
 	// Unified AI state for the indicator
-	type AIState = 'processing' | 'reasoning' | 'searching' | 'generating' | 'complete';
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'generating' | 'complete';
 	let aiState = $derived<AIState>(
 		!message.isStreaming && !isThinking ? 'complete' :
 		isSearching ? 'searching' :
+		isReadingDocument ? 'reading_document' :
 		isThinking ? 'reasoning' :
 		isStreaming ? 'generating' :
 		isStreamingEmpty ? 'processing' :
@@ -63,7 +65,7 @@
 
 	// Show the unified indicator (not during extended thinking - that has its own display)
 	let showUnifiedIndicator = $derived(
-		(aiState === 'processing' || aiState === 'searching') && !isThinking && !hasThinking
+		(aiState === 'processing' || aiState === 'searching' || aiState === 'reading_document') && !isThinking && !hasThinking
 	);
 
 	// Track if this is the first content after thinking (for animation)

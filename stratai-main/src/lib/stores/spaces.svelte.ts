@@ -1,0 +1,271 @@
+/**
+ * Spaces Store - Space management with PostgreSQL persistence
+ * Uses Svelte 5 runes for reactivity with SvelteMap for proper tracking
+ *
+ * Handles:
+ * - Space CRUD operations (custom spaces only for create/delete)
+ * - System space seeding
+ * - Space lookup by slug
+ */
+
+import { SvelteMap } from 'svelte/reactivity';
+import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
+
+class SpacesStore {
+	// Space cache by ID
+	spaces = new SvelteMap<string, Space>();
+
+	// Space lookup by slug for URL routing
+	spacesBySlug = new SvelteMap<string, Space>();
+
+	// Loading and error states
+	isLoading = $state(false);
+	error = $state<string | null>(null);
+
+	// Version counter for fine-grained reactivity
+	_version = $state(0);
+
+	// Track if spaces have been loaded
+	private loaded = $state(false);
+
+	/**
+	 * Load all spaces (system + custom)
+	 */
+	async loadSpaces(): Promise<void> {
+		if (this.loaded) return;
+
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch('/api/spaces');
+
+			if (!response.ok) {
+				if (response.status === 401) return;
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.spaces) {
+				for (const s of data.spaces) {
+					const space: Space = {
+						...s,
+						createdAt: new Date(s.createdAt),
+						updatedAt: new Date(s.updatedAt)
+					};
+
+					this.spaces.set(space.id, space);
+					this.spacesBySlug.set(space.slug, space);
+				}
+
+				this.loaded = true;
+				this._version++;
+			}
+		} catch (e) {
+			console.error('Failed to load spaces:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to load spaces';
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Create a new custom space
+	 */
+	async createSpace(input: CreateSpaceInput): Promise<Space | null> {
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch('/api/spaces', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || `Create failed: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.space) {
+				const space: Space = {
+					...data.space,
+					createdAt: new Date(data.space.createdAt),
+					updatedAt: new Date(data.space.updatedAt)
+				};
+
+				this.spaces.set(space.id, space);
+				this.spacesBySlug.set(space.slug, space);
+				this._version++;
+				return space;
+			}
+			return null;
+		} catch (e) {
+			console.error('Failed to create space:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to create space';
+			return null;
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Update a space
+	 * Note: System spaces only allow context updates
+	 */
+	async updateSpace(id: string, updates: UpdateSpaceInput): Promise<Space | null> {
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const oldSpace = this.spaces.get(id);
+
+			const response = await fetch(`/api/spaces/${id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(updates)
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || `Update failed: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.space) {
+				const space: Space = {
+					...data.space,
+					createdAt: new Date(data.space.createdAt),
+					updatedAt: new Date(data.space.updatedAt)
+				};
+
+				// Update cache
+				this.spaces.set(space.id, space);
+
+				// Update slug lookup if slug changed
+				if (oldSpace && oldSpace.slug !== space.slug) {
+					this.spacesBySlug.delete(oldSpace.slug);
+				}
+				this.spacesBySlug.set(space.slug, space);
+
+				this._version++;
+				return space;
+			}
+			return null;
+		} catch (e) {
+			console.error('Failed to update space:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to update space';
+			return null;
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Delete a custom space
+	 * Note: System spaces cannot be deleted
+	 */
+	async deleteSpace(id: string): Promise<boolean> {
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const space = this.spaces.get(id);
+			if (!space) return false;
+
+			const response = await fetch(`/api/spaces/${id}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || `Delete failed: ${response.status}`);
+			}
+
+			// Remove from caches
+			this.spaces.delete(id);
+			this.spacesBySlug.delete(space.slug);
+			this._version++;
+			return true;
+		} catch (e) {
+			console.error('Failed to delete space:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to delete space';
+			return false;
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Get all spaces sorted by order (reactive)
+	 */
+	getAllSpaces(): Space[] {
+		void this._version;
+		return Array.from(this.spaces.values()).sort((a, b) => a.orderIndex - b.orderIndex);
+	}
+
+	/**
+	 * Get system spaces (reactive)
+	 */
+	getSystemSpaces(): Space[] {
+		void this._version;
+		return Array.from(this.spaces.values())
+			.filter((s) => s.type === 'system')
+			.sort((a, b) => a.orderIndex - b.orderIndex);
+	}
+
+	/**
+	 * Get custom spaces (reactive)
+	 */
+	getCustomSpaces(): Space[] {
+		void this._version;
+		return Array.from(this.spaces.values())
+			.filter((s) => s.type === 'custom')
+			.sort((a, b) => a.orderIndex - b.orderIndex);
+	}
+
+	/**
+	 * Get a space by slug (reactive)
+	 */
+	getSpaceBySlug(slug: string): Space | undefined {
+		void this._version;
+		return this.spacesBySlug.get(slug);
+	}
+
+	/**
+	 * Get a space by ID (reactive)
+	 */
+	getSpaceById(id: string): Space | undefined {
+		void this._version;
+		return this.spaces.get(id);
+	}
+
+	/**
+	 * Check if spaces have been loaded
+	 */
+	isLoaded(): boolean {
+		return this.loaded;
+	}
+
+	/**
+	 * Get custom space count (reactive)
+	 */
+	getCustomSpaceCount(): number {
+		void this._version;
+		return Array.from(this.spaces.values()).filter((s) => s.type === 'custom').length;
+	}
+
+	/**
+	 * Clear cache (force reload)
+	 */
+	clearCache(): void {
+		this.loaded = false;
+		this.spaces.clear();
+		this.spacesBySlug.clear();
+		this._version++;
+	}
+}
+
+export const spacesStore = new SpacesStore();

@@ -3,7 +3,6 @@ import { createChatCompletion, mapErrorMessage, supportsExtendedThinking } from 
 import type { ChatCompletionRequest, ChatMessage, MessageContentBlock } from '$lib/types/api';
 import { getFullSystemPrompt } from '$lib/config/system-prompts';
 import { getAssistById } from '$lib/config/assists';
-import type { SpaceType } from '$lib/types/chat';
 
 /**
  * Assist API endpoint
@@ -16,7 +15,7 @@ interface AssistRequest {
 	assistId: string;
 	messages: ChatMessage[];
 	model: string;
-	space: SpaceType;
+	spaceId: string;
 	thinkingEnabled?: boolean;
 	thinkingBudgetTokens?: number;
 }
@@ -32,13 +31,15 @@ function shouldUseCacheControl(model: string): boolean {
 /**
  * Build the complete system prompt for an assist
  * Composes: platform prompt + space context + assist instructions
+ * Note: For system spaces, spaceId is the same as the slug (work, research, etc.)
  */
-function buildAssistSystemPrompt(model: string, space: SpaceType, assistId: string): string | null {
+function buildAssistSystemPrompt(model: string, spaceId: string, assistId: string): string | null {
 	const assist = getAssistById(assistId);
 	if (!assist) return null;
 
 	// Get base system prompt (platform + space)
-	const basePrompt = getFullSystemPrompt(model, space);
+	// For system spaces, spaceId === slug, so we can pass it directly
+	const basePrompt = getFullSystemPrompt(model, spaceId as 'work' | 'research' | 'random' | 'personal' | null);
 	if (!basePrompt) return assist.systemPromptAddition;
 
 	// Compose with assist-specific instructions
@@ -134,10 +135,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Validate request
-	if (!body.model || !body.messages || !body.assistId || !body.space) {
+	if (!body.model || !body.messages || !body.assistId || !body.spaceId) {
 		return new Response(
 			JSON.stringify({
-				error: { message: 'Invalid request: model, messages, assistId, and space are required', type: 'validation_error' }
+				error: { message: 'Invalid request: model, messages, assistId, and spaceId are required', type: 'validation_error' }
 			}),
 			{
 				status: 400,
@@ -167,14 +168,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		assistId: body.assistId,
 		assistName: assist.name,
 		model: body.model,
-		space: body.space,
+		spaceId: body.spaceId,
 		messageCount: body.messages.length,
 		thinkingEnabled
 	});
 
 	try {
 		// Build complete system prompt
-		const systemPrompt = buildAssistSystemPrompt(body.model, body.space, body.assistId);
+		const systemPrompt = buildAssistSystemPrompt(body.model, body.spaceId, body.assistId);
 
 		// Prepare messages with system prompt
 		let messages: ChatMessage[] = systemPrompt

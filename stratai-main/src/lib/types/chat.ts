@@ -36,8 +36,8 @@ export interface Message {
 	timestamp: number;
 	isStreaming?: boolean;
 	error?: string;
-	// Web search fields
-	searchStatus?: 'searching' | 'complete';
+	// Web search and document reading fields
+	searchStatus?: 'searching' | 'reading_document' | 'complete';
 	searchQuery?: string;
 	sources?: SearchSource[];
 	// File attachments
@@ -81,7 +81,9 @@ export interface Conversation {
 	continuationSummary?: string; // Summary used to start this conversation
 	refreshedAt?: number; // Timestamp when session was refreshed
 	// Space and organization
-	space?: SpaceType | null; // Which space this conversation belongs to
+	spaceId?: string | null; // FK to spaces table (system space id = slug, custom = UUID)
+	focusAreaId?: string | null; // FK to focus_areas table (Phase C)
+	taskId?: string | null; // FK to tasks table for deep work mode (Phase C)
 	tags?: string[]; // For template auto-tagging and filtering
 	// Future multi-tenant fields:
 	// userId: string;

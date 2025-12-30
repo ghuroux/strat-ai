@@ -5,12 +5,18 @@
  * All other assists (Meeting Summary, Decision Log, etc.) feed into/from the task list.
  */
 
+// Note: SpaceType is kept for backwards compatibility with some UI components
+// but spaceId (string) is now the canonical reference to spaces table
 import type { SpaceType } from './chat';
 
 /**
  * Task status values
+ * - active: Task is ready to work on
+ * - planning: Task is being broken down into subtasks (Plan Mode)
+ * - completed: Task is done
+ * - deferred: Task is postponed
  */
-export type TaskStatus = 'active' | 'completed' | 'deferred';
+export type TaskStatus = 'active' | 'planning' | 'completed' | 'deferred';
 
 /**
  * Task priority values
@@ -71,9 +77,15 @@ export interface Task {
 	subtaskOrder?: number;
 	contextSummary?: string;
 
+	// Focus Area (optional - for specialized context within space)
+	focusAreaId?: string;
+
 	// Scope
-	space: SpaceType;
+	spaceId: string; // FK to spaces table (system space id = slug, custom = UUID)
 	userId: string;
+
+	// Planning state (for status='planning' tasks)
+	planningData?: PlanningData;
 
 	// Timestamps
 	lastActivityAt: Date;
@@ -87,7 +99,8 @@ export interface Task {
  */
 export interface CreateTaskInput {
 	title: string;
-	space: SpaceType;
+	spaceId: string; // FK to spaces table
+	focusAreaId?: string;
 	priority?: TaskPriority;
 	dueDate?: Date;
 	dueDateType?: DueDateType;
@@ -101,6 +114,7 @@ export interface UpdateTaskInput {
 	title?: string;
 	status?: TaskStatus;
 	priority?: TaskPriority;
+	focusAreaId?: string | null;
 	dueDate?: Date | null;
 	dueDateType?: DueDateType | null;
 	completionNotes?: string;
@@ -121,6 +135,7 @@ export interface CreateSubtaskInput {
 	parentTaskId: string;
 	subtaskType?: SubtaskType;
 	priority?: TaskPriority;
+	sourceConversationId?: string; // The conversation that created this subtask (e.g., Plan Mode conversation)
 }
 
 /**
@@ -136,6 +151,7 @@ export interface PlanModeState {
 	taskId: string;
 	taskTitle: string;
 	phase: PlanModePhase;
+	exchangeCount: number; // Tracks conversation depth for prompt selection
 	proposedSubtasks: ProposedSubtask[];
 	conversationId?: string;
 }
@@ -151,6 +167,18 @@ export interface ProposedSubtask {
 }
 
 /**
+ * Persisted planning data - stored in task.planning_data JSONB
+ * Enables Plan Mode state to survive page refreshes
+ */
+export interface PlanningData {
+	phase: PlanModePhase;
+	exchangeCount: number; // Tracks conversation depth for prompt selection
+	proposedSubtasks: ProposedSubtask[];
+	conversationId?: string;
+	startedAt: string; // ISO timestamp
+}
+
+/**
  * Task extracted from AI response (before confirmation)
  * This is the ephemeral version before user confirms and it becomes a Task
  */
@@ -163,6 +191,7 @@ export interface ExtractedTask {
 
 /**
  * Database row representation (for repository layer)
+ * Note: postgres.js auto-converts snake_case to camelCase
  */
 export interface TaskRow {
 	id: string;
@@ -170,33 +199,38 @@ export interface TaskRow {
 	status: string;
 	priority: string;
 	color: string;
-	due_date: Date | null;
-	due_date_type: string | null;
-	completed_at: Date | null;
-	completion_notes: string | null;
-	source_type: string;
-	source_assist_id: string | null;
-	source_conversation_id: string | null;
-	linked_conversation_ids: string[] | null;
+	dueDate: Date | null;
+	dueDateType: string | null;
+	completedAt: Date | null;
+	completionNotes: string | null;
+	sourceType: string;
+	sourceAssistId: string | null;
+	sourceConversationId: string | null;
+	linkedConversationIds: string[] | null;
 	// Subtask columns
-	parent_task_id: string | null;
-	subtask_type: string | null;
-	subtask_order: number | null;
-	context_summary: string | null;
+	parentTaskId: string | null;
+	subtaskType: string | null;
+	subtaskOrder: number | null;
+	contextSummary: string | null;
+	// Focus Area
+	focusAreaId: string | null;
+	// Planning state
+	planningData: PlanningData | null;
 	// Scope
-	space: string;
-	user_id: string;
-	last_activity_at: Date;
-	created_at: Date;
-	updated_at: Date;
-	deleted_at: Date | null;
+	spaceId: string;
+	userId: string;
+	lastActivityAt: Date;
+	createdAt: Date;
+	updatedAt: Date;
+	deletedAt: Date | null;
 }
 
 /**
  * Filter options for listing tasks
  */
 export interface TaskListFilter {
-	space?: SpaceType;
+	spaceId?: string; // FK to spaces table
+	focusAreaId?: string | null; // null = no focus area, undefined = any
 	status?: TaskStatus | TaskStatus[];
 	priority?: TaskPriority;
 	includeCompleted?: boolean;
@@ -214,6 +248,7 @@ export interface GreetingData {
 
 /**
  * Convert database row to Task entity
+ * Note: postgres.js auto-converts snake_case to camelCase, so row properties are already camelCase
  */
 export function rowToTask(row: TaskRow): Task {
 	return {
@@ -222,27 +257,118 @@ export function rowToTask(row: TaskRow): Task {
 		status: row.status as TaskStatus,
 		priority: row.priority as TaskPriority,
 		color: row.color,
-		dueDate: row.due_date ?? undefined,
-		dueDateType: (row.due_date_type as DueDateType) ?? undefined,
-		completedAt: row.completed_at ?? undefined,
-		completionNotes: row.completion_notes ?? undefined,
+		dueDate: row.dueDate ?? undefined,
+		dueDateType: (row.dueDateType as DueDateType) ?? undefined,
+		completedAt: row.completedAt ?? undefined,
+		completionNotes: row.completionNotes ?? undefined,
 		source: {
-			type: row.source_type as TaskSourceType,
-			assistId: row.source_assist_id ?? undefined,
-			conversationId: row.source_conversation_id ?? undefined
+			type: row.sourceType as TaskSourceType,
+			assistId: row.sourceAssistId ?? undefined,
+			conversationId: row.sourceConversationId ?? undefined
 		},
-		linkedConversationIds: row.linked_conversation_ids ?? [],
+		linkedConversationIds: row.linkedConversationIds ?? [],
 		// Subtask fields
-		parentTaskId: row.parent_task_id ?? undefined,
-		subtaskType: (row.subtask_type as SubtaskType) ?? undefined,
-		subtaskOrder: row.subtask_order ?? undefined,
-		contextSummary: row.context_summary ?? undefined,
+		parentTaskId: row.parentTaskId ?? undefined,
+		subtaskType: (row.subtaskType as SubtaskType) ?? undefined,
+		subtaskOrder: row.subtaskOrder ?? undefined,
+		contextSummary: row.contextSummary ?? undefined,
+		// Focus Area
+		focusAreaId: row.focusAreaId ?? undefined,
+		// Planning state
+		planningData: row.planningData ?? undefined,
 		// Scope
-		space: row.space as SpaceType,
-		userId: row.user_id,
-		lastActivityAt: row.last_activity_at,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at,
-		deletedAt: row.deleted_at ?? undefined
+		spaceId: row.spaceId,
+		userId: row.userId,
+		lastActivityAt: row.lastActivityAt,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+		deletedAt: row.deletedAt ?? undefined
+	};
+}
+
+// ============================================================================
+// RELATED TASKS (Task Context System)
+// ============================================================================
+
+/**
+ * Types of relationships between tasks
+ * - related: general connection
+ * - blocks: source blocks target (target can't start until source done)
+ * - depends_on: source depends on target (source can't start until target done)
+ * - informs: output of source informs/feeds into target
+ */
+export type TaskRelationshipType = 'related' | 'blocks' | 'depends_on' | 'informs';
+
+/**
+ * Related task junction record
+ */
+export interface RelatedTask {
+	id: string;
+	sourceTaskId: string;
+	targetTaskId: string;
+	relationshipType: TaskRelationshipType;
+	createdAt: Date;
+}
+
+/**
+ * Database row for related_tasks junction
+ */
+export interface RelatedTaskRow {
+	id: string;
+	source_task_id: string;
+	target_task_id: string;
+	relationship_type: string;
+	created_at: Date;
+}
+
+/**
+ * Related task info for display (includes the actual task)
+ */
+export interface RelatedTaskInfo {
+	task: Task;
+	relationshipType: TaskRelationshipType;
+	direction: 'outgoing' | 'incoming'; // outgoing = we're the source, incoming = we're the target
+}
+
+/**
+ * Input for linking tasks
+ */
+export interface LinkTaskInput {
+	targetTaskId: string;
+	relationshipType?: TaskRelationshipType;
+}
+
+/**
+ * Context payload for Plan Mode
+ * Aggregates all linked context for a task
+ */
+export interface TaskContext {
+	documents: Array<{
+		id: string;
+		filename: string;
+		content: string;
+		summary?: string;
+		charCount: number;
+		role: string;
+	}>;
+	relatedTasks: Array<{
+		id: string;
+		title: string;
+		contextSummary?: string;
+		status: TaskStatus;
+		relationship: string;
+	}>;
+}
+
+/**
+ * Convert related_tasks row to RelatedTask
+ */
+export function rowToRelatedTask(row: RelatedTaskRow): RelatedTask {
+	return {
+		id: row.id,
+		sourceTaskId: row.source_task_id,
+		targetTaskId: row.target_task_id,
+		relationshipType: row.relationship_type as TaskRelationshipType,
+		createdAt: row.created_at
 	};
 }

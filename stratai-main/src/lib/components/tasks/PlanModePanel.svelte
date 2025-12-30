@@ -1,26 +1,58 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
+	import { fly, slide } from 'svelte/transition';
 	import type { PlanModeState, ProposedSubtask } from '$lib/types/tasks';
+	import type { TaskContextInfo } from '$lib/utils/context-builder';
+	import { estimateTokens } from '$lib/utils/context-builder';
 
 	interface Props {
 		planMode: PlanModeState;
+		context?: TaskContextInfo;
 		onClose: () => void;
 		onCreateSubtasks: () => void;
 		onUpdateSubtask: (id: string, title: string) => void;
 		onToggleSubtask: (id: string) => void;
 		onRemoveSubtask: (id: string) => void;
 		onAddSubtask: () => void;
+		onRequestProposal?: () => void; // User signals ready for suggestions
 	}
 
 	let {
 		planMode,
+		context,
 		onClose,
 		onCreateSubtasks,
 		onUpdateSubtask,
 		onToggleSubtask,
 		onRemoveSubtask,
-		onAddSubtask
+		onAddSubtask,
+		onRequestProposal
 	}: Props = $props();
+
+	// Context section state
+	let contextExpanded = $state(false);
+
+	// Context calculations
+	let hasContext = $derived(
+		(context?.documents?.length ?? 0) > 0 || (context?.relatedTasks?.length ?? 0) > 0
+	);
+
+	let totalChars = $derived.by(() => {
+		if (!context) return 0;
+		let chars = 0;
+		if (context.documents) {
+			for (const doc of context.documents) {
+				chars += doc.charCount;
+			}
+		}
+		if (context.relatedTasks) {
+			for (const rt of context.relatedTasks) {
+				chars += rt.title.length + (rt.contextSummary?.length ?? 0) + 100;
+			}
+		}
+		return chars;
+	});
+
+	let tokenCount = $derived(estimateTokens(totalChars));
 
 	// Edit mode state
 	let editingId: string | null = $state(null);
@@ -146,11 +178,98 @@
 		</button>
 	</div>
 
+	<!-- Phase Indicator -->
+	<div class="flex items-center gap-2 px-4 py-2 border-b border-surface-800 bg-surface-800/20">
+		{#if planMode.phase === 'eliciting'}
+			<div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+			<span class="text-xs text-surface-400">Understanding your task...</span>
+			{#if (planMode.exchangeCount || 0) > 0}
+				<span class="text-xs text-surface-600">• {planMode.exchangeCount} exchange{(planMode.exchangeCount || 0) !== 1 ? 's' : ''}</span>
+			{/if}
+		{:else if planMode.phase === 'proposing'}
+			<div class="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></div>
+			<span class="text-xs text-surface-400">Creating breakdown...</span>
+		{:else}
+			<div class="w-2 h-2 rounded-full bg-green-500"></div>
+			<span class="text-xs text-surface-400">Review & confirm</span>
+		{/if}
+	</div>
+
+	<!-- Request Breakdown Action (visible after 2+ exchanges in eliciting) -->
+	{#if planMode.phase === 'eliciting' && (planMode.exchangeCount || 0) >= 2 && onRequestProposal}
+		<div class="px-4 py-3 border-b border-surface-800 bg-gradient-to-r from-blue-500/5 to-purple-500/5">
+			<button
+				type="button"
+				onclick={onRequestProposal}
+				class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg
+					   bg-gradient-to-r from-blue-500 to-purple-500 text-white text-sm font-medium
+					   hover:from-blue-600 hover:to-purple-600 transition-all shadow-lg shadow-blue-500/20"
+			>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+				</svg>
+				Create Breakdown
+			</button>
+			<p class="text-xs text-surface-500 text-center mt-2">
+				Or say "yes" / "go ahead" in the chat
+			</p>
+		</div>
+	{/if}
+
 	<!-- Task Context -->
 	<div class="px-4 py-3 border-b border-surface-800 bg-surface-800/30">
 		<p class="text-xs text-surface-500 uppercase tracking-wider mb-1">Planning for</p>
 		<p class="text-sm text-surface-200 font-medium">{planMode.taskTitle}</p>
 	</div>
+
+	<!-- Linked Context -->
+	{#if hasContext}
+		<div class="border-b border-surface-800">
+			<button
+				type="button"
+				class="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-surface-800/30 transition-colors"
+				onclick={() => contextExpanded = !contextExpanded}
+			>
+				<span class="flex items-center gap-2 text-xs text-surface-500">
+					<span class="text-sm">📎</span>
+					<span>
+						{(context?.documents?.length ?? 0)} doc{(context?.documents?.length ?? 0) !== 1 ? 's' : ''},
+						{(context?.relatedTasks?.length ?? 0)} task{(context?.relatedTasks?.length ?? 0) !== 1 ? 's' : ''}
+					</span>
+					<span class="text-surface-600">•</span>
+					<span>~{tokenCount.toLocaleString()} tokens</span>
+				</span>
+				<svg
+					class="w-4 h-4 text-surface-500 transition-transform duration-150"
+					class:rotate-180={contextExpanded}
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+				</svg>
+			</button>
+
+			{#if contextExpanded}
+				<div class="px-4 pb-3 flex flex-wrap gap-1.5" transition:slide={{ duration: 150 }}>
+					{#if context?.documents}
+						{#each context.documents as doc (doc.id)}
+							<span class="context-chip doc-chip">
+								📄 {doc.filename}
+							</span>
+						{/each}
+					{/if}
+					{#if context?.relatedTasks}
+						{#each context.relatedTasks as rt (rt.id)}
+							<span class="context-chip task-chip">
+								🔗 {rt.title}
+							</span>
+						{/each}
+					{/if}
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Content Area -->
 	<div class="flex-1 overflow-y-auto p-4">
@@ -168,7 +287,18 @@
 					</svg>
 				</div>
 				<p class="text-sm text-surface-400 mb-1">Chat with the AI to plan your task</p>
-				<p class="text-xs text-surface-500">Subtasks will appear here once proposed</p>
+				<p class="text-xs text-surface-500 mb-4">Subtasks will appear here once proposed</p>
+
+				<!-- Ready for suggestions button - appears after first exchange -->
+				{#if planMode.phase === 'eliciting' && (planMode.exchangeCount || 0) >= 1 && onRequestProposal}
+					<button
+						type="button"
+						onclick={onRequestProposal}
+						class="text-sm text-surface-400 hover:text-white transition-colors underline underline-offset-4 decoration-surface-600 hover:decoration-surface-400"
+					>
+						Ready for suggestions →
+					</button>
+				{/if}
 			</div>
 		{:else}
 			<!-- Proposed Subtasks List -->
@@ -352,5 +482,31 @@
 	/* Subtask item hover */
 	.subtask-item:not(:has(input)):hover {
 		transform: translateX(-2px);
+	}
+
+	/* Context chips */
+	.context-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 3px 8px;
+		font-size: 11px;
+		border-radius: 12px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 150px;
+	}
+
+	.doc-chip {
+		background: rgba(59, 130, 246, 0.1);
+		color: rgba(255, 255, 255, 0.7);
+		border: 1px solid rgba(59, 130, 246, 0.2);
+	}
+
+	.task-chip {
+		background: rgba(168, 85, 247, 0.1);
+		color: rgba(255, 255, 255, 0.7);
+		border: 1px solid rgba(168, 85, 247, 0.2);
 	}
 </style>

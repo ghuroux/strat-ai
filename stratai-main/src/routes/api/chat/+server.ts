@@ -2,9 +2,16 @@ import type { RequestHandler } from './$types';
 import { createChatCompletion, createChatCompletionWithTools, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
 import { searchWeb, formatSearchResultsForLLM, isBraveSearchConfigured } from '$lib/server/brave-search';
 import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig, ChatMessage, MessageContentBlock } from '$lib/types/api';
-import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, type FocusedTaskInfo, type PlanModePhase } from '$lib/config/system-prompts';
+import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, getFullSystemPromptForPlanModeWithContext, getFullSystemPromptWithFocusArea, getFullSystemPromptWithSpace, getFocusAreaPrompt, type FocusedTaskInfo, type PlanModePhase, type TaskContextInfo, type FocusAreaInfo, type SpaceInfo, type PlanModeTaskContext } from '$lib/config/system-prompts';
+import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
+import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
+import { postgresConversationRepository } from '$lib/server/persistence/postgres';
+import { postgresFocusAreaRepository } from '$lib/server/persistence/focus-areas-postgres';
+import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres';
+import { getToolCacheRepository, hashParams } from '$lib/server/persistence/tool-cache-postgres';
 import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists';
 import type { SpaceType } from '$lib/types/chat';
+import { isSystemSpace } from '$lib/types/spaces';
 
 /**
  * Check if model supports explicit cache_control (Anthropic Claude models)
@@ -115,6 +122,13 @@ interface PlanModeContext {
 	taskId: string;
 	taskTitle: string;
 	phase: PlanModePhase;
+	exchangeCount?: number; // Tracks conversation depth for prompt selection
+	context?: TaskContextInfo;
+	// Task metadata for time/date awareness and priority context
+	priority?: 'normal' | 'high';
+	dueDate?: string | null; // ISO string from frontend
+	dueDateType?: 'hard' | 'soft' | null;
+	createdAt?: string; // ISO string from frontend
 }
 
 /**
@@ -155,11 +169,12 @@ function injectSystemPrompt(messages: ChatMessage[], prompt: string): ChatMessag
  * Inject platform-level system prompt before user messages
  * This provides consistent baseline behavior across all conversations
  * The platform prompt is composed with any user-provided system prompt
- * When a space is provided, space-specific context is appended
+ * Context chain: Platform → Space → Focus Area → Task
  * When an assistId is provided, the assist's system prompt is also included
  * Phase-specific prompts are added for task-breakdown assist flow
  * When a focusedTask is provided (persistent focus mode), task context is added
  * When planMode is active, Plan Mode prompts take precedence over other contexts
+ * When a custom space with context is provided, custom space context is injected
  */
 function injectPlatformPrompt(
 	messages: ChatMessage[],
@@ -167,20 +182,87 @@ function injectPlatformPrompt(
 	space?: SpaceType | null,
 	assistContext?: AssistContext | null,
 	focusedTask?: FocusedTaskInfo | null,
-	planModeContext?: PlanModeContext | null
+	planModeContext?: PlanModeContext | null,
+	focusArea?: FocusAreaInfo | null,
+	spaceInfo?: SpaceInfo | null
 ): ChatMessage[] {
 	// Plan Mode takes precedence - use specialized Plan Mode prompts
 	if (planModeContext) {
-		const fullPrompt = getFullSystemPromptForPlanMode(
-			model,
-			space,
-			planModeContext.taskTitle,
-			planModeContext.phase
-		);
+		// Enhanced logging for Plan Mode testing
+		console.log('\n========== PLAN MODE ACTIVE ==========');
+		console.log(`[Plan Mode] Task: "${planModeContext.taskTitle}"`);
+		console.log(`[Plan Mode] Phase: ${planModeContext.phase}`);
+		console.log(`[Plan Mode] Exchange Count: ${planModeContext.exchangeCount || 0}`);
+		console.log(`[Plan Mode] Has Context: ${!!planModeContext.context}`);
+		if (planModeContext.context) {
+			console.log(`[Plan Mode] Context - Docs: ${planModeContext.context.documents?.length || 0}, Tasks: ${planModeContext.context.relatedTasks?.length || 0}`);
+		}
+		console.log(`[Plan Mode] Priority: ${planModeContext.priority || 'normal'}`);
+		console.log(`[Plan Mode] Due: ${planModeContext.dueDate || 'none'}`);
+		console.log('=======================================\n');
+
+		// Build task metadata context for time/date awareness
+		const taskMetadata: PlanModeTaskContext | undefined = planModeContext.createdAt
+			? {
+					title: planModeContext.taskTitle,
+					priority: planModeContext.priority || 'normal',
+					dueDate: planModeContext.dueDate ? new Date(planModeContext.dueDate) : null,
+					dueDateType: planModeContext.dueDateType || null,
+					createdAt: new Date(planModeContext.createdAt)
+				}
+			: undefined;
+
+		// Use context-aware prompt if task context is available
+		// Pass exchangeCount for phase-appropriate elicitation prompts
+		const exchangeCount = planModeContext.exchangeCount || 0;
+		const fullPrompt = planModeContext.context
+			? getFullSystemPromptForPlanModeWithContext(
+					model,
+					space,
+					planModeContext.taskTitle,
+					planModeContext.phase,
+					planModeContext.context,
+					focusArea,
+					taskMetadata,
+					exchangeCount
+				)
+			: getFullSystemPromptForPlanMode(
+					model,
+					space,
+					planModeContext.taskTitle,
+					planModeContext.phase,
+					focusArea,
+					taskMetadata,
+					exchangeCount
+				);
+
+		// Log a preview of the Plan Mode prompt (first 800 chars)
+		const promptPreview = fullPrompt.length > 800 ? fullPrompt.slice(0, 800) + '...' : fullPrompt;
+		console.log('[Plan Mode] System Prompt Preview:');
+		console.log('---');
+		console.log(promptPreview);
+		console.log('---');
+		console.log(`[Plan Mode] Total prompt length: ${fullPrompt.length} chars\n`);
+
 		return injectSystemPrompt(messages, fullPrompt);
 	}
 
-	let fullPrompt = getFullSystemPrompt(model, space);
+	// Build base prompt: Platform → Space → Focus Area
+	// Priority: Focus Area > Custom Space with context > System Space
+	let fullPrompt: string;
+	if (focusArea) {
+		// Focus area includes space context
+		fullPrompt = getFullSystemPromptWithFocusArea(model, focusArea);
+	} else if (spaceInfo && spaceInfo.type === 'custom' && spaceInfo.context) {
+		// Custom space with user-provided context
+		fullPrompt = getFullSystemPromptWithSpace(model, spaceInfo);
+	} else if (spaceInfo && spaceInfo.type === 'system') {
+		// System space - use slug as SpaceType
+		fullPrompt = getFullSystemPrompt(model, spaceInfo.slug as SpaceType);
+	} else {
+		// Fallback to space from request body (backwards compatibility)
+		fullPrompt = getFullSystemPrompt(model, space);
+	}
 
 	// If assist is active, append the assist-specific prompt
 	if (assistContext?.assistId) {
@@ -257,22 +339,74 @@ const webSearchToolOpenAI = {
 	}
 };
 
+// Document reading tool - Anthropic format
+// Used in Plan Mode to let AI access reference documents on-demand
+const readDocumentToolAnthropic: ToolDefinition = {
+	name: 'read_document',
+	description: 'Read a reference document to get additional context. Use this when you need specific information from an available document to help with planning. Available documents are listed in the system prompt. Only read documents when you genuinely need the information - during elicitation, focus on understanding the user first.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			filename: {
+				type: 'string',
+				description: 'The filename of the document to read (as listed in available documents)'
+			}
+		},
+		required: ['filename']
+	}
+};
+
+// Document reading tool - OpenAI format
+const readDocumentToolOpenAI = {
+	type: 'function' as const,
+	function: {
+		name: 'read_document',
+		description: 'Read a reference document to get additional context. Use this when you need specific information from an available document to help with planning. Available documents are listed in the system prompt. Only read documents when you genuinely need the information - during elicitation, focus on understanding the user first.',
+		parameters: {
+			type: 'object',
+			properties: {
+				filename: {
+					type: 'string',
+					description: 'The filename of the document to read (as listed in available documents)'
+				}
+			},
+			required: ['filename']
+		}
+	}
+};
+
+// Document info for tool context
+interface DocumentInfo {
+	filename: string;
+	content: string;
+	charCount: number;
+}
+
 /**
  * Get the appropriate tool format for the model
  * Anthropic uses input_schema, OpenAI uses type:'function' with parameters
- * Returns unknown[] because the format differs between providers
+ * Optionally includes document reading tool when documents are available
  */
-function getToolsForModel(model: string): ToolDefinition[] {
+function getToolsForModel(model: string, includeDocumentTool: boolean = false): ToolDefinition[] {
 	const lowerModel = model.toLowerCase();
 
 	// Check if it's an Anthropic/Claude model
 	if (lowerModel.includes('claude') || lowerModel.includes('anthropic')) {
-		return [webSearchToolAnthropic];
+		const tools = [webSearchToolAnthropic];
+		if (includeDocumentTool) {
+			tools.push(readDocumentToolAnthropic);
+		}
+		return tools;
 	}
 
 	// For OpenAI and other models, use OpenAI format
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const tools: any[] = [webSearchToolOpenAI];
+	if (includeDocumentTool) {
+		tools.push(readDocumentToolOpenAI);
+	}
 	// Cast to unknown first, then to ToolDefinition[] to satisfy type checker
-	return [webSearchToolOpenAI] as unknown as ToolDefinition[];
+	return tools as unknown as ToolDefinition[];
 }
 
 // System message to add when search is enabled
@@ -404,7 +538,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		budgetTokens: body.thinkingBudgetTokens
 	});
 
-	// Extract space, assist context, focused task, and plan mode (before removing client fields)
+	// Extract space, assist context, focused task, plan mode, and focus area (before removing client fields)
 	const space = body.space;
 	const assistContext: AssistContext | null = body.assistId ? {
 		assistId: body.assistId,
@@ -413,10 +547,215 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		assistFocusedTask: body.assistFocusedTask
 	} : null;
 	const focusedTask: FocusedTaskInfo | null = body.focusedTask ?? null;
-	const planModeContext: PlanModeContext | null = body.planMode ?? null;
+	let planModeContext: PlanModeContext | null = body.planMode ?? null;
+	const focusAreaId = body.focusAreaId;
+
+	// Debug logging: What plan mode context did we receive?
+	console.log('\n========== CHAT API REQUEST ==========');
+	console.log(`[API] body.planMode received:`, body.planMode ? 'YES' : 'NO');
+	if (body.planMode) {
+		console.log(`[API] planMode.taskId: ${body.planMode.taskId}`);
+		console.log(`[API] planMode.phase: ${body.planMode.phase}`);
+		console.log(`[API] planMode.exchangeCount: ${body.planMode.exchangeCount}`);
+	} else {
+		console.log('[API] NO PLAN MODE CONTEXT - This means frontend did not send planMode');
+	}
+	console.log('========================================\n');
+
+	// Fetch planning conversation context for subtasks
+	// This provides warm-start context from the Plan Mode conversation that created the subtask
+	let focusedTaskWithPlanningContext: FocusedTaskInfo | null = focusedTask;
+	if (focusedTask?.isSubtask && focusedTask?.sourceConversationId) {
+		try {
+			const userId = 'admin'; // POC hardcoded user
+			const planningConversation = await postgresConversationRepository.findById(focusedTask.sourceConversationId, userId);
+
+			if (planningConversation?.messages && planningConversation.messages.length > 0) {
+				// Generate a concise summary of the planning conversation
+				const planningMessages = planningConversation.messages;
+
+				// Extract the key points from the planning conversation
+				// Focus on user requirements and AI's understanding
+				const summary = planningMessages
+					.map(msg => {
+						const role = msg.role === 'user' ? 'User' : 'AI';
+						let content = '';
+						if (typeof msg.content === 'string') {
+							content = msg.content;
+						} else if (Array.isArray(msg.content)) {
+							content = (msg.content as Array<{ type: string; text?: string }>)
+								.filter(c => c.type === 'text' && c.text)
+								.map(c => c.text)
+								.join(' ');
+						}
+						// Truncate long messages
+						const truncated = content.length > 500 ? content.slice(0, 500) + '...' : content;
+						return `${role}: ${truncated}`;
+					})
+					.join('\n\n');
+
+				// Add the summary to focusedTask
+				focusedTaskWithPlanningContext = {
+					...focusedTask,
+					planningConversationSummary: summary
+				};
+
+				console.log(`[API] Loaded planning conversation context for subtask (${planningMessages.length} messages)`);
+			}
+		} catch (error) {
+			console.warn('[API] Failed to load planning conversation context:', error);
+			// Continue without planning context - non-critical
+		}
+	}
+
+	// Fetch space context - for spaces with user-provided context
+	let spaceContext: SpaceInfo | null = null;
+	if (space) {
+		try {
+			const userId = 'admin'; // POC hardcoded user
+			const spaceData = await postgresSpaceRepository.findBySlug(space, userId);
+
+			if (spaceData) {
+				spaceContext = {
+					id: spaceData.id,
+					name: spaceData.name,
+					slug: spaceData.slug,
+					type: spaceData.type,
+					context: spaceData.context
+				};
+
+				// Fetch documents if space has document IDs
+				if (spaceData.contextDocumentIds && spaceData.contextDocumentIds.length > 0) {
+					const documents = await Promise.all(
+						spaceData.contextDocumentIds.map(async (docId) => {
+							const doc = await postgresDocumentRepository.findById(docId, userId);
+							return doc;
+						})
+					);
+
+					// Filter out nulls and map to context format
+					const validDocs = documents.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
+					if (validDocs.length > 0) {
+						spaceContext.contextDocuments = validDocs.map((doc) => ({
+							id: doc.id,
+							filename: doc.filename,
+							content: doc.content,
+							charCount: doc.charCount
+						}));
+						console.log(`Space "${spaceData.name}" loaded with ${validDocs.length} document(s)`);
+					}
+				}
+
+				// Log if space has context or documents
+				if (spaceData.context || spaceContext.contextDocuments?.length) {
+					console.log(`Space context loaded: "${spaceData.name}" (context: ${!!spaceData.context}, docs: ${spaceContext.contextDocuments?.length || 0})`);
+				}
+			}
+		} catch (error) {
+			// Log but don't fail - space context is optional enhancement
+			console.warn('Failed to load space context:', error);
+		}
+	}
+
+	// Fetch focus area context if focusAreaId is provided
+	let focusAreaContext: FocusAreaInfo | null = null;
+	if (focusAreaId) {
+		try {
+			// For POC, use hardcoded admin user (consistent with other API endpoints)
+			const userId = 'admin';
+			const focusArea = await postgresFocusAreaRepository.findById(focusAreaId, userId);
+
+			if (focusArea) {
+				console.log(`[DEBUG] Focus area found:`, {
+					id: focusArea.id,
+					name: focusArea.name,
+					contextDocumentIds: focusArea.contextDocumentIds,
+					hasDocIds: !!focusArea.contextDocumentIds,
+					docIdsLength: focusArea.contextDocumentIds?.length
+				});
+
+				focusAreaContext = {
+					id: focusArea.id,
+					name: focusArea.name,
+					context: focusArea.context,
+					spaceId: focusArea.spaceId
+				};
+
+				// Fetch documents if focus area has document IDs
+				if (focusArea.contextDocumentIds && focusArea.contextDocumentIds.length > 0) {
+					const documents = await Promise.all(
+						focusArea.contextDocumentIds.map(async (docId) => {
+							const doc = await postgresDocumentRepository.findById(docId, userId);
+							return doc;
+						})
+					);
+
+					// Filter out nulls and map to context format
+					const validDocs = documents.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
+					if (validDocs.length > 0) {
+						focusAreaContext.contextDocuments = validDocs.map((doc) => ({
+							id: doc.id,
+							filename: doc.filename,
+							content: doc.content,
+							charCount: doc.charCount
+						}));
+						console.log(`Focus area "${focusArea.name}" loaded with ${validDocs.length} document(s)`);
+					}
+				}
+
+				console.log(`Focus area context loaded: "${focusArea.name}" in space "${focusArea.spaceId}"`);
+			}
+		} catch (error) {
+			// Log but don't fail - focus area context is optional enhancement
+			console.warn('Failed to load focus area context:', error);
+		}
+	}
+
+	// Fetch task context for Plan Mode if a task is selected
+	// This provides documents and related tasks as context for planning
+	if (planModeContext?.taskId) {
+		try {
+			// For POC, use hardcoded admin user (consistent with other API endpoints)
+			const userId = 'admin';
+
+			const [linkedDocs, relatedTasksInfo] = await Promise.all([
+				postgresDocumentRepository.getDocumentsForTask(planModeContext.taskId, userId),
+				postgresTaskRepository.getRelatedTasks(planModeContext.taskId, userId)
+			]);
+
+			// Only attach context if we have documents or related tasks
+			if (linkedDocs.length > 0 || relatedTasksInfo.length > 0) {
+				planModeContext = {
+					...planModeContext,
+					context: {
+						documents: linkedDocs.map((doc) => ({
+							id: doc.id,
+							filename: doc.filename,
+							content: doc.content,
+							summary: doc.summary,
+							charCount: doc.charCount,
+							role: doc.contextRole
+						})),
+						relatedTasks: relatedTasksInfo.map((rt) => ({
+							id: rt.task.id,
+							title: rt.task.title,
+							contextSummary: rt.task.contextSummary,
+							status: rt.task.status,
+							relationship: rt.relationshipType
+						}))
+					}
+				};
+
+				console.log(`Plan Mode context loaded: ${linkedDocs.length} documents, ${relatedTasksInfo.length} related tasks`);
+			}
+		} catch (error) {
+			// Log but don't fail - context is optional enhancement
+			console.warn('Failed to load Plan Mode task context:', error);
+		}
+	}
 
 	// Remove client-specific fields before forwarding to LiteLLM
-	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, ...cleanBody } = body;
+	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, focusAreaId: ___________, ...cleanBody } = body;
 
 	// Add thinking config if enabled
 	if (thinkingEnabled) {
@@ -438,13 +777,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			console.log(`  Message ${idx}: role=${msg.role}, contentType=${contentType}, preview=${contentPreview}`);
 		});
 
-		// If search is enabled, use tool handling
-		if (searchEnabled) {
-			return await handleChatWithTools(cleanBody, thinkingEnabled, space, assistContext, focusedTask, planModeContext);
+		// Determine if we need tool handling:
+		// 1. Web search is enabled
+		// 2. Plan Mode with reference documents (enables on-demand document reading)
+		const hasReferenceDocuments =
+			(focusAreaContext?.contextDocuments?.length ?? 0) > 0 ||
+			(planModeContext?.context?.documents?.length ?? 0) > 0;
+		const needsToolHandling = searchEnabled || (planModeContext && hasReferenceDocuments);
+
+		if (needsToolHandling) {
+			return await handleChatWithTools(cleanBody, thinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext);
 		}
 
-		// Inject platform system prompt with space context (before cache breakpoints so it gets cached)
-		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTask, planModeContext);
+		// Inject platform system prompt with space + focus area + custom space context (before cache breakpoints so it gets cached)
+		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext);
 
 		// Apply cache breakpoints for Claude models (conversation history caching)
 		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
@@ -458,11 +804,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			console.log(`Cache breakpoints: ${cachedCount}/${messagesWithCache.length} messages marked for caching`);
 		}
 
-		// Standard streaming response without tools
-		const litellmResponse = await createChatCompletion({
+		// Build request options
+		const requestOptions: typeof cleanBody & { max_tokens?: number } = {
 			...cleanBody,
 			messages: messagesWithCache
-		});
+		};
+
+		// Structural constraint: limit response length during ALL of Plan Mode elicitation
+		// This prevents the AI from dumping content - user must explicitly trigger proposal
+		if (planModeContext?.phase === 'eliciting') {
+			// Exchange 0-1: 400 char limit → ~120 tokens
+			// Exchange 2+: 300 char limit → ~100 tokens
+			const tokenLimit = (planModeContext.exchangeCount || 0) >= 2 ? 100 : 120;
+			requestOptions.max_tokens = tokenLimit;
+			console.log(`[Plan Mode] Elicitation constraint: max_tokens=${tokenLimit} (exchange ${planModeContext.exchangeCount || 0})`);
+		}
+
+		// Standard streaming response without tools
+		const litellmResponse = await createChatCompletion(requestOptions);
 		console.log('LiteLLM response status:', litellmResponse.status);
 
 		// Log cache statistics if available (for monitoring prompt caching effectiveness)
@@ -516,11 +875,33 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null): Promise<Response> {
 	const encoder = new TextEncoder();
 
-	// Inject platform prompt with space context (and assist if active), then cache breakpoints, then search context
-	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext);
+	// Build map of available documents (from focus area and/or plan mode task context)
+	const availableDocuments = new Map<string, DocumentInfo>();
+	if (focusArea?.contextDocuments) {
+		for (const doc of focusArea.contextDocuments) {
+			availableDocuments.set(doc.filename, {
+				filename: doc.filename,
+				content: doc.content,
+				charCount: doc.charCount
+			});
+		}
+	}
+	if (planModeContext?.context?.documents) {
+		for (const doc of planModeContext.context.documents) {
+			availableDocuments.set(doc.filename, {
+				filename: doc.filename,
+				content: doc.content,
+				charCount: doc.charCount
+			});
+		}
+	}
+	const hasDocuments = availableDocuments.size > 0;
+
+	// Inject platform prompt with space + focus area + custom space context (and assist if active), then cache breakpoints, then search context
+	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext, focusArea, spaceInfo);
 	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
 
@@ -528,14 +909,26 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	const stream = new ReadableStream({
 		async start(controller) {
 			try {
-				// Make initial request with tools (non-streaming to detect tool use)
-				// Use model-appropriate tool format (Anthropic vs OpenAI)
-				const initialResponse = await createChatCompletionWithTools({
+				// Build request options with optional max_tokens constraint
+				const toolRequestOptions: typeof body & { max_tokens?: number } = {
 					...body,
 					messages: messagesWithSearchContext,
 					stream: false,
-					tools: getToolsForModel(body.model)
-				});
+					tools: getToolsForModel(body.model, hasDocuments)
+				};
+
+				// Structural constraint: limit response length during ALL of Plan Mode elicitation
+				if (planModeContext?.phase === 'eliciting') {
+					// Exchange 0-1: 400 char limit → ~120 tokens
+					// Exchange 2+: 300 char limit → ~100 tokens
+					const tokenLimit = (planModeContext.exchangeCount || 0) >= 2 ? 100 : 120;
+					toolRequestOptions.max_tokens = tokenLimit;
+					console.log(`[Plan Mode] Elicitation constraint (tools): max_tokens=${tokenLimit}`);
+				}
+
+				// Make initial request with tools (non-streaming to detect tool use)
+				// Include document tool if documents are available (Plan Mode with reference docs)
+				const initialResponse = await createChatCompletionWithTools(toolRequestOptions);
 
 				if (!initialResponse.ok) {
 					const errorBody = await initialResponse.text();
@@ -644,6 +1037,95 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 								toolResults.push({
 									tool_call_id: toolCall.id,
 									content: 'No search query provided'
+								});
+							}
+						} else if (toolCall.function?.name === 'read_document') {
+							// Document reading tool - used in Plan Mode for reference docs
+							const args = JSON.parse(toolCall.function.arguments || '{}');
+							const filename = args.filename;
+
+							if (filename) {
+								console.log('Reading document:', filename);
+
+								// Use task ID as cache scope (documents are typically read in plan mode)
+								const cacheScope = planModeContext?.taskId || body.planMode?.taskId || null;
+								const paramsHash = hashParams({ filename });
+								const userId = 'admin'; // TODO: Get from auth
+								let cachedResult = null;
+
+								if (cacheScope) {
+									try {
+										const toolCache = getToolCacheRepository();
+										cachedResult = await toolCache.findByParams(
+											cacheScope,
+											'read_document',
+											paramsHash,
+											userId
+										);
+										if (cachedResult) {
+											console.log(`Cache hit for document: ${filename}`);
+											// Use cached result
+											toolResults.push({
+												tool_call_id: toolCall.id,
+												content: cachedResult.fullResult
+											});
+											continue; // Skip to next tool call
+										}
+									} catch (cacheError) {
+										console.warn('Cache lookup failed, will read document:', cacheError);
+									}
+								}
+
+								// Look up document in available documents
+								const doc = availableDocuments.get(filename);
+								if (doc) {
+									console.log(`Document found: ${filename} (${doc.charCount} chars)`);
+
+									// Send status update for UX feedback
+									sendSSE(controller, encoder, {
+										type: 'status',
+										status: 'reading_document',
+										query: filename
+									});
+
+									const resultContent = `Document "${filename}":\n\n${doc.content}`;
+
+									// Cache the result for future turns
+									if (cacheScope) {
+										try {
+											const toolCache = getToolCacheRepository();
+											await toolCache.create(
+												cacheScope,
+												'read_document',
+												paramsHash,
+												resultContent,
+												null, // TODO: Generate summary for token efficiency
+												doc.charCount,
+												userId
+											);
+											console.log(`Cached document: ${filename}`);
+										} catch (cacheError) {
+											console.warn('Failed to cache document:', cacheError);
+										}
+									}
+
+									// Return document content
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: resultContent
+									});
+								} else {
+									// Document not found
+									const availableList = Array.from(availableDocuments.keys()).join(', ');
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: `Document "${filename}" not found. Available documents: ${availableList || 'none'}`
+									});
+								}
+							} else {
+								toolResults.push({
+									tool_call_id: toolCall.id,
+									content: 'No filename provided for read_document'
 								});
 							}
 						} else {

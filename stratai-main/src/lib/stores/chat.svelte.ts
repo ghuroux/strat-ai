@@ -9,7 +9,7 @@
  */
 
 import { SvelteMap } from 'svelte/reactivity';
-import type { Message, Conversation, StructuredSummary, SpaceType } from '$lib/types/chat';
+import type { Message, Conversation, StructuredSummary } from '$lib/types/chat';
 import type { AssistState } from '$lib/types/assists';
 import { ASSISTS } from '$lib/config/assists';
 
@@ -61,7 +61,13 @@ class ChatStore {
 	assistAbortController = $state<AbortController | null>(null);
 
 	// Space state (for filtering conversations by space)
-	activeSpace = $state<SpaceType | null>(null);
+	activeSpaceId = $state<string | null>(null);
+
+	// Focus area state (for filtering conversations by focus area within a space)
+	selectedFocusAreaId = $state<string | null>(null);
+
+	// Task state (for deep work mode - filter to task-linked conversations only)
+	focusedTaskId = $state<string | null>(null);
 
 	// Version counter for fine-grained updates (message content changes)
 	_version = $state(0);
@@ -288,23 +294,81 @@ class ChatStore {
 
 	// Conversations filtered by active space (for space sidebar views)
 	conversationsBySpace = $derived.by(() => {
-		if (!this.activeSpace) return this.conversationList;
-		return this.conversationList.filter((c) => c.space === this.activeSpace);
+		if (!this.activeSpaceId) return this.conversationList;
+		return this.conversationList.filter((c) => c.spaceId === this.activeSpaceId);
 	});
 
 	// Pinned conversations filtered by active space
 	pinnedConversationsBySpace = $derived.by(() => {
-		if (!this.activeSpace) return this.pinnedConversations;
-		return this.pinnedConversations.filter((c) => c.space === this.activeSpace);
+		if (!this.activeSpaceId) return this.pinnedConversations;
+		return this.pinnedConversations.filter((c) => c.spaceId === this.activeSpaceId);
 	});
 
 	// Unpinned conversations filtered by active space
 	unpinnedConversationsBySpace = $derived.by(() => {
-		if (!this.activeSpace) return this.unpinnedConversations;
-		return this.unpinnedConversations.filter((c) => c.space === this.activeSpace);
+		if (!this.activeSpaceId) return this.unpinnedConversations;
+		return this.unpinnedConversations.filter((c) => c.spaceId === this.activeSpaceId);
 	});
 
-	createConversation(model: string, space?: SpaceType): string {
+	// Context-aware grouped conversations for sidebar
+	// Used by Phase C: Chat Context Awareness
+	groupedConversations = $derived.by(() => {
+		const allConversations = Array.from(this.conversations.values())
+			.filter((c) => c && c.id)
+			.sort((a, b) => b.updatedAt - a.updatedAt);
+
+		// Deep work mode: only show task conversations
+		if (this.focusedTaskId) {
+			return {
+				current: allConversations.filter((c) => c.taskId === this.focusedTaskId),
+				otherInSpace: [],
+				otherContexts: [],
+				pinned: allConversations.filter((c) => c.pinned && c.taskId === this.focusedTaskId)
+			};
+		}
+
+		// Focus area view
+		if (this.selectedFocusAreaId) {
+			return {
+				current: allConversations.filter(
+					(c) => c.focusAreaId === this.selectedFocusAreaId && !c.pinned
+				),
+				otherInSpace: allConversations.filter(
+					(c) =>
+						c.spaceId === this.activeSpaceId &&
+						c.focusAreaId !== this.selectedFocusAreaId &&
+						!c.pinned
+				),
+				otherContexts: allConversations.filter(
+					(c) => c.spaceId !== this.activeSpaceId && !c.pinned
+				),
+				pinned: allConversations.filter((c) => c.pinned)
+			};
+		}
+
+		// Space view (all focus areas)
+		if (this.activeSpaceId) {
+			return {
+				current: allConversations.filter((c) => c.spaceId === this.activeSpaceId && !c.pinned),
+				otherInSpace: [], // Not applicable in space view
+				otherContexts: allConversations.filter((c) => c.spaceId !== this.activeSpaceId && !c.pinned),
+				pinned: allConversations.filter((c) => c.pinned)
+			};
+		}
+
+		// Main view (no space context)
+		return {
+			current: allConversations.filter((c) => !c.spaceId && !c.pinned),
+			otherInSpace: [], // Not applicable in main view
+			otherContexts: allConversations.filter((c) => c.spaceId && !c.pinned),
+			pinned: allConversations.filter((c) => c.pinned)
+		};
+	});
+
+	createConversation(
+		model: string,
+		options?: { spaceId?: string; focusAreaId?: string; taskId?: string }
+	): string {
 		const id = generateId();
 		const conversation: Conversation = {
 			id,
@@ -313,7 +377,9 @@ class ChatStore {
 			model,
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
-			space: space || null,
+			spaceId: options?.spaceId || null,
+			focusAreaId: options?.focusAreaId || null,
+			taskId: options?.taskId || null,
 			tags: []
 		};
 
@@ -367,15 +433,130 @@ class ChatStore {
 	 * Set the active space for filtering conversations
 	 * Used by space pages to scope the sidebar view
 	 */
-	setActiveSpace(space: SpaceType | null): void {
-		this.activeSpace = space;
+	setActiveSpaceId(spaceId: string | null): void {
+		this.activeSpaceId = spaceId;
 	}
 
 	/**
 	 * Get count of conversations in a specific space
 	 */
-	getSpaceConversationCount(space: SpaceType): number {
-		return Array.from(this.conversations.values()).filter((c) => c.space === space).length;
+	getSpaceConversationCount(spaceId: string): number {
+		return Array.from(this.conversations.values()).filter((c) => c.spaceId === spaceId).length;
+	}
+
+	/**
+	 * Set the selected focus area for filtering conversations
+	 * Used by focus area views to scope the sidebar view
+	 */
+	setSelectedFocusAreaId(focusAreaId: string | null): void {
+		this.selectedFocusAreaId = focusAreaId;
+	}
+
+	/**
+	 * Set the focused task for deep work mode
+	 * When set, sidebar will only show task-linked conversations
+	 */
+	setFocusedTaskId(taskId: string | null): void {
+		this.focusedTaskId = taskId;
+	}
+
+	/**
+	 * Get conversations linked to a specific focus area
+	 */
+	getConversationsByFocusArea(focusAreaId: string): Conversation[] {
+		return Array.from(this.conversations.values())
+			.filter((c) => c.focusAreaId === focusAreaId)
+			.sort((a, b) => b.updatedAt - a.updatedAt);
+	}
+
+	/**
+	 * Get conversations linked to a specific task (for deep work mode)
+	 */
+	getConversationsForTask(taskId: string): Conversation[] {
+		return Array.from(this.conversations.values())
+			.filter((c) => c.taskId === taskId)
+			.sort((a, b) => b.updatedAt - a.updatedAt);
+	}
+
+	/**
+	 * Get conversations in the current context based on activeSpaceId + selectedFocusAreaId
+	 * Used for context-aware sidebar grouping
+	 */
+	getConversationsInCurrentContext(): Conversation[] {
+		const allConversations = Array.from(this.conversations.values());
+
+		// If focused on a task (deep work mode), only show task conversations
+		if (this.focusedTaskId) {
+			return allConversations
+				.filter((c) => c.taskId === this.focusedTaskId)
+				.sort((a, b) => b.updatedAt - a.updatedAt);
+		}
+
+		// If in a focus area, show focus area conversations
+		if (this.selectedFocusAreaId) {
+			return allConversations
+				.filter((c) => c.focusAreaId === this.selectedFocusAreaId)
+				.sort((a, b) => b.updatedAt - a.updatedAt);
+		}
+
+		// If in a space, show space conversations
+		if (this.activeSpaceId) {
+			return allConversations
+				.filter((c) => c.spaceId === this.activeSpaceId)
+				.sort((a, b) => b.updatedAt - a.updatedAt);
+		}
+
+		// Main view: show conversations without space context
+		return allConversations
+			.filter((c) => !c.spaceId)
+			.sort((a, b) => b.updatedAt - a.updatedAt);
+	}
+
+	/**
+	 * Check if a conversation is in the current context
+	 * Used to determine if "Bring to Context" modal should be shown
+	 */
+	isConversationInCurrentContext(conversation: Conversation): boolean {
+		// If focused on a task, conversation must match the task
+		if (this.focusedTaskId) {
+			return conversation.taskId === this.focusedTaskId;
+		}
+
+		// If in a focus area, conversation must match the focus area
+		if (this.selectedFocusAreaId) {
+			return conversation.focusAreaId === this.selectedFocusAreaId;
+		}
+
+		// If in a space, conversation must match the space
+		if (this.activeSpaceId) {
+			return conversation.spaceId === this.activeSpaceId;
+		}
+
+		// Main view: conversation should have no space context
+		return !conversation.spaceId;
+	}
+
+	/**
+	 * Update a conversation's context (spaceId, focusAreaId, taskId)
+	 * Used by "Bring to Context" modal
+	 */
+	updateConversationContext(
+		id: string,
+		context: { spaceId?: string | null; focusAreaId?: string | null; taskId?: string | null }
+	): void {
+		const conv = this.conversations.get(id);
+		if (conv) {
+			const updated = {
+				...conv,
+				spaceId: context.spaceId !== undefined ? context.spaceId : conv.spaceId,
+				focusAreaId: context.focusAreaId !== undefined ? context.focusAreaId : conv.focusAreaId,
+				taskId: context.taskId !== undefined ? context.taskId : conv.taskId,
+				updatedAt: Date.now()
+			};
+			this.conversations.set(id, updated);
+			this.schedulePersist();
+			this.syncToApi(updated);
+		}
 	}
 
 	addMessage(conversationId: string, message: Omit<Message, 'id' | 'timestamp'>): string {

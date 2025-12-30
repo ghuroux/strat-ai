@@ -108,15 +108,26 @@ if [ "$FRESH_INSTALL" = true ]; then
     echo -e "${YELLOW}Fresh install requested - dropping existing tables...${NC}"
     $PSQL -d $DB_NAME -q <<EOF
         -- Drop tables in correct order (respecting foreign keys)
+        -- Document context tables first (they reference tasks)
+        DROP TABLE IF EXISTS task_documents CASCADE;
+        DROP TABLE IF EXISTS related_tasks CASCADE;
+        DROP TABLE IF EXISTS documents CASCADE;
+        -- Arena tables
         DROP TABLE IF EXISTS arena_battle_models CASCADE;
         DROP TABLE IF EXISTS model_rankings CASCADE;
         DROP TABLE IF EXISTS arena_battles CASCADE;
+        -- Core tables (tasks before focus_areas due to FK, focus_areas before spaces)
         DROP TABLE IF EXISTS tasks CASCADE;
+        DROP TABLE IF EXISTS focus_areas CASCADE;
+        DROP TABLE IF EXISTS spaces CASCADE;
         DROP TABLE IF EXISTS conversations CASCADE;
 
         -- Drop functions
         DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
         DROP FUNCTION IF EXISTS update_tasks_updated_at() CASCADE;
+        DROP FUNCTION IF EXISTS update_documents_updated_at() CASCADE;
+        DROP FUNCTION IF EXISTS update_focus_areas_updated_at() CASCADE;
+        DROP FUNCTION IF EXISTS update_spaces_updated_at() CASCADE;
 EOF
     echo -e "${GREEN}Existing tables dropped${NC}"
     echo ""
@@ -131,8 +142,17 @@ $PSQL -d $DB_NAME -f "$SCHEMA_DIR/schema.sql" -q
 echo "  - Arena schema..."
 $PSQL -d $DB_NAME -f "$SCHEMA_DIR/arena-schema.sql" -q
 
+echo "  - Spaces schema..."
+$PSQL -d $DB_NAME -f "$SCHEMA_DIR/spaces-schema.sql" -q
+
+echo "  - Focus Areas schema..."
+$PSQL -d $DB_NAME -f "$SCHEMA_DIR/focus-areas-schema.sql" -q
+
 echo "  - Tasks schema..."
 $PSQL -d $DB_NAME -f "$SCHEMA_DIR/tasks-schema.sql" -q
+
+echo "  - Documents schema..."
+$PSQL -d $DB_NAME -f "$SCHEMA_DIR/documents-schema.sql" -q
 
 echo ""
 echo -e "${GREEN}=========================================="
@@ -140,7 +160,7 @@ echo "  Database setup complete!"
 echo "==========================================${NC}"
 echo ""
 echo "Tables created:"
-$PSQL -d $DB_NAME -c "\dt" 2>/dev/null | grep -E "(conversations|arena_battles|model_rankings|arena_battle_models|tasks)" || echo "  (tables created successfully)"
+$PSQL -d $DB_NAME -c "\dt" 2>/dev/null | grep -E "(conversations|arena_battles|model_rankings|arena_battle_models|spaces|focus_areas|tasks|documents|task_documents|related_tasks)" || echo "  (tables created successfully)"
 echo ""
 echo "Next steps:"
 echo "  1. Copy .env.example to .env"

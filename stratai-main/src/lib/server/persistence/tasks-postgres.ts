@@ -14,9 +14,12 @@ import type {
 	UpdateTaskInput,
 	TaskListFilter,
 	CreateSubtaskInput,
-	SubtaskType
+	SubtaskType,
+	TaskRelationshipType,
+	RelatedTaskRow,
+	RelatedTaskInfo,
+	PlanningData
 } from '$lib/types/tasks';
-import type { SpaceType } from '$lib/types/chat';
 import type { TaskRepository } from './types';
 import { sql } from './db';
 import { getNextTaskColor } from '$lib/config/task-colors';
@@ -30,36 +33,55 @@ function generateTaskId(): string {
 
 /**
  * Convert database row to Task entity
+ * Note: postgres.js auto-converts snake_case to camelCase, so row properties are already camelCase
  */
 function dbRowToTask(row: TaskRow): Task {
+	// Parse planningData - postgres.js may return JSONB as string
+	let parsedPlanningData: PlanningData | undefined = undefined;
+	if (row.planningData !== null && row.planningData !== undefined) {
+		if (typeof row.planningData === 'string') {
+			try {
+				parsedPlanningData = JSON.parse(row.planningData) as PlanningData;
+			} catch (e) {
+				console.error('[dbRowToTask] Failed to parse planningData string:', e);
+			}
+		} else {
+			parsedPlanningData = row.planningData as PlanningData;
+		}
+	}
+
 	return {
 		id: row.id,
 		title: row.title,
 		status: row.status as Task['status'],
 		priority: row.priority as Task['priority'],
 		color: row.color,
-		dueDate: row.due_date ?? undefined,
-		dueDateType: row.due_date_type as Task['dueDateType'] ?? undefined,
-		completedAt: row.completed_at ?? undefined,
-		completionNotes: row.completion_notes ?? undefined,
+		dueDate: row.dueDate ?? undefined,
+		dueDateType: row.dueDateType as Task['dueDateType'] ?? undefined,
+		completedAt: row.completedAt ?? undefined,
+		completionNotes: row.completionNotes ?? undefined,
 		source: {
-			type: row.source_type as Task['source']['type'],
-			assistId: row.source_assist_id ?? undefined,
-			conversationId: row.source_conversation_id ?? undefined
+			type: row.sourceType as Task['source']['type'],
+			assistId: row.sourceAssistId ?? undefined,
+			conversationId: row.sourceConversationId ?? undefined
 		},
-		linkedConversationIds: row.linked_conversation_ids ?? [],
+		linkedConversationIds: row.linkedConversationIds ?? [],
 		// Subtask fields
-		parentTaskId: row.parent_task_id ?? undefined,
-		subtaskType: (row.subtask_type as SubtaskType) ?? undefined,
-		subtaskOrder: row.subtask_order ?? undefined,
-		contextSummary: row.context_summary ?? undefined,
+		parentTaskId: row.parentTaskId ?? undefined,
+		subtaskType: (row.subtaskType as SubtaskType) ?? undefined,
+		subtaskOrder: row.subtaskOrder ?? undefined,
+		contextSummary: row.contextSummary ?? undefined,
+		// Focus Area
+		focusAreaId: row.focusAreaId ?? undefined,
+		// Planning state - use parsed value
+		planningData: parsedPlanningData,
 		// Scope
-		space: row.space as SpaceType,
-		userId: row.user_id,
-		lastActivityAt: row.last_activity_at,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at,
-		deletedAt: row.deleted_at ?? undefined
+		spaceId: row.spaceId,
+		userId: row.userId,
+		lastActivityAt: row.lastActivityAt,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+		deletedAt: row.deletedAt ?? undefined
 	};
 }
 
@@ -71,26 +93,26 @@ export const postgresTaskRepository: TaskRepository = {
 		// Build WHERE conditions based on filter
 		let query;
 
-		if (filter?.space && filter?.status) {
+		if (filter?.spaceId && filter?.status) {
 			const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
 			query = sql<TaskRow[]>`
 				SELECT *
 				FROM tasks
 				WHERE user_id = ${userId}
-					AND space = ${filter.space}
+					AND space_id = ${filter.spaceId}
 					AND status = ANY(${statuses})
 					AND deleted_at IS NULL
 				ORDER BY
 					CASE WHEN priority = 'high' THEN 0 ELSE 1 END,
 					created_at DESC
 			`;
-		} else if (filter?.space) {
+		} else if (filter?.spaceId) {
 			if (filter.includeCompleted) {
 				query = sql<TaskRow[]>`
 					SELECT *
 					FROM tasks
 					WHERE user_id = ${userId}
-						AND space = ${filter.space}
+						AND space_id = ${filter.spaceId}
 						AND deleted_at IS NULL
 					ORDER BY
 						CASE WHEN status = 'completed' THEN 1 ELSE 0 END,
@@ -102,7 +124,7 @@ export const postgresTaskRepository: TaskRepository = {
 					SELECT *
 					FROM tasks
 					WHERE user_id = ${userId}
-						AND space = ${filter.space}
+						AND space_id = ${filter.spaceId}
 						AND status != 'completed'
 						AND deleted_at IS NULL
 					ORDER BY
@@ -161,7 +183,8 @@ export const postgresTaskRepository: TaskRepository = {
 				id, title, status, priority, color,
 				due_date, due_date_type,
 				source_type, source_assist_id, source_conversation_id,
-				space, user_id,
+				focus_area_id,
+				space_id, user_id,
 				last_activity_at, created_at, updated_at
 			) VALUES (
 				${id},
@@ -174,7 +197,8 @@ export const postgresTaskRepository: TaskRepository = {
 				${input.source?.type ?? 'manual'},
 				${input.source?.assistId ?? null},
 				${input.source?.conversationId ?? null},
-				${input.space},
+				${input.focusAreaId ?? null},
+				${input.spaceId},
 				${userId},
 				${now},
 				${now},
@@ -234,6 +258,7 @@ export const postgresTaskRepository: TaskRepository = {
 				title = COALESCE(${updates.title ?? null}, title),
 				status = COALESCE(${updates.status ?? null}, status),
 				priority = COALESCE(${updates.priority ?? null}, priority),
+				focus_area_id = ${updates.focusAreaId === null ? null : updates.focusAreaId ?? sql`focus_area_id`},
 				due_date = ${updates.dueDate === null ? null : updates.dueDate ?? sql`due_date`},
 				due_date_type = ${updates.dueDateType === null ? null : updates.dueDateType ?? sql`due_date_type`},
 				completion_notes = COALESCE(${updates.completionNotes ?? null}, completion_notes),
@@ -254,6 +279,26 @@ export const postgresTaskRepository: TaskRepository = {
 				status = 'completed',
 				completed_at = NOW(),
 				completion_notes = ${notes ?? null},
+				planning_data = NULL,
+				last_activity_at = NOW(),
+				updated_at = NOW()
+			WHERE id = ${id}
+				AND user_id = ${userId}
+				AND deleted_at IS NULL
+		`;
+
+		return this.findById(id, userId);
+	},
+
+	/**
+	 * Update planning data for a task (for Plan Mode persistence)
+	 * Pass null to clear planning data (when exiting plan mode)
+	 */
+	async updatePlanningData(id: string, planningData: PlanningData | null, userId: string): Promise<Task | null> {
+		await sql`
+			UPDATE tasks
+			SET
+				planning_data = ${planningData ? JSON.stringify(planningData) : null}::jsonb,
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}
@@ -278,13 +323,13 @@ export const postgresTaskRepository: TaskRepository = {
 	async count(userId: string, filter?: TaskListFilter): Promise<number> {
 		let result;
 
-		if (filter?.space) {
+		if (filter?.spaceId) {
 			if (filter.includeCompleted) {
 				result = await sql<{ count: string }[]>`
 					SELECT COUNT(*) as count
 					FROM tasks
 					WHERE user_id = ${userId}
-						AND space = ${filter.space}
+						AND space_id = ${filter.spaceId}
 						AND deleted_at IS NULL
 				`;
 			} else {
@@ -292,7 +337,7 @@ export const postgresTaskRepository: TaskRepository = {
 					SELECT COUNT(*) as count
 					FROM tasks
 					WHERE user_id = ${userId}
-						AND space = ${filter.space}
+						AND space_id = ${filter.spaceId}
 						AND status != 'completed'
 						AND deleted_at IS NULL
 				`;
@@ -319,12 +364,12 @@ export const postgresTaskRepository: TaskRepository = {
 		return parseInt(result[0]?.count || '0', 10);
 	},
 
-	async getActiveBySpace(userId: string, space: SpaceType): Promise<Task[]> {
+	async getActiveBySpaceId(userId: string, spaceId: string): Promise<Task[]> {
 		const rows = await sql<TaskRow[]>`
 			SELECT *
 			FROM tasks
 			WHERE user_id = ${userId}
-				AND space = ${space}
+				AND space_id = ${spaceId}
 				AND status = 'active'
 				AND deleted_at IS NULL
 			ORDER BY
@@ -408,14 +453,15 @@ export const postgresTaskRepository: TaskRepository = {
 		}
 
 		// Get the next subtask order
-		const orderResult = await sql<{ max_order: number | null }[]>`
+		// Note: postgres.js transforms column names to camelCase, so we use maxOrder not max_order
+		const orderResult = await sql<{ maxOrder: number | null }[]>`
 			SELECT MAX(subtask_order) as max_order
 			FROM tasks
 			WHERE parent_task_id = ${input.parentTaskId}
 				AND user_id = ${userId}
 				AND deleted_at IS NULL
 		`;
-		const nextOrder = (orderResult[0]?.max_order ?? -1) + 1;
+		const nextOrder = (orderResult[0]?.maxOrder ?? -1) + 1;
 
 		const id = generateTaskId();
 		const color = parent.color; // Inherit parent color (slightly muted in UI)
@@ -425,8 +471,8 @@ export const postgresTaskRepository: TaskRepository = {
 			INSERT INTO tasks (
 				id, title, status, priority, color,
 				parent_task_id, subtask_type, subtask_order,
-				source_type,
-				space, user_id,
+				source_type, source_conversation_id, focus_area_id,
+				space_id, user_id,
 				last_activity_at, created_at, updated_at
 			) VALUES (
 				${id},
@@ -437,8 +483,10 @@ export const postgresTaskRepository: TaskRepository = {
 				${input.parentTaskId},
 				${input.subtaskType ?? 'conversation'},
 				${nextOrder},
-				'manual',
-				${parent.space},
+				${input.sourceConversationId ? 'chat' : 'manual'},
+				${input.sourceConversationId ?? null},
+				${parent.focusAreaId ?? null},
+				${parent.spaceId},
 				${userId},
 				${now},
 				${now},
@@ -491,5 +539,108 @@ export const postgresTaskRepository: TaskRepository = {
 				AND user_id = ${userId}
 				AND deleted_at IS NULL
 		`;
+	},
+
+	async deleteSubtasks(parentId: string, userId: string): Promise<number> {
+		const result = await sql`
+			UPDATE tasks
+			SET deleted_at = NOW()
+			WHERE parent_task_id = ${parentId}
+				AND user_id = ${userId}
+				AND deleted_at IS NULL
+		`;
+		return result.count;
+	},
+
+	// =====================================================
+	// Related Task Methods (Task Context System)
+	// =====================================================
+
+	async linkRelatedTask(
+		sourceTaskId: string,
+		targetTaskId: string,
+		relationshipType: TaskRelationshipType,
+		userId: string
+	): Promise<void> {
+		// Verify both tasks exist and belong to user
+		const sourceTask = await this.findById(sourceTaskId, userId);
+		const targetTask = await this.findById(targetTaskId, userId);
+
+		if (!sourceTask || !targetTask) {
+			throw new Error('One or both tasks not found');
+		}
+
+		if (sourceTaskId === targetTaskId) {
+			throw new Error('Cannot relate a task to itself');
+		}
+
+		const id = `rtlink_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+		const now = new Date();
+
+		// Use ON CONFLICT to handle duplicates gracefully
+		await sql`
+			INSERT INTO related_tasks (id, source_task_id, target_task_id, relationship_type, created_at)
+			VALUES (${id}, ${sourceTaskId}, ${targetTaskId}, ${relationshipType}, ${now})
+			ON CONFLICT (source_task_id, target_task_id) DO UPDATE
+			SET relationship_type = ${relationshipType}
+		`;
+	},
+
+	async unlinkRelatedTask(sourceTaskId: string, targetTaskId: string, userId: string): Promise<void> {
+		// Verify source task belongs to user before unlinking
+		const sourceTask = await this.findById(sourceTaskId, userId);
+		if (!sourceTask) {
+			throw new Error('Source task not found or access denied');
+		}
+
+		await sql`
+			DELETE FROM related_tasks
+			WHERE source_task_id = ${sourceTaskId}
+			  AND target_task_id = ${targetTaskId}
+		`;
+	},
+
+	async getRelatedTasks(taskId: string, userId: string): Promise<RelatedTaskInfo[]> {
+		// Get tasks where this task is the source (outgoing relationships)
+		const outgoingRows = await sql<(TaskRow & { relationship_type: string })[]>`
+			SELECT t.*, rt.relationship_type
+			FROM tasks t
+			JOIN related_tasks rt ON rt.target_task_id = t.id
+			WHERE rt.source_task_id = ${taskId}
+			  AND t.user_id = ${userId}
+			  AND t.deleted_at IS NULL
+			ORDER BY t.created_at DESC
+		`;
+
+		// Get tasks where this task is the target (incoming relationships)
+		const incomingRows = await sql<(TaskRow & { relationship_type: string })[]>`
+			SELECT t.*, rt.relationship_type
+			FROM tasks t
+			JOIN related_tasks rt ON rt.source_task_id = t.id
+			WHERE rt.target_task_id = ${taskId}
+			  AND t.user_id = ${userId}
+			  AND t.deleted_at IS NULL
+			ORDER BY t.created_at DESC
+		`;
+
+		const results: RelatedTaskInfo[] = [];
+
+		for (const row of outgoingRows) {
+			results.push({
+				task: dbRowToTask(row),
+				relationshipType: row.relationship_type as TaskRelationshipType,
+				direction: 'outgoing'
+			});
+		}
+
+		for (const row of incomingRows) {
+			results.push({
+				task: dbRowToTask(row),
+				relationshipType: row.relationship_type as TaskRelationshipType,
+				direction: 'incoming'
+			});
+		}
+
+		return results;
 	}
 };

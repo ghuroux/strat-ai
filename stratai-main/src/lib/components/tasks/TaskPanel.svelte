@@ -1,21 +1,42 @@
 <script lang="ts">
 	import { fly, fade, slide } from 'svelte/transition';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { focusAreaStore } from '$lib/stores/focusAreas.svelte';
+	import { documentStore } from '$lib/stores/documents.svelte';
+	import DeleteTaskModal from './DeleteTaskModal.svelte';
 	import type { Task, TaskPriority, DueDateType, SubtaskType } from '$lib/types/tasks';
-	import type { SpaceType } from '$lib/types/chat';
+	import type { DocumentContextRole } from '$lib/types/documents';
 
 	interface Props {
-		space: SpaceType;
+		spaceId: string;
+		focusAreaId?: string | null; // Current focus area selection
 		onClose: () => void;
 		onFocusTask: (taskId: string) => void;
+		onAddContext?: (taskId: string) => void;
 	}
 
-	let { space, onClose, onFocusTask }: Props = $props();
+	let { spaceId, focusAreaId, onClose, onFocusTask, onAddContext }: Props = $props();
 
 	// Task state from store - only parent tasks for main list
-	let parentTasks = $derived(taskStore.parentTasks);
+	// Sort: Planning tasks first, then high priority, then by date
+	let parentTasks = $derived(
+		taskStore.parentTasks.slice().sort((a, b) => {
+			// Planning tasks always first
+			if (a.status === 'planning' && b.status !== 'planning') return -1;
+			if (a.status !== 'planning' && b.status === 'planning') return 1;
+			// Then high priority
+			if (a.priority === 'high' && b.priority !== 'high') return -1;
+			if (a.priority !== 'high' && b.priority === 'high') return 1;
+			// Then by created date
+			return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+		})
+	);
 	let focusedTaskId = $derived(taskStore.focusedTaskId);
 	let isLoading = $derived(taskStore.isLoading);
+	let planningTask = $derived(taskStore.planningTask);
+
+	// Focus areas for the current space
+	let focusAreas = $derived(focusAreaStore.getFocusAreasForSpace(spaceId));
 
 	// UI state
 	let editingTaskId: string | null = $state(null);
@@ -23,18 +44,52 @@
 		title: '',
 		priority: 'normal' as TaskPriority,
 		dueDate: '',
-		dueDateType: 'soft' as DueDateType
+		dueDateType: 'soft' as DueDateType,
+		focusAreaId: '' as string // empty string = no focus area
 	});
 	let showAddTask = $state(false);
+	let showContextSection = $state(false);
 	let newTaskForm = $state({
 		title: '',
 		priority: 'normal' as TaskPriority,
 		dueDate: '',
-		dueDateType: 'soft' as DueDateType
+		dueDateType: 'soft' as DueDateType,
+		focusAreaId: '' as string, // empty = use current focusAreaId or none
+		selectedDocumentIds: new Set<string>(),
+		selectedRelatedTaskIds: new Set<string>()
+	});
+
+	// Document/task selection state for the context picker
+	let documentSearchQuery = $state('');
+	let relatedTaskSearchQuery = $state('');
+	let selectedDocumentRole = $state<DocumentContextRole>('reference');
+
+	// Available documents filtered for context picker
+	let availableDocuments = $derived.by(() => {
+		const _ = documentStore._version;
+		const docs = documentStore.getDocuments(spaceId);
+		if (!documentSearchQuery) return docs;
+		const query = documentSearchQuery.toLowerCase();
+		return docs.filter(
+			d => d.filename.toLowerCase().includes(query) ||
+				 d.title?.toLowerCase().includes(query)
+		);
+	});
+
+	// Available tasks for linking (exclude current tasks that are already parents)
+	let availableRelatedTasks = $derived.by(() => {
+		const _ = taskStore._version;
+		const tasks = taskStore.parentTasks;
+		if (!relatedTaskSearchQuery) return tasks;
+		const query = relatedTaskSearchQuery.toLowerCase();
+		return tasks.filter(t => t.title.toLowerCase().includes(query));
 	});
 	let completingTaskId: string | null = $state(null);
 	let completionNotes = $state('');
-	let deleteConfirmId: string | null = $state(null);
+
+	// Delete modal state
+	let deleteModalTask: Task | null = $state(null);
+	let deleteModalInfo = $state({ subtaskCount: 0, conversationCount: 0 });
 
 	// Subtask state
 	let addingSubtaskTo: string | null = $state(null);
@@ -46,7 +101,9 @@
 	// Keyboard handler
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
-			if (editingTaskId) {
+			if (deleteModalTask) {
+				deleteModalTask = null;
+			} else if (editingTaskId) {
 				editingTaskId = null;
 			} else if (showAddTask) {
 				showAddTask = false;
@@ -57,8 +114,6 @@
 			} else if (completingTaskId) {
 				completingTaskId = null;
 				completionNotes = '';
-			} else if (deleteConfirmId) {
-				deleteConfirmId = null;
 			} else {
 				onClose();
 			}
@@ -70,8 +125,15 @@
 			title: '',
 			priority: 'normal',
 			dueDate: '',
-			dueDateType: 'soft'
+			dueDateType: 'soft',
+			focusAreaId: '',
+			selectedDocumentIds: new Set<string>(),
+			selectedRelatedTaskIds: new Set<string>()
 		};
+		showContextSection = false;
+		documentSearchQuery = '';
+		relatedTaskSearchQuery = '';
+		selectedDocumentRole = 'reference';
 	}
 
 	function resetSubtaskForm() {
@@ -112,7 +174,8 @@
 			title: task.title,
 			priority: task.priority,
 			dueDate: task.dueDate ? task.dueDate.toISOString().split('T')[0] : '',
-			dueDateType: task.dueDateType || 'soft'
+			dueDateType: task.dueDateType || 'soft',
+			focusAreaId: task.focusAreaId || ''
 		};
 	}
 
@@ -122,6 +185,7 @@
 		await taskStore.updateTask(editingTaskId, {
 			title: editForm.title.trim(),
 			priority: editForm.priority,
+			focusAreaId: editForm.focusAreaId || null, // empty string becomes null
 			dueDate: editForm.dueDate ? new Date(editForm.dueDate) : null,
 			dueDateType: editForm.dueDate ? editForm.dueDateType : null
 		});
@@ -136,16 +200,42 @@
 	async function addTask() {
 		if (!newTaskForm.title.trim()) return;
 
-		await taskStore.createTask({
+		// Determine focus area: use form selection, or fall back to current focusAreaId
+		const selectedFocusArea = newTaskForm.focusAreaId || focusAreaId || undefined;
+
+		const newTask = await taskStore.createTask({
 			title: newTaskForm.title.trim(),
-			space,
+			spaceId,
+			focusAreaId: selectedFocusArea,
 			priority: newTaskForm.priority,
 			dueDate: newTaskForm.dueDate ? new Date(newTaskForm.dueDate) : undefined,
 			dueDateType: newTaskForm.dueDate ? newTaskForm.dueDateType : undefined,
 			source: { type: 'manual' }
 		});
+
+		// If task was created successfully and we have context to link
+		if (newTask) {
+			// Link selected documents
+			const docIds = Array.from(newTaskForm.selectedDocumentIds);
+			for (const docId of docIds) {
+				await documentStore.linkToTask(docId, newTask.id, selectedDocumentRole);
+			}
+
+			// Link selected related tasks
+			const relatedIds = Array.from(newTaskForm.selectedRelatedTaskIds);
+			for (const targetId of relatedIds) {
+				await taskStore.linkRelatedTask(newTask.id, targetId, 'related');
+			}
+		}
+
 		showAddTask = false;
 		resetNewTaskForm();
+	}
+
+	// Helper to get focus area name
+	function getFocusAreaName(faId: string): string | null {
+		const fa = focusAreaStore.getFocusAreaById(faId);
+		return fa?.name ?? null;
 	}
 
 	// Complete task functions
@@ -162,10 +252,20 @@
 	}
 
 	// Delete functions
-	async function confirmDelete() {
-		if (!deleteConfirmId) return;
-		await taskStore.deleteTask(deleteConfirmId);
-		deleteConfirmId = null;
+	function openDeleteModal(task: Task) {
+		const info = taskStore.getTaskDeletionInfo(task.id);
+		deleteModalTask = task;
+		deleteModalInfo = info;
+	}
+
+	async function handleDeleteConfirm(deleteConversations: boolean) {
+		if (!deleteModalTask) return;
+		await taskStore.deleteTask(deleteModalTask.id, { deleteConversations });
+		deleteModalTask = null;
+	}
+
+	function handleDeleteCancel() {
+		deleteModalTask = null;
 	}
 
 	// Focus function
@@ -271,19 +371,21 @@
 					{@const isFocused = task.id === focusedTaskId}
 					{@const isEditing = task.id === editingTaskId}
 					{@const isCompleting = task.id === completingTaskId}
-					{@const isDeleting = task.id === deleteConfirmId}
 					{@const hasSubtasks = taskStore.hasSubtasks(task.id)}
 					{@const isExpanded = taskStore.isTaskExpanded(task.id)}
 					{@const subtasks = taskStore.getSubtasksForTask(task.id)}
 					{@const subtaskCount = subtasks.length}
 					{@const completedSubtaskCount = subtasks.filter(s => s.status === 'completed').length}
+					{@const isPlanning = task.status === 'planning'}
+					{@const proposedCount = task.planningData?.proposedSubtasks?.length ?? 0}
 
 					<div
 						class="task-item group relative rounded-xl border transition-all duration-200
 							   {isFocused
 								? 'ring-2 ring-offset-2 ring-offset-surface-900'
-								: 'hover:border-surface-600'}"
-						style="background: {isFocused ? `color-mix(in srgb, ${task.color} 10%, transparent)` : 'rgba(var(--surface-800-rgb), 0.5)'}; border-color: {isFocused ? task.color : 'rgb(var(--surface-700-rgb))'}; {isFocused ? `--tw-ring-color: ${task.color};` : ''}"
+								: 'hover:border-surface-600'}
+							   {isPlanning ? 'planning-task' : ''}"
+						style="background: {isPlanning ? 'rgba(168, 85, 247, 0.1)' : isFocused ? `color-mix(in srgb, ${task.color} 10%, transparent)` : 'rgba(var(--surface-800-rgb), 0.5)'}; border-color: {isPlanning ? 'rgb(168, 85, 247)' : isFocused ? task.color : 'rgb(var(--surface-700-rgb))'}; {isFocused ? `--tw-ring-color: ${task.color};` : ''}"
 					>
 						{#if isEditing}
 							<!-- Edit Mode -->
@@ -318,6 +420,21 @@
 										/>
 									</div>
 								</div>
+								{#if focusAreas.length > 0}
+									<div>
+										<label class="block text-xs text-surface-500 mb-1">Focus Area</label>
+										<select
+											bind:value={editForm.focusAreaId}
+											class="w-full px-3 py-2 bg-surface-900 border border-surface-600 rounded-lg
+												   text-surface-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+										>
+											<option value="">No focus area</option>
+											{#each focusAreas as fa}
+												<option value={fa.id}>{fa.name}</option>
+											{/each}
+										</select>
+									</div>
+								{/if}
 								{#if editForm.dueDate}
 									<div>
 										<label class="block text-xs text-surface-500 mb-1">Deadline Type</label>
@@ -391,29 +508,6 @@
 									</button>
 								</div>
 							</div>
-						{:else if isDeleting}
-							<!-- Delete Confirmation -->
-							<div class="p-4 space-y-3" transition:fade={{ duration: 150 }}>
-								<div class="text-sm text-surface-300">
-									Delete <span class="font-medium text-surface-100">"{task.title}"</span>?
-								</div>
-								<div class="flex gap-2">
-									<button
-										type="button"
-										onclick={confirmDelete}
-										class="px-4 py-2 text-sm font-medium bg-red-500 text-white rounded-lg hover:bg-red-600"
-									>
-										Delete
-									</button>
-									<button
-										type="button"
-										onclick={() => deleteConfirmId = null}
-										class="px-4 py-2 text-sm font-medium bg-surface-700 text-surface-300 rounded-lg hover:bg-surface-600"
-									>
-										Cancel
-									</button>
-								</div>
-							</div>
 						{:else}
 							<!-- Display Mode -->
 							<div class="p-3">
@@ -445,13 +539,31 @@
 									></div>
 
 									<div class="flex-1 min-w-0">
-										<!-- Title, Priority, and Subtask count -->
+										<!-- Title, Priority, Focus Area, and Subtask count -->
 										<div class="flex items-start gap-2">
 											<span class="text-sm text-surface-100 flex-1 leading-relaxed {isFocused ? 'font-medium' : ''}">{task.title}</span>
-											{#if task.priority === 'high'}
+											{#if isPlanning}
+												<span class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-purple-500/20 text-purple-400 rounded flex items-center gap-1">
+													<svg class="w-3 h-3 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+														<circle cx="12" cy="12" r="3" />
+													</svg>
+													PLANNING
+													{#if proposedCount > 0}
+														<span class="text-purple-300">({proposedCount})</span>
+													{/if}
+												</span>
+											{:else if task.priority === 'high'}
 												<span class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded">
 													HIGH
 												</span>
+											{/if}
+											{#if task.focusAreaId}
+												{@const faName = getFocusAreaName(task.focusAreaId)}
+												{#if faName}
+													<span class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-primary-500/20 text-primary-400 rounded truncate max-w-[100px]" title={faName}>
+														{faName}
+													</span>
+												{/if}
 											{/if}
 											{#if subtaskCount > 0}
 												<span class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-surface-700 text-surface-400 rounded">
@@ -486,42 +598,85 @@
 
 								<!-- Action buttons -->
 								<div class="mt-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-									{#if !isFocused}
+									{#if isPlanning}
+										<!-- Planning-specific actions -->
 										<button
 											type="button"
 											onclick={() => handleFocus(task.id)}
 											class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
-												   bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors"
+												   bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors"
 										>
 											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 											</svg>
-											Focus
+											Resume Planning
 										</button>
+										<button
+											type="button"
+											onclick={() => taskStore.exitPlanMode()}
+											class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+												   bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors"
+											title="Cancel planning and return to active status"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+											</svg>
+											Cancel
+										</button>
+									{:else}
+										<!-- Normal task actions -->
+										{#if !isFocused}
+											<button
+												type="button"
+												onclick={() => handleFocus(task.id)}
+												class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+													   bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors"
+											>
+												<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+												</svg>
+												Focus
+											</button>
+										{/if}
+										<button
+											type="button"
+											onclick={() => startCompleting(task)}
+											class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+												   bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+											</svg>
+											Done
+										</button>
+										<button
+											type="button"
+											onclick={() => startAddingSubtask(task.id)}
+											class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+												   bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors"
+											title="Add subtask"
+										>
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+											</svg>
+											Subtask
+										</button>
+										{#if onAddContext}
+											<button
+												type="button"
+												onclick={() => onAddContext?.(task.id)}
+												class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
+													   bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors"
+												title="Add context (documents, related tasks)"
+											>
+												<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+												</svg>
+												Context
+											</button>
+										{/if}
 									{/if}
-									<button
-										type="button"
-										onclick={() => startCompleting(task)}
-										class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
-											   bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
-									>
-										<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-										</svg>
-										Done
-									</button>
-									<button
-										type="button"
-										onclick={() => startAddingSubtask(task.id)}
-										class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium
-											   bg-surface-700 text-surface-300 hover:bg-surface-600 transition-colors"
-										title="Add subtask"
-									>
-										<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-										</svg>
-										Subtask
-									</button>
 									<button
 										type="button"
 										onclick={() => startEditing(task)}
@@ -534,7 +689,7 @@
 									</button>
 									<button
 										type="button"
-										onclick={() => deleteConfirmId = task.id}
+										onclick={() => openDeleteModal(task)}
 										class="p-1.5 rounded-lg text-surface-500 hover:text-red-400 hover:bg-surface-700 transition-colors"
 										title="Delete"
 									>
@@ -551,24 +706,33 @@
 									<div class="pl-10 pr-3 py-2 space-y-1">
 										{#each subtasks as subtask (subtask.id)}
 											{@const isSubtaskFocused = subtask.id === focusedTaskId}
-											<div
-												class="flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors
-													   {isSubtaskFocused ? 'bg-surface-700' : 'hover:bg-surface-700/50'}"
+											{@const isCompleted = subtask.status === 'completed'}
+											{@const isConversation = subtask.subtaskType === 'conversation'}
+											<button
+												type="button"
+												onclick={() => { if (!isCompleted && isConversation) handleFocus(subtask.id); }}
+												class="group/subtask w-full flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors text-left
+													   {isSubtaskFocused ? 'bg-surface-700' : 'hover:bg-surface-700/50'}
+													   {isCompleted ? 'opacity-60' : ''}"
 											>
-												<!-- Subtask type icon -->
+												<!-- Subtask type icon / checkbox -->
 												{#if subtask.subtaskType === 'action'}
-													<button
-														type="button"
-														onclick={() => taskStore.completeTask(subtask.id)}
-														class="flex-shrink-0 w-4 h-4 rounded border border-surface-500
-															   {subtask.status === 'completed' ? 'bg-green-500 border-green-500' : 'hover:border-surface-400'}"
+													<!-- svelte-ignore a11y_no_static_element_interactions -->
+													<span
+														role="checkbox"
+														aria-checked={isCompleted}
+														tabindex="0"
+														onclick={(e) => { e.stopPropagation(); taskStore.completeTask(subtask.id); }}
+														onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); taskStore.completeTask(subtask.id); } }}
+														class="flex-shrink-0 w-4 h-4 rounded border border-surface-500 flex items-center justify-center cursor-pointer
+															   {isCompleted ? 'bg-green-500 border-green-500' : 'hover:border-surface-400'}"
 													>
-														{#if subtask.status === 'completed'}
+														{#if isCompleted}
 															<svg class="w-full h-full text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
 															</svg>
 														{/if}
-													</button>
+													</span>
 												{:else}
 													<svg class="w-4 h-4 text-surface-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -576,24 +740,17 @@
 												{/if}
 
 												<!-- Subtask title -->
-												<span class="flex-1 text-xs text-surface-300 truncate {subtask.status === 'completed' ? 'line-through opacity-60' : ''}">
+												<span class="flex-1 text-xs text-surface-300 truncate {isCompleted ? 'line-through' : ''}">
 													{subtask.title}
 												</span>
 
-												<!-- Focus button for conversation subtasks -->
-												{#if subtask.subtaskType === 'conversation' && subtask.status !== 'completed'}
-													<button
-														type="button"
-														onclick={() => handleFocus(subtask.id)}
-														class="p-1 rounded text-surface-500 hover:text-surface-300 hover:bg-surface-600 transition-colors opacity-0 group-hover:opacity-100"
-														title="Focus on this subtask"
-													>
-														<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-														</svg>
-													</button>
+												<!-- Focus arrow for conversation subtasks -->
+												{#if isConversation && !isCompleted}
+													<svg class="w-4 h-4 text-surface-500 group-hover/subtask:text-surface-300 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+													</svg>
 												{/if}
-											</div>
+											</button>
 										{/each}
 
 										<!-- Add Subtask Form -->
@@ -691,6 +848,164 @@
 								</div>
 							</div>
 						{/if}
+
+						<!-- Focus Area -->
+						{#if focusAreas.length > 0}
+							<div class="mb-3">
+								<label class="block text-xs text-surface-500 mb-1">Focus Area</label>
+								<select
+									bind:value={newTaskForm.focusAreaId}
+									class="w-full px-3 py-2 bg-surface-900 border border-surface-600 rounded-lg
+										   text-surface-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+								>
+									<option value="">
+										{focusAreaId ? getFocusAreaName(focusAreaId) || 'Current focus area' : 'No focus area'}
+									</option>
+									{#each focusAreas as fa}
+										<option value={fa.id}>{fa.name}</option>
+									{/each}
+								</select>
+							</div>
+						{/if}
+
+						<!-- Add Context (expandable) -->
+						<div class="mb-3">
+							<button
+								type="button"
+								onclick={() => { showContextSection = !showContextSection; if (showContextSection) documentStore.loadDocuments(spaceId); }}
+								class="flex items-center gap-2 text-xs text-surface-400 hover:text-surface-300 transition-colors"
+							>
+								<svg
+									class="w-4 h-4 transition-transform {showContextSection ? 'rotate-90' : ''}"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+								</svg>
+								Add Context
+								{#if newTaskForm.selectedDocumentIds.size > 0 || newTaskForm.selectedRelatedTaskIds.size > 0}
+									<span class="px-1.5 py-0.5 bg-primary-500/20 text-primary-400 rounded text-[10px]">
+										{newTaskForm.selectedDocumentIds.size + newTaskForm.selectedRelatedTaskIds.size}
+									</span>
+								{/if}
+							</button>
+
+							{#if showContextSection}
+								<div class="mt-3 space-y-3 p-3 bg-surface-800/50 rounded-lg border border-surface-700" transition:slide={{ duration: 200 }}>
+									<!-- Documents Section -->
+									<div>
+										<div class="flex items-center justify-between mb-2">
+											<span class="text-xs font-medium text-surface-400">Documents</span>
+											<select
+												bind:value={selectedDocumentRole}
+												class="px-2 py-1 bg-surface-700 border border-surface-600 rounded text-[10px] text-surface-300"
+											>
+												<option value="reference">Reference</option>
+												<option value="input">Input</option>
+												<option value="output">Output</option>
+											</select>
+										</div>
+
+										<!-- Selected Documents -->
+										{#if newTaskForm.selectedDocumentIds.size > 0}
+											<div class="flex flex-wrap gap-1 mb-2">
+												{#each Array.from(newTaskForm.selectedDocumentIds) as docId}
+													{@const doc = documentStore.getDocumentById(docId)}
+													{#if doc}
+														<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-primary-500/20 text-primary-300 rounded text-[10px]">
+															{doc.title || doc.filename}
+															<button
+																type="button"
+																onclick={() => { newTaskForm.selectedDocumentIds.delete(docId); newTaskForm.selectedDocumentIds = new Set(newTaskForm.selectedDocumentIds); }}
+																class="hover:text-white"
+															>×</button>
+														</span>
+													{/if}
+												{/each}
+											</div>
+										{/if}
+
+										<!-- Document Search & List -->
+										<input
+											type="text"
+											bind:value={documentSearchQuery}
+											placeholder="Search documents..."
+											class="w-full px-2 py-1.5 bg-surface-900 border border-surface-600 rounded text-xs text-surface-100 mb-2"
+										/>
+										<div class="max-h-24 overflow-y-auto space-y-1">
+											{#if availableDocuments.length === 0}
+												<p class="text-[10px] text-surface-500 italic">No documents available</p>
+											{:else}
+												{#each availableDocuments.slice(0, 5) as doc}
+													{#if !newTaskForm.selectedDocumentIds.has(doc.id)}
+														<button
+															type="button"
+															onclick={() => { newTaskForm.selectedDocumentIds.add(doc.id); newTaskForm.selectedDocumentIds = new Set(newTaskForm.selectedDocumentIds); }}
+															class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-surface-700 text-left"
+														>
+															<span class="text-xs">📄</span>
+															<span class="text-xs text-surface-300 truncate flex-1">{doc.title || doc.filename}</span>
+														</button>
+													{/if}
+												{/each}
+											{/if}
+										</div>
+									</div>
+
+									<!-- Related Tasks Section -->
+									<div class="pt-2 border-t border-surface-700">
+										<span class="block text-xs font-medium text-surface-400 mb-2">Related Tasks</span>
+
+										<!-- Selected Tasks -->
+										{#if newTaskForm.selectedRelatedTaskIds.size > 0}
+											<div class="flex flex-wrap gap-1 mb-2">
+												{#each Array.from(newTaskForm.selectedRelatedTaskIds) as taskId}
+													{@const task = taskStore.tasks.get(taskId)}
+													{#if task}
+														<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px]" style="background: {task.color}20; color: {task.color};">
+															{task.title}
+															<button
+																type="button"
+																onclick={() => { newTaskForm.selectedRelatedTaskIds.delete(taskId); newTaskForm.selectedRelatedTaskIds = new Set(newTaskForm.selectedRelatedTaskIds); }}
+																class="hover:opacity-80"
+															>×</button>
+														</span>
+													{/if}
+												{/each}
+											</div>
+										{/if}
+
+										<!-- Task Search & List -->
+										<input
+											type="text"
+											bind:value={relatedTaskSearchQuery}
+											placeholder="Search tasks..."
+											class="w-full px-2 py-1.5 bg-surface-900 border border-surface-600 rounded text-xs text-surface-100 mb-2"
+										/>
+										<div class="max-h-24 overflow-y-auto space-y-1">
+											{#if availableRelatedTasks.length === 0}
+												<p class="text-[10px] text-surface-500 italic">No tasks available</p>
+											{:else}
+												{#each availableRelatedTasks.slice(0, 5) as task}
+													{#if !newTaskForm.selectedRelatedTaskIds.has(task.id)}
+														<button
+															type="button"
+															onclick={() => { newTaskForm.selectedRelatedTaskIds.add(task.id); newTaskForm.selectedRelatedTaskIds = new Set(newTaskForm.selectedRelatedTaskIds); }}
+															class="w-full flex items-center gap-2 p-1.5 rounded hover:bg-surface-700 text-left"
+														>
+															<span class="w-2 h-2 rounded-full" style="background: {task.color};"></span>
+															<span class="text-xs text-surface-300 truncate flex-1">{task.title}</span>
+														</button>
+													{/if}
+												{/each}
+											{/if}
+										</div>
+									</div>
+								</div>
+							{/if}
+						</div>
+
 						<div class="flex gap-2">
 							<button
 								type="button"
@@ -733,6 +1048,17 @@
 		<span class="text-xs text-surface-500">Press Esc to close</span>
 	</div>
 </aside>
+
+<!-- Delete Task Modal -->
+{#if deleteModalTask}
+	<DeleteTaskModal
+		task={deleteModalTask}
+		subtaskCount={deleteModalInfo.subtaskCount}
+		conversationCount={deleteModalInfo.conversationCount}
+		onConfirm={handleDeleteConfirm}
+		onCancel={handleDeleteCancel}
+	/>
+{/if}
 
 <style>
 	.task-panel {

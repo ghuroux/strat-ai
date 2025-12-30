@@ -12,7 +12,7 @@
 	 * 1. Processing (brief) → 2. Reasoning/Searching → 3. Generating
 	 */
 
-	type AIState = 'processing' | 'reasoning' | 'searching' | 'generating' | 'complete';
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'generating' | 'complete';
 
 	interface Props {
 		state: AIState;
@@ -42,6 +42,7 @@
 			case 'processing': return 'Processing';
 			case 'reasoning': return 'Reasoning';
 			case 'searching': return 'Searching';
+			case 'reading_document': return 'Reading';
 			case 'generating': return 'Writing';
 			default: return '';
 		}
@@ -52,6 +53,7 @@
 			case 'processing': return 'Understanding your request';
 			case 'reasoning': return 'Thinking through the problem';
 			case 'searching': return searchQuery ? `"${searchQuery}"` : 'the web';
+			case 'reading_document': return searchQuery ? `"${searchQuery}"` : 'reference documents';
 			case 'generating': return 'Crafting response';
 			default: return '';
 		}
@@ -64,6 +66,7 @@
 		class:state-processing={state === 'processing'}
 		class:state-reasoning={state === 'reasoning'}
 		class:state-searching={state === 'searching'}
+		class:state-reading-document={state === 'reading_document'}
 		class:state-generating={state === 'generating'}
 		in:scale={{ duration: 400, start: 0.9, opacity: 0, easing: backOut }}
 		out:fade={{ duration: 300, easing: cubicOut }}
@@ -96,6 +99,10 @@
 						{:else if state === 'reasoning'}
 							<svg class="orb-icon brain-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+							</svg>
+						{:else if state === 'reading_document'}
+							<svg class="orb-icon document-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 							</svg>
 						{:else if state === 'generating'}
 							<svg class="orb-icon pen-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,6 +216,12 @@
 		--color-glow: rgba(139, 92, 246, 0.35);
 	}
 
+	.state-reading-document {
+		--color-primary: 249, 115, 22;
+		--color-secondary: 251, 146, 60;
+		--color-glow: rgba(249, 115, 22, 0.35);
+	}
+
 	.state-generating {
 		--color-primary: 34, 197, 94;
 		--color-secondary: 20, 184, 166;
@@ -253,6 +266,15 @@
 			rgba(30, 41, 59, 0.5) 100%
 		);
 		border-color: rgba(139, 92, 246, 0.15);
+	}
+
+	.state-reading-document .indicator-card {
+		background: linear-gradient(
+			135deg,
+			rgba(249, 115, 22, 0.08) 0%,
+			rgba(30, 41, 59, 0.5) 100%
+		);
+		border-color: rgba(249, 115, 22, 0.15);
 	}
 
 	/* Orb Container */
@@ -386,6 +408,10 @@
 
 	.pen-icon {
 		animation: iconBob 1.2s ease-in-out infinite;
+	}
+
+	.document-icon {
+		animation: documentScan 2s ease-in-out infinite;
 	}
 
 	/* Orbiting particles */
@@ -642,6 +668,25 @@
 		}
 	}
 
+	@keyframes documentScan {
+		0%, 100% {
+			transform: translateY(0) scale(1);
+			opacity: 0.9;
+		}
+		25% {
+			transform: translateY(-1px) scale(1.05);
+			opacity: 1;
+		}
+		50% {
+			transform: translateY(0) scale(1);
+			opacity: 0.9;
+		}
+		75% {
+			transform: translateY(1px) scale(1.05);
+			opacity: 1;
+		}
+	}
+
 	@keyframes orbitSpin {
 		from {
 			transform: rotate(0deg);
@@ -737,6 +782,15 @@
 			rgba(255, 255, 255, 0.9) 100%
 		);
 		border-color: rgba(139, 92, 246, 0.2);
+	}
+
+	:global(html.light) .state-reading-document .indicator-card {
+		background: linear-gradient(
+			135deg,
+			rgba(249, 115, 22, 0.1) 0%,
+			rgba(255, 255, 255, 0.9) 100%
+		);
+		border-color: rgba(249, 115, 22, 0.2);
 	}
 
 	:global(html.light) .status-secondary {

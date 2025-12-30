@@ -30,16 +30,17 @@ CREATE TABLE IF NOT EXISTS conversations (
     -- Multi-tenant fields (nullable for Phase 0.2, required later)
     user_id TEXT, -- Will become NOT NULL in Phase 0.4
     team_id TEXT,
-    space TEXT, -- 'work', 'research', 'random', 'personal'
+    space_id TEXT, -- FK to spaces table (system space id = slug)
+    focus_area_id TEXT, -- FK to focus_areas table (Phase C)
+    task_id TEXT, -- FK to tasks table for task-linked conversations (Phase C)
     tags TEXT[] DEFAULT '{}', -- For template auto-tagging and filtering (Phase 0.3b+)
 
     -- Timestamps
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ, -- Soft delete
+    deleted_at TIMESTAMPTZ -- Soft delete
 
-    -- Constraints
-    CONSTRAINT valid_space CHECK (space IS NULL OR space IN ('work', 'research', 'random', 'personal'))
+    -- Note: FK to spaces table added via ALTER after spaces table exists
 );
 
 -- Indexes for common queries
@@ -69,9 +70,19 @@ CREATE INDEX IF NOT EXISTS idx_conversations_continued_from
     WHERE continued_from_id IS NOT NULL;
 
 -- Space filtering (for Phase 0.3a Spaces)
-CREATE INDEX IF NOT EXISTS idx_conversations_space
-    ON conversations(user_id, space, updated_at DESC)
-    WHERE deleted_at IS NULL AND space IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_conversations_space_id
+    ON conversations(user_id, space_id, updated_at DESC)
+    WHERE deleted_at IS NULL AND space_id IS NOT NULL;
+
+-- Focus area filtering (for Phase C Chat Context Awareness)
+CREATE INDEX IF NOT EXISTS idx_conversations_focus_area
+    ON conversations(user_id, focus_area_id, updated_at DESC)
+    WHERE deleted_at IS NULL AND focus_area_id IS NOT NULL;
+
+-- Task-linked conversations (for Phase C deep work mode)
+CREATE INDEX IF NOT EXISTS idx_conversations_task
+    ON conversations(user_id, task_id, updated_at DESC)
+    WHERE deleted_at IS NULL AND task_id IS NOT NULL;
 
 -- Tags filtering with GIN index for array containment queries (Phase 0.3b+)
 CREATE INDEX IF NOT EXISTS idx_conversations_tags
@@ -98,4 +109,6 @@ CREATE TRIGGER update_conversations_updated_at
 COMMENT ON TABLE conversations IS 'Chat conversations with embedded JSONB messages. Supports soft deletes and multi-tenant access patterns.';
 COMMENT ON COLUMN conversations.messages IS 'Array of message objects: [{id, role, content, timestamp, thinking?, attachments?, sources?}]';
 COMMENT ON COLUMN conversations.summary IS 'Conversation summary - either structured {points: [{text, messageIndices}]} or legacy string';
-COMMENT ON COLUMN conversations.space IS 'Productivity space: work, research, random, or personal';
+COMMENT ON COLUMN conversations.space_id IS 'Foreign key to spaces table. For system spaces, equals the slug (work, research, random, personal). For custom spaces, is the UUID.';
+COMMENT ON COLUMN conversations.focus_area_id IS 'Foreign key to focus_areas table. Links conversation to a specific focus area within a space.';
+COMMENT ON COLUMN conversations.task_id IS 'Foreign key to tasks table. Links conversation to a specific task for deep work mode filtering.';

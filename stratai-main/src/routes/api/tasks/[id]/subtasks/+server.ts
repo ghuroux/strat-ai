@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ params }) => {
 /**
  * POST /api/tasks/[id]/subtasks
  * Create a new subtask
- * Body: { title: string, subtaskType?: 'conversation' | 'action', priority?: 'normal' | 'high' }
+ * Body: { title: string, subtaskType?: 'conversation' | 'action', priority?: 'normal' | 'high', sourceConversationId?: string }
  */
 export const POST: RequestHandler = async ({ params, request }) => {
 	try {
@@ -78,7 +78,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			title: body.title.trim(),
 			parentTaskId: params.id,
 			subtaskType: (body.subtaskType as SubtaskType) ?? 'conversation',
-			priority: body.priority ?? 'normal'
+			priority: body.priority ?? 'normal',
+			sourceConversationId: body.sourceConversationId // Plan Mode conversation ID for context injection
 		};
 
 		const subtask = await postgresTaskRepository.createSubtask(input, DEFAULT_USER_ID);
