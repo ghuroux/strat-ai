@@ -23,15 +23,15 @@
 	import PlanModePanel from '$lib/components/tasks/PlanModePanel.svelte';
 	import AddContextModal from '$lib/components/tasks/AddContextModal.svelte';
 	import ManageContextModal from '$lib/components/tasks/ManageContextModal.svelte';
-	import { FocusAreaPills, FocusAreaModal } from '$lib/components/focus-areas';
+	import { AreaPills as FocusAreaPills, AreaModal as FocusAreaModal } from '$lib/components/areas';
 	import { SpaceModal } from '$lib/components/spaces';
 	import BringToContextModal from '$lib/components/chat/BringToContextModal.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
-	import { focusAreaStore } from '$lib/stores/focusAreas.svelte';
+	import { areaStore as focusAreaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
-	import type { FocusArea, CreateFocusAreaInput, UpdateFocusAreaInput } from '$lib/types/focus-areas';
+	import type { Area as FocusArea, CreateAreaInput as CreateFocusAreaInput, UpdateAreaInput as UpdateFocusAreaInput } from '$lib/types/areas';
 	import type { DocumentContextRole } from '$lib/types/documents';
 	import type { TaskRelationshipType } from '$lib/types/tasks';
 	import { settingsStore } from '$lib/stores/settings.svelte';
@@ -1965,11 +1965,11 @@
 	</div>
 </header>
 
-<!-- Focus Area Pills Bar (always show so users can add first focus area) -->
+<!-- Area Pills Bar (always show so users can add first area) -->
 {#if currentSpace}
 	<div class="focus-area-bar">
 		<FocusAreaPills
-			{focusAreas}
+			areas={focusAreas}
 			selectedId={selectedFocusAreaId}
 			onSelect={handleFocusAreaSelect}
 			onAdd={handleAddFocusArea}
@@ -2429,11 +2429,11 @@
 <!-- Settings Panel -->
 <SettingsPanel open={settingsOpen} onclose={() => settingsOpen = false} />
 
-<!-- Focus Area Modal -->
+<!-- Area Modal -->
 {#if currentSpace}
 	<FocusAreaModal
 		open={showFocusAreaModal}
-		focusArea={editingFocusArea}
+		area={editingFocusArea}
 		spaceId={currentSpace}
 		onClose={handleCloseFocusAreaModal}
 		onCreate={handleCreateFocusArea}

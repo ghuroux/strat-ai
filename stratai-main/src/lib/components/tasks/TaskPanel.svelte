@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fly, fade, slide } from 'svelte/transition';
 	import { taskStore } from '$lib/stores/tasks.svelte';
-	import { focusAreaStore } from '$lib/stores/focusAreas.svelte';
+	import { areaStore as focusAreaStore } from '$lib/stores/areas.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import DeleteTaskModal from './DeleteTaskModal.svelte';
 	import type { Task, TaskPriority, DueDateType, SubtaskType } from '$lib/types/tasks';

@@ -6,11 +6,11 @@
 -->
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
-	import { focusAreaStore } from '$lib/stores/focusAreas.svelte';
+	import { areaStore as focusAreaStore } from '$lib/stores/areas.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { documentStore, type TaskDocumentLink } from '$lib/stores/documents.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
-	import type { FocusArea } from '$lib/types/focus-areas';
+	import type { Area as FocusArea } from '$lib/types/areas';
 	import type { Document, DocumentContextRole } from '$lib/types/documents';
 
 	interface Props {

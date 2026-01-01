@@ -22,12 +22,13 @@ import type {
 	DocumentContextRole,
 	DocumentWithTaskInfo
 } from '$lib/types/documents';
+import type { Area, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
+import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
 import type {
 	FocusArea,
 	CreateFocusAreaInput,
 	UpdateFocusAreaInput
 } from '$lib/types/focus-areas';
-import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
 
 // =====================================================
 // Tool Cache Types (for document reading, etc.)
@@ -213,11 +214,32 @@ export interface DocumentRepository {
 }
 
 // =====================================================
-// Focus Area Types
+// Area Types (renamed from Focus Areas)
 // =====================================================
 
 /**
- * Repository interface for Focus Area entities
+ * Repository interface for Area entities
+ * Areas are navigable sub-spaces within spaces
+ */
+export interface AreaRepository {
+	findAll(userId: string, spaceId?: string): Promise<Area[]>;
+	findById(id: string, userId: string): Promise<Area | null>;
+	findByName(spaceId: string, name: string, userId: string): Promise<Area | null>;
+	findBySlug(spaceId: string, slug: string, userId: string): Promise<Area | null>;
+	findGeneral(spaceId: string, userId: string): Promise<Area | null>;
+	create(input: CreateAreaInput, userId: string): Promise<Area>;
+	createGeneral(spaceId: string, userId: string): Promise<Area>;
+	update(id: string, updates: UpdateAreaInput, userId: string): Promise<Area | null>;
+	delete(id: string, userId: string): Promise<boolean>;
+	reorder(spaceId: string, orderedIds: string[], userId: string): Promise<void>;
+	getTaskCount(id: string, userId: string): Promise<number>;
+	getConversationCount(id: string, userId: string): Promise<number>;
+}
+
+/**
+ * Legacy repository interface for FocusArea entities
+ * Kept for backwards compatibility with focus-areas-postgres.ts
+ * New code should use AreaRepository instead
  */
 export interface FocusAreaRepository {
 	findAll(userId: string, spaceId?: string): Promise<FocusArea[]>;

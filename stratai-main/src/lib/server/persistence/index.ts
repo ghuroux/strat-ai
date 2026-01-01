@@ -4,6 +4,9 @@ export * from './postgres';
 export * from './arena-postgres';
 export * from './tasks-postgres';
 export * from './documents-postgres';
-export * from './focus-areas-postgres';
+export * from './areas-postgres';
 export * from './spaces-postgres';
 export { sql, testConnection, closeConnection } from './db';
+
+// Backwards compatibility - re-export areas as focusAreas
+export { postgresAreaRepository as postgresFocusAreaRepository } from './areas-postgres';

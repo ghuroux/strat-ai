@@ -21,6 +21,7 @@ import {
 	MAX_CUSTOM_SPACES
 } from '$lib/types/spaces';
 import type { SpaceRepository } from './types';
+import { postgresAreaRepository } from './areas-postgres';
 
 /**
  * Generate a unique space ID
@@ -141,6 +142,15 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 		const space = await this.findById(id, userId);
 		if (!space) throw new Error('Failed to create space');
+
+		// Auto-create General area for the new space
+		try {
+			await postgresAreaRepository.createGeneral(space.id, userId);
+		} catch (e) {
+			console.error('Failed to create General area for space:', e);
+			// Don't fail space creation, the migration will catch this
+		}
+
 		return space;
 	},
 
@@ -241,12 +251,15 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 		// Create missing system spaces
 		const now = new Date();
+		const newSpaceIds: string[] = [];
+
 		for (let i = 0; i < SYSTEM_SPACE_SLUGS.length; i++) {
 			const slug = SYSTEM_SPACE_SLUGS[i];
 			if (existingSlugs.has(slug)) continue;
 
 			const def = SYSTEM_SPACES[slug];
 			const id = generateSpaceId();
+			newSpaceIds.push(id);
 
 			await sql`
 				INSERT INTO spaces (
@@ -267,6 +280,15 @@ export const postgresSpaceRepository: SpaceRepository = {
 				)
 				ON CONFLICT DO NOTHING
 			`;
+		}
+
+		// Auto-create General areas for newly created system spaces
+		for (const spaceId of newSpaceIds) {
+			try {
+				await postgresAreaRepository.createGeneral(spaceId, userId);
+			} catch (e) {
+				console.error('Failed to create General area for system space:', spaceId, e);
+			}
 		}
 	},
 
