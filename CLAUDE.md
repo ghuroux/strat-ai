@@ -121,8 +121,13 @@ Don't revisit without good reason:
 - Space dashboard components and area routing
 - Migration 005-areas-rename-migrate.sql
 
+**BEFORE STARTING NEXT SESSION - Run database migration:**
+```bash
+psql -d stratai -f src/lib/server/persistence/migrations/006-tasks-area-rename.sql
+```
+This renames `focus_area_id` to `area_id` in the tasks table. Without this, task creation will fail with a 500 error.
+
 **Next steps:**
-- Run migrations 005 and 006 on database
 - Test task creation flow end-to-end
 - Wire up AreaWelcomeScreen quick actions
 - Test conversation pinning and area-to-area moving
