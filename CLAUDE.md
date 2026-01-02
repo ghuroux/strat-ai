@@ -141,6 +141,105 @@ Track acknowledged issues to address later:
 
 ## Session Log
 
+### Session: 2026-01-02 (Areas Architecture - ConversationDrawer and TaskContextBanner)
+**Focus**: Continue Areas Architecture redesign with enhanced conversation management and task context UI
+
+**Completed**:
+
+**1. ConversationDrawer Component** (new):
+- Created slide-out drawer for managing conversations within an area
+- Pin/unpin conversations for quick access
+- Move conversation to different area
+- Task badge showing linked task title
+- Proper loading states and empty state
+
+**2. TaskContextBanner Component** (new):
+- Banner displayed at top of chat when conversation is linked to a task
+- Shows task title and area context
+- Allows quick navigation to the task
+
+**3. AreaWelcomeScreen Component** (new):
+- Welcome screen shown when entering an area without active conversation
+- Quick actions for starting new chat or viewing recent activity
+
+**4. Space Dashboard Components** (new):
+- `SpaceDashboard.svelte` - Main dashboard view for spaces
+- `AreaCard.svelte` - Card component for displaying areas
+- `CreateAreaCard.svelte` - Card for creating new areas
+- `RecentActivitySection.svelte` - Shows recent activity across areas
+
+**5. Layout and UX Improvements**:
+- Chat message width capped at 960px for better readability
+- Chat input and TaskContextBanner remain full-width
+- Moved drawer toggle button next to area name in breadcrumb
+- Made area name clickable to return to AreaWelcomeScreen
+- Various CSS refinements for better visual hierarchy
+
+**6. Area Routing Structure** (new):
+- Added `/spaces/[space]/[area]/+page.svelte` for area-specific views
+- Added `/spaces/[space]/task/[taskId]/+page.svelte` for task-focused views
+
+**7. Database Migration**:
+- Created `005-areas-rename-migrate.sql` for renaming focus_areas to areas
+
+**8. Cleanup**:
+- Removed deprecated `focusAreas.svelte.ts` store (replaced by areas functionality)
+
+**Files Created** (10 new files):
+- `src/lib/components/chat/AreaWelcomeScreen.svelte`
+- `src/lib/components/chat/ConversationDrawer.svelte`
+- `src/lib/components/chat/TaskContextBanner.svelte`
+- `src/lib/components/spaces/AreaCard.svelte`
+- `src/lib/components/spaces/CreateAreaCard.svelte`
+- `src/lib/components/spaces/RecentActivitySection.svelte`
+- `src/lib/components/spaces/SpaceDashboard.svelte`
+- `src/lib/server/persistence/migrations/005-areas-rename-migrate.sql`
+- `src/routes/spaces/[space]/[area]/+page.svelte`
+- `src/routes/spaces/[space]/task/[taskId]/+page.svelte`
+
+**Files Modified** (20 files):
+- `src/lib/components/layout/Sidebar.svelte` - Area-aware sidebar updates
+- `src/lib/components/spaces/index.ts` - Added new component exports
+- `src/lib/components/tasks/ManageContextModal.svelte` - Updated for areas
+- `src/lib/components/tasks/TaskPanel.svelte` - Task context improvements
+- `src/lib/server/persistence/postgres.ts` - Area-related query updates
+- `src/lib/server/persistence/tasks-postgres.ts` - Task-area relationships
+- `src/lib/stores/chat.svelte.ts` - Added drawer and area state management
+- `src/lib/stores/tasks.svelte.ts` - Task-area integration
+- `src/lib/types/api.ts` - Area-related type updates
+- `src/lib/types/chat.ts` - Conversation-area relationship types
+- `src/lib/types/tasks.ts` - Task-area types
+- `src/routes/spaces/[space]/+page.svelte` - Major refactor for area-based UX
+- `src/routes/api/chat/+server.ts` - Area context in chat
+- `src/routes/api/tasks/+server.ts` - Area filtering for tasks
+- `src/routes/api/tasks/[id]/+server.ts` - Task-area updates
+- `BACKLOG.md` - Updated with Areas architecture progress
+
+**Files Deleted**:
+- `src/lib/stores/focusAreas.svelte.ts` - Replaced by areas functionality
+
+**Architecture Notes**:
+- Areas replace Focus Areas with a cleaner naming convention
+- ConversationDrawer provides Gmail-like conversation management within areas
+- TaskContextBanner ensures users always know when working in task context
+- 960px max-width for messages improves readability on wide screens
+
+**Current State**:
+- Areas architecture foundation complete
+- Conversation management within areas functional
+- Task-linked conversations show proper context
+
+**Commit**: `eb0c856` - feat: Enhance Areas architecture with ConversationDrawer and TaskContextBanner
+
+**Next session suggestions**:
+- Run the areas migration (005-areas-rename-migrate.sql) on the database
+- Test conversation pinning and area-to-area moving
+- Wire up AreaWelcomeScreen quick actions
+- Add area-specific conversation filtering in the drawer
+- Consider adding conversation search within areas
+
+---
+
 ### Session: 2025-12-30 (Cascading Delete + Context System + Spaces Infrastructure)
 **Focus**: Implement cascading delete for tasks, fix postgres.js bugs, build context and spaces infrastructure
 
