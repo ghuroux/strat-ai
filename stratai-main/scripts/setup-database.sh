@@ -155,6 +155,18 @@ echo "  - Documents schema..."
 $PSQL -d $DB_NAME -f "$SCHEMA_DIR/documents-schema.sql" -q
 
 echo ""
+echo "Running migrations..."
+
+# Run migration files in order
+for migration in "$SCHEMA_DIR/migrations"/*.sql; do
+    if [ -f "$migration" ]; then
+        migration_name=$(basename "$migration")
+        echo "  - $migration_name..."
+        $PSQL -d $DB_NAME -f "$migration" -q 2>/dev/null || echo "    (already applied or skipped)"
+    fi
+done
+
+echo ""
 echo -e "${GREEN}=========================================="
 echo "  Database setup complete!"
 echo "==========================================${NC}"

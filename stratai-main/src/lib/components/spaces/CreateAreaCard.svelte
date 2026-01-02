@@ -16,12 +16,8 @@
 
 <button type="button" class="create-card" style="--card-color: {spaceColor}" onclick={onclick}>
 	<div class="card-icon">
-		<svg viewBox="0 0 20 20" fill="currentColor">
-			<path
-				fill-rule="evenodd"
-				d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
-				clip-rule="evenodd"
-			/>
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+			<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
 		</svg>
 	</div>
 	<span class="card-text">Create Area</span>
@@ -36,8 +32,8 @@
 		justify-content: center;
 		gap: 0.75rem;
 		padding: 1.5rem;
-		background: transparent;
-		border: 2px dashed rgba(255, 255, 255, 0.15);
+		background: color-mix(in srgb, var(--card-color) 8%, transparent);
+		border: 1px solid color-mix(in srgb, var(--card-color) 25%, transparent);
 		border-radius: 0.75rem;
 		cursor: pointer;
 		transition: all 0.2s ease;
@@ -46,8 +42,10 @@
 	}
 
 	.create-card:hover {
-		background: rgba(255, 255, 255, 0.03);
-		border-color: color-mix(in srgb, var(--card-color) 50%, transparent);
+		background: color-mix(in srgb, var(--card-color) 12%, transparent);
+		border-color: color-mix(in srgb, var(--card-color) 40%, transparent);
+		transform: translateY(-2px);
+		box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.3);
 	}
 
 	.create-card:focus-visible {
@@ -61,15 +59,14 @@
 		justify-content: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		background: rgba(255, 255, 255, 0.05);
+		background: color-mix(in srgb, var(--card-color) 15%, transparent);
 		border-radius: 0.5rem;
-		color: rgba(255, 255, 255, 0.4);
+		color: var(--card-color);
 		transition: all 0.2s ease;
 	}
 
 	.create-card:hover .card-icon {
-		background: color-mix(in srgb, var(--card-color) 15%, transparent);
-		color: var(--card-color);
+		background: color-mix(in srgb, var(--card-color) 25%, transparent);
 	}
 
 	.card-icon svg {
@@ -80,17 +77,17 @@
 	.card-text {
 		font-size: 0.9375rem;
 		font-weight: 500;
-		color: rgba(255, 255, 255, 0.6);
+		color: var(--card-color);
 		transition: color 0.2s ease;
 	}
 
 	.create-card:hover .card-text {
-		color: rgba(255, 255, 255, 0.9);
+		color: var(--card-color);
 	}
 
 	.card-hint {
 		font-size: 0.75rem;
-		color: rgba(255, 255, 255, 0.3);
+		color: rgba(255, 255, 255, 0.4);
 		margin: 0;
 		max-width: 140px;
 		line-height: 1.4;

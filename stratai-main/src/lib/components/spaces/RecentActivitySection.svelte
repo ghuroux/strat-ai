@@ -66,12 +66,8 @@
 		{#if hasMore && onViewAll}
 			<button type="button" class="view-all" onclick={onViewAll}>
 				View all
-				<svg viewBox="0 0 20 20" fill="currentColor">
-					<path
-						fill-rule="evenodd"
-						d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-						clip-rule="evenodd"
-					/>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
 				</svg>
 			</button>
 		{/if}
@@ -92,20 +88,14 @@
 					>
 						<div class="item-icon" class:chat={item.type === 'chat'} class:task={item.type === 'task'}>
 							{#if item.type === 'chat'}
-								<svg viewBox="0 0 20 20" fill="currentColor">
-									<path
-										fill-rule="evenodd"
-										d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z"
-										clip-rule="evenodd"
-									/>
+								<!-- Chat bubble icon -->
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
 								</svg>
 							{:else}
-								<svg viewBox="0 0 20 20" fill="currentColor">
-									<path
-										fill-rule="evenodd"
-										d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z"
-										clip-rule="evenodd"
-									/>
+								<!-- Task/Clipboard icon -->
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
 								</svg>
 							{/if}
 						</div>

@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   subtask_order INTEGER DEFAULT 0,
   context_summary TEXT,
 
-  -- Focus Area (optional - for specialized context within space)
-  focus_area_id TEXT REFERENCES focus_areas(id) ON DELETE SET NULL,
+  -- Area (optional - for specialized context within space)
+  area_id TEXT REFERENCES areas(id) ON DELETE SET NULL,
 
   -- Planning state (for Plan Mode persistence)
   planning_data JSONB,
@@ -62,8 +62,8 @@ CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_task_id, subtask_ord
 -- Index for checking if a task has subtasks
 CREATE INDEX IF NOT EXISTS idx_tasks_has_subtasks ON tasks(parent_task_id) WHERE parent_task_id IS NOT NULL AND deleted_at IS NULL;
 
--- Index for fetching tasks by focus area
-CREATE INDEX IF NOT EXISTS idx_tasks_focus_area ON tasks(focus_area_id) WHERE focus_area_id IS NOT NULL AND deleted_at IS NULL;
+-- Index for fetching tasks by area
+CREATE INDEX IF NOT EXISTS idx_tasks_area ON tasks(area_id) WHERE area_id IS NOT NULL AND deleted_at IS NULL;
 
 -- Index for finding tasks in planning status (for auto-restore)
 CREATE INDEX IF NOT EXISTS idx_tasks_planning ON tasks(user_id, space_id) WHERE status = 'planning' AND deleted_at IS NULL;

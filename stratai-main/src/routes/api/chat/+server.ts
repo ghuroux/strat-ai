@@ -6,7 +6,7 @@ import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMo
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import { postgresConversationRepository } from '$lib/server/persistence/postgres';
-import { postgresFocusAreaRepository } from '$lib/server/persistence/focus-areas-postgres';
+import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres';
 import { getToolCacheRepository, hashParams } from '$lib/server/persistence/tool-cache-postgres';
 import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists';
@@ -663,7 +663,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		try {
 			// For POC, use hardcoded admin user (consistent with other API endpoints)
 			const userId = 'admin';
-			const focusArea = await postgresFocusAreaRepository.findById(areaId, userId);
+			const focusArea = await postgresAreaRepository.findById(areaId, userId);
 
 			if (focusArea) {
 				console.log(`[DEBUG] Focus area found:`, {

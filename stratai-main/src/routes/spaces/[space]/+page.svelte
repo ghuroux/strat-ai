@@ -25,6 +25,7 @@
 	import type { Space } from '$lib/types/spaces';
 	import type { Area, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
 	import type { SpaceType } from '$lib/types/chat';
+	import type { CreateTaskInput } from '$lib/types/tasks';
 
 	// Get space from route param
 	let spaceParam = $derived($page.params.space);
@@ -200,6 +201,19 @@
 		await spacesStore.updateSpace(id, updates);
 		showSpaceModal = false;
 	}
+
+	// Task handlers
+	function handleTaskClick(task: any) {
+		// Navigate to task focus mode
+		goto(`/spaces/${spaceParam}/task/${task.id}`);
+	}
+
+	async function handleCreateTask(input: CreateTaskInput) {
+		const created = await taskStore.createTask(input);
+		if (created) {
+			toastStore.success(`Task "${input.title}" created`);
+		}
+	}
 </script>
 
 <svelte:head>
@@ -220,6 +234,8 @@
 		spaceSlug={spaceParam || ''}
 		onCreateArea={handleCreateArea}
 		onOpenSettings={handleOpenSettings}
+		onTaskClick={handleTaskClick}
+		onCreateTask={handleCreateTask}
 	/>
 
 	<!-- Area Modal -->

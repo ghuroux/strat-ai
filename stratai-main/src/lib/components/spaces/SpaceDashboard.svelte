@@ -2,12 +2,10 @@
 	/**
 	 * SpaceDashboard - Navigation hub for a space
 	 *
-	 * Clean, clear, premium design with:
-	 * - Space header with name and description
-	 * - Area cards as primary navigation
-	 * - Create Area card
-	 * - Recent activity section
-	 * - Active tasks section
+	 * Two-column layout reflecting "two reasons to visit Spaces":
+	 * - Left: Areas (context-rich discussions)
+	 * - Right: Tasks (execute to-do list)
+	 * - Below: Recent activity across both
 	 *
 	 * No chat here - chat lives in area pages
 	 */
@@ -15,10 +13,14 @@
 	import AreaCard from './AreaCard.svelte';
 	import CreateAreaCard from './CreateAreaCard.svelte';
 	import RecentActivitySection from './RecentActivitySection.svelte';
+	import TasksSection from './TasksSection.svelte';
+	import TaskModal from './TaskModal.svelte';
+	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import type { Area } from '$lib/types/areas';
 	import type { Space } from '$lib/types/spaces';
 	import type { Conversation } from '$lib/types/chat';
-	import type { Task } from '$lib/types/tasks';
+	import type { SpaceType } from '$lib/types/chat';
+	import type { Task, CreateTaskInput } from '$lib/types/tasks';
 
 	interface AreaWithStats extends Area {
 		conversationCount?: number;
@@ -33,6 +35,8 @@
 		spaceSlug: string;
 		onCreateArea: () => void;
 		onOpenSettings?: () => void;
+		onTaskClick?: (task: Task) => void;
+		onCreateTask?: (input: CreateTaskInput) => Promise<void>;
 	}
 
 	let {
@@ -42,8 +46,13 @@
 		activeTasks,
 		spaceSlug,
 		onCreateArea,
-		onOpenSettings
+		onOpenSettings,
+		onTaskClick,
+		onCreateTask
 	}: Props = $props();
+
+	// Task modal state
+	let showTaskModal = $state(false);
 
 	// Derive space color
 	let spaceColor = $derived(space.color || '#3b82f6');
@@ -119,6 +128,30 @@
 			goto(`/spaces/${spaceSlug}/task/${item.id}`);
 		}
 	}
+
+	function handleTaskClick(task: Task) {
+		if (onTaskClick) {
+			onTaskClick(task);
+		} else {
+			// Default: navigate to task focus mode
+			goto(`/spaces/${spaceSlug}/task/${task.id}`);
+		}
+	}
+
+	function handleOpenTaskModal() {
+		showTaskModal = true;
+	}
+
+	async function handleCreateTask(input: CreateTaskInput) {
+		if (onCreateTask) {
+			await onCreateTask(input);
+		}
+	}
+
+	function handleViewAllTasks() {
+		// Navigate to tasks page for this space
+		goto(`/spaces/${spaceSlug}/tasks`);
+	}
 </script>
 
 <div class="dashboard" style="--space-color: {spaceColor}">
@@ -126,9 +159,9 @@
 	<header class="dashboard-header">
 		<div class="header-content">
 			<div class="space-info">
-				{#if space.icon}
-					<span class="space-icon">{space.icon}</span>
-				{/if}
+				<div class="space-icon-wrapper">
+					<SpaceIcon space={spaceSlug as SpaceType} size="xl" />
+				</div>
 				<div class="space-text">
 					<h1 class="space-name">{space.name}</h1>
 					{#if space.context}
@@ -140,41 +173,56 @@
 			</div>
 			{#if onOpenSettings}
 				<button type="button" class="settings-button" onclick={onOpenSettings} title="Space settings">
-					<svg viewBox="0 0 20 20" fill="currentColor">
+					<!-- Settings/Cog icon (Heroicons outline) -->
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 						<path
-							fill-rule="evenodd"
-							d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z"
-							clip-rule="evenodd"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"
 						/>
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
 					</svg>
 				</button>
 			{/if}
 		</div>
 	</header>
 
-	<!-- Main content -->
+	<!-- Main content: Two-column layout -->
 	<main class="dashboard-content">
-		<!-- Areas Section -->
-		<section class="areas-section">
-			<header class="section-header">
-				<h2 class="section-title">Your Areas</h2>
-			</header>
+		<div class="main-columns">
+			<!-- Left Column: Areas (Context-rich discussions) -->
+			<section class="areas-section">
+				<header class="section-header">
+					<h2 class="section-title">Areas</h2>
+					<span class="section-count">{areas.length}</span>
+				</header>
 
-			<div class="areas-grid">
-				{#each areas as area (area.id)}
-					<AreaCard
-						{area}
-						conversationCount={area.conversationCount ?? 0}
-						lastActivity={area.lastActivity ?? null}
-						{spaceColor}
-						onclick={() => handleAreaClick(area)}
-					/>
-				{/each}
-				<CreateAreaCard {spaceColor} onclick={onCreateArea} />
-			</div>
-		</section>
+				<div class="areas-grid">
+					{#each areas as area (area.id)}
+						<AreaCard
+							{area}
+							conversationCount={area.conversationCount ?? 0}
+							lastActivity={area.lastActivity ?? null}
+							{spaceColor}
+							onclick={() => handleAreaClick(area)}
+						/>
+					{/each}
+					<CreateAreaCard {spaceColor} onclick={onCreateArea} />
+				</div>
+			</section>
 
-		<!-- Activity Sections -->
+			<!-- Right Column: Tasks (Execute to-do list) -->
+			<TasksSection
+				tasks={activeTasks}
+				{areas}
+				{spaceColor}
+				onTaskClick={handleTaskClick}
+				onOpenTaskModal={handleOpenTaskModal}
+				onViewAllTasks={handleViewAllTasks}
+			/>
+		</div>
+
+		<!-- Recent Activity (below both columns) -->
 		<div class="activity-sections">
 			{#if recentActivity.length > 0}
 				<RecentActivitySection
@@ -183,18 +231,7 @@
 					onItemClick={handleActivityClick}
 					emptyMessage="No recent activity"
 				/>
-			{/if}
-
-			{#if activeTaskItems.length > 0}
-				<RecentActivitySection
-					items={activeTaskItems}
-					title="Active Tasks"
-					onItemClick={handleActivityClick}
-					emptyMessage="No active tasks"
-				/>
-			{/if}
-
-			{#if recentActivity.length === 0 && activeTaskItems.length === 0}
+			{:else if areas.length === 0 && activeTasks.length === 0}
 				<div class="empty-dashboard">
 					<div class="empty-icon">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -207,13 +244,23 @@
 					</div>
 					<h3 class="empty-title">Ready to get started?</h3>
 					<p class="empty-text">
-						Click on an area above to start a conversation, or create a new area for a specific topic.
+						Create an area for focused discussions, or add a task to your to-do list.
 					</p>
 				</div>
 			{/if}
 		</div>
 	</main>
 </div>
+
+<!-- Task Modal -->
+<TaskModal
+	open={showTaskModal}
+	spaceId={space.id}
+	{areas}
+	{spaceColor}
+	onClose={() => (showTaskModal = false)}
+	onCreate={handleCreateTask}
+/>
 
 <style>
 	.dashboard {
@@ -243,9 +290,15 @@
 		gap: 1rem;
 	}
 
-	.space-icon {
-		font-size: 2.5rem;
-		line-height: 1;
+	.space-icon-wrapper {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 3rem;
+		height: 3rem;
+		background: color-mix(in srgb, var(--space-color) 15%, transparent);
+		border-radius: 0.75rem;
+		color: var(--space-color);
 	}
 
 	.space-text {
@@ -301,7 +354,15 @@
 		gap: 2.5rem;
 	}
 
-	/* Areas Section */
+	/* Two-column layout */
+	.main-columns {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 2rem;
+		align-items: start;
+	}
+
+	/* Areas Section (left column) */
 	.areas-section {
 		display: flex;
 		flex-direction: column;
@@ -311,7 +372,7 @@
 	.section-header {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		gap: 0.5rem;
 	}
 
 	.section-title {
@@ -323,10 +384,19 @@
 		margin: 0;
 	}
 
+	.section-count {
+		font-size: 0.625rem;
+		font-weight: 600;
+		padding: 0.125rem 0.375rem;
+		background: rgba(255, 255, 255, 0.08);
+		border-radius: 9999px;
+		color: rgba(255, 255, 255, 0.5);
+	}
+
 	.areas-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-		gap: 1rem;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 0.75rem;
 	}
 
 	/* Activity Sections */
@@ -334,7 +404,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2rem;
-		padding-top: 1rem;
+		padding-top: 1.5rem;
 		border-top: 1px solid rgba(255, 255, 255, 0.06);
 	}
 
@@ -376,6 +446,13 @@
 	}
 
 	/* Responsive */
+	@media (max-width: 1024px) {
+		.main-columns {
+			grid-template-columns: 1fr;
+			gap: 2.5rem;
+		}
+	}
+
 	@media (max-width: 640px) {
 		.dashboard {
 			padding: 1rem;

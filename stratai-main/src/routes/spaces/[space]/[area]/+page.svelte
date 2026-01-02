@@ -697,6 +697,315 @@
 		if (!linkedTask) return;
 		goto(`/spaces/${spaceParam}/task/${linkedTask.id}`);
 	}
+
+	// ============================================
+	// Message Edit/Resend/Regenerate handlers
+	// ============================================
+
+	/**
+	 * Trigger a fresh assistant response for the current conversation
+	 */
+	async function triggerAssistantResponse() {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId) return;
+
+		const assistantMessageId = chatStore.addMessage(conversationId, {
+			role: 'assistant',
+			content: '',
+			isStreaming: true
+		});
+
+		const controller = new AbortController();
+		chatStore.setStreaming(true, controller);
+
+		try {
+			const conv = chatStore.getConversation(conversationId);
+			const allMessages = (conv?.messages || []).filter((m) => !m.isStreaming && !m.error);
+
+			const apiMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [];
+			const systemPrompt = settingsStore.systemPrompt?.trim();
+			if (systemPrompt) {
+				apiMessages.push({ role: 'system', content: systemPrompt });
+			}
+			for (const m of allMessages) {
+				apiMessages.push({ role: m.role, content: m.content });
+			}
+
+			const response = await fetch('/api/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					model: effectiveModel,
+					messages: apiMessages,
+					temperature: settingsStore.temperature,
+					max_tokens: settingsStore.effectiveMaxTokens,
+					searchEnabled: settingsStore.webSearchEnabled,
+					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
+					space: spaceParam,
+					areaId: area?.id
+				}),
+				signal: controller.signal
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Request failed');
+			}
+
+			const reader = response.body?.getReader();
+			const decoder = new TextDecoder();
+			if (!reader) throw new Error('No response body');
+
+			let buffer = '';
+			let collectedSources: Array<{ title: string; url: string; snippet: string }> = [];
+
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				const decoded = decoder.decode(value, { stream: true });
+				buffer += decoded;
+				const lines = buffer.split('\n');
+				buffer = lines.pop() || '';
+
+				for (const line of lines) {
+					if (line.startsWith('data: ')) {
+						const data = line.slice(6);
+						if (data === '[DONE]') continue;
+
+						try {
+							const parsed = JSON.parse(data);
+
+							if (parsed.type === 'thinking_start') {
+								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: true });
+							} else if (parsed.type === 'thinking') {
+								chatStore.appendToThinking(conversationId!, assistantMessageId, parsed.content);
+							} else if (parsed.type === 'thinking_end') {
+								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: false });
+							} else if (parsed.type === 'content') {
+								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.content);
+							} else if (parsed.type === 'sources') {
+								collectedSources = parsed.sources;
+							} else if (parsed.type === 'error') {
+								throw new Error(parsed.error);
+							} else if (parsed.choices?.[0]?.delta?.content) {
+								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.choices[0].delta.content);
+							}
+						} catch (e) {
+							if (e instanceof Error && e.message !== 'Unexpected token') {
+								throw e;
+							}
+						}
+					}
+				}
+			}
+
+			chatStore.updateMessage(conversationId!, assistantMessageId, {
+				isStreaming: false,
+				isThinking: false,
+				sources: collectedSources.length > 0 ? collectedSources : undefined
+			});
+
+		} catch (err) {
+			if (err instanceof Error && err.name === 'AbortError') {
+				chatStore.updateMessage(conversationId!, assistantMessageId, { isStreaming: false });
+			} else {
+				chatStore.updateMessage(conversationId!, assistantMessageId, {
+					isStreaming: false,
+					error: err instanceof Error ? err.message : 'Unknown error'
+				});
+				toastStore.error(err instanceof Error ? err.message : 'Failed to get response');
+			}
+		} finally {
+			chatStore.setStreaming(false);
+		}
+	}
+
+	/**
+	 * Edit a message and resend from that point
+	 */
+	async function handleEditAndResend(messageId: string, newContent: string) {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId) return;
+
+		// Update the message content
+		chatStore.updateMessageContent(conversationId, messageId, newContent);
+
+		// Get message index and delete all subsequent messages
+		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
+		if (messageIndex !== -1) {
+			chatStore.deleteMessagesFromIndex(conversationId, messageIndex + 1);
+		}
+
+		// Trigger fresh response
+		await triggerAssistantResponse();
+	}
+
+	/**
+	 * Resend from a specific message (keeps original content)
+	 */
+	async function handleResend(messageId: string) {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId) return;
+
+		const messageIndex = chatStore.getMessageIndex(conversationId, messageId);
+		if (messageIndex !== -1) {
+			chatStore.deleteMessagesFromIndex(conversationId, messageIndex + 1);
+		}
+
+		await triggerAssistantResponse();
+	}
+
+	/**
+	 * Regenerate the last assistant response
+	 */
+	async function handleRegenerate() {
+		const conversationId = chatStore.activeConversation?.id;
+		if (!conversationId) return;
+
+		// Find the last assistant message and delete it
+		const conv = chatStore.getConversation(conversationId);
+		if (!conv) return;
+
+		const lastAssistantIndex = [...conv.messages].reverse().findIndex(m => m.role === 'assistant');
+		if (lastAssistantIndex !== -1) {
+			const actualIndex = conv.messages.length - 1 - lastAssistantIndex;
+			chatStore.deleteMessagesFromIndex(conversationId, actualIndex);
+		}
+
+		await triggerAssistantResponse();
+	}
+
+	// ============================================
+	// Conversation Management handlers
+	// ============================================
+
+	// Conversation menu state
+	let showConversationMenu = $state(false);
+	let isRenaming = $state(false);
+	let renameValue = $state('');
+
+	function handleRenameConversation() {
+		const conv = chatStore.activeConversation;
+		if (!conv) return;
+		renameValue = conv.title || 'Untitled';
+		isRenaming = true;
+		showConversationMenu = false;
+	}
+
+	function handleSaveRename() {
+		const conv = chatStore.activeConversation;
+		if (!conv || !renameValue.trim()) return;
+		chatStore.updateConversationTitle(conv.id, renameValue.trim());
+		isRenaming = false;
+		renameValue = '';
+	}
+
+	function handleCancelRename() {
+		isRenaming = false;
+		renameValue = '';
+	}
+
+	function handleExportConversation() {
+		const conv = chatStore.activeConversation;
+		if (!conv) return;
+		showConversationMenu = false;
+
+		// Build markdown export
+		const lines: string[] = [];
+		lines.push(`# ${conv.title || 'Conversation'}`);
+		lines.push('');
+		lines.push(`**Model:** ${conv.model}`);
+		lines.push(`**Date:** ${new Date(conv.createdAt).toLocaleString()}`);
+		if (space?.name) lines.push(`**Space:** ${space.name}`);
+		if (area?.name) lines.push(`**Area:** ${area.name}`);
+		lines.push('');
+		lines.push('---');
+		lines.push('');
+
+		for (const message of conv.messages) {
+			const roleLabel = message.role === 'user' ? '**You:**' : '**Assistant:**';
+			lines.push(roleLabel);
+			lines.push('');
+			lines.push(message.content);
+			lines.push('');
+		}
+
+		const markdown = lines.join('\n');
+		const blob = new Blob([markdown], { type: 'text/markdown' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${(conv.title || 'conversation').replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+
+		toastStore.success('Conversation exported');
+	}
+
+	function handleDeleteConversation() {
+		const conv = chatStore.activeConversation;
+		if (!conv) return;
+		showConversationMenu = false;
+
+		chatStore.deleteConversation(conv.id);
+		toastStore.success('Conversation deleted');
+	}
+
+	// ============================================
+	// Drawer-specific handlers (by conversation ID)
+	// ============================================
+
+	function handleDrawerRename(convId: string, newTitle: string) {
+		chatStore.updateConversationTitle(convId, newTitle);
+		toastStore.success('Conversation renamed');
+	}
+
+	function handleDrawerExport(convId: string) {
+		const conv = chatStore.getConversation(convId);
+		if (!conv) return;
+
+		// Build markdown export
+		const lines: string[] = [];
+		lines.push(`# ${conv.title || 'Conversation'}`);
+		lines.push('');
+		lines.push(`**Model:** ${conv.model}`);
+		lines.push(`**Date:** ${new Date(conv.createdAt).toLocaleString()}`);
+		if (space?.name) lines.push(`**Space:** ${space.name}`);
+		if (area?.name) lines.push(`**Area:** ${area.name}`);
+		lines.push('');
+		lines.push('---');
+		lines.push('');
+
+		for (const message of conv.messages) {
+			const roleLabel = message.role === 'user' ? '**You:**' : '**Assistant:**';
+			lines.push(roleLabel);
+			lines.push('');
+			lines.push(message.content);
+			lines.push('');
+		}
+
+		const markdown = lines.join('\n');
+		const blob = new Blob([markdown], { type: 'text/markdown' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${(conv.title || 'conversation').replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+		URL.revokeObjectURL(url);
+
+		toastStore.success('Conversation exported');
+	}
+
+	function handleDrawerDelete(convId: string) {
+		chatStore.deleteConversation(convId);
+		toastStore.success('Conversation deleted');
+	}
 </script>
 
 <svelte:head>
@@ -747,7 +1056,7 @@
 					</button>
 				</div>
 			</div>
-			<div class="header-right">
+					<div class="header-right">
 				<ModelSelector
 					selectedModel={effectiveModel}
 					onchange={handleModelChange}
@@ -848,6 +1157,10 @@
 								{message}
 								messageIndex={i}
 								showTimestamp={settingsStore.showTimestamps}
+								canEdit={message.role === 'user' && !chatStore.isStreaming}
+								onEditAndResend={handleEditAndResend}
+								onResend={handleResend}
+								onRegenerate={handleRegenerate}
 								onSecondOpinion={handleSecondOpinionTrigger}
 							/>
 						</div>
@@ -931,6 +1244,9 @@
 			onNewChat={handleNewChat}
 			onPinConversation={handlePinConversation}
 			onMoveToArea={handleMoveToArea}
+			onRenameConversation={handleDrawerRename}
+			onExportConversation={handleDrawerExport}
+			onDeleteConversation={handleDrawerDelete}
 		/>
 	</div>
 {:else}
@@ -1225,13 +1541,14 @@
 		background: rgba(245, 158, 11, 0.15);
 	}
 
-	/* Main chat area */
+	/* Main chat area - edge-to-edge background */
 	.chat-area {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
 		transition: margin-right 0.2s ease;
+		background: var(--bg-chat, #0f0f11);
 	}
 
 	.chat-area.with-panel {
@@ -1241,19 +1558,185 @@
 	.messages-container {
 		flex: 1;
 		overflow-y: auto;
-		padding: 1rem 2rem;
+		padding: 1rem 0;
 	}
 
-	/* Constrain message width for better readability */
+	/* Constrain message width for better readability - padding on wrapper */
 	.messages-container > :global(*) {
 		max-width: 960px;
 		margin-left: auto;
 		margin-right: auto;
+		padding-left: 2rem;
+		padding-right: 2rem;
 	}
 
 	.input-container {
 		padding: 1rem 2rem;
 		border-top: 1px solid rgba(255, 255, 255, 0.06);
+		background: var(--bg-chat, #0f0f11);
+	}
+
+	/* Conversation menu */
+	.conversation-menu-container {
+		position: relative;
+	}
+
+	.menu-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 0.375rem;
+		transition: all 0.15s ease;
+	}
+
+	.menu-button:hover {
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.1);
+		border-color: rgba(255, 255, 255, 0.2);
+	}
+
+	.menu-button svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+	}
+
+	.conversation-menu {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		right: 0;
+		min-width: 160px;
+		padding: 0.375rem;
+		background: var(--bg-secondary, #18181b);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 0.5rem;
+		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+		z-index: 50;
+	}
+
+	.menu-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.8125rem;
+		color: rgba(255, 255, 255, 0.8);
+		background: transparent;
+		border-radius: 0.375rem;
+		text-align: left;
+		transition: all 0.1s ease;
+	}
+
+	.menu-item:hover {
+		color: rgba(255, 255, 255, 1);
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.menu-item.danger {
+		color: #ef4444;
+	}
+
+	.menu-item.danger:hover {
+		background: rgba(239, 68, 68, 0.15);
+	}
+
+	.menu-item svg {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
+	}
+
+	/* Rename dialog */
+	.rename-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		z-index: 60;
+	}
+
+	.rename-dialog {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 90%;
+		max-width: 400px;
+		padding: 1.5rem;
+		background: var(--bg-secondary, #18181b);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 0.75rem;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+		z-index: 70;
+	}
+
+	.rename-dialog h3 {
+		margin: 0 0 1rem 0;
+		font-size: 1rem;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.9);
+	}
+
+	.rename-input {
+		width: 100%;
+		padding: 0.625rem 0.875rem;
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 0.5rem;
+		outline: none;
+		transition: all 0.15s ease;
+	}
+
+	.rename-input:focus {
+		border-color: var(--area-color, #3b82f6);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--area-color, #3b82f6) 20%, transparent);
+	}
+
+	.rename-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+
+	.btn-cancel,
+	.btn-save {
+		padding: 0.5rem 1rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		border-radius: 0.375rem;
+		transition: all 0.15s ease;
+	}
+
+	.btn-cancel {
+		color: rgba(255, 255, 255, 0.7);
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.btn-cancel:hover {
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.12);
+	}
+
+	.btn-save {
+		color: white;
+		background: var(--area-color, #3b82f6);
+	}
+
+	.btn-save:hover {
+		filter: brightness(1.1);
 	}
 
 	/* Panels */
