@@ -105,22 +105,27 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-02 (Areas Architecture)
+### Latest: 2026-01-02 (Space Dashboard & TaskModal)
 
 **Completed:**
-- `ConversationDrawer.svelte` - slide-out drawer with pin/move/task badges
-- `TaskContextBanner.svelte` - banner for task-linked conversations
-- `AreaWelcomeScreen.svelte` - welcome screen for areas
-- Space dashboard components (`AreaCard`, `CreateAreaCard`, `RecentActivitySection`)
-- Area routing (`/spaces/[space]/[area]/+page.svelte`)
-- Migration `005-areas-rename-migrate.sql`
-- Chat message width capped at 960px, full-width input/banner
-- Clickable breadcrumbs (space → dashboard, area → welcome screen)
+- `TaskModal.svelte` - modal for task creation with title, due date, deadline type (soft/hard), priority (normal/high), and area linking
+- `TasksSection.svelte` - task list component with modal-based creation (replaced inline input)
+- `SpaceDashboard.svelte` - integrated TaskModal with full `CreateTaskInput` type support
+- `ConversationDrawer.svelte` - enhanced badge styling and visual polish
+- `AreaCard.svelte` / `CreateAreaCard.svelte` - refined visual consistency
+- Migration `006-tasks-area-rename.sql` - rename focus_area_id to area_id
+- Added claude-sonnet-4.5 model alias in litellm-config.yaml
+
+**Previous session (same day):**
+- ConversationDrawer, TaskContextBanner, AreaWelcomeScreen components
+- Space dashboard components and area routing
+- Migration 005-areas-rename-migrate.sql
 
 **Next steps:**
-- Run areas migration on database
-- Test conversation pinning and area-to-area moving
+- Run migrations 005 and 006 on database
+- Test task creation flow end-to-end
 - Wire up AreaWelcomeScreen quick actions
+- Test conversation pinning and area-to-area moving
 
 ---
 
