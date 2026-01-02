@@ -276,7 +276,7 @@ class TaskStore {
 		spaceId: string,
 		assistId: string,
 		conversationId?: string,
-		focusAreaId?: string
+		areaId?: string
 	): Promise<Task[]> {
 		this.error = null;
 
@@ -292,7 +292,7 @@ class TaskStore {
 						dueDateType: t.dueDateType
 					})),
 					spaceId,
-					focusAreaId, // Apply to all tasks in bulk
+					areaId, // Apply to all tasks in bulk
 					source: {
 						type: 'assist',
 						assistId,
@@ -1352,6 +1352,13 @@ class TaskStore {
 	 */
 	getTasksForSpaceId(spaceId: string): Task[] {
 		return this.taskList.filter((t) => t.spaceId === spaceId);
+	}
+
+	/**
+	 * Get tasks for a specific area
+	 */
+	getTasksForAreaId(areaId: string): Task[] {
+		return this.taskList.filter((t) => t.areaId === areaId);
 	}
 
 	/**

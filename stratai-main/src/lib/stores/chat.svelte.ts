@@ -63,8 +63,8 @@ class ChatStore {
 	// Space state (for filtering conversations by space)
 	activeSpaceId = $state<string | null>(null);
 
-	// Focus area state (for filtering conversations by focus area within a space)
-	selectedFocusAreaId = $state<string | null>(null);
+	// Area state (for filtering conversations by area within a space)
+	selectedAreaId = $state<string | null>(null);
 
 	// Task state (for deep work mode - filter to task-linked conversations only)
 	focusedTaskId = $state<string | null>(null);
@@ -311,63 +311,78 @@ class ChatStore {
 	});
 
 	// Context-aware grouped conversations for sidebar
-	// Used by Phase C: Chat Context Awareness
+	// Area-centric model: Area is the primary filter
+	// Key change: Pinned conversations only show in their ORIGIN area (not everywhere)
 	groupedConversations = $derived.by(() => {
 		const allConversations = Array.from(this.conversations.values())
 			.filter((c) => c && c.id)
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 
-		// Deep work mode: only show task conversations
+		// Deep work mode: only show task conversations (isolated experience)
 		if (this.focusedTaskId) {
 			return {
-				current: allConversations.filter((c) => c.taskId === this.focusedTaskId),
-				otherInSpace: [],
-				otherContexts: [],
-				pinned: allConversations.filter((c) => c.pinned && c.taskId === this.focusedTaskId)
+				pinned: allConversations.filter((c) => c.pinned && c.taskId === this.focusedTaskId),
+				current: allConversations.filter((c) => c.taskId === this.focusedTaskId && !c.pinned),
+				otherInSpace: [], // Not shown in task focus mode (serene isolation)
+				otherContexts: [] // Not shown in task focus mode
 			};
 		}
 
-		// Focus area view
-		if (this.selectedFocusAreaId) {
+		// Area view - primary filter in new architecture
+		// Pinned chats show ONLY in their origin area (not everywhere)
+		if (this.selectedAreaId) {
 			return {
-				current: allConversations.filter(
-					(c) => c.focusAreaId === this.selectedFocusAreaId && !c.pinned
+				// Pinned conversations that BELONG to this area only
+				pinned: allConversations.filter(
+					(c) => c.areaId === this.selectedAreaId && c.pinned
 				),
+				// Current area conversations (not pinned)
+				current: allConversations.filter(
+					(c) => c.areaId === this.selectedAreaId && !c.pinned
+				),
+				// Other areas in the same space (collapsible "From Other Areas")
 				otherInSpace: allConversations.filter(
 					(c) =>
 						c.spaceId === this.activeSpaceId &&
-						c.focusAreaId !== this.selectedFocusAreaId &&
-						!c.pinned
+						c.areaId !== this.selectedAreaId &&
+						c.areaId // Must have an areaId (excludes orphans)
 				),
+				// Conversations from other spaces (rarely shown, mostly for search)
 				otherContexts: allConversations.filter(
-					(c) => c.spaceId !== this.activeSpaceId && !c.pinned
-				),
-				pinned: allConversations.filter((c) => c.pinned)
+					(c) => c.spaceId && c.spaceId !== this.activeSpaceId
+				)
 			};
 		}
 
-		// Space view (all focus areas)
+		// Space view (Space Dashboard - navigation hub, typically no sidebar)
+		// Kept for fallback/transition purposes
 		if (this.activeSpaceId) {
 			return {
+				// Pinned in this space only
+				pinned: allConversations.filter((c) => c.spaceId === this.activeSpaceId && c.pinned),
+				// All conversations in this space
 				current: allConversations.filter((c) => c.spaceId === this.activeSpaceId && !c.pinned),
-				otherInSpace: [], // Not applicable in space view
-				otherContexts: allConversations.filter((c) => c.spaceId !== this.activeSpaceId && !c.pinned),
-				pinned: allConversations.filter((c) => c.pinned)
+				otherInSpace: [], // Not applicable at space level
+				// Other spaces
+				otherContexts: allConversations.filter((c) => c.spaceId !== this.activeSpaceId)
 			};
 		}
 
-		// Main view (no space context)
+		// Main view (no space context - legacy main chat)
 		return {
+			// Pinned conversations without a space
+			pinned: allConversations.filter((c) => !c.spaceId && c.pinned),
+			// Conversations without a space
 			current: allConversations.filter((c) => !c.spaceId && !c.pinned),
 			otherInSpace: [], // Not applicable in main view
-			otherContexts: allConversations.filter((c) => c.spaceId && !c.pinned),
-			pinned: allConversations.filter((c) => c.pinned)
+			// Conversations that belong to spaces (collapsible "From Spaces")
+			otherContexts: allConversations.filter((c) => c.spaceId)
 		};
 	});
 
 	createConversation(
 		model: string,
-		options?: { spaceId?: string; focusAreaId?: string; taskId?: string }
+		options?: { spaceId?: string; areaId?: string; taskId?: string }
 	): string {
 		const id = generateId();
 		const conversation: Conversation = {
@@ -378,7 +393,7 @@ class ChatStore {
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 			spaceId: options?.spaceId || null,
-			focusAreaId: options?.focusAreaId || null,
+			areaId: options?.areaId || null,
 			taskId: options?.taskId || null,
 			tags: []
 		};
@@ -448,8 +463,8 @@ class ChatStore {
 	 * Set the selected focus area for filtering conversations
 	 * Used by focus area views to scope the sidebar view
 	 */
-	setSelectedFocusAreaId(focusAreaId: string | null): void {
-		this.selectedFocusAreaId = focusAreaId;
+	setSelectedAreaId(areaId: string | null): void {
+		this.selectedAreaId = areaId;
 	}
 
 	/**
@@ -463,9 +478,9 @@ class ChatStore {
 	/**
 	 * Get conversations linked to a specific focus area
 	 */
-	getConversationsByFocusArea(focusAreaId: string): Conversation[] {
+	getConversationsByArea(areaId: string): Conversation[] {
 		return Array.from(this.conversations.values())
-			.filter((c) => c.focusAreaId === focusAreaId)
+			.filter((c) => c.areaId === areaId)
 			.sort((a, b) => b.updatedAt - a.updatedAt);
 	}
 
@@ -479,7 +494,7 @@ class ChatStore {
 	}
 
 	/**
-	 * Get conversations in the current context based on activeSpaceId + selectedFocusAreaId
+	 * Get conversations in the current context based on activeSpaceId + selectedAreaId
 	 * Used for context-aware sidebar grouping
 	 */
 	getConversationsInCurrentContext(): Conversation[] {
@@ -493,9 +508,9 @@ class ChatStore {
 		}
 
 		// If in a focus area, show focus area conversations
-		if (this.selectedFocusAreaId) {
+		if (this.selectedAreaId) {
 			return allConversations
-				.filter((c) => c.focusAreaId === this.selectedFocusAreaId)
+				.filter((c) => c.areaId === this.selectedAreaId)
 				.sort((a, b) => b.updatedAt - a.updatedAt);
 		}
 
@@ -523,8 +538,8 @@ class ChatStore {
 		}
 
 		// If in a focus area, conversation must match the focus area
-		if (this.selectedFocusAreaId) {
-			return conversation.focusAreaId === this.selectedFocusAreaId;
+		if (this.selectedAreaId) {
+			return conversation.areaId === this.selectedAreaId;
 		}
 
 		// If in a space, conversation must match the space
@@ -537,19 +552,19 @@ class ChatStore {
 	}
 
 	/**
-	 * Update a conversation's context (spaceId, focusAreaId, taskId)
+	 * Update a conversation's context (spaceId, areaId, taskId)
 	 * Used by "Bring to Context" modal
 	 */
 	updateConversationContext(
 		id: string,
-		context: { spaceId?: string | null; focusAreaId?: string | null; taskId?: string | null }
+		context: { spaceId?: string | null; areaId?: string | null; taskId?: string | null }
 	): void {
 		const conv = this.conversations.get(id);
 		if (conv) {
 			const updated = {
 				...conv,
 				spaceId: context.spaceId !== undefined ? context.spaceId : conv.spaceId,
-				focusAreaId: context.focusAreaId !== undefined ? context.focusAreaId : conv.focusAreaId,
+				areaId: context.areaId !== undefined ? context.areaId : conv.areaId,
 				taskId: context.taskId !== undefined ? context.taskId : conv.taskId,
 				updatedAt: Date.now()
 			};

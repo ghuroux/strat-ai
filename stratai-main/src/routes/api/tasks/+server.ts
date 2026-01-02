@@ -17,14 +17,14 @@ const DEFAULT_USER_ID = 'admin';
  * GET /api/tasks
  * Query params:
  * - spaceId: Filter by space ID
- * - focusAreaId: Filter by focus area ID
+ * - areaId: Filter by focus area ID
  * - status: Filter by status (active, completed, deferred) - can be comma-separated
  * - includeCompleted: Include completed tasks (default: false)
  */
 export const GET: RequestHandler = async ({ url }) => {
 	try {
 		const spaceId = url.searchParams.get('spaceId') ?? undefined;
-		const focusAreaId = url.searchParams.get('focusAreaId');
+		const areaId = url.searchParams.get('areaId');
 		const statusParam = url.searchParams.get('status');
 		const includeCompleted = url.searchParams.get('includeCompleted') === 'true';
 
@@ -36,9 +36,9 @@ export const GET: RequestHandler = async ({ url }) => {
 			filter.spaceId = spaceId;
 		}
 
-		// Handle focusAreaId filter (null means no focus area, undefined means any)
-		if (focusAreaId !== null) {
-			filter.focusAreaId = focusAreaId === 'null' ? null : focusAreaId || undefined;
+		// Handle areaId filter (null means no focus area, undefined means any)
+		if (areaId !== null) {
+			filter.areaId = areaId === 'null' ? null : areaId || undefined;
 		}
 
 		if (statusParam) {
@@ -61,8 +61,8 @@ export const GET: RequestHandler = async ({ url }) => {
 /**
  * POST /api/tasks
  * Body can be:
- * - Single task: { title, spaceId, focusAreaId?, priority?, dueDate?, dueDateType?, source? }
- * - Bulk tasks: { tasks: [...], spaceId, focusAreaId?, source? }
+ * - Single task: { title, spaceId, areaId?, priority?, dueDate?, dueDateType?, source? }
+ * - Bulk tasks: { tasks: [...], spaceId, areaId?, source? }
  */
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -70,10 +70,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Check if bulk create
 		if (body.tasks && Array.isArray(body.tasks)) {
-			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string; focusAreaId?: string }) => ({
+			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string; areaId?: string }) => ({
 				title: t.title,
 				spaceId: body.spaceId as string,
-				focusAreaId: t.focusAreaId ?? body.focusAreaId, // Per-task or bulk level
+				areaId: t.areaId ?? body.areaId, // Per-task or bulk level
 				priority: t.priority,
 				dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
 				dueDateType: t.dueDateType,
@@ -89,7 +89,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		const input: CreateTaskInput = {
 			title: body.title,
 			spaceId: body.spaceId as string,
-			focusAreaId: body.focusAreaId,
+			areaId: body.areaId,
 			priority: body.priority,
 			dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
 			dueDateType: body.dueDateType,

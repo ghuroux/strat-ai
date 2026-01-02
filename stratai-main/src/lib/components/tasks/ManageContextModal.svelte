@@ -2,24 +2,24 @@
 	ManageContextModal.svelte
 
 	Modal for managing context settings for a task.
-	Allows setting focus area, viewing/managing linked documents.
+	Allows setting area, viewing/managing linked documents.
 -->
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
-	import { areaStore as focusAreaStore } from '$lib/stores/areas.svelte';
+	import { areaStore } from '$lib/stores/areas.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { documentStore, type TaskDocumentLink } from '$lib/stores/documents.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
-	import type { Area as FocusArea } from '$lib/types/areas';
+	import type { Area } from '$lib/types/areas';
 	import type { Document, DocumentContextRole } from '$lib/types/documents';
 
 	interface Props {
 		open: boolean;
 		taskId: string;
 		spaceId: string;
-		currentFocusAreaId: string | null;
+		currentAreaId: string | null;
 		onClose: () => void;
-		onUpdateFocusArea: (focusAreaId: string | null) => Promise<void>;
+		onUpdateArea: (areaId: string | null) => Promise<void>;
 		onAddContext: () => void; // Opens AddContextModal for full document management
 	}
 
@@ -27,20 +27,20 @@
 		open,
 		taskId,
 		spaceId,
-		currentFocusAreaId,
+		currentAreaId,
 		onClose,
-		onUpdateFocusArea,
+		onUpdateArea,
 		onAddContext
 	}: Props = $props();
 
 	// State
-	let selectedFocusAreaId = $state<string | null>(null);
+	let selectedAreaId = $state<string | null>(null);
 	let isSaving = $state(false);
 	let isUnlinking = $state<string | null>(null);
 
-	// Get focus areas for this space
-	let focusAreas = $derived.by(() => {
-		return focusAreaStore.getFocusAreasForSpace(spaceId);
+	// Get areas for this space
+	let areas = $derived.by(() => {
+		return areaStore.getAreasForSpace(spaceId);
 	});
 
 	// Get linked documents for this task
@@ -56,26 +56,26 @@
 	// Reset selection when modal opens
 	$effect(() => {
 		if (open) {
-			selectedFocusAreaId = currentFocusAreaId;
+			selectedAreaId = currentAreaId;
 		}
 	});
 
-	// Handle save focus area
-	async function handleSaveFocusArea() {
-		if (selectedFocusAreaId === currentFocusAreaId) {
+	// Handle save area
+	async function handleSaveArea() {
+		if (selectedAreaId === currentAreaId) {
 			return;
 		}
 
 		isSaving = true;
 		try {
-			await onUpdateFocusArea(selectedFocusAreaId);
-			const newFocusArea = selectedFocusAreaId
-				? focusAreas.find(f => f.id === selectedFocusAreaId)?.name
+			await onUpdateArea(selectedAreaId);
+			const newArea = selectedAreaId
+				? areas.find(a => a.id === selectedAreaId)?.name
 				: 'None';
-			toastStore.success(`Focus area updated to: ${newFocusArea || 'None'}`);
+			toastStore.success(`Area updated to: ${newArea || 'None'}`);
 		} catch (error) {
-			console.error('Failed to update focus area:', error);
-			toastStore.error('Failed to update focus area');
+			console.error('Failed to update area:', error);
+			toastStore.error('Failed to update area');
 		} finally {
 			isSaving = false;
 		}
@@ -266,19 +266,19 @@
 				<!-- Divider -->
 				<div class="border-t border-surface-700/50"></div>
 
-				<!-- Focus Area Selection -->
+				<!-- Area Selection -->
 				<div class="space-y-3">
 					<div class="flex items-center justify-between">
 						<label class="block text-sm font-medium text-surface-300">
-							Focus Area
+							Area
 						</label>
-						{#if selectedFocusAreaId !== currentFocusAreaId}
+						{#if selectedAreaId !== currentAreaId}
 							<button
 								type="button"
 								class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium
 									   text-primary-400 hover:text-primary-300 bg-primary-500/10 hover:bg-primary-500/20
 									   rounded-lg transition-colors disabled:opacity-50"
-								onclick={handleSaveFocusArea}
+								onclick={handleSaveArea}
 								disabled={isSaving}
 							>
 								{#if isSaving}
@@ -296,84 +296,84 @@
 						{/if}
 					</div>
 					<p class="text-xs text-surface-500">
-						Assign to a focus area to inherit its context and documents.
+						Assign to an area to inherit its context and documents.
 					</p>
 
 					<div class="space-y-1.5 max-h-48 overflow-y-auto">
-						<!-- No Focus Area Option -->
+						<!-- No Area Option -->
 						<label
 							class="flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all
-								   {selectedFocusAreaId === null
+								   {selectedAreaId === null
 									? 'border-primary-500 bg-primary-500/10'
 									: 'border-surface-700 hover:border-surface-600 hover:bg-surface-800/50'}"
 						>
 							<input
 								type="radio"
-								name="focusArea"
-								checked={selectedFocusAreaId === null}
-								onchange={() => selectedFocusAreaId = null}
+								name="area"
+								checked={selectedAreaId === null}
+								onchange={() => selectedAreaId = null}
 								class="sr-only"
 							/>
 							<div class="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0
-								   {selectedFocusAreaId === null ? 'border-primary-500' : 'border-surface-500'}">
-								{#if selectedFocusAreaId === null}
+								   {selectedAreaId === null ? 'border-primary-500' : 'border-surface-500'}">
+								{#if selectedAreaId === null}
 									<div class="w-2 h-2 rounded-full bg-primary-500"></div>
 								{/if}
 							</div>
-							<span class="text-sm text-surface-300">No focus area (general)</span>
+							<span class="text-sm text-surface-300">No area (general)</span>
 						</label>
 
-						<!-- Focus Areas -->
-						{#each focusAreas as focusArea (focusArea.id)}
+						<!-- Areas -->
+						{#each areas as area (area.id)}
 							<label
 								class="flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all
-									   {selectedFocusAreaId === focusArea.id
+									   {selectedAreaId === area.id
 										? 'border-primary-500 bg-primary-500/10'
 										: 'border-surface-700 hover:border-surface-600 hover:bg-surface-800/50'}"
 							>
 								<input
 									type="radio"
-									name="focusArea"
-									checked={selectedFocusAreaId === focusArea.id}
-									onchange={() => selectedFocusAreaId = focusArea.id}
+									name="area"
+									checked={selectedAreaId === area.id}
+									onchange={() => selectedAreaId = area.id}
 									class="sr-only"
 								/>
 								<div class="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0
-									   {selectedFocusAreaId === focusArea.id ? 'border-primary-500' : 'border-surface-500'}">
-									{#if selectedFocusAreaId === focusArea.id}
+									   {selectedAreaId === area.id ? 'border-primary-500' : 'border-surface-500'}">
+									{#if selectedAreaId === area.id}
 										<div class="w-2 h-2 rounded-full bg-primary-500"></div>
 									{/if}
 								</div>
 								<div class="flex items-center gap-2 min-w-0 flex-1">
-									{#if focusArea.color}
+									{#if area.color}
 										<div
 											class="w-2.5 h-2.5 rounded-full flex-shrink-0"
-											style="background-color: {focusArea.color};"
+											style="background-color: {area.color};"
 										></div>
 									{/if}
-									<span class="text-sm text-surface-200 truncate">{focusArea.name}</span>
+									<span class="text-sm text-surface-200 truncate">{area.name}</span>
 								</div>
-								{#if focusArea.context}
+								{#if area.context}
 									<span class="text-xs text-surface-500 flex-shrink-0">Has context</span>
 								{/if}
 							</label>
 						{/each}
 
-						{#if focusAreas.length === 0}
+						{#if areas.length === 0}
 							<div class="p-3 text-center text-surface-500 text-sm">
-								<p>No focus areas in this space yet.</p>
+								<p>No areas in this space yet.</p>
 							</div>
 						{/if}
 					</div>
 				</div>
 
 				<!-- Context Chain Preview -->
-				{#if selectedFocusAreaId}
-					{@const selectedFA = focusAreas.find(f => f.id === selectedFocusAreaId)}
-					{#if selectedFA?.context}
+				{#if selectedAreaId}
+					{@const selectedArea = areas.find(a => a.id === selectedAreaId)}
+					{#if selectedArea?.context}
 						<div class="p-3 bg-surface-800/30 rounded-lg border border-surface-700/50">
-							<p class="text-xs font-medium text-surface-400 mb-1.5">Focus Area Context</p>
-							<p class="text-sm text-surface-300 line-clamp-3">{selectedFA.context}</p>
+							<p class="text-xs font-medium text-surface-400 mb-1.5">Area Context</p>
+							<p class="text-sm text-surface-300 line-clamp-3">{selectedArea.context}</p>
 						</div>
 					{/if}
 				{/if}

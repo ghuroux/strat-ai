@@ -548,7 +548,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	} : null;
 	const focusedTask: FocusedTaskInfo | null = body.focusedTask ?? null;
 	let planModeContext: PlanModeContext | null = body.planMode ?? null;
-	const focusAreaId = body.focusAreaId;
+	const areaId = body.areaId;
 
 	// Debug logging: What plan mode context did we receive?
 	console.log('\n========== CHAT API REQUEST ==========');
@@ -657,13 +657,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
-	// Fetch focus area context if focusAreaId is provided
+	// Fetch focus area context if areaId is provided
 	let focusAreaContext: FocusAreaInfo | null = null;
-	if (focusAreaId) {
+	if (areaId) {
 		try {
 			// For POC, use hardcoded admin user (consistent with other API endpoints)
 			const userId = 'admin';
-			const focusArea = await postgresFocusAreaRepository.findById(focusAreaId, userId);
+			const focusArea = await postgresFocusAreaRepository.findById(areaId, userId);
 
 			if (focusArea) {
 				console.log(`[DEBUG] Focus area found:`, {
@@ -755,7 +755,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Remove client-specific fields before forwarding to LiteLLM
-	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, focusAreaId: ___________, ...cleanBody } = body;
+	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, areaId: ___________, ...cleanBody } = body;
 
 	// Add thinking config if enabled
 	if (thinkingEnabled) {

@@ -8,7 +8,7 @@
 		conversation: Conversation;
 		currentContext: {
 			spaceId?: string | null;
-			focusAreaId?: string | null;
+			areaId?: string | null;
 			taskId?: string | null;
 		};
 		onOpenInOrigin: () => void;

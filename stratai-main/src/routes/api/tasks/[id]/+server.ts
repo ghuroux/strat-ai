@@ -39,7 +39,7 @@ export const GET: RequestHandler = async ({ params }) => {
 /**
  * PATCH /api/tasks/[id]
  * Update task fields
- * Body: { title?, status?, priority?, focusAreaId?, dueDate?, dueDateType?, completionNotes? }
+ * Body: { title?, status?, priority?, areaId?, dueDate?, dueDateType?, completionNotes? }
  */
 export const PATCH: RequestHandler = async ({ params, request }) => {
 	try {
@@ -50,8 +50,8 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		if (body.title !== undefined) updates.title = body.title;
 		if (body.status !== undefined) updates.status = body.status;
 		if (body.priority !== undefined) updates.priority = body.priority;
-		if (body.focusAreaId !== undefined) {
-			updates.focusAreaId = body.focusAreaId || null; // empty string becomes null
+		if (body.areaId !== undefined) {
+			updates.areaId = body.areaId || null; // empty string becomes null
 		}
 		if (body.dueDate !== undefined) {
 			updates.dueDate = body.dueDate ? new Date(body.dueDate) : null;

@@ -582,6 +582,103 @@ Brain dump → AI extracts tasks → Confirm in WorkingPanel → Priority check 
 
 ---
 
+## Task Focus Mode: Future Vision
+
+> **Status**: Core implementation in progress. This section documents future enhancements to revisit.
+
+Task Focus Mode (`/spaces/[space]/task/[taskId]`) provides a dedicated, distraction-free environment for working on individual tasks. The following features are planned for future phases.
+
+### Productivity Features
+
+**Task Timer & Pomodoro**:
+- [ ] Built-in timer with Pomodoro mode (25 min focus / 5 min break)
+- [ ] Visual timer in header (non-intrusive, no anxiety)
+- [ ] Auto-pause when leaving task focus
+- [ ] Session summary: "You spent 47 minutes on this task"
+
+**Focus Analytics**:
+- [ ] Time spent per task (tracked automatically)
+- [ ] Messages exchanged per task
+- [ ] Completion velocity (tasks completed per week)
+- [ ] Personal insights: "You're most productive between 9-11 AM"
+
+**Completion Experience**:
+- [ ] Satisfying completion animation
+- [ ] Optional reflection: "What went well?"
+- [ ] Streak tracking: "3 tasks completed today!"
+- [ ] Weekly summary digest
+
+### Intelligence Features
+
+**Auto-Suggest Subtasks**:
+- [ ] Analyze task title/description → suggest initial subtasks
+- [ ] "Based on similar tasks, you might need: ..."
+- [ ] One-click to accept suggestions
+
+**Time Estimation**:
+- [ ] Learn from historical task completion times
+- [ ] "Tasks like this usually take ~2 hours"
+- [ ] Compare estimate vs actual after completion
+
+**Smart Context**:
+- [ ] Suggest related documents from knowledge base
+- [ ] "You mentioned X in a previous conversation—relevant?"
+- [ ] Surface similar completed tasks for reference
+
+**Next Step Suggestions**:
+- [ ] After subtask completion: "Ready for the next step?"
+- [ ] AI suggests what to tackle next based on priority/dependencies
+- [ ] Natural transition prompts in chat
+
+### Collaboration Features (Post-MVP)
+
+**Task Sharing**:
+- [ ] Share task with teammate (read-only or collaborative)
+- [ ] Task handoff with context summary
+- [ ] Comments vs chat (async collaboration)
+
+**Notifications**:
+- [ ] Slack/Teams integration for task updates
+- [ ] Email digest of task progress
+- [ ] Mention teammates in task chat
+
+### Integration Features (Post-MVP)
+
+**Calendar Integration**:
+- [ ] "Block time for this task" → creates calendar event
+- [ ] See upcoming time blocks in task header
+- [ ] Sync with Google Calendar / Outlook
+
+**External Tool Sync**:
+- [ ] Jira/Linear integration (2-way sync)
+- [ ] GitHub issue linking
+- [ ] Import tasks from external tools
+
+**Export & Reporting**:
+- [ ] Export task summary (markdown, PDF)
+- [ ] Weekly/monthly task reports
+- [ ] Time tracking export for billing
+
+### UX Enhancements
+
+**Keyboard Shortcuts**:
+- [ ] `Cmd+Enter` - Send message
+- [ ] `Cmd+Shift+S` - Toggle subtask complete
+- [ ] `Cmd+Shift+N` - New subtask
+- [ ] `Escape` - Exit task focus (with confirmation if unsaved)
+
+**Mobile Experience**:
+- [ ] Responsive task focus layout
+- [ ] Swipe gestures for subtask completion
+- [ ] Voice input for quick task notes
+
+**Ambient Mode**:
+- [ ] Subtle background sounds (optional)
+- [ ] Do Not Disturb integration
+- [ ] Fullscreen focus mode (hide all chrome)
+
+---
+
 ## Phase 0.4: Contexts & Projects
 
 **Goal**: Lightweight persistent containers within spaces

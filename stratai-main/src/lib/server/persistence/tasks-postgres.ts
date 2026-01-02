@@ -71,8 +71,8 @@ function dbRowToTask(row: TaskRow): Task {
 		subtaskType: (row.subtaskType as SubtaskType) ?? undefined,
 		subtaskOrder: row.subtaskOrder ?? undefined,
 		contextSummary: row.contextSummary ?? undefined,
-		// Focus Area
-		focusAreaId: row.focusAreaId ?? undefined,
+		// Area
+		areaId: row.areaId ?? undefined,
 		// Planning state - use parsed value
 		planningData: parsedPlanningData,
 		// Scope
@@ -183,7 +183,7 @@ export const postgresTaskRepository: TaskRepository = {
 				id, title, status, priority, color,
 				due_date, due_date_type,
 				source_type, source_assist_id, source_conversation_id,
-				focus_area_id,
+				area_id,
 				space_id, user_id,
 				last_activity_at, created_at, updated_at
 			) VALUES (
@@ -197,7 +197,7 @@ export const postgresTaskRepository: TaskRepository = {
 				${input.source?.type ?? 'manual'},
 				${input.source?.assistId ?? null},
 				${input.source?.conversationId ?? null},
-				${input.focusAreaId ?? null},
+				${input.areaId ?? null},
 				${input.spaceId},
 				${userId},
 				${now},
@@ -258,7 +258,7 @@ export const postgresTaskRepository: TaskRepository = {
 				title = COALESCE(${updates.title ?? null}, title),
 				status = COALESCE(${updates.status ?? null}, status),
 				priority = COALESCE(${updates.priority ?? null}, priority),
-				focus_area_id = ${updates.focusAreaId === null ? null : updates.focusAreaId ?? sql`focus_area_id`},
+				area_id = ${updates.areaId === null ? null : updates.areaId ?? sql`area_id`},
 				due_date = ${updates.dueDate === null ? null : updates.dueDate ?? sql`due_date`},
 				due_date_type = ${updates.dueDateType === null ? null : updates.dueDateType ?? sql`due_date_type`},
 				completion_notes = COALESCE(${updates.completionNotes ?? null}, completion_notes),
@@ -471,7 +471,7 @@ export const postgresTaskRepository: TaskRepository = {
 			INSERT INTO tasks (
 				id, title, status, priority, color,
 				parent_task_id, subtask_type, subtask_order,
-				source_type, source_conversation_id, focus_area_id,
+				source_type, source_conversation_id, area_id,
 				space_id, user_id,
 				last_activity_at, created_at, updated_at
 			) VALUES (
@@ -485,7 +485,7 @@ export const postgresTaskRepository: TaskRepository = {
 				${nextOrder},
 				${input.sourceConversationId ? 'chat' : 'manual'},
 				${input.sourceConversationId ?? null},
-				${parent.focusAreaId ?? null},
+				${parent.areaId ?? null},
 				${parent.spaceId},
 				${userId},
 				${now},

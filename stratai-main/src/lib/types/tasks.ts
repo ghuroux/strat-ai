@@ -78,7 +78,7 @@ export interface Task {
 	contextSummary?: string;
 
 	// Focus Area (optional - for specialized context within space)
-	focusAreaId?: string;
+	areaId?: string;
 
 	// Scope
 	spaceId: string; // FK to spaces table (system space id = slug, custom = UUID)
@@ -100,7 +100,7 @@ export interface Task {
 export interface CreateTaskInput {
 	title: string;
 	spaceId: string; // FK to spaces table
-	focusAreaId?: string;
+	areaId?: string;
 	priority?: TaskPriority;
 	dueDate?: Date;
 	dueDateType?: DueDateType;
@@ -114,7 +114,7 @@ export interface UpdateTaskInput {
 	title?: string;
 	status?: TaskStatus;
 	priority?: TaskPriority;
-	focusAreaId?: string | null;
+	areaId?: string | null;
 	dueDate?: Date | null;
 	dueDateType?: DueDateType | null;
 	completionNotes?: string;
@@ -213,7 +213,7 @@ export interface TaskRow {
 	subtaskOrder: number | null;
 	contextSummary: string | null;
 	// Focus Area
-	focusAreaId: string | null;
+	areaId: string | null;
 	// Planning state
 	planningData: PlanningData | null;
 	// Scope
@@ -230,7 +230,7 @@ export interface TaskRow {
  */
 export interface TaskListFilter {
 	spaceId?: string; // FK to spaces table
-	focusAreaId?: string | null; // null = no focus area, undefined = any
+	areaId?: string | null; // null = no focus area, undefined = any
 	status?: TaskStatus | TaskStatus[];
 	priority?: TaskPriority;
 	includeCompleted?: boolean;
@@ -273,7 +273,7 @@ export function rowToTask(row: TaskRow): Task {
 		subtaskOrder: row.subtaskOrder ?? undefined,
 		contextSummary: row.contextSummary ?? undefined,
 		// Focus Area
-		focusAreaId: row.focusAreaId ?? undefined,
+		areaId: row.areaId ?? undefined,
 		// Planning state
 		planningData: row.planningData ?? undefined,
 		// Scope

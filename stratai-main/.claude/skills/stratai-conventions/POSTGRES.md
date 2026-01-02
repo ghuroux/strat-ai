@@ -121,7 +121,7 @@ export interface TaskRow {
     // Note: camelCase even though DB column is snake_case
     parentTaskId: string | null;      // parent_task_id in DB
     subtaskOrder: number | null;      // subtask_order in DB
-    focusAreaId: string | null;       // focus_area_id in DB
+    areaId: string | null;            // area_id in DB
     sourceType: string;               // source_type in DB
     sourceConversationId: string | null;
     linkedConversationIds: string[];  // JSONB

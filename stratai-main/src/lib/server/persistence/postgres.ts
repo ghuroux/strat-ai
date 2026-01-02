@@ -18,7 +18,7 @@ interface ConversationRow {
 	userId: string | null;
 	teamId: string | null;
 	spaceId: string | null;
-	focusAreaId: string | null;
+	areaId: string | null;
 	taskId: string | null;
 	tags: string[] | null;
 	createdAt: Date;
@@ -54,7 +54,7 @@ function rowToConversation(row: ConversationRow): Conversation {
 		continuationSummary: row.continuationSummary ?? undefined,
 		refreshedAt: toTimestamp(row.refreshedAt),
 		spaceId: row.spaceId ?? null,
-		focusAreaId: row.focusAreaId ?? null,
+		areaId: row.areaId ?? null,
 		taskId: row.taskId ?? null,
 		tags: row.tags ?? [],
 		createdAt: toTimestamp(row.createdAt) ?? Date.now(),
@@ -76,7 +76,7 @@ export const postgresConversationRepository: ConversationRepository = {
 			SELECT
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
-				user_id, team_id, space_id, focus_area_id, task_id,
+				user_id, team_id, space_id, area_id, task_id,
 				created_at, updated_at, deleted_at
 			FROM conversations
 			WHERE user_id = ${userId}
@@ -91,7 +91,7 @@ export const postgresConversationRepository: ConversationRepository = {
 			SELECT
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
-				user_id, team_id, space_id, focus_area_id, task_id,
+				user_id, team_id, space_id, area_id, task_id,
 				created_at, updated_at, deleted_at
 			FROM conversations
 			WHERE id = ${id}
@@ -108,7 +108,7 @@ export const postgresConversationRepository: ConversationRepository = {
 			INSERT INTO conversations (
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
-				user_id, space_id, focus_area_id, task_id, created_at, updated_at
+				user_id, space_id, area_id, task_id, created_at, updated_at
 			) VALUES (
 				${conversation.id},
 				${conversation.title},
@@ -121,7 +121,7 @@ export const postgresConversationRepository: ConversationRepository = {
 				${conversation.refreshedAt ? new Date(conversation.refreshedAt) : null},
 				${userId},
 				${conversation.spaceId ?? null},
-				${conversation.focusAreaId ?? null},
+				${conversation.areaId ?? null},
 				${conversation.taskId ?? null},
 				${new Date(conversation.createdAt)},
 				${new Date(conversation.updatedAt)}
@@ -136,7 +136,7 @@ export const postgresConversationRepository: ConversationRepository = {
 				continuation_summary = EXCLUDED.continuation_summary,
 				refreshed_at = EXCLUDED.refreshed_at,
 				space_id = EXCLUDED.space_id,
-				focus_area_id = EXCLUDED.focus_area_id,
+				area_id = EXCLUDED.area_id,
 				task_id = EXCLUDED.task_id,
 				updated_at = EXCLUDED.updated_at,
 				deleted_at = NULL
@@ -156,7 +156,7 @@ export const postgresConversationRepository: ConversationRepository = {
 				continuation_summary = ${conversation.continuationSummary ?? null},
 				refreshed_at = ${conversation.refreshedAt ? new Date(conversation.refreshedAt) : null},
 				space_id = ${conversation.spaceId ?? null},
-				focus_area_id = ${conversation.focusAreaId ?? null},
+				area_id = ${conversation.areaId ?? null},
 				task_id = ${conversation.taskId ?? null},
 				updated_at = NOW()
 			WHERE id = ${conversation.id}
@@ -264,7 +264,7 @@ export async function findBySpaceId(
 		SELECT
 			id, title, model, messages, pinned, summary,
 			continued_from_id, continuation_summary, refreshed_at,
-			user_id, team_id, space_id, focus_area_id, task_id, tags,
+			user_id, team_id, space_id, area_id, task_id, tags,
 			created_at, updated_at, deleted_at
 		FROM conversations
 		WHERE user_id = ${userId}
@@ -288,7 +288,7 @@ export async function searchConversations(
 		SELECT
 			id, title, model, messages, pinned, summary,
 			continued_from_id, continuation_summary, refreshed_at,
-			user_id, team_id, space_id, focus_area_id, task_id, tags,
+			user_id, team_id, space_id, area_id, task_id, tags,
 			created_at, updated_at, deleted_at
 		FROM conversations
 		WHERE user_id = ${userId}
@@ -322,7 +322,7 @@ export async function getConversationsPaginated(
 				SELECT
 					id, title, model, messages, pinned, summary,
 					continued_from_id, continuation_summary, refreshed_at,
-					user_id, team_id, space_id, focus_area_id, task_id, tags,
+					user_id, team_id, space_id, area_id, task_id, tags,
 					created_at, updated_at, deleted_at
 				FROM conversations
 				WHERE user_id = ${userId}
@@ -336,7 +336,7 @@ export async function getConversationsPaginated(
 				SELECT
 					id, title, model, messages, pinned, summary,
 					continued_from_id, continuation_summary, refreshed_at,
-					user_id, team_id, space_id, focus_area_id, task_id, tags,
+					user_id, team_id, space_id, area_id, task_id, tags,
 					created_at, updated_at, deleted_at
 				FROM conversations
 				WHERE user_id = ${userId}

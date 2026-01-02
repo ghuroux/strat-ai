@@ -9,13 +9,13 @@
 
 	interface Props {
 		spaceId: string;
-		focusAreaId?: string | null; // Current focus area selection
+		areaId?: string | null; // Current focus area selection
 		onClose: () => void;
 		onFocusTask: (taskId: string) => void;
 		onAddContext?: (taskId: string) => void;
 	}
 
-	let { spaceId, focusAreaId, onClose, onFocusTask, onAddContext }: Props = $props();
+	let { spaceId, areaId, onClose, onFocusTask, onAddContext }: Props = $props();
 
 	// Task state from store - only parent tasks for main list
 	// Sort: Planning tasks first, then high priority, then by date
@@ -45,7 +45,7 @@
 		priority: 'normal' as TaskPriority,
 		dueDate: '',
 		dueDateType: 'soft' as DueDateType,
-		focusAreaId: '' as string // empty string = no focus area
+		areaId: '' as string // empty string = no focus area
 	});
 	let showAddTask = $state(false);
 	let showContextSection = $state(false);
@@ -54,7 +54,7 @@
 		priority: 'normal' as TaskPriority,
 		dueDate: '',
 		dueDateType: 'soft' as DueDateType,
-		focusAreaId: '' as string, // empty = use current focusAreaId or none
+		areaId: '' as string, // empty = use current areaId or none
 		selectedDocumentIds: new Set<string>(),
 		selectedRelatedTaskIds: new Set<string>()
 	});
@@ -126,7 +126,7 @@
 			priority: 'normal',
 			dueDate: '',
 			dueDateType: 'soft',
-			focusAreaId: '',
+			areaId: '',
 			selectedDocumentIds: new Set<string>(),
 			selectedRelatedTaskIds: new Set<string>()
 		};
@@ -175,7 +175,7 @@
 			priority: task.priority,
 			dueDate: task.dueDate ? task.dueDate.toISOString().split('T')[0] : '',
 			dueDateType: task.dueDateType || 'soft',
-			focusAreaId: task.focusAreaId || ''
+			areaId: task.areaId || ''
 		};
 	}
 
@@ -185,7 +185,7 @@
 		await taskStore.updateTask(editingTaskId, {
 			title: editForm.title.trim(),
 			priority: editForm.priority,
-			focusAreaId: editForm.focusAreaId || null, // empty string becomes null
+			areaId: editForm.areaId || null, // empty string becomes null
 			dueDate: editForm.dueDate ? new Date(editForm.dueDate) : null,
 			dueDateType: editForm.dueDate ? editForm.dueDateType : null
 		});
@@ -200,13 +200,13 @@
 	async function addTask() {
 		if (!newTaskForm.title.trim()) return;
 
-		// Determine focus area: use form selection, or fall back to current focusAreaId
-		const selectedFocusArea = newTaskForm.focusAreaId || focusAreaId || undefined;
+		// Determine focus area: use form selection, or fall back to current areaId
+		const selectedFocusArea = newTaskForm.areaId || areaId || undefined;
 
 		const newTask = await taskStore.createTask({
 			title: newTaskForm.title.trim(),
 			spaceId,
-			focusAreaId: selectedFocusArea,
+			areaId: selectedFocusArea,
 			priority: newTaskForm.priority,
 			dueDate: newTaskForm.dueDate ? new Date(newTaskForm.dueDate) : undefined,
 			dueDateType: newTaskForm.dueDate ? newTaskForm.dueDateType : undefined,
@@ -232,10 +232,9 @@
 		resetNewTaskForm();
 	}
 
-	// Helper to get focus area name
-	function getFocusAreaName(faId: string): string | null {
-		const fa = focusAreaStore.getFocusAreaById(faId);
-		return fa?.name ?? null;
+	// Helper to get area by ID (returns full area for color access)
+	function getArea(areaId: string) {
+		return focusAreaStore.getAreaById(areaId);
 	}
 
 	// Complete task functions
@@ -422,13 +421,13 @@
 								</div>
 								{#if focusAreas.length > 0}
 									<div>
-										<label class="block text-xs text-surface-500 mb-1">Focus Area</label>
+										<label class="block text-xs text-surface-500 mb-1">Area</label>
 										<select
-											bind:value={editForm.focusAreaId}
+											bind:value={editForm.areaId}
 											class="w-full px-3 py-2 bg-surface-900 border border-surface-600 rounded-lg
 												   text-surface-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
 										>
-											<option value="">No focus area</option>
+											<option value="">No area</option>
 											{#each focusAreas as fa}
 												<option value={fa.id}>{fa.name}</option>
 											{/each}
@@ -539,7 +538,7 @@
 									></div>
 
 									<div class="flex-1 min-w-0">
-										<!-- Title, Priority, Focus Area, and Subtask count -->
+										<!-- Title, Priority, Area, and Subtask count -->
 										<div class="flex items-start gap-2">
 											<span class="text-sm text-surface-100 flex-1 leading-relaxed {isFocused ? 'font-medium' : ''}">{task.title}</span>
 											{#if isPlanning}
@@ -557,11 +556,15 @@
 													HIGH
 												</span>
 											{/if}
-											{#if task.focusAreaId}
-												{@const faName = getFocusAreaName(task.focusAreaId)}
-												{#if faName}
-													<span class="flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium bg-primary-500/20 text-primary-400 rounded truncate max-w-[100px]" title={faName}>
-														{faName}
+											{#if task.areaId}
+												{@const taskArea = getArea(task.areaId)}
+												{#if taskArea}
+													<span
+														class="area-badge flex-shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded truncate max-w-[100px]"
+														style="--area-color: {taskArea.color || '#3b82f6'}; background: color-mix(in srgb, var(--area-color) 20%, transparent); color: var(--area-color);"
+														title={taskArea.name}
+													>
+														{taskArea.name}
 													</span>
 												{/if}
 											{/if}
@@ -849,17 +852,17 @@
 							</div>
 						{/if}
 
-						<!-- Focus Area -->
+						<!-- Area -->
 						{#if focusAreas.length > 0}
 							<div class="mb-3">
-								<label class="block text-xs text-surface-500 mb-1">Focus Area</label>
+								<label class="block text-xs text-surface-500 mb-1">Area</label>
 								<select
-									bind:value={newTaskForm.focusAreaId}
+									bind:value={newTaskForm.areaId}
 									class="w-full px-3 py-2 bg-surface-900 border border-surface-600 rounded-lg
 										   text-surface-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
 								>
 									<option value="">
-										{focusAreaId ? getFocusAreaName(focusAreaId) || 'Current focus area' : 'No focus area'}
+										{areaId ? getArea(areaId)?.name || 'Current area' : 'No area'}
 									</option>
 									{#each focusAreas as fa}
 										<option value={fa.id}>{fa.name}</option>

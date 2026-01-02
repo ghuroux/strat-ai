@@ -506,7 +506,7 @@
 		// Update conversation context to current (main = no space)
 		chatStore.updateConversationContext(conv.id, {
 			spaceId: null,
-			focusAreaId: null,
+			areaId: null,
 			taskId: null
 		});
 
@@ -1282,7 +1282,7 @@
 {#if showBringToContextModal && bringToContextConversation}
 	<BringToContextModal
 		conversation={bringToContextConversation}
-		currentContext={{ spaceId: null, focusAreaId: null, taskId: null }}
+		currentContext={{ spaceId: null, areaId: null, taskId: null }}
 		onOpenInOrigin={handleOpenInOrigin}
 		onBringHere={handleBringHere}
 		onClose={handleCloseBringToContext}

@@ -96,8 +96,8 @@ export interface ChatCompletionRequest {
 		dueDateType?: 'hard' | 'soft' | null;
 		createdAt?: string;
 	} | null;
-	// Focus Area context (specialized context within a space)
-	focusAreaId?: string | null;
+	// Area context (specialized context within a space)
+	areaId?: string | null;
 }
 
 // Tool use types for Claude

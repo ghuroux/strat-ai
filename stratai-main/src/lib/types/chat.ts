@@ -82,7 +82,7 @@ export interface Conversation {
 	refreshedAt?: number; // Timestamp when session was refreshed
 	// Space and organization
 	spaceId?: string | null; // FK to spaces table (system space id = slug, custom = UUID)
-	focusAreaId?: string | null; // FK to focus_areas table (Phase C)
+	areaId?: string | null; // FK to areas table
 	taskId?: string | null; // FK to tasks table for deep work mode (Phase C)
 	tags?: string[]; // For template auto-tagging and filtering
 	// Future multi-tenant fields:

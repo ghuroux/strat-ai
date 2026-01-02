@@ -47,20 +47,29 @@
 		});
 	}
 
-	// Context-aware grouped conversations (Phase C)
+	// Context-aware grouped conversations (Area-centric model)
 	let grouped = $derived(chatStore.groupedConversations);
 
 	// Filtered by search query
 	let filteredPinned = $derived.by(() => filterByQuery(grouped.pinned, searchQuery));
 	let filteredCurrent = $derived.by(() => filterByQuery(grouped.current, searchQuery));
+	let filteredOtherInSpace = $derived.by(() => filterByQuery(grouped.otherInSpace, searchQuery));
 	let filteredOtherContexts = $derived.by(() => filterByQuery(grouped.otherContexts, searchQuery));
 
 	let hasResults = $derived(
-		filteredPinned.length > 0 || filteredCurrent.length > 0 || filteredOtherContexts.length > 0
+		filteredPinned.length > 0 || filteredCurrent.length > 0 ||
+		filteredOtherInSpace.length > 0 || filteredOtherContexts.length > 0
 	);
 	let hasPinnedResults = $derived(filteredPinned.length > 0);
 	let hasCurrentResults = $derived(filteredCurrent.length > 0);
+	let hasOtherInSpace = $derived(filteredOtherInSpace.length > 0);
 	let hasOtherContexts = $derived(filteredOtherContexts.length > 0);
+
+	// Determine if we're in an Area view (for section labels)
+	let isInAreaView = $derived(!!chatStore.selectedAreaId);
+
+	// State for "From Other Areas" collapsible section
+	let otherAreasExpanded = $state(false);
 
 	function handleConversationClick(id: string) {
 		const conversation = chatStore.conversations.get(id);
@@ -330,7 +339,50 @@
 				{/each}
 			{/if}
 
-			<!-- Other Contexts Section (collapsible) -->
+			<!-- From Other Areas Section (collapsible) - Only shown in Area view -->
+			{#if hasOtherInSpace}
+				<div class="section-divider"></div>
+				<button
+					type="button"
+					class="section-header section-header-collapsible"
+					onclick={() => (otherAreasExpanded = !otherAreasExpanded)}
+				>
+					<svg
+						class="w-3.5 h-3.5 transform transition-transform duration-200"
+						class:rotate-90={otherAreasExpanded}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+					</svg>
+					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+					</svg>
+					<span>From Other Areas</span>
+					<span class="section-count">{filteredOtherInSpace.length}</span>
+				</button>
+				{#if otherAreasExpanded}
+					<div transition:slide={{ duration: 200 }}>
+						{#each filteredOtherInSpace as conversation (conversation.id)}
+							<ConversationItem
+								{conversation}
+								active={conversation.id === chatStore.activeConversationId}
+								menuOpen={openMenuId === conversation.id}
+								onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
+								onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+								ondelete={() => handleDeleteConversation(conversation.id)}
+								onpin={() => handlePinConversation(conversation.id)}
+								onrename={(title) => handleRenameConversation(conversation.id, title)}
+								onexport={() => handleExportConversation(conversation.id)}
+								onFocusTask={handleFocusTask}
+							/>
+						{/each}
+					</div>
+				{/if}
+			{/if}
+
+			<!-- From Other Spaces Section (collapsible) - Shown in Area/Main view -->
 			{#if hasOtherContexts}
 				<div class="section-divider"></div>
 				<button
@@ -350,7 +402,7 @@
 					<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
 					</svg>
-					<span>From Spaces</span>
+					<span>{isInAreaView ? 'From Other Spaces' : 'From Spaces'}</span>
 					<span class="section-count">{filteredOtherContexts.length}</span>
 				</button>
 				{#if otherContextsExpanded}
