@@ -15,7 +15,9 @@
 	import RecentActivitySection from './RecentActivitySection.svelte';
 	import TasksSection from './TasksSection.svelte';
 	import TaskModal from './TaskModal.svelte';
+	import DeleteConfirmModal from './DeleteConfirmModal.svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
+	import { taskStore } from '$lib/stores/tasks.svelte';
 	import type { Area } from '$lib/types/areas';
 	import type { Space } from '$lib/types/spaces';
 	import type { Conversation } from '$lib/types/chat';
@@ -36,7 +38,7 @@
 		onCreateArea: () => void;
 		onOpenSettings?: () => void;
 		onTaskClick?: (task: Task) => void;
-		onCreateTask?: (input: CreateTaskInput) => Promise<void>;
+		onCreateTask?: (input: CreateTaskInput) => Promise<Task | null>;
 	}
 
 	let {
@@ -53,80 +55,67 @@
 
 	// Task modal state
 	let showTaskModal = $state(false);
+	let editingTask = $state<Task | null>(null);
+
+	// Delete confirmation modal state
+	let showDeleteModal = $state(false);
+	let deletingTask = $state<Task | null>(null);
 
 	// Derive space color
 	let spaceColor = $derived(space.color || '#3b82f6');
 
-	// Build activity items from conversations and tasks
+	// Recent conversations only (for quick resume) - includes area chats and subtask chats
+	// Show 10 items initially, with option to show more
+	let maxRecentItems = $state(10);
 	let recentActivity = $derived.by(() => {
-		const chatItems = recentConversations.slice(0, 5).map((conv) => {
-			const area = areas.find((a) => a.id === conv.areaId);
-			return {
-				type: 'chat' as const,
-				id: conv.id,
-				title: conv.title || 'Untitled conversation',
-				areaId: conv.areaId ?? undefined,
-				areaName: area?.name,
-				areaColor: area?.color || spaceColor,
-				timestamp: new Date(conv.updatedAt)
-			};
-		});
+		return recentConversations
+			.map((conv) => {
+				const area = areas.find((a) => a.id === conv.areaId);
+				// Find associated task if this is a task conversation (use taskStore to include subtasks)
+				const task = conv.taskId ? taskStore.getTask(conv.taskId) : null;
+				// Check if it's a subtask and get parent task info
+				const isSubtask = !!(task?.parentTaskId);
+				const parentTask = isSubtask ? taskStore.getTask(task.parentTaskId!) : null;
 
-		const taskItems = activeTasks.slice(0, 3).map((task) => {
-			const area = areas.find((a) => a.id === task.areaId);
-			return {
-				type: 'task' as const,
-				id: task.id,
-				title: task.title,
-				areaId: task.areaId ?? undefined,
-				areaName: area?.name,
-				areaColor: area?.color || spaceColor,
-				timestamp: new Date(task.updatedAt),
-				status: task.status
-			};
-		});
-
-		// Merge and sort by timestamp
-		return [...chatItems, ...taskItems]
-			.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-			.slice(0, 5);
-	});
-
-	// Active tasks for dedicated section
-	let activeTaskItems = $derived(
-		activeTasks
-			.filter((t) => t.status === 'active' || t.status === 'planning')
-			.slice(0, 5)
-			.map((task) => {
-				const area = areas.find((a) => a.id === task.areaId);
 				return {
-					type: 'task' as const,
-					id: task.id,
-					title: task.title,
-					areaId: task.areaId ?? undefined,
+					type: 'chat' as const,
+					id: conv.id,
+					title: conv.title || 'Untitled conversation',
+					areaId: conv.areaId ?? undefined,
 					areaName: area?.name,
 					areaColor: area?.color || spaceColor,
-					timestamp: new Date(task.updatedAt),
-					status: task.status
+					taskId: conv.taskId ?? undefined,
+					taskTitle: task?.title,
+					isSubtask,
+					parentTaskTitle: parentTask?.title,
+					timestamp: new Date(conv.updatedAt)
 				};
 			})
-	);
+			.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+	});
+
+	let displayedActivity = $derived(recentActivity.slice(0, maxRecentItems));
+	let hasMoreActivity = $derived(recentActivity.length > maxRecentItems);
 
 	function handleAreaClick(area: Area) {
 		goto(`/spaces/${spaceSlug}/${area.slug}`);
 	}
 
-	function handleActivityClick(item: { type: string; id: string; areaId?: string }) {
-		if (item.type === 'chat' && item.areaId) {
+	function handleActivityClick(item: { type: string; id: string; areaId?: string; taskId?: string }) {
+		if (item.taskId) {
+			// Task-associated conversation (subtask chat) - navigate to task page
+			goto(`/spaces/${spaceSlug}/task/${item.taskId}`);
+		} else if (item.areaId) {
+			// Area conversation - navigate to area with conversation ID
 			const area = areas.find((a) => a.id === item.areaId);
 			if (area) {
-				// Navigate to area with conversation ID in query param
 				goto(`/spaces/${spaceSlug}/${area.slug}?conversation=${item.id}`);
 			}
-		} else if (item.type === 'task') {
-			// Navigate to task focus mode
-			goto(`/spaces/${spaceSlug}/task/${item.id}`);
 		}
+	}
+
+	function handleShowMoreActivity() {
+		maxRecentItems += 10;
 	}
 
 	function handleTaskClick(task: Task) {
@@ -142,15 +131,50 @@
 		showTaskModal = true;
 	}
 
-	async function handleCreateTask(input: CreateTaskInput) {
+	async function handleCreateTask(input: CreateTaskInput): Promise<Task | null> {
 		if (onCreateTask) {
-			await onCreateTask(input);
+			return await onCreateTask(input);
 		}
+		return null;
 	}
 
 	function handleViewAllTasks() {
 		// Navigate to tasks page for this space
 		goto(`/spaces/${spaceSlug}/tasks`);
+	}
+
+	function handleEditTask(task: Task) {
+		editingTask = task;
+		showTaskModal = true;
+	}
+
+	function handleDeleteTask(task: Task) {
+		// Open delete confirmation modal
+		deletingTask = task;
+		showDeleteModal = true;
+	}
+
+	async function handleConfirmDelete(deleteConversations: boolean) {
+		if (!deletingTask) return;
+
+		await taskStore.deleteTask(deletingTask.id, { deleteConversations });
+		showDeleteModal = false;
+		deletingTask = null;
+	}
+
+	function handleCloseDeleteModal() {
+		showDeleteModal = false;
+		deletingTask = null;
+	}
+
+	function handleStartPlanMode(task: Task) {
+		// Navigate to task page to start plan mode
+		goto(`/spaces/${spaceSlug}/task/${task.id}?plan=true`);
+	}
+
+	function handleCloseTaskModal() {
+		showTaskModal = false;
+		editingTask = null;
 	}
 </script>
 
@@ -216,21 +240,33 @@
 				tasks={activeTasks}
 				{areas}
 				{spaceColor}
+				spaceParam={spaceSlug}
 				onTaskClick={handleTaskClick}
 				onOpenTaskModal={handleOpenTaskModal}
 				onViewAllTasks={handleViewAllTasks}
+				onEditTask={handleEditTask}
+				onDeleteTask={handleDeleteTask}
+				onStartPlanMode={handleStartPlanMode}
 			/>
 		</div>
 
-		<!-- Recent Activity (below both columns) -->
+		<!-- Recent Conversations (below both columns) -->
 		<div class="activity-sections">
-			{#if recentActivity.length > 0}
+			{#if displayedActivity.length > 0}
 				<RecentActivitySection
-					items={recentActivity}
-					title="Recent Activity"
+					items={displayedActivity}
+					title="Recent Conversations"
 					onItemClick={handleActivityClick}
-					emptyMessage="No recent activity"
+					emptyMessage="No recent conversations"
 				/>
+				{#if hasMoreActivity}
+					<button type="button" class="show-more-activity" onclick={handleShowMoreActivity}>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+						</svg>
+						Show more conversations
+					</button>
+				{/if}
 			{:else if areas.length === 0 && activeTasks.length === 0}
 				<div class="empty-dashboard">
 					<div class="empty-icon">
@@ -258,8 +294,18 @@
 	spaceId={space.id}
 	{areas}
 	{spaceColor}
-	onClose={() => (showTaskModal = false)}
+	task={editingTask}
+	onClose={handleCloseTaskModal}
 	onCreate={handleCreateTask}
+/>
+
+<!-- Delete Confirmation Modal -->
+<DeleteConfirmModal
+	open={showDeleteModal}
+	task={deletingTask}
+	{spaceColor}
+	onClose={handleCloseDeleteModal}
+	onConfirm={handleConfirmDelete}
 />
 
 <style>
@@ -267,9 +313,19 @@
 		display: flex;
 		flex-direction: column;
 		min-height: 100%;
-		padding: 2rem;
+		height: 100%;
+		overflow-y: auto;
+	}
+
+	/* Content centering via child selector - allows full-width scrolling */
+	.dashboard > :global(*) {
 		max-width: 1200px;
-		margin: 0 auto;
+		margin-left: auto;
+		margin-right: auto;
+		padding-left: 2rem;
+		padding-right: 2rem;
+		width: 100%;
+		box-sizing: border-box;
 	}
 
 	/* Header */
@@ -403,9 +459,37 @@
 	.activity-sections {
 		display: flex;
 		flex-direction: column;
-		gap: 2rem;
+		gap: 1rem;
 		padding-top: 1.5rem;
 		border-top: 1px solid rgba(255, 255, 255, 0.06);
+	}
+
+	.show-more-activity {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		width: 100%;
+		padding: 0.75rem 1rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.show-more-activity:hover {
+		color: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.06);
+		border-color: rgba(255, 255, 255, 0.1);
+	}
+
+	.show-more-activity svg {
+		width: 1rem;
+		height: 1rem;
 	}
 
 	/* Empty State */
@@ -454,8 +538,9 @@
 	}
 
 	@media (max-width: 640px) {
-		.dashboard {
-			padding: 1rem;
+		.dashboard > :global(*) {
+			padding-left: 1rem;
+			padding-right: 1rem;
 		}
 
 		.space-name {

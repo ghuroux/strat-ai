@@ -627,6 +627,7 @@ export type PlanModePhase = 'eliciting' | 'proposing' | 'confirming';
  */
 export interface PlanModeTaskContext {
 	title: string;
+	description?: string; // User-provided background/context for the task
 	priority: 'normal' | 'high';
 	dueDate?: Date | null;
 	dueDateType?: 'hard' | 'soft' | null;
@@ -754,13 +755,18 @@ export function getPlanModePrompt(
 		}
 	}
 
+	// Build description section if provided
+	const descriptionSection = taskContext?.description
+		? `\n\n**User's Background/Context:**\n${taskContext.description}`
+		: '';
+
 	const baseContext = `
 <plan_mode>
 ## Planning Mode
 
 **Today:** ${todayStr}
 
-**Task:** "${taskTitle}"${taskMetadata}
+**Task:** "${taskTitle}"${taskMetadata}${descriptionSection}
 
 You are a planning partner helping the user break down this task into focused, manageable pieces. Your goal is to reduce their cognitive load - make planning feel effortless, not overwhelming.
 </plan_mode>`;
@@ -808,33 +814,51 @@ You've had ${exchangeCount} exchange(s) with the user. You're making progress.
 			// First 1-2 exchanges: strict elicitation prompt
 			return `${baseContext}
 
-<elicitation_rules>
-## Your Role: Thoughtful Planning Partner
+<brief_response_format>
+## Elicitation Phase - Understand Before Proposing
 
-The user wants help planning this task. Your job is to UNDERSTAND before suggesting.
+Your response will be displayed in a chat interface with limited space.
+Keep responses concise to maintain conversational flow. Long responses lose user engagement.
+
+<document_instruction>
+If reference documents are available: call the read_document tool FIRST.
+Use specific details from documents to show you've engaged with their preparation.
+</document_instruction>
 
 ${openerGuidance}
 
-**Your response MUST follow this exact structure:**
-1. ONE sentence acknowledging what you know (reference task context, urgency, or documents if relevant)
-2. ONE focused question about the user's specific angle or concern
-3. A brief invitation: "What else should I know?" or similar
+<response_structure>
+Write exactly three parts in flowing prose (not a list):
+1. ONE sentence citing specific details from the document or task description (names, dates, numbers, locations)
+2. ONE focused question about their priorities, concerns, or constraints
+3. Brief invitation: "What else should I know?"
+</response_structure>
 
-**HARD CONSTRAINTS - THESE ARE NON-NEGOTIABLE:**
-- MAXIMUM 400 CHARACTERS total (this will be enforced)
-- NO numbered lists, bullet points, or tables
-- NO frameworks, proposals, or breakdowns
-- NO document summaries or lengthy explanations
-- ONE question only
+<example_good>
+"The Ironman 70.3 on May 9th with 4 racing and 2 supporting - solid crew. What's your main concern: race logistics, or keeping the supporters entertained? What else?"
+</example_good>
 
-**Good Example:**
-"Q1 planning for StratTech - I can see this phase focuses on product-market fit. What's your main concern: scoping the right deliverables, or making sure the team can execute? What else should I know?"
+<example_bad>
+"I see you have a document attached. What are you trying to accomplish?"
+↑ FAILS: Generic acknowledgment without specific details from document
+</example_bad>
 
-**Bad Example (TOO LONG, proposes):**
-"Let me help you with Q1 planning. Based on the 2030 strategy, here's what I'm thinking... [continues for 500+ words with tables]"
+<constraints>
+1. Stay under 400 characters total
+2. Write in prose, not lists or bullets
+3. Ask only ONE question
+4. Reference SPECIFIC details (names, dates, locations, numbers)
+5. Conversational tone - capable colleague, not assistant
+</constraints>
 
-**Tone:** Capable colleague who respects their time. Warm but efficient.
-</elicitation_rules>`;
+<checklist_before_responding>
+✓ Read documents first (if available)
+✓ Opening sentence cites specific details
+✓ Single focused question included
+✓ Ends with "What else should I know?" or similar
+✓ Total response under 400 characters
+</checklist_before_responding>
+</brief_response_format>`;
 
 		case 'proposing':
 			// Adjust guidance based on deadline urgency
@@ -854,47 +878,51 @@ ${openerGuidance}
 
 			return `${baseContext}
 
-<proposal_rules>
-## Time to Propose Subtasks
+<numbered_list_output>
+## PROPOSAL PHASE - Generate Subtask List
 ${urgencyGuidance}
-Based on your conversation, propose a clear breakdown. The user will see these as checkable subtasks in a panel.
 
-**REQUIRED FORMAT - Use EXACTLY this structure:**
+Your response is AUTOMATICALLY PARSED by a regex that extracts lines matching "^\\d+\\. " pattern.
+The parser creates database tasks from each numbered line. Correct format = tasks created. Wrong format = parsing fails, no tasks created.
 
+<exact_format>
 Based on what we've discussed, here's my suggested breakdown:
 
-1. [Subtask title - action verb + clear outcome]
-2. [Subtask title]
-3. [Subtask title]
+1. First subtask title here
+2. Second subtask title here
+3. Third subtask title here
+4. Fourth subtask title here
 
 Would you like to adjust any of these?
+</exact_format>
 
-**Subtask Guidelines:**
-- Start each with an action verb (Draft, Research, Review, Create, Define, etc.)
-- Keep titles under 60 characters
-- Each should be completable in one focused session (30 min - 2 hours)
-- Order by logical sequence or priority
-- Typically 3-5 subtasks (up to 7 for complex tasks)
+<format_rules>
+1. Open with a brief intro sentence (e.g., "Based on what we've discussed...")
+2. Use simple numbered list: 1. 2. 3. 4. (the parser requires this exact pattern)
+3. Write each subtask as a short actionable title under 60 characters
+4. Keep items on single lines with no line breaks within items
+5. Include 3-7 subtasks depending on task complexity
+6. Close with "Would you like to adjust any of these?"
+</format_rules>
 
-**For Complex/Multi-Part Tasks:**
-If the task has clear phases or workstreams, you can organize as:
+<parser_will_fail_on>
+- Bullet points (- or •) instead of numbers
+- Checkboxes ([ ] or ☐)
+- Nested lists or indented items
+- Bold/italic formatting within items
+- Tables or headers
+- Explanatory text after the numbered item on the same line
+- Questions instead of a proposal
+</parser_will_fail_on>
 
-1. [Phase 1 focus]: [First action]
-2. [Phase 1 focus]: [Second action]
-3. [Phase 2 focus]: [First action]
-...
-
-**STRICT FORMAT RULES:**
-- Use ONLY a simple numbered list (1. 2. 3.)
-- NO tables
-- NO checkboxes (- [ ])
-- NO nested lists
-- NO bold/italic in subtask titles
-- NO explanations after each subtask (just the title)
-- Maximum 7 subtasks
-
-**Tone:** Confident but flexible. Present your best thinking, invite adjustments.
-</proposal_rules>`;
+<checklist_before_responding>
+✓ Opening sentence present
+✓ Lines start with "1. " "2. " "3. " etc.
+✓ Each item is a short title (under 60 chars)
+✓ No bullets, checkboxes, bold, or tables
+✓ Closing question present
+</checklist_before_responding>
+</numbered_list_output>`;
 
 		case 'confirming':
 			return `${baseContext}
@@ -956,7 +984,7 @@ ${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea
 				const sizeKb = Math.round(doc.charCount / 1000);
 				contextNote += `\n- ${doc.filename} (${sizeKb}k chars)`;
 			}
-			contextNote += `\n\nUse the **read_document** tool if you need specific information from these documents. During elicitation, focus on understanding the user first before consulting documents.`;
+			contextNote += `\n\nUse the **read_document** tool to read documents. **On your FIRST response, read available documents** to understand the user's preparation. Reference document details in your opening.`;
 		}
 		contextNote += `\n</context_note>`;
 	}
@@ -1080,7 +1108,7 @@ ${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea
 	const hasDocuments =
 		(focusArea?.contextDocuments?.length ?? 0) > 0 || (linkedContext?.documents?.length ?? 0) > 0;
 	if (hasDocuments) {
-		contextSummary += `\n\n**Document Access:** Use the **read_document** tool to read any listed document when you need specific information. During elicitation, focus on understanding the user first before consulting documents.`;
+		contextSummary += `\n\n**Document Access:** Use the **read_document** tool to read documents. **IMPORTANT:** On your FIRST response, read available documents to understand the user's preparation. Reference specific details from documents in your opening - this shows you've engaged with their materials and lets you ask informed questions.`;
 	}
 
 	// Structure: Platform → Plan Mode Instructions → Minimal Context Summary

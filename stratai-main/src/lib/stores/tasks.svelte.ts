@@ -21,7 +21,9 @@ import type {
 	SubtaskType,
 	RelatedTaskInfo,
 	TaskRelationshipType,
-	TaskContext
+	TaskContext,
+	PlanModeSynopsis,
+	SubtaskContext
 } from '$lib/types/tasks';
 import type { TaskContextInfo } from '$lib/utils/context-builder';
 
@@ -48,7 +50,12 @@ class TaskStore {
 
 	// Plan completion state - transient flag for post-planning UX
 	// Set when subtasks are created from Plan Mode, cleared when user starts a subtask
-	planJustCompleted = $state<{ taskId: string; subtaskCount: number; firstSubtaskId?: string } | null>(null);
+	planJustCompleted = $state<{
+		taskId: string;
+		subtaskCount: number;
+		firstSubtaskId?: string;
+		synopsis?: PlanModeSynopsis;
+	} | null>(null);
 
 	// Version counter for fine-grained updates
 	_version = $state(0);
@@ -636,7 +643,8 @@ class TaskStore {
 					title: input.title,
 					subtaskType: input.subtaskType ?? 'conversation',
 					priority: input.priority ?? 'normal',
-					sourceConversationId: input.sourceConversationId
+					sourceConversationId: input.sourceConversationId,
+					contextSummary: input.contextSummary // Rich context from Plan Mode
 				})
 			});
 
@@ -968,6 +976,22 @@ class TaskStore {
 	}
 
 	/**
+	 * Set synopsis for Plan Mode (shown on Review Breakdown screen)
+	 * Called after subtask extraction, before confirming phase
+	 */
+	async setSynopsis(synopsis: PlanModeSynopsis | null): Promise<boolean> {
+		const task = this.planningTask;
+		if (!task?.planningData) return false;
+
+		const planningData: PlanningData = {
+			...task.planningData,
+			synopsis: synopsis ?? undefined
+		};
+
+		return this.updatePlanningData(task.id, planningData);
+	}
+
+	/**
 	 * Update a proposed subtask
 	 */
 	async updateProposedSubtask(id: string, updates: Partial<ProposedSubtask>): Promise<boolean> {
@@ -1041,7 +1065,65 @@ class TaskStore {
 	}
 
 	/**
+	 * Generate rich context for Plan Mode subtasks via LLM
+	 * Returns synopsis for the overall breakdown and context for each subtask
+	 */
+	async generatePlanContext(): Promise<{
+		synopsis: PlanModeSynopsis;
+		subtaskContexts: Map<string, SubtaskContext>;
+	} | null> {
+		const task = this.planningTask;
+		if (!task?.planningData) return null;
+
+		const confirmed = task.planningData.proposedSubtasks.filter((s) => s.confirmed);
+		if (confirmed.length === 0) return null;
+
+		try {
+			const response = await fetch('/api/plan-context', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					taskTitle: task.title,
+					proposedSubtasks: confirmed.map((s) => ({
+						id: s.id,
+						title: s.title,
+						type: s.type
+					}))
+				})
+			});
+
+			if (!response.ok) {
+				console.error('Failed to generate plan context:', response.status);
+				return null;
+			}
+
+			const data = await response.json();
+
+			// Build a map of subtask contexts for easy lookup
+			const subtaskContexts = new Map<string, SubtaskContext>();
+			if (data.subtaskContexts) {
+				for (const ctx of data.subtaskContexts) {
+					subtaskContexts.set(ctx.id, {
+						whyImportant: ctx.whyImportant,
+						definitionOfDone: ctx.definitionOfDone,
+						hints: ctx.hints || []
+					});
+				}
+			}
+
+			return {
+				synopsis: data.synopsis as PlanModeSynopsis,
+				subtaskContexts
+			};
+		} catch (e) {
+			console.error('Failed to generate plan context:', e);
+			return null;
+		}
+	}
+
+	/**
 	 * Create subtasks from confirmed proposed subtasks
+	 * Generates rich context via LLM, then creates subtasks with that context
 	 * The Plan Mode conversation ID is stored on each subtask for context injection
 	 */
 	async createSubtasksFromPlanMode(): Promise<Task[]> {
@@ -1049,18 +1131,38 @@ class TaskStore {
 		if (!task?.planningData) return [];
 
 		const confirmed = task.planningData.proposedSubtasks.filter((s) => s.confirmed);
+		if (confirmed.length === 0) return [];
+
 		const createdSubtasks: Task[] = [];
 
 		// Get the Plan Mode conversation ID to store on subtasks
 		const planModeConversationId = task.planningData.conversationId;
 		const parentTaskId = task.id;
 
+		// Generate rich context for subtasks via LLM
+		// This runs during the "Working on your subtasks..." loading phase
+		const planContext = await this.generatePlanContext();
+
+		// Store synopsis on parent task's planning data before exiting plan mode
+		if (planContext?.synopsis) {
+			const updatedPlanningData: PlanningData = {
+				...task.planningData,
+				synopsis: planContext.synopsis
+			};
+			await this.updatePlanningData(parentTaskId, updatedPlanningData);
+		}
+
+		// Create subtasks with their individual context
 		for (const proposed of confirmed) {
+			// Get context for this specific subtask
+			const subtaskContext = planContext?.subtaskContexts.get(proposed.id);
+
 			const subtask = await this.createSubtask({
 				title: proposed.title,
 				parentTaskId: parentTaskId,
 				subtaskType: proposed.type,
-				sourceConversationId: planModeConversationId // Pass Plan Mode conversation for context
+				sourceConversationId: planModeConversationId, // Pass Plan Mode conversation for context
+				contextSummary: subtaskContext ? JSON.stringify(subtaskContext) : undefined
 			});
 			if (subtask) {
 				createdSubtasks.push(subtask);
@@ -1076,7 +1178,8 @@ class TaskStore {
 			this.planJustCompleted = {
 				taskId: parentTaskId,
 				subtaskCount: createdSubtasks.length,
-				firstSubtaskId: createdSubtasks[0]?.id
+				firstSubtaskId: createdSubtasks[0]?.id,
+				synopsis: planContext?.synopsis
 			};
 		}
 

@@ -88,6 +88,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Single task create
 		const input: CreateTaskInput = {
 			title: body.title,
+			description: body.description,
 			spaceId: body.spaceId as string,
 			areaId: body.areaId,
 			priority: body.priority,

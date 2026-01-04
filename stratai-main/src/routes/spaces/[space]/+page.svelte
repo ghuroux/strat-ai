@@ -25,7 +25,7 @@
 	import type { Space } from '$lib/types/spaces';
 	import type { Area, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
 	import type { SpaceType } from '$lib/types/chat';
-	import type { CreateTaskInput } from '$lib/types/tasks';
+	import type { CreateTaskInput, Task } from '$lib/types/tasks';
 
 	// Get space from route param
 	let spaceParam = $derived($page.params.space);
@@ -107,12 +107,12 @@
 			.slice(0, 10);
 	});
 
-	// Get active tasks for this space
+	// Get active tasks for this space (parent tasks only, not subtasks)
 	let activeTasks = $derived.by(() => {
 		if (!spaceParam) return [];
 		return taskStore
 			.getTasksForSpaceId(spaceParam)
-			.filter((t) => t.status === 'active' || t.status === 'planning')
+			.filter((t) => (t.status === 'active' || t.status === 'planning') && !t.parentTaskId)
 			.slice(0, 10);
 	});
 
@@ -208,11 +208,12 @@
 		goto(`/spaces/${spaceParam}/task/${task.id}`);
 	}
 
-	async function handleCreateTask(input: CreateTaskInput) {
+	async function handleCreateTask(input: CreateTaskInput): Promise<Task | null> {
 		const created = await taskStore.createTask(input);
 		if (created) {
 			toastStore.success(`Task "${input.title}" created`);
 		}
+		return created;
 	}
 </script>
 

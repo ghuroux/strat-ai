@@ -14,6 +14,7 @@
 	import { fly, fade } from 'svelte/transition';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
+	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
 	import AreaWelcomeScreen from '$lib/components/chat/AreaWelcomeScreen.svelte';
 	import ConversationDrawer from '$lib/components/chat/ConversationDrawer.svelte';
 	import TaskContextBanner from '$lib/components/chat/TaskContextBanner.svelte';
@@ -1135,7 +1136,7 @@
 				/>
 			{/if}
 
-			<div class="messages-container" bind:this={messagesContainer}>
+			<ChatMessageList bind:containerRef={messagesContainer}>
 				{#if messages.length === 0}
 					<AreaWelcomeScreen
 						{area}
@@ -1176,7 +1177,7 @@
 						/>
 					{/if}
 				{/if}
-			</div>
+			</ChatMessageList>
 
 			<!-- Chat input -->
 			<div class="input-container">
@@ -1553,21 +1554,6 @@
 
 	.chat-area.with-panel {
 		margin-right: 40vw;
-	}
-
-	.messages-container {
-		flex: 1;
-		overflow-y: auto;
-		padding: 1rem 0;
-	}
-
-	/* Constrain message width for better readability - padding on wrapper */
-	.messages-container > :global(*) {
-		max-width: 960px;
-		margin-left: auto;
-		margin-right: auto;
-		padding-left: 2rem;
-		padding-right: 2rem;
 	}
 
 	.input-container {

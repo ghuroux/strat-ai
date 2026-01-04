@@ -121,6 +121,7 @@ interface AssistContext {
 interface PlanModeContext {
 	taskId: string;
 	taskTitle: string;
+	description?: string; // User-provided background/context for the task
 	phase: PlanModePhase;
 	exchangeCount?: number; // Tracks conversation depth for prompt selection
 	context?: TaskContextInfo;
@@ -205,6 +206,7 @@ function injectPlatformPrompt(
 		const taskMetadata: PlanModeTaskContext | undefined = planModeContext.createdAt
 			? {
 					title: planModeContext.taskTitle,
+					description: planModeContext.description,
 					priority: planModeContext.priority || 'normal',
 					dueDate: planModeContext.dueDate ? new Date(planModeContext.dueDate) : null,
 					dueDateType: planModeContext.dueDateType || null,
@@ -343,7 +345,7 @@ const webSearchToolOpenAI = {
 // Used in Plan Mode to let AI access reference documents on-demand
 const readDocumentToolAnthropic: ToolDefinition = {
 	name: 'read_document',
-	description: 'Read a reference document to get additional context. Use this when you need specific information from an available document to help with planning. Available documents are listed in the system prompt. Only read documents when you genuinely need the information - during elicitation, focus on understanding the user first.',
+	description: 'Read a reference document to get context for planning. IMPORTANT: On the FIRST exchange when documents are available, read them to understand what the user has already gathered. This shows you\'ve done your homework. Use the document content to ask informed, specific questions rather than generic ones.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -361,7 +363,7 @@ const readDocumentToolOpenAI = {
 	type: 'function' as const,
 	function: {
 		name: 'read_document',
-		description: 'Read a reference document to get additional context. Use this when you need specific information from an available document to help with planning. Available documents are listed in the system prompt. Only read documents when you genuinely need the information - during elicitation, focus on understanding the user first.',
+		description: 'Read a reference document to get context for planning. IMPORTANT: On the FIRST exchange when documents are available, read them to understand what the user has already gathered. This shows you\'ve done your homework. Use the document content to ask informed, specific questions rather than generic ones.',
 		parameters: {
 			type: 'object',
 			properties: {
@@ -712,18 +714,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Fetch task context for Plan Mode if a task is selected
-	// This provides documents and related tasks as context for planning
+	// This provides documents, related tasks, and task description as context for planning
 	if (planModeContext?.taskId) {
 		try {
 			// For POC, use hardcoded admin user (consistent with other API endpoints)
 			const userId = 'admin';
 
-			const [linkedDocs, relatedTasksInfo] = await Promise.all([
+			// Fetch task for description, documents, and related tasks in parallel
+			const [task, linkedDocs, relatedTasksInfo] = await Promise.all([
+				postgresTaskRepository.findById(planModeContext.taskId, userId),
 				postgresDocumentRepository.getDocumentsForTask(planModeContext.taskId, userId),
 				postgresTaskRepository.getRelatedTasks(planModeContext.taskId, userId)
 			]);
 
-			// Only attach context if we have documents or related tasks
+			// Add task description if available
+			if (task?.description) {
+				planModeContext = { ...planModeContext, description: task.description };
+				console.log(`Plan Mode: Task has description (${task.description.length} chars)`);
+			}
+
+			// Attach context if we have documents or related tasks
 			if (linkedDocs.length > 0 || relatedTasksInfo.length > 0) {
 				planModeContext = {
 					...planModeContext,
@@ -757,8 +767,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Remove client-specific fields before forwarding to LiteLLM
 	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, areaId: ___________, ...cleanBody } = body;
 
+	// Disable extended thinking during Plan Mode eliciting phase
+	// Reason: We enforce max_tokens=120 for brief responses, which conflicts with thinking.budget_tokens
+	const effectiveThinkingEnabled = thinkingEnabled && !(planModeContext?.phase === 'eliciting');
+	if (planModeContext?.phase === 'eliciting' && thinkingEnabled) {
+		console.log('[Plan Mode] Extended thinking disabled during eliciting phase (max_tokens constraint)');
+	}
+
 	// Add thinking config if enabled
-	if (thinkingEnabled) {
+	if (effectiveThinkingEnabled) {
 		cleanBody.thinking = {
 			type: 'enabled',
 			budget_tokens: body.thinkingBudgetTokens || 10000
@@ -786,7 +803,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const needsToolHandling = searchEnabled || (planModeContext && hasReferenceDocuments);
 
 		if (needsToolHandling) {
-			return await handleChatWithTools(cleanBody, thinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext);
+			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext);
 		}
 
 		// Inject platform system prompt with space + focus area + custom space context (before cache breakpoints so it gets cached)
@@ -845,7 +862,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return await handleLiteLLMError(litellmResponse);
 		}
 
-		return streamResponse(litellmResponse, thinkingEnabled);
+		return streamResponse(litellmResponse, effectiveThinkingEnabled);
 
 	} catch (err) {
 		console.error('Chat endpoint error:', err);

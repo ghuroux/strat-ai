@@ -45,6 +45,8 @@ export interface Message {
 	// Extended thinking (Claude models)
 	thinking?: string;
 	isThinking?: boolean;
+	// Hidden messages (not shown in UI but included in API context)
+	hidden?: boolean;
 }
 
 export interface SummaryPoint {

@@ -27,40 +27,38 @@ const CHECKBOX_PATTERN = /^[-*]\s*\[[ xX]?\]\s+(.+)$/gm;
 
 /**
  * Detect if content contains a subtask proposal
- * Used to trigger the "confirming" phase
+ * Uses keyword + structure approach for robustness (not specific phrases)
  */
 export function contentContainsProposal(content: string): boolean {
-	// Look for patterns indicating a task breakdown or plan
-	const proposalIndicators = [
-		/here'?s?\s+how\s+(?:I'?d?|we\s+(?:can|could))\s+break\s+(?:this|it)\s+down/i,
-		/proposed\s+(?:breakdown|subtasks|plan)/i,
-		/break(?:ing)?\s+(?:this|it)\s+down\s+(?:into|as)/i,
-		/suggested\s+(?:subtasks|breakdown|plan)/i,
-		/(?:here'?s?|this\s+is)\s+(?:your|the)\s+(?:finalized\s+)?(?:plan|breakdown)/i,
-		/task\s+breakdown/i,
-		/breakdown\s+(?:of|for)/i,
-		/(?:here\s+are|these\s+are)\s+(?:the\s+)?(?:subtasks|tasks|steps)/i,
-		/structured\s+breakdown/i,
-		/(?:revised|updated)\s+phases/i,
-		/phase\s+\d+:/i, // "Phase 1:" headers
-	];
+	// Check for task-related keywords anywhere in content (flexible)
+	// Matches: subtask(s), sub-task(s), task list, tasks for, steps to, action items, breakdown, etc.
+	const taskKeywords = /\b(subtasks?|sub-tasks?|tasks?\s*(?:list|for|to|are|is)|steps?\s+(?:to|for|are)|action\s*items?|breakdown|todo|to-do|checklist)\b/i;
+	const hasTaskKeyword = taskKeywords.test(content);
 
-	// Check for proposal indicators
-	const hasIndicator = proposalIndicators.some((pattern) => pattern.test(content));
-
-	// Check for at least 2 numbered items (list format)
+	// Check for at least 3 numbered items (stronger signal)
 	const listMatches = content.match(NUMBERED_LIST_PATTERN);
-	const hasNumberedList = listMatches && listMatches.length >= 2;
+	const hasNumberedList = !!(listMatches && listMatches.length >= 3);
 
 	// Check for at least 2 table rows with numbers
 	const tableMatches = content.match(TABLE_ROW_PATTERN);
-	const hasTable = tableMatches && tableMatches.length >= 2;
+	const hasTable = !!(tableMatches && tableMatches.length >= 2);
 
 	// Check for at least 3 checkbox items
 	const checkboxMatches = content.match(CHECKBOX_PATTERN);
-	const hasCheckboxes = checkboxMatches && checkboxMatches.length >= 3;
+	const hasCheckboxes = !!(checkboxMatches && checkboxMatches.length >= 3);
 
-	return hasIndicator && (Boolean(hasNumberedList) || Boolean(hasTable) || Boolean(hasCheckboxes));
+	// Check if this looks like a list of questions (shouldn't extract)
+	const questionIndicators = /\b(question|clarif|what\s+(?:is|are|do|does|should|would)|how\s+(?:do|does|should|would|can)|let\s+me\s+(?:know|ask))\b/i;
+	const looksLikeQuestions = questionIndicators.test(content);
+
+	// Check if more than half the list items end with "?"
+	const questionItems = listMatches?.filter(m => m.trim().endsWith('?')).length ?? 0;
+	const mostItemsAreQuestions = !!(listMatches && questionItems > listMatches.length / 2);
+
+	// Has list structure + task keywords + not questions
+	const hasListStructure = hasNumberedList || hasTable || hasCheckboxes;
+
+	return hasTaskKeyword && hasListStructure && !looksLikeQuestions && !mostItemsAreQuestions;
 }
 
 /**

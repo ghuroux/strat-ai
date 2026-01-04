@@ -4,18 +4,28 @@
 	Right column of Space Dashboard - Task execution hub.
 	Shows active/planning tasks with quick add functionality.
 	Equal prominence to AreasSection for "two reasons to visit Spaces" UX.
+
+	Accordion behavior: Tasks with subtasks expand inline instead of navigating.
+	Quick actions available via menu button on each task.
 -->
 <script lang="ts">
+	import { slide, fade } from 'svelte/transition';
 	import type { Task } from '$lib/types/tasks';
 	import type { Area } from '$lib/types/areas';
+	import { taskStore } from '$lib/stores/tasks.svelte';
+	import SubtaskAccordionList from './SubtaskAccordionList.svelte';
 
 	interface Props {
 		tasks: Task[];
 		areas: Area[];
 		spaceColor: string;
+		spaceParam: string;
 		onTaskClick: (task: Task) => void;
 		onOpenTaskModal: () => void;
 		onViewAllTasks?: () => void;
+		onEditTask?: (task: Task) => void;
+		onDeleteTask?: (task: Task) => void;
+		onStartPlanMode?: (task: Task) => void;
 		maxDisplayTasks?: number;
 	}
 
@@ -23,11 +33,25 @@
 		tasks,
 		areas,
 		spaceColor,
+		spaceParam,
 		onTaskClick,
 		onOpenTaskModal,
 		onViewAllTasks,
+		onEditTask,
+		onDeleteTask,
+		onStartPlanMode,
 		maxDisplayTasks = 5
 	}: Props = $props();
+
+	// Track which task has open menu and its position
+	let openMenuTaskId = $state<string | null>(null);
+	let menuPosition = $state<{ top: number; left: number } | null>(null);
+
+	// Track which tasks are expanded (for accordion)
+	let expandedTaskIds = $state(new Set<string>());
+
+	// Show all tasks toggle (inline expansion)
+	let showAllTasks = $state(false);
 
 	// Sort tasks: due date first (earliest first), then high priority, then most recent
 	let sortedTasks = $derived.by(() => {
@@ -51,8 +75,8 @@
 	let activeTasks = $derived(sortedTasks.filter(t => t.status === 'active'));
 	let planningTasks = $derived(sortedTasks.filter(t => t.status === 'planning'));
 
-	// Display limited tasks with "View all" option
-	let displayTasks = $derived(sortedTasks.slice(0, maxDisplayTasks));
+	// Display limited tasks with "Show more" option
+	let displayTasks = $derived(showAllTasks ? sortedTasks : sortedTasks.slice(0, maxDisplayTasks));
 	let hasMoreTasks = $derived(sortedTasks.length > maxDisplayTasks);
 	let remainingCount = $derived(sortedTasks.length - maxDisplayTasks);
 
@@ -89,20 +113,127 @@
 				return { label: status, class: '' };
 		}
 	}
+
+	// Get subtasks for a task
+	function getSubtasks(taskId: string): Task[] {
+		return taskStore.getSubtasksForTask(taskId);
+	}
+
+	// Check if task has subtasks
+	function hasSubtasks(taskId: string): boolean {
+		return getSubtasks(taskId).length > 0;
+	}
+
+	// Check if task is expanded
+	function isExpanded(taskId: string): boolean {
+		return expandedTaskIds.has(taskId);
+	}
+
+	// Toggle task expansion
+	function toggleExpanded(taskId: string) {
+		const newSet = new Set(expandedTaskIds);
+		if (newSet.has(taskId)) {
+			newSet.delete(taskId);
+		} else {
+			newSet.add(taskId);
+		}
+		expandedTaskIds = newSet;
+	}
+
+	// Handle task click - toggle accordion if has subtasks, otherwise navigate
+	function handleTaskClick(task: Task) {
+		if (hasSubtasks(task.id)) {
+			toggleExpanded(task.id);
+		} else {
+			onTaskClick(task);
+		}
+	}
+
+	// Toggle menu for a task
+	function toggleMenu(e: Event, taskId: string) {
+		e.stopPropagation();
+
+		if (openMenuTaskId === taskId) {
+			openMenuTaskId = null;
+			menuPosition = null;
+		} else {
+			// Calculate position from button
+			const button = e.currentTarget as HTMLElement;
+			const rect = button.getBoundingClientRect();
+
+			// Position menu below and to the left of button
+			menuPosition = {
+				top: rect.bottom + 4,
+				left: rect.right - 140 // 140px is min-width of menu
+			};
+			openMenuTaskId = taskId;
+		}
+	}
+
+	// Close menu
+	function closeMenu() {
+		openMenuTaskId = null;
+		menuPosition = null;
+	}
+
+	// Handle focus action
+	function handleFocus(e: Event, task: Task) {
+		e.stopPropagation();
+		closeMenu();
+		onTaskClick(task);
+	}
+
+	// Handle done action
+	async function handleDone(e: Event, task: Task) {
+		e.stopPropagation();
+		closeMenu();
+		await taskStore.completeTask(task.id);
+	}
+
+	// Handle plan mode action
+	function handlePlan(e: Event, task: Task) {
+		e.stopPropagation();
+		closeMenu();
+		onStartPlanMode?.(task);
+	}
+
+	// Handle edit action
+	function handleEdit(e: Event, task: Task) {
+		e.stopPropagation();
+		closeMenu();
+		onEditTask?.(task);
+	}
+
+	// Handle delete action
+	function handleDelete(e: Event, task: Task) {
+		e.stopPropagation();
+		closeMenu();
+		onDeleteTask?.(task);
+	}
+
+	// Close menu when clicking outside
+	function handleClickOutside(e: MouseEvent) {
+		const target = e.target as HTMLElement;
+		if (!target.closest('.task-menu-container')) {
+			closeMenu();
+		}
+	}
+
+	// Get subtask count badge
+	function getSubtaskCount(taskId: string): { total: number; completed: number } {
+		const subtasks = getSubtasks(taskId);
+		const completed = subtasks.filter(s => s.status === 'completed').length;
+		return { total: subtasks.length, completed };
+	}
 </script>
+
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<svelte:window onclick={handleClickOutside} />
 
 <section class="tasks-section" style="--space-color: {spaceColor}">
 	<header class="section-header">
 		<h2 class="section-title">Tasks</h2>
 		<span class="task-count">{tasks.length}</span>
-		{#if hasMoreTasks && onViewAllTasks}
-			<button type="button" class="view-all" onclick={onViewAllTasks}>
-				View all
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-				</svg>
-			</button>
-		{/if}
 	</header>
 
 	<div class="tasks-container">
@@ -112,38 +243,161 @@
 				{#each displayTasks as task (task.id)}
 					{@const area = getArea(task.areaId)}
 					{@const statusInfo = getStatusInfo(task.status)}
-					<button
-						type="button"
-						class="task-item"
-						onclick={() => onTaskClick(task)}
-						style="--task-color: {task.color || spaceColor}"
-					>
-						<div class="task-indicator">
-							<div class="task-dot" class:high-priority={task.priority === 'high'}></div>
-						</div>
-						<div class="task-content">
-							<div class="task-header">
-								<span class="task-title">{task.title}</span>
-								{#if task.priority === 'high'}
-									<span class="priority-badge">!</span>
+					{@const taskHasSubtasks = hasSubtasks(task.id)}
+					{@const taskExpanded = isExpanded(task.id)}
+					{@const subtaskCount = taskHasSubtasks ? getSubtaskCount(task.id) : null}
+					{@const menuOpen = openMenuTaskId === task.id}
+					<div class="task-wrapper" class:expanded={taskExpanded}>
+						<div class="task-item-container">
+							<button
+								type="button"
+								class="task-item"
+								class:has-subtasks={taskHasSubtasks}
+								onclick={() => handleTaskClick(task)}
+								style="--task-color: {task.color || spaceColor}"
+							>
+								<div class="task-indicator">
+									<div class="task-dot" class:high-priority={task.priority === 'high'}></div>
+								</div>
+								<div class="task-content">
+									<div class="task-header">
+										<span class="task-title">{task.title}</span>
+										{#if task.priority === 'high'}
+											<span class="priority-badge">!</span>
+										{/if}
+										{#if subtaskCount}
+											<span class="subtask-badge">
+												{subtaskCount.completed}/{subtaskCount.total}
+											</span>
+										{/if}
+									</div>
+									<div class="task-meta">
+										<span class="task-status {statusInfo.class}">{statusInfo.label}</span>
+										{#if area}
+											<span class="task-area" style="--area-color: {area.color || spaceColor}">
+												{area.icon || ''} {area.name}
+											</span>
+										{/if}
+										<span class="task-time">{formatRelativeTime(new Date(task.updatedAt))}</span>
+									</div>
+								</div>
+								{#if taskHasSubtasks}
+									<svg
+										class="expand-chevron"
+										class:rotated={taskExpanded}
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="1.5"
+									>
+										<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+									</svg>
+								{:else}
+									<svg class="task-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+									</svg>
+								{/if}
+							</button>
+
+							<!-- Menu Button -->
+							<div class="task-menu-container">
+								<button
+									type="button"
+									class="menu-button"
+									class:active={menuOpen}
+									onclick={(e) => toggleMenu(e, task.id)}
+									title="Task actions"
+								>
+									<svg viewBox="0 0 24 24" fill="currentColor">
+										<circle cx="12" cy="6" r="1.5"/>
+										<circle cx="12" cy="12" r="1.5"/>
+										<circle cx="12" cy="18" r="1.5"/>
+									</svg>
+								</button>
+
+								<!-- Dropdown Menu (rendered at fixed position to escape overflow) -->
+								{#if menuOpen && menuPosition}
+									<div
+										class="task-menu"
+										style="position: fixed; top: {menuPosition.top}px; left: {menuPosition.left}px;"
+										transition:fade={{ duration: 100 }}
+									>
+										<button type="button" class="menu-item" onclick={(e) => handleFocus(e, task)}>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+											</svg>
+											<span>Open</span>
+										</button>
+										<button type="button" class="menu-item" onclick={(e) => handleDone(e, task)}>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+											</svg>
+											<span>Done</span>
+										</button>
+										{#if !taskHasSubtasks && onStartPlanMode}
+											<button type="button" class="menu-item" onclick={(e) => handlePlan(e, task)}>
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+												</svg>
+												<span>+ Plan</span>
+											</button>
+										{/if}
+										<div class="menu-divider"></div>
+										{#if onEditTask}
+											<button type="button" class="menu-item" onclick={(e) => handleEdit(e, task)}>
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+												</svg>
+												<span>Edit</span>
+											</button>
+										{/if}
+										{#if onDeleteTask}
+											<button type="button" class="menu-item danger" onclick={(e) => handleDelete(e, task)}>
+												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+													<path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+												</svg>
+												<span>Delete</span>
+											</button>
+										{/if}
+									</div>
 								{/if}
 							</div>
-							<div class="task-meta">
-								<span class="task-status {statusInfo.class}">{statusInfo.label}</span>
-								{#if area}
-									<span class="task-area" style="--area-color: {area.color || spaceColor}">
-										{area.icon || ''} {area.name}
-									</span>
-								{/if}
-								<span class="task-time">{formatRelativeTime(new Date(task.updatedAt))}</span>
-							</div>
 						</div>
-						<svg class="task-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-						</svg>
-					</button>
+
+						<!-- Accordion Content -->
+						{#if taskExpanded && taskHasSubtasks}
+							<div transition:slide={{ duration: 200 }}>
+								<SubtaskAccordionList
+									subtasks={getSubtasks(task.id)}
+									parentTaskId={task.id}
+									{spaceParam}
+								/>
+							</div>
+						{/if}
+					</div>
 				{/each}
 			</div>
+
+			<!-- Show more / Show less toggle -->
+			{#if hasMoreTasks}
+				<button
+					type="button"
+					class="show-more-button"
+					onclick={() => showAllTasks = !showAllTasks}
+				>
+					{#if showAllTasks}
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+						</svg>
+						Show less
+					{:else}
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+						</svg>
+						Show {remainingCount} more
+					{/if}
+				</button>
+			{/if}
 		{:else}
 			<div class="empty-tasks">
 				<div class="empty-icon">
@@ -195,26 +449,31 @@
 		margin: 0;
 	}
 
-	.view-all {
-		margin-left: auto;
-		display: inline-flex;
+	.show-more-button {
+		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		justify-content: center;
+		gap: 0.375rem;
+		width: 100%;
+		padding: 0.625rem 1rem;
+		margin-top: 0.5rem;
 		font-size: 0.75rem;
 		font-weight: 500;
-		color: var(--space-color);
-		background: none;
-		border: none;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 0.5rem;
 		cursor: pointer;
-		padding: 0;
-		transition: opacity 0.15s ease;
+		transition: all 0.15s ease;
 	}
 
-	.view-all:hover {
-		opacity: 0.8;
+	.show-more-button:hover {
+		color: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.06);
+		border-color: rgba(255, 255, 255, 0.1);
 	}
 
-	.view-all svg {
+	.show-more-button svg {
 		width: 0.875rem;
 		height: 0.875rem;
 	}
@@ -237,6 +496,8 @@
 		border-radius: 0.75rem;
 		padding: 0.5rem;
 		min-height: 200px;
+		max-height: 60vh;
+		overflow-y: auto;
 	}
 
 	/* Task List */
@@ -244,6 +505,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+	}
+
+	.task-wrapper {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.task-wrapper.expanded .task-item {
+		background: rgba(255, 255, 255, 0.05);
+		border-color: rgba(255, 255, 255, 0.1);
+		border-bottom-left-radius: 0;
+		border-bottom-right-radius: 0;
 	}
 
 	.task-item {
@@ -319,6 +592,16 @@
 		border-radius: 0.25rem;
 	}
 
+	.subtask-badge {
+		flex-shrink: 0;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.625rem;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.08);
+		border-radius: 9999px;
+	}
+
 	.task-meta {
 		display: flex;
 		align-items: center;
@@ -370,6 +653,27 @@
 	.task-item:hover .task-arrow {
 		color: rgba(255, 255, 255, 0.6);
 		transform: translateX(2px);
+	}
+
+	.expand-chevron {
+		flex-shrink: 0;
+		width: 1rem;
+		height: 1rem;
+		color: rgba(255, 255, 255, 0.4);
+		margin-top: 0.125rem;
+		transition: all 0.2s ease;
+	}
+
+	.expand-chevron.rotated {
+		transform: rotate(180deg);
+	}
+
+	.task-item:hover .expand-chevron {
+		color: rgba(255, 255, 255, 0.6);
+	}
+
+	.task-item.has-subtasks {
+		cursor: pointer;
 	}
 
 	/* Empty State */
@@ -432,5 +736,120 @@
 	.add-task-button svg {
 		width: 1rem;
 		height: 1rem;
+	}
+
+	/* Task Item Container - wraps task-item + menu */
+	.task-item-container {
+		position: relative;
+		display: flex;
+		align-items: stretch;
+	}
+
+	.task-item-container .task-item {
+		flex: 1;
+		border-top-right-radius: 0;
+		border-bottom-right-radius: 0;
+		border-right: none;
+	}
+
+	/* Menu Container */
+	.task-menu-container {
+		position: relative;
+		display: flex;
+		align-items: stretch;
+	}
+
+	.menu-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		padding: 0.5rem;
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-left: none;
+		border-top-right-radius: 0.5rem;
+		border-bottom-right-radius: 0.5rem;
+		color: rgba(255, 255, 255, 0.3);
+		cursor: pointer;
+		transition: all 0.15s ease;
+		opacity: 0;
+	}
+
+	.task-item-container:hover .menu-button,
+	.menu-button.active {
+		opacity: 1;
+	}
+
+	.menu-button:hover,
+	.menu-button.active {
+		background: rgba(255, 255, 255, 0.08);
+		color: rgba(255, 255, 255, 0.7);
+	}
+
+	.menu-button svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	/* Dropdown Menu - uses fixed positioning via inline style */
+	.task-menu {
+		min-width: 140px;
+		background: rgba(30, 30, 35, 0.98);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 0.5rem;
+		padding: 0.25rem;
+		z-index: 1000;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+	}
+
+	.menu-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.5rem 0.625rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.8);
+		background: transparent;
+		border: none;
+		border-radius: 0.375rem;
+		text-align: left;
+		cursor: pointer;
+		transition: all 0.1s ease;
+	}
+
+	.menu-item:hover {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.menu-item svg {
+		width: 0.875rem;
+		height: 0.875rem;
+		flex-shrink: 0;
+	}
+
+	.menu-item.danger {
+		color: #ef4444;
+	}
+
+	.menu-item.danger:hover {
+		background: rgba(239, 68, 68, 0.15);
+	}
+
+	.menu-divider {
+		height: 1px;
+		margin: 0.25rem 0;
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	/* Fix expanded task with menu */
+	.task-wrapper.expanded .task-item-container .task-item {
+		border-bottom-left-radius: 0;
+	}
+
+	.task-wrapper.expanded .menu-button {
+		border-bottom-right-radius: 0;
 	}
 </style>

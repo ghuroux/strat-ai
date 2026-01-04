@@ -60,6 +60,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			updates.dueDateType = body.dueDateType || null;
 		}
 		if (body.completionNotes !== undefined) updates.completionNotes = body.completionNotes;
+		if (body.description !== undefined) updates.description = body.description;
 
 		const task = await postgresTaskRepository.update(params.id, updates, DEFAULT_USER_ID);
 

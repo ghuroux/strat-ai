@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
+	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
 	import WelcomeScreen from '$lib/components/chat/WelcomeScreen.svelte';
 	import ConversationSummary from '$lib/components/chat/ConversationSummary.svelte';
 	import SessionSeparator from '$lib/components/chat/SessionSeparator.svelte';
@@ -1183,54 +1184,52 @@
 				</div>
 			{/if}
 			<!-- Messages -->
-			<div bind:this={messagesContainer} class="flex-1 overflow-y-auto p-4 md:p-6">
-				<div class="max-w-4xl mx-auto">
-					{#if messages.length === 0 && parentMessages.length === 0}
-						<WelcomeScreen hasModel={!!selectedModel} onNewChat={handleNewChat} />
-					{:else}
-						<!-- Parent conversation messages (for continued conversations) -->
-						{#if isContinuedConversation && parentMessages.length > 0}
-							<div class="parent-messages opacity-70">
-								{#each parentMessages as message (message.id)}
-									<ChatMessage {message} showTimestamp={settingsStore.showTimestamps} />
-								{/each}
-							</div>
-						{/if}
-
-						<!-- Session separator for continued conversations -->
-						{#if isContinuedConversation && refreshedAt}
-							<SessionSeparator
-								timestamp={refreshedAt}
-								summaryPreview={continuationSummary}
-							/>
-						{/if}
-
-						<!-- Current conversation messages -->
-						{#each messages as message, index (message.id)}
-							<ChatMessage
-								{message}
-								messageIndex={index}
-								showTimestamp={settingsStore.showTimestamps}
-								canEdit={!chatStore.isStreaming}
-								onEditAndResend={handleEditAndResend}
-								onResend={handleResend}
-								onRegenerate={handleRegenerate}
-								onSecondOpinion={(idx, e) => handleSecondOpinionTrigger(idx, e)}
-							/>
-						{/each}
-						<!-- Summary section - shows at bottom when summary exists or is generating -->
-						{#if currentSummary || isGeneratingSummary}
-							<ConversationSummary
-								summary={currentSummary}
-								isGenerating={isGeneratingSummary}
-								onGenerate={handleGenerateSummary}
-								onDismiss={handleDismissSummary}
-								onScrollToMessage={scrollToMessage}
-							/>
-						{/if}
+			<ChatMessageList bind:containerRef={messagesContainer}>
+				{#if messages.length === 0 && parentMessages.length === 0}
+					<WelcomeScreen hasModel={!!selectedModel} onNewChat={handleNewChat} />
+				{:else}
+					<!-- Parent conversation messages (for continued conversations) -->
+					{#if isContinuedConversation && parentMessages.length > 0}
+						<div class="parent-messages opacity-70">
+							{#each parentMessages as message (message.id)}
+								<ChatMessage {message} showTimestamp={settingsStore.showTimestamps} />
+							{/each}
+						</div>
 					{/if}
-				</div>
-			</div>
+
+					<!-- Session separator for continued conversations -->
+					{#if isContinuedConversation && refreshedAt}
+						<SessionSeparator
+							timestamp={refreshedAt}
+							summaryPreview={continuationSummary}
+						/>
+					{/if}
+
+					<!-- Current conversation messages -->
+					{#each messages as message, index (message.id)}
+						<ChatMessage
+							{message}
+							messageIndex={index}
+							showTimestamp={settingsStore.showTimestamps}
+							canEdit={!chatStore.isStreaming}
+							onEditAndResend={handleEditAndResend}
+							onResend={handleResend}
+							onRegenerate={handleRegenerate}
+							onSecondOpinion={(idx, e) => handleSecondOpinionTrigger(idx, e)}
+						/>
+					{/each}
+					<!-- Summary section - shows at bottom when summary exists or is generating -->
+					{#if currentSummary || isGeneratingSummary}
+						<ConversationSummary
+							summary={currentSummary}
+							isGenerating={isGeneratingSummary}
+							onGenerate={handleGenerateSummary}
+							onDismiss={handleDismissSummary}
+							onScrollToMessage={scrollToMessage}
+						/>
+					{/if}
+				{/if}
+			</ChatMessageList>
 
 			<!-- Input -->
 			<ChatInput

@@ -53,6 +53,7 @@ function dbRowToTask(row: TaskRow): Task {
 	return {
 		id: row.id,
 		title: row.title,
+		description: row.description ?? undefined,
 		status: row.status as Task['status'],
 		priority: row.priority as Task['priority'],
 		color: row.color,
@@ -180,7 +181,7 @@ export const postgresTaskRepository: TaskRepository = {
 
 		await sql`
 			INSERT INTO tasks (
-				id, title, status, priority, color,
+				id, title, description, status, priority, color,
 				due_date, due_date_type,
 				source_type, source_assist_id, source_conversation_id,
 				area_id,
@@ -189,6 +190,7 @@ export const postgresTaskRepository: TaskRepository = {
 			) VALUES (
 				${id},
 				${input.title},
+				${input.description ?? null},
 				'active',
 				${input.priority ?? 'normal'},
 				${color},
@@ -256,6 +258,7 @@ export const postgresTaskRepository: TaskRepository = {
 			UPDATE tasks
 			SET
 				title = COALESCE(${updates.title ?? null}, title),
+				description = ${updates.description === null ? null : updates.description ?? sql`description`},
 				status = COALESCE(${updates.status ?? null}, status),
 				priority = COALESCE(${updates.priority ?? null}, priority),
 				area_id = ${updates.areaId === null ? null : updates.areaId ?? sql`area_id`},
@@ -471,6 +474,7 @@ export const postgresTaskRepository: TaskRepository = {
 			INSERT INTO tasks (
 				id, title, status, priority, color,
 				parent_task_id, subtask_type, subtask_order,
+				context_summary,
 				source_type, source_conversation_id, area_id,
 				space_id, user_id,
 				last_activity_at, created_at, updated_at
@@ -483,6 +487,7 @@ export const postgresTaskRepository: TaskRepository = {
 				${input.parentTaskId},
 				${input.subtaskType ?? 'conversation'},
 				${nextOrder},
+				${input.contextSummary ?? null},
 				${input.sourceConversationId ? 'chat' : 'manual'},
 				${input.sourceConversationId ?? null},
 				${parent.areaId ?? null},

@@ -19,6 +19,10 @@
 		areaId?: string;
 		areaName?: string;
 		areaColor?: string;
+		taskId?: string;
+		taskTitle?: string;
+		isSubtask?: boolean;
+		parentTaskTitle?: string;
 		timestamp: Date;
 		status?: string;
 	}
@@ -103,7 +107,15 @@
 						<div class="item-content">
 							<span class="item-title">{item.title}</span>
 							<div class="item-meta">
-								{#if item.areaName}
+								{#if item.isSubtask && item.parentTaskTitle}
+									<!-- Subtask conversation -->
+									<span class="subtask-badge">Subtask</span>
+									<span class="parent-task-badge">{item.parentTaskTitle}</span>
+								{:else if item.taskTitle}
+									<!-- Parent task conversation -->
+									<span class="task-badge">{item.taskTitle}</span>
+								{:else if item.areaName}
+									<!-- Area conversation -->
 									<span
 										class="area-badge"
 										style="--badge-color: {item.areaColor || '#6b7280'}"
@@ -260,6 +272,48 @@
 		color: var(--badge-color);
 		background: color-mix(in srgb, var(--badge-color) 15%, transparent);
 		border-radius: 0.25rem;
+	}
+
+	.task-badge {
+		display: inline-flex;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: #a78bfa;
+		background: rgba(167, 139, 250, 0.15);
+		border-radius: 0.25rem;
+	}
+
+	.subtask-badge {
+		display: inline-flex;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: #f472b6;
+		background: rgba(244, 114, 182, 0.15);
+		border-radius: 0.25rem;
+	}
+
+	.parent-task-badge {
+		display: inline-flex;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.65);
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 0.25rem;
+	}
+
+	/* Truncate badges only on mobile */
+	@media (max-width: 640px) {
+		.task-badge,
+		.parent-task-badge,
+		.area-badge {
+			max-width: 120px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
 	}
 
 	.status-badge {

@@ -47,7 +47,7 @@ export const GET: RequestHandler = async ({ params }) => {
 /**
  * POST /api/tasks/[id]/subtasks
  * Create a new subtask
- * Body: { title: string, subtaskType?: 'conversation' | 'action', priority?: 'normal' | 'high', sourceConversationId?: string }
+ * Body: { title: string, subtaskType?: 'conversation' | 'action', priority?: 'normal' | 'high', sourceConversationId?: string, contextSummary?: string }
  */
 export const POST: RequestHandler = async ({ params, request }) => {
 	try {
@@ -68,6 +68,11 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			return json({ error: 'Invalid priority. Must be "normal" or "high"' }, { status: 400 });
 		}
 
+		// Validate contextSummary if provided (should be valid JSON string)
+		if (body.contextSummary && typeof body.contextSummary !== 'string') {
+			return json({ error: 'contextSummary must be a JSON string' }, { status: 400 });
+		}
+
 		// Verify parent task exists
 		const parent = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
 		if (!parent) {
@@ -79,7 +84,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			parentTaskId: params.id,
 			subtaskType: (body.subtaskType as SubtaskType) ?? 'conversation',
 			priority: body.priority ?? 'normal',
-			sourceConversationId: body.sourceConversationId // Plan Mode conversation ID for context injection
+			sourceConversationId: body.sourceConversationId, // Plan Mode conversation ID for context injection
+			contextSummary: body.contextSummary // Rich context generated during Plan Mode
 		};
 
 		const subtask = await postgresTaskRepository.createSubtask(input, DEFAULT_USER_ID);
