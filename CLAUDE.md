@@ -105,32 +105,62 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-02 (Space Dashboard & TaskModal)
+### Latest: 2026-01-04 (Task Planning & AI Prompt Engineering)
+
+**Completed:**
+
+*Task Descriptions & Planning:*
+- Added `description` field to tasks for user-provided background/context
+- Migration `007-tasks-description.sql` - adds description column to tasks table
+- Updated types, stores, API endpoints, and persistence layer for descriptions
+
+*Plan Mode Prompt Engineering:*
+- Applied modern AI instruction-following techniques to `/src/lib/config/system-prompts.ts`:
+  - Format-named XML tags (`<numbered_list_output>`, `<brief_response_format>`)
+  - Added parsing context explaining regex extraction for subtask creation
+  - Positive framing with numbered "what to do" steps
+  - Constraint checklists at end (`<checklist_before_responding>`) to address "lost in the middle" effect
+  - Good/bad examples with failure explanations
+
+*New Components:*
+- `SubtaskDashboard.svelte` - dashboard view for task with subtask progress
+- `CompleteTaskModal.svelte` - confirmation modal for completing tasks
+- `DeleteConfirmModal.svelte` - reusable delete confirmation modal
+- `SubtaskAccordionList.svelte` - expandable subtask list component
+- `ProgressRing.svelte` - circular progress indicator (ui component)
+- `PlanModeConfirmation.svelte` - confirmation step for plan mode
+- `ChatMessageList.svelte` - extracted chat message list component
+
+*New API Endpoints:*
+- `/api/plan-context` - fetch context for plan mode
+- `/api/plan-synopsis` - get synopsis of planning conversation
+
+*Enhanced:*
+- `TaskModal.svelte` - added description textarea, improved UX
+- `TasksSection.svelte` - enhanced task list display
+- `SpaceDashboard.svelte` - integrated new components
+- Task page (`/spaces/[space]/task/[taskId]`) - major enhancements
+
+**BEFORE STARTING NEXT SESSION - Run database migration:**
+```bash
+psql -d stratai -f src/lib/server/persistence/migrations/007-tasks-description.sql
+```
+This adds the `description` column to the tasks table.
+
+**Next steps:**
+- Test end-to-end task planning flow with new prompts
+- Verify subtask extraction works with improved prompt format
+- Test description field in task creation/editing
+
+### Previous: 2026-01-02 (Space Dashboard & TaskModal)
 
 **Completed:**
 - `TaskModal.svelte` - modal for task creation with title, due date, deadline type (soft/hard), priority (normal/high), and area linking
 - `TasksSection.svelte` - task list component with modal-based creation (replaced inline input)
 - `SpaceDashboard.svelte` - integrated TaskModal with full `CreateTaskInput` type support
-- `ConversationDrawer.svelte` - enhanced badge styling and visual polish
-- `AreaCard.svelte` / `CreateAreaCard.svelte` - refined visual consistency
-- Migration `006-tasks-area-rename.sql` - rename focus_area_id to area_id
-- Added claude-sonnet-4.5 model alias in litellm-config.yaml
-
-**Previous session (same day):**
 - ConversationDrawer, TaskContextBanner, AreaWelcomeScreen components
 - Space dashboard components and area routing
-- Migration 005-areas-rename-migrate.sql
-
-**BEFORE STARTING NEXT SESSION - Run database migration:**
-```bash
-psql -d stratai -f src/lib/server/persistence/migrations/006-tasks-area-rename.sql
-```
-This renames `focus_area_id` to `area_id` in the tasks table. Without this, task creation will fail with a 500 error.
-
-**Next steps:**
-- Test task creation flow end-to-end
-- Wire up AreaWelcomeScreen quick actions
-- Test conversation pinning and area-to-area moving
+- Migrations 005-areas-rename-migrate.sql and 006-tasks-area-rename.sql
 
 ---
 
