@@ -385,6 +385,32 @@ Brain dump → AI extracts tasks → Confirm in WorkingPanel → Priority check 
 
 > **Core Insight**: Knowledge workers need help managing their time, not just their tasks. The AI should know when it's a new day, when tasks are stale, and when to offer help.
 
+**Task Dashboard (COMPLETE)** - `/spaces/[space]/tasks`:
+- [x] `TaskDashboard.svelte` - main dashboard with time-based task grouping
+- [x] Task groups: Needs Attention, Today, This Week, Later, Anytime
+- [x] `TaskGroupSection.svelte` - reusable section with "Show More" pattern (max 5 visible)
+- [x] `TaskCard.svelte` - task display with subtask progress, area badges, due dates
+- [x] `StatsRow.svelte` - completion streak and daily stats
+- [x] `FocusSuggestion.svelte` - suggests what to work on based on priority/overdue
+
+**Recently Completed (COMPLETE)**:
+- [x] `RecentlyCompletedSection.svelte` - shows today's completions
+- [x] Expand to show this month's completions
+- [x] Reopen action to restore completed tasks
+- [ ] Pagination for 100+ completions (future)
+
+**Stale Task Detection (COMPLETE)**:
+- [x] Track `lastActivityAt` on tasks
+- [x] Define stale threshold (7 days no activity)
+- [x] `stale_dismissed_at` column for dismissing stale warnings
+- [x] Migration `008-task-stale-dismissed.sql`
+- [x] Surface stale/overdue in "Needs Attention" group
+- [x] Due date passed = overdue (hard deadlines)
+
+**Reopen Task (COMPLETE)**:
+- [x] API endpoint `/api/tasks/[id]/reopen`
+- [x] `reopenTask()` method in store
+
 **Day Change Detection**:
 - [ ] Store `lastSessionDate` in user preferences
 - [ ] Detect new day on space entry
@@ -396,12 +422,6 @@ Brain dump → AI extracts tasks → Confirm in WorkingPanel → Priority check 
 - [ ] Monday: "Happy Monday! Quick check on your week..."
 - [ ] Overdue items: "Heads up - 2 items slipped past their dates..."
 - [ ] Stale items: "Some tasks have been sitting a while..."
-
-**Stale Task Detection**:
-- [ ] Track `lastActivityAt` on tasks
-- [ ] Define stale threshold (e.g., 2 weeks no activity)
-- [ ] Due date passed = overdue
-- [ ] Surface stale/overdue in greeting
 
 **Cleanup Offer**:
 - [ ] When conditions met (Monday, 2+ overdue, stale items)
@@ -1091,7 +1111,8 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 | ~~Enhanced Focus Mode~~ | 0.3c+ | High | Medium | ✅ |
 | ~~Subtasks & Plan Mode~~ | 0.3d++ | High | Medium | ✅ |
 | Meeting Summary + Guided | 0.3d | High | High | Deferred |
-| Temporal Awareness | 0.3e | High | Medium | **NEXT** |
+| Task Dashboard + Stale Detection | 0.3e | High | Medium | ✅ |
+| Day Change + Cleanup Offers | 0.3e | High | Medium | **NEXT** |
 | Form templates | 0.3f | Medium | Medium | Planned |
 | Entity extraction | 0.3g | High | High | Planned |
 | Onboarding (stretch) | 0.3h | Medium | Low | Stretch |
@@ -1115,5 +1136,5 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 
 ---
 
-*Aligned with PRODUCT_VISION.md - Last Updated: December 16, 2024*
-*Completed: Phase 0.1, Phase 0.2, Phase 0.3a, Phase 0.3b, Phase 0.3c, Phase 0.3c+, Phase 0.3d++ | Next: Phase 0.3e Temporal Awareness*
+*Aligned with PRODUCT_VISION.md - Last Updated: January 6, 2026*
+*Completed: Phase 0.1, Phase 0.2, Phase 0.3a, Phase 0.3b, Phase 0.3c, Phase 0.3c+, Phase 0.3d++, Phase 0.3e (Task Dashboard) | Next: Phase 0.3e (Day Change + Cleanup)*

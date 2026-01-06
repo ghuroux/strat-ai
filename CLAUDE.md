@@ -105,54 +105,51 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-04 (Task Planning & AI Prompt Engineering)
+### Latest: 2026-01-06 (Task Dashboard & Scaling UX)
 
 **Completed:**
 
-*Task Descriptions & Planning:*
-- Added `description` field to tasks for user-provided background/context
-- Migration `007-tasks-description.sql` - adds description column to tasks table
-- Updated types, stores, API endpoints, and persistence layer for descriptions
+*Task Dashboard (`/spaces/[space]/tasks`):*
+- `TaskDashboard.svelte` - main dashboard with time-based task grouping
+- `TaskGroupSection.svelte` - reusable section component with "Show More" pattern (caps at 5 visible tasks)
+- `TaskCard.svelte` - individual task card with subtask progress, area badges, due dates
+- `StatsRow.svelte` - shows completion streak and daily stats
+- `FocusSuggestion.svelte` - suggests what to work on based on priority/overdue
 
-*Plan Mode Prompt Engineering:*
-- Applied modern AI instruction-following techniques to `/src/lib/config/system-prompts.ts`:
-  - Format-named XML tags (`<numbered_list_output>`, `<brief_response_format>`)
-  - Added parsing context explaining regex extraction for subtask creation
-  - Positive framing with numbered "what to do" steps
-  - Constraint checklists at end (`<checklist_before_responding>`) to address "lost in the middle" effect
-  - Good/bad examples with failure explanations
+*Recently Completed Section:*
+- `RecentlyCompletedSection.svelte` - shows today's completions by default
+- Expands to show this month's completions (flat list, newest first)
+- Fixed visibility bug - now shows even when no tasks completed today
+- Reopen action to restore completed tasks
+- TODO added for future pagination if 100+ completions
 
-*New Components:*
-- `SubtaskDashboard.svelte` - dashboard view for task with subtask progress
-- `CompleteTaskModal.svelte` - confirmation modal for completing tasks
-- `DeleteConfirmModal.svelte` - reusable delete confirmation modal
-- `SubtaskAccordionList.svelte` - expandable subtask list component
-- `ProgressRing.svelte` - circular progress indicator (ui component)
-- `PlanModeConfirmation.svelte` - confirmation step for plan mode
-- `ChatMessageList.svelte` - extracted chat message list component
+*Stale Task Detection:*
+- Tasks flagged as stale after 7+ days no activity
+- `stale_dismissed_at` column for users to dismiss stale warnings
+- Migration `008-task-stale-dismissed.sql` adds the column
+- `dismissStale()` method in store and API
 
-*New API Endpoints:*
-- `/api/plan-context` - fetch context for plan mode
-- `/api/plan-synopsis` - get synopsis of planning conversation
+*Reopen Task:*
+- New API endpoint `/api/tasks/[id]/reopen`
+- `reopenTask()` method in store
+- Clears `completedAt` and sets status back to active
 
-*Enhanced:*
-- `TaskModal.svelte` - added description textarea, improved UX
-- `TasksSection.svelte` - enhanced task list display
-- `SpaceDashboard.svelte` - integrated new components
-- Task page (`/spaces/[space]/task/[taskId]`) - major enhancements
+*Bug Fixes:*
+- Fixed nested button error (button inside button) using div with role="button"
+- Fixed visibility condition for Recently Completed section
 
 **BEFORE STARTING NEXT SESSION - Run database migration:**
 ```bash
-psql -d stratai -f src/lib/server/persistence/migrations/007-tasks-description.sql
+psql -d stratai -f src/lib/server/persistence/migrations/008-task-stale-dismissed.sql
 ```
-This adds the `description` column to the tasks table.
+This adds the `stale_dismissed_at` column to the tasks table. Without this, stale dismissal will fail.
 
 **Next steps:**
-- Test end-to-end task planning flow with new prompts
-- Verify subtask extraction works with improved prompt format
-- Test description field in task creation/editing
+- Continue Phase 0.3e: Temporal Awareness (day change detection, cleanup offers)
+- Add keyboard shortcuts for common task actions
+- Consider adding task time estimates
 
-### Previous: 2026-01-02 (Space Dashboard & TaskModal)
+### Previous: 2026-01-04 (Task Planning & AI Prompt Engineering)
 
 **Completed:**
 - `TaskModal.svelte` - modal for task creation with title, due date, deadline type (soft/hard), priority (normal/high), and area linking
