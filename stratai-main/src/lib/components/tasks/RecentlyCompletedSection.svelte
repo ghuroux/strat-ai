@@ -2,8 +2,8 @@
 	RecentlyCompletedSection.svelte
 
 	Shows recently completed tasks in the Task Dashboard.
-	- Default: Today's completions
-	- Expanded: This month's completions
+	- Default: Today's completions (includes subtasks for immediate feedback)
+	- Expanded: This month's parent task completions (summary view)
 	- Reopen action to restore tasks
 
 	TODO: Add pagination if this month's completions becomes too large (100+)
@@ -36,7 +36,7 @@
 		});
 	});
 
-	// Filter tasks completed this month
+	// Filter tasks completed this month - PARENT TASKS ONLY (for summary view)
 	let thisMonthsTasks = $derived.by(() => {
 		const now = new Date();
 		const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -44,6 +44,8 @@
 		return completedTasks
 			.filter((task) => {
 				if (!task.completedAt) return false;
+				// Only include parent tasks (not subtasks) for the month view
+				if (task.parentTaskId) return false;
 				return new Date(task.completedAt) >= startOfMonth;
 			})
 			.sort((a, b) => {
@@ -57,8 +59,8 @@
 	// Tasks to display based on current view
 	let displayTasks = $derived(showThisMonth ? thisMonthsTasks : todaysTasks);
 
-	// Count for "show more" button
-	let additionalCount = $derived(thisMonthsTasks.length - todaysTasks.length);
+	// Show "view month" button only if there are parent tasks this month to view
+	let hasMonthProjects = $derived(thisMonthsTasks.length > 0);
 
 	// Format completion date
 	function formatCompletedDate(date: Date): string {
@@ -85,7 +87,7 @@
 	}
 </script>
 
-{#if thisMonthsTasks.length > 0}
+{#if todaysTasks.length > 0 || thisMonthsTasks.length > 0}
 	<section class="completed-section" style="--space-color: {spaceColor}" transition:slide={{ duration: 200 }}>
 		<!-- Header -->
 		<div class="section-header">
@@ -137,35 +139,35 @@
 		</div>
 
 		<!-- Show more / Show less -->
-		{#if !showThisMonth && todaysTasks.length === 0 && thisMonthsTasks.length > 0}
-			<!-- No tasks today but have tasks this month -->
+		{#if !showThisMonth && todaysTasks.length === 0 && hasMonthProjects}
+			<!-- No tasks today but have parent tasks this month -->
 			<button
 				type="button"
 				class="show-more-btn"
 				onclick={() => (showThisMonth = true)}
 			>
-				View {thisMonthsTasks.length} completed this month
+				View {thisMonthsTasks.length} project{thisMonthsTasks.length === 1 ? '' : 's'} completed this month
 			</button>
-		{:else if !showThisMonth && additionalCount > 0}
-			<!-- Have tasks today and more this month -->
+		{:else if !showThisMonth && hasMonthProjects}
+			<!-- Have tasks today and parent tasks this month -->
 			<button
 				type="button"
 				class="show-more-btn"
 				onclick={() => (showThisMonth = true)}
 			>
-				Show {additionalCount} more from this month
+				View {thisMonthsTasks.length} project{thisMonthsTasks.length === 1 ? '' : 's'} completed this month
 			</button>
 		{:else if showThisMonth && todaysTasks.length > 0}
-			<!-- Viewing month, can collapse to today -->
+			<!-- Viewing month, can go back to today's view -->
 			<button
 				type="button"
 				class="show-more-btn"
 				onclick={() => (showThisMonth = false)}
 			>
-				Show only today
+				Show today's completions
 			</button>
-		{:else if showThisMonth && todaysTasks.length === 0}
-			<!-- Viewing month, nothing to collapse to -->
+		{:else if showThisMonth}
+			<!-- Viewing month, collapse -->
 			<button
 				type="button"
 				class="show-more-btn"

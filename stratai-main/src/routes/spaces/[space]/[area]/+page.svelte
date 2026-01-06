@@ -24,8 +24,13 @@
 	import SecondOpinionPanel from '$lib/components/chat/SecondOpinionPanel.svelte';
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
+	import { TasksPanel, DocsPanel, TaskSuggestionCard } from '$lib/components/areas';
+	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
+	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { documentStore } from '$lib/stores/documents.svelte';
+	import type { CreateTaskInput, Task } from '$lib/types/tasks';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
@@ -163,8 +168,50 @@
 		return { id: task.id, title: task.title, color: task.color };
 	}
 
-	// State for tasks panel
-	let showTasksPanel = $state(true);
+	// Panel states
+	let tasksPanelOpen = $state(false);
+	let docsPanelOpen = $state(false);
+	let taskModalOpen = $state(false);
+
+	// Task suggestion state
+	let dismissedSuggestions = $state<Set<string>>(new Set()); // Message IDs with dismissed suggestions
+	let pendingSuggestion = $state<TaskSuggestion | null>(null); // Suggestion waiting to create task
+
+	// Parse suggestions from the last assistant message
+	let currentSuggestionInfo = $derived.by(() => {
+		if (!messages.length) return null;
+
+		// Find the last assistant message that's not streaming
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const msg = messages[i];
+			if (msg.role === 'assistant' && !msg.isStreaming && msg.content) {
+				// Skip if already dismissed
+				if (dismissedSuggestions.has(msg.id)) return null;
+
+				const { suggestions } = parseTaskSuggestions(msg.content);
+				if (suggestions.length > 0) {
+					return {
+						messageId: msg.id,
+						messageIndex: i,
+						suggestion: suggestions[0] // Only show first suggestion
+					};
+				}
+				// Only check the last assistant message
+				break;
+			}
+		}
+		return null;
+	});
+
+	// Counts for header badges
+	let areaTaskCount = $derived(areaTasks.length);
+	let spaceDocCount = $derived.by(() => {
+		if (!spaceParam) return 0;
+		return documentStore.getDocuments(spaceParam).length;
+	});
+
+	// All areas for TaskModal
+	let allAreas = $derived(spaceParam ? areaStore.getAreasForSpace(spaceParam) : []);
 
 	// Apply area color
 	$effect(() => {
@@ -672,6 +719,53 @@
 		goto(`/spaces/${spaceParam}/task/${taskId}`);
 	}
 
+	// Task creation handler (from TasksPanel)
+	async function handleCreateTask(input: CreateTaskInput): Promise<Task | null> {
+		// Pre-fill with current area if not specified
+		const taskInput: CreateTaskInput = {
+			...input,
+			areaId: input.areaId || area?.id
+		};
+		return taskStore.createTask(taskInput);
+	}
+
+	// Task suggestion handlers
+	function handleAcceptSuggestion(suggestion: TaskSuggestion) {
+		// Store the suggestion and open TaskModal with pre-filled values
+		pendingSuggestion = suggestion;
+		taskModalOpen = true;
+	}
+
+	function handleDismissSuggestion() {
+		if (currentSuggestionInfo) {
+			// Add to dismissed set
+			dismissedSuggestions = new Set([...dismissedSuggestions, currentSuggestionInfo.messageId]);
+		}
+	}
+
+	// Modified task creation to handle suggestions
+	async function handleCreateTaskFromModal(input: CreateTaskInput): Promise<Task | null> {
+		const result = await handleCreateTask(input);
+		if (result && pendingSuggestion && currentSuggestionInfo) {
+			// Task created from suggestion - dismiss the card
+			dismissedSuggestions = new Set([...dismissedSuggestions, currentSuggestionInfo.messageId]);
+			pendingSuggestion = null;
+			toastStore.success('Task created from suggestion');
+		}
+		return result;
+	}
+
+	// Get pre-filled values for TaskModal from pending suggestion
+	let suggestionPreFill = $derived.by(() => {
+		if (!pendingSuggestion) return undefined;
+		const dueDate = pendingSuggestion.dueDate ? parseDueDate(pendingSuggestion.dueDate) : null;
+		return {
+			title: pendingSuggestion.title,
+			priority: pendingSuggestion.priority,
+			dueDate: dueDate || undefined
+		};
+	});
+
 	// Continue an existing chat
 	function handleContinueChat(conversationId: string) {
 		chatStore.setActiveConversation(conversationId);
@@ -1038,26 +1132,54 @@
 						{#if area.icon}<span class="area-icon">{area.icon}</span>{/if}
 						{area.name}
 					</button>
-					<!-- Conversations drawer toggle - next to area name -->
-					<button
-						type="button"
-						class="drawer-toggle"
-						class:has-conversations={areaConversations.length > 0}
-						onclick={() => drawerOpen = true}
-						title="View all conversations ({areaConversations.length})"
-						style="--area-color: {areaColor}"
-					>
-						<svg viewBox="0 0 20 20" fill="currentColor">
-							<path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-							<path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
-						</svg>
-						{#if areaConversations.length > 0}
-							<span class="conversation-count">{areaConversations.length}</span>
-						{/if}
-					</button>
 				</div>
 			</div>
-					<div class="header-right">
+
+			<!-- Tools cluster (Chats/Tasks/Docs panel toggles) -->
+			<div class="header-tools">
+				<button
+					type="button"
+					class="tool-button"
+					onclick={() => drawerOpen = true}
+					title="Conversations ({areaConversations.length})"
+				>
+					<svg viewBox="0 0 20 20" fill="currentColor">
+						<path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+						<path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+					</svg>
+					{#if areaConversations.length > 0}
+						<span class="tool-badge">{areaConversations.length}</span>
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="tool-button"
+					onclick={() => tasksPanelOpen = true}
+					title="Tasks ({areaTaskCount})"
+				>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+					</svg>
+					{#if areaTaskCount > 0}
+						<span class="tool-badge">{areaTaskCount}</span>
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="tool-button"
+					onclick={() => docsPanelOpen = true}
+					title="Documents ({spaceDocCount})"
+				>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+					</svg>
+					{#if spaceDocCount > 0}
+						<span class="tool-badge">{spaceDocCount}</span>
+					{/if}
+				</button>
+			</div>
+
+			<div class="header-right">
 				<ModelSelector
 					selectedModel={effectiveModel}
 					onchange={handleModelChange}
@@ -1084,45 +1206,6 @@
 				</button>
 			</div>
 		</header>
-
-		<!-- Tasks in this area (collapsible bar) -->
-		{#if areaTasks.length > 0}
-			<div class="tasks-bar" class:collapsed={!showTasksPanel}>
-				<button
-					type="button"
-					class="tasks-bar-toggle"
-					onclick={() => showTasksPanel = !showTasksPanel}
-				>
-					<svg class="toggle-icon" viewBox="0 0 20 20" fill="currentColor">
-						<path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
-					</svg>
-					<span class="toggle-label">Tasks in this Area</span>
-					<span class="task-count">{areaTasks.length}</span>
-				</button>
-
-				{#if showTasksPanel}
-					<div class="tasks-list" transition:fade={{ duration: 100 }}>
-						{#each areaTasks as task (task.id)}
-							<button
-								type="button"
-								class="task-item"
-								onclick={() => goToTask(task.id)}
-								style="--task-color: {task.color}"
-							>
-								<div
-									class="task-dot"
-									style="background-color: {task.color};"
-								></div>
-								<span class="task-title">{task.title}</span>
-								<span class="task-status" class:planning={task.status === 'planning'}>
-									{task.status === 'planning' ? 'Planning' : 'Active'}
-								</span>
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		{/if}
 
 		<!-- Main chat area -->
 		<main class="chat-area" class:with-panel={isSecondOpinionOpen}>
@@ -1164,6 +1247,17 @@
 								onRegenerate={handleRegenerate}
 								onSecondOpinion={handleSecondOpinionTrigger}
 							/>
+							<!-- Task suggestion card (appears after assistant message with suggestion) -->
+							{#if currentSuggestionInfo && currentSuggestionInfo.messageIndex === i}
+								<div class="suggestion-container">
+									<TaskSuggestionCard
+										suggestion={currentSuggestionInfo.suggestion}
+										areaColor={areaColor}
+										onAccept={handleAcceptSuggestion}
+										onDismiss={handleDismissSuggestion}
+									/>
+								</div>
+							{/if}
 						</div>
 					{/each}
 
@@ -1248,6 +1342,38 @@
 			onRenameConversation={handleDrawerRename}
 			onExportConversation={handleDrawerExport}
 			onDeleteConversation={handleDrawerDelete}
+		/>
+
+		<!-- Tasks Panel -->
+		<TasksPanel
+			isOpen={tasksPanelOpen}
+			areaId={area.id}
+			spaceColor={areaColor}
+			onClose={() => tasksPanelOpen = false}
+			onAddTask={() => taskModalOpen = true}
+			onTaskClick={(task) => goToTask(task.id)}
+		/>
+
+		<!-- Docs Panel -->
+		<DocsPanel
+			isOpen={docsPanelOpen}
+			spaceId={spaceParam || ''}
+			spaceColor={areaColor}
+			onClose={() => docsPanelOpen = false}
+		/>
+
+		<!-- Task Modal -->
+		<TaskModal
+			open={taskModalOpen}
+			spaceId={spaceParam || ''}
+			areas={allAreas}
+			spaceColor={areaColor}
+			initialValues={suggestionPreFill}
+			onClose={() => {
+				taskModalOpen = false;
+				pendingSuggestion = null;
+			}}
+			onCreate={handleCreateTaskFromModal}
 		/>
 	</div>
 {:else}
@@ -1353,6 +1479,55 @@
 		font-size: 0.875rem;
 	}
 
+	/* Tools cluster */
+	.header-tools {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
+
+	.tool-button {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 0.5rem;
+		transition: all 0.15s ease;
+	}
+
+	.tool-button:hover {
+		background: rgba(255, 255, 255, 0.08);
+		border-color: rgba(255, 255, 255, 0.1);
+		color: var(--area-color);
+	}
+
+	.tool-button svg {
+		width: 1.125rem;
+		height: 1.125rem;
+	}
+
+	.tool-badge {
+		position: absolute;
+		top: -0.125rem;
+		right: -0.125rem;
+		min-width: 1rem;
+		height: 1rem;
+		padding: 0 0.25rem;
+		font-size: 0.625rem;
+		font-weight: 600;
+		line-height: 1rem;
+		text-align: center;
+		color: #fff;
+		background: color-mix(in srgb, var(--area-color) 85%, #000);
+		border-radius: 9999px;
+	}
+
 	.header-right {
 		display: flex;
 		align-items: center;
@@ -1386,162 +1561,6 @@
 		height: 1rem;
 	}
 
-	/* Drawer toggle - inline with breadcrumb */
-	.drawer-toggle {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		margin-left: 0.5rem;
-		color: rgba(255, 255, 255, 0.4);
-		background: transparent;
-		border-radius: 0.25rem;
-		transition: all 0.15s ease;
-		position: relative;
-	}
-
-	.drawer-toggle:hover {
-		color: rgba(255, 255, 255, 0.8);
-		background: rgba(255, 255, 255, 0.1);
-	}
-
-	.drawer-toggle.has-conversations {
-		color: var(--area-color);
-	}
-
-	.drawer-toggle.has-conversations:hover {
-		background: color-mix(in srgb, var(--area-color) 15%, transparent);
-	}
-
-	.drawer-toggle svg {
-		width: 0.875rem;
-		height: 0.875rem;
-	}
-
-	/* Conversation count badge */
-	.conversation-count {
-		position: absolute;
-		top: -0.125rem;
-		right: -0.375rem;
-		min-width: 0.875rem;
-		height: 0.875rem;
-		padding: 0 0.1875rem;
-		font-size: 0.5625rem;
-		font-weight: 600;
-		line-height: 0.875rem;
-		text-align: center;
-		color: white;
-		background: var(--area-color);
-		border-radius: 9999px;
-	}
-
-	/* Tasks bar */
-	.tasks-bar {
-		background: rgba(255, 255, 255, 0.02);
-		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-	}
-
-	.tasks-bar.collapsed {
-		border-bottom: none;
-	}
-
-	.tasks-bar-toggle {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.5rem 1rem;
-		color: rgba(255, 255, 255, 0.5);
-		background: transparent;
-		text-align: left;
-		font-size: 0.75rem;
-		font-weight: 500;
-		transition: all 0.15s ease;
-	}
-
-	.tasks-bar-toggle:hover {
-		color: rgba(255, 255, 255, 0.7);
-		background: rgba(255, 255, 255, 0.02);
-	}
-
-	.toggle-icon {
-		width: 1rem;
-		height: 1rem;
-		transition: transform 0.15s ease;
-	}
-
-	.tasks-bar.collapsed .toggle-icon {
-		transform: rotate(-90deg);
-	}
-
-	.toggle-label {
-		flex: 1;
-	}
-
-	.task-count {
-		padding: 0.125rem 0.375rem;
-		font-size: 0.625rem;
-		font-weight: 600;
-		color: var(--area-color);
-		background: color-mix(in srgb, var(--area-color) 15%, transparent);
-		border-radius: 9999px;
-	}
-
-	.tasks-list {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		padding: 0 1rem 0.75rem;
-	}
-
-	.task-item {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.375rem 0.75rem;
-		font-size: 0.75rem;
-		color: rgba(255, 255, 255, 0.8);
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 0.375rem;
-		transition: all 0.15s ease;
-	}
-
-	.task-item:hover {
-		color: rgba(255, 255, 255, 1);
-		background: rgba(255, 255, 255, 0.08);
-		border-color: color-mix(in srgb, var(--task-color) 40%, transparent);
-	}
-
-	.task-dot {
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
-
-	.task-title {
-		max-width: 200px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.task-status {
-		padding: 0.125rem 0.375rem;
-		font-size: 0.625rem;
-		font-weight: 500;
-		color: rgba(255, 255, 255, 0.5);
-		background: rgba(255, 255, 255, 0.05);
-		border-radius: 0.25rem;
-	}
-
-	.task-status.planning {
-		color: #f59e0b;
-		background: rgba(245, 158, 11, 0.15);
-	}
-
 	/* Main chat area - edge-to-edge background */
 	.chat-area {
 		flex: 1;
@@ -1554,6 +1573,12 @@
 
 	.chat-area.with-panel {
 		margin-right: 40vw;
+	}
+
+	.suggestion-container {
+		padding: 0 2rem;
+		max-width: 48rem;
+		margin: 0 auto;
 	}
 
 	.input-container {

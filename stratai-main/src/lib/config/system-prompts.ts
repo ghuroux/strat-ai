@@ -1116,5 +1116,78 @@ ${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea
 	return `${platformPrompt}\n${planModePrompt}${contextSummary}`;
 }
 
+/**
+ * Task Detection Prompt
+ *
+ * When enabled, this addition teaches the AI to recognize actionable items
+ * in conversation and offer to create tasks. The AI includes structured
+ * [TASK_SUGGEST] markers that the frontend parses to show suggestion cards.
+ *
+ * Used in Area conversations where task tracking is relevant.
+ */
+export const TASK_DETECTION_PROMPT = `
+<task_detection>
+## Task Detection
+
+When the user expresses intentions, commitments, or action items during our conversation, recognize them and offer to track them. Look for statements like:
+
+- "I need to..." / "I should..." / "I have to..."
+- "Let me check with..." / "I'll follow up on..."
+- "We should probably..." / "Don't forget to..."
+- "By Friday..." / "Before the meeting..."
+- Any commitment to future action
+
+When you detect such a statement, include a structured marker in your response:
+
+[TASK_SUGGEST]
+title: Brief, actionable task title (under 60 chars)
+dueDate: Relative date if mentioned (today, tomorrow, Friday, next week, etc.)
+priority: normal or high (high if urgent language used)
+reason: One sentence explaining why this might be worth tracking
+[/TASK_SUGGEST]
+
+**Guidelines:**
+- Only suggest tasks for CLEAR actionable items, not vague statements
+- Don't suggest for completed actions ("I already did X")
+- Don't suggest for hypotheticals ("We could maybe...")
+- Maximum ONE suggestion per response
+- Place the marker at the END of your response, after your main content
+- Keep suggesting natural - don't force it if nothing actionable was said
+
+**Example exchange:**
+User: "I need to finish the quarterly report by Friday, and I should probably check with Sarah about the budget numbers."
+
+Your response (ends with):
+[TASK_SUGGEST]
+title: Finish quarterly report
+dueDate: Friday
+priority: normal
+reason: You mentioned needing to complete this by end of week
+[/TASK_SUGGEST]
+</task_detection>`;
+
+/**
+ * Get the task detection prompt addition
+ * Returns the prompt if task detection should be enabled, empty string otherwise
+ */
+export function getTaskDetectionPrompt(enableTaskDetection: boolean = false): string {
+	return enableTaskDetection ? TASK_DETECTION_PROMPT : '';
+}
+
+/**
+ * Get the full system prompt for an Area with optional task detection
+ * Combines: Platform → Focus Area → Task Detection
+ */
+export function getAreaSystemPrompt(
+	model: string,
+	focusArea: FocusAreaInfo,
+	enableTaskDetection: boolean = true
+): string {
+	const basePrompt = getFullSystemPromptWithFocusArea(model, focusArea);
+	const taskDetection = getTaskDetectionPrompt(enableTaskDetection);
+
+	return taskDetection ? `${basePrompt}\n${taskDetection}` : basePrompt;
+}
+
 // Re-export types for convenience
 export type { TaskContextInfo };

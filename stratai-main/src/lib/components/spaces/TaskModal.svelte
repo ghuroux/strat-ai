@@ -18,12 +18,22 @@
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 
+	interface InitialValues {
+		title?: string;
+		description?: string;
+		dueDate?: Date;
+		dueDateType?: DueDateType;
+		priority?: TaskPriority;
+		areaId?: string;
+	}
+
 	interface Props {
 		open: boolean;
 		spaceId: string;
 		areas: Area[];
 		spaceColor?: string;
 		task?: Task | null; // If provided, modal is in edit mode
+		initialValues?: InitialValues; // Pre-fill form in create mode (e.g., from task suggestions)
 		onClose: () => void;
 		onCreate: (input: CreateTaskInput) => Promise<Task | null>; // Returns created task for document linking
 	}
@@ -34,6 +44,7 @@
 		areas,
 		spaceColor = '#3b82f6',
 		task = null,
+		initialValues,
 		onClose,
 		onCreate
 	}: Props = $props();
@@ -75,6 +86,14 @@
 				areaId = task.areaId || '';
 				// Load linked documents
 				documentStore.loadDocumentsForTask(task.id);
+			} else if (initialValues) {
+				// Create mode with initial values (e.g., from task suggestion)
+				title = initialValues.title || '';
+				description = initialValues.description || '';
+				dueDate = initialValues.dueDate ? initialValues.dueDate.toISOString().split('T')[0] : '';
+				dueDateType = initialValues.dueDateType || 'soft';
+				priority = initialValues.priority || 'normal';
+				areaId = initialValues.areaId || '';
 			} else {
 				// Create mode: reset form
 				title = '';

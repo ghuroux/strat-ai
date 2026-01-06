@@ -43,10 +43,9 @@
 	});
 
 	// Get completed tasks for this space (for Recently Completed section)
+	// Include subtasks - RecentlyCompletedSection will handle filtering for different views
 	let completedTasks = $derived.by(() => {
-		return taskStore
-			.getTasksForSpaceId(spaceId)
-			.filter((t) => !t.parentTaskId && t.status === 'completed');
+		return taskStore.getTasksForSpaceId(spaceId).filter((t) => t.status === 'completed');
 	});
 
 	// Helper functions for date comparisons

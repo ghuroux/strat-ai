@@ -11,6 +11,8 @@
 -->
 <script lang="ts">
 	import type { Task } from '$lib/types/tasks';
+	import { getGreeting } from '$lib/utils/temporal-context';
+	import { browser } from '$app/environment';
 
 	interface Props {
 		tasks: Task[];
@@ -32,16 +34,22 @@
 		onTaskClick
 	}: Props = $props();
 
+	// Get temporal greeting (only in browser, since it uses localStorage)
+	const greeting = browser ? getGreeting() : 'Good morning';
+
 	// Generate contextual message based on current state
+	// Combines temporal greeting with task status
 	let contextMessage = $derived.by(() => {
+		// Build status part first
+		let status: string;
+
 		// Priority: overdue > today's workload > momentum > all clear
 		if (overdueCount > 0) {
-			return overdueCount === 1
-				? '1 overdue task needs attention'
-				: `${overdueCount} overdue tasks need attention`;
-		}
-
-		if (todayCount > 0) {
+			status =
+				overdueCount === 1
+					? '1 overdue task needs attention'
+					: `${overdueCount} overdue tasks need attention`;
+		} else if (todayCount > 0) {
 			const highPriorityToday = tasks.filter(
 				(t) =>
 					t.priority === 'high' &&
@@ -50,18 +58,21 @@
 			).length;
 
 			if (highPriorityToday > 0) {
-				return `${todayCount} task${todayCount === 1 ? '' : 's'} due today, ${highPriorityToday} high priority`;
+				status = `${todayCount} task${todayCount === 1 ? '' : 's'} due today, ${highPriorityToday} high priority`;
+			} else {
+				status = `${todayCount} task${todayCount === 1 ? '' : 's'} due today`;
 			}
-			return `${todayCount} task${todayCount === 1 ? '' : 's'} due today`;
+		} else if (completedToday > 0) {
+			status =
+				completedToday === 1
+					? "you've completed 1 task today"
+					: `you've completed ${completedToday} tasks today`;
+		} else {
+			status = 'all clear for today';
 		}
 
-		if (completedToday > 0) {
-			return completedToday === 1
-				? "You've completed 1 task today - keep it going"
-				: `You've completed ${completedToday} tasks today - nice momentum`;
-		}
-
-		return 'All clear for today';
+		// Combine greeting with status
+		return `${greeting} — ${status}`;
 	});
 
 	// Suggested task algorithm
