@@ -42,24 +42,25 @@ export interface Document {
 
 /**
  * Database row representation
+ * Note: postgres.js transforms column names to camelCase automatically
  */
 export interface DocumentRow {
 	id: string;
-	user_id: string;
-	space_id: string | null;
+	userId: string;
+	spaceId: string | null;
 	filename: string;
-	mime_type: string;
-	file_size: number;
-	char_count: number;
-	page_count: number | null;
+	mimeType: string;
+	fileSize: number;
+	charCount: number;
+	pageCount: number | null;
 	content: string;
-	content_hash: string;
+	contentHash: string;
 	title: string | null;
 	summary: string | null;
 	truncated: boolean;
-	created_at: Date;
-	updated_at: Date;
-	deleted_at: Date | null;
+	createdAt: Date;
+	updatedAt: Date;
+	deletedAt: Date | null;
 }
 
 /**
@@ -76,14 +77,15 @@ export interface TaskDocument {
 
 /**
  * Database row for task_documents junction
+ * Note: postgres.js transforms column names to camelCase automatically
  */
 export interface TaskDocumentRow {
 	id: string;
-	task_id: string;
-	document_id: string;
-	context_role: string;
-	context_note: string | null;
-	created_at: Date;
+	taskId: string;
+	documentId: string;
+	contextRole: string;
+	contextNote: string | null;
+	createdAt: Date;
 }
 
 /**
@@ -142,38 +144,40 @@ export interface DocumentSummary {
 
 /**
  * Convert database row to Document entity
+ * Note: postgres.js auto-transforms snake_case to camelCase
  */
 export function rowToDocument(row: DocumentRow): Document {
 	return {
 		id: row.id,
-		userId: row.user_id,
-		spaceId: row.space_id ?? undefined,
+		userId: row.userId,
+		spaceId: row.spaceId ?? undefined,
 		filename: row.filename,
-		mimeType: row.mime_type,
-		fileSize: row.file_size,
-		charCount: row.char_count,
-		pageCount: row.page_count ?? undefined,
+		mimeType: row.mimeType,
+		fileSize: row.fileSize,
+		charCount: row.charCount,
+		pageCount: row.pageCount ?? undefined,
 		content: row.content,
-		contentHash: row.content_hash,
+		contentHash: row.contentHash,
 		title: row.title ?? undefined,
 		summary: row.summary ?? undefined,
 		truncated: row.truncated,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at,
-		deletedAt: row.deleted_at ?? undefined
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt,
+		deletedAt: row.deletedAt ?? undefined
 	};
 }
 
 /**
  * Convert task_documents row to TaskDocument
+ * Note: postgres.js auto-transforms snake_case to camelCase
  */
 export function rowToTaskDocument(row: TaskDocumentRow): TaskDocument {
 	return {
 		id: row.id,
-		taskId: row.task_id,
-		documentId: row.document_id,
-		contextRole: row.context_role as DocumentContextRole,
-		contextNote: row.context_note ?? undefined,
-		createdAt: row.created_at
+		taskId: row.taskId,
+		documentId: row.documentId,
+		contextRole: row.contextRole as DocumentContextRole,
+		contextNote: row.contextNote ?? undefined,
+		createdAt: row.createdAt
 	};
 }
