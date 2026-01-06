@@ -105,7 +105,53 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-06 (Task Dashboard & Scaling UX)
+### Latest: 2026-01-06 (Panel Infrastructure & Task Suggestions)
+
+**Completed:**
+
+*Phase 1 - Foundation (Panel Infrastructure):*
+- `PanelBase.svelte` - shared scaffolding for slide-out panels
+- `TasksPanel.svelte` - area tasks panel with complete/add actions
+- `DocsPanel.svelte` - documents panel with drag-drop upload
+- `AreaHeader.svelte` - extracted header component with tools cluster
+
+*UI Improvements:*
+- Integrated panels into Area page with tool icons in header
+- Moved conversations icon to tools cluster (Chats, Tasks, Docs as equal CTAs)
+- Removed task chips bar (tasks now accessible via panel)
+- Cleaned up orphaned CSS (task bar styles, old drawer toggle styles)
+
+*Phase 3 - Intelligence (Task Suggestions):*
+- `task-suggestion-parser.ts` - parses AI responses for `[TASK_SUGGEST]` markers
+- `TASK_DETECTION_PROMPT` in system-prompts.ts - teaches AI to detect actionable items
+- `TaskSuggestionCard.svelte` - inline suggestion card after AI messages
+- `TaskModal.svelte` - added `initialValues` prop for pre-filling from suggestions
+- Integrated suggestion parsing, display, and accept/dismiss handlers in Area page
+
+*Additional:*
+- `temporal-context.ts` - utility for temporal awareness (scaffolding)
+
+**Files Created:**
+- `src/lib/components/areas/panels/PanelBase.svelte`
+- `src/lib/components/areas/panels/TasksPanel.svelte`
+- `src/lib/components/areas/panels/DocsPanel.svelte`
+- `src/lib/components/areas/AreaHeader.svelte`
+- `src/lib/components/areas/suggestions/TaskSuggestionCard.svelte`
+- `src/lib/utils/task-suggestion-parser.ts`
+- `src/lib/utils/temporal-context.ts`
+
+**Files Modified:**
+- `src/lib/components/areas/index.ts`
+- `src/lib/config/system-prompts.ts`
+- `src/lib/components/spaces/TaskModal.svelte`
+- `src/routes/spaces/[space]/[area]/+page.svelte`
+
+**Next steps:**
+- Continue Phase 0.3e: Temporal Awareness (day change detection, cleanup offers)
+- Add keyboard shortcuts for common task actions
+- Wire up DocsPanel to actual document API
+
+### Previous: 2026-01-06 (Task Dashboard & Scaling UX)
 
 **Completed:**
 
