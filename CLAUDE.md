@@ -107,51 +107,53 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-06 (Panel Infrastructure & Task Suggestions)
+### Latest: 2026-01-06 (Task Focus UX & Navigation Fixes)
 
 **Completed:**
 
-*Phase 1 - Foundation (Panel Infrastructure):*
-- `PanelBase.svelte` - shared scaffolding for slide-out panels
-- `TasksPanel.svelte` - area tasks panel with complete/add actions
-- `DocsPanel.svelte` - documents panel with drag-drop upload
-- `AreaHeader.svelte` - extracted header component with tools cluster
+*Navigation & UX Fixes:*
+- Fixed "Open Task Focus" to preserve current conversation via `conversationId` query param
+- Hidden empty subtasks panel - only shows when subtasks actually exist (~90 lines dead CSS removed)
+- Added context isolation: clears conversation when entering area if it doesn't belong to that area
+- Cleaner, less cluttered task focus experience for simple tasks
 
-*UI Improvements:*
-- Integrated panels into Area page with tool icons in header
-- Moved conversations icon to tools cluster (Chats, Tasks, Docs as equal CTAs)
-- Removed task chips bar (tasks now accessible via panel)
-- Cleaned up orphaned CSS (task bar styles, old drawer toggle styles)
+*Model Display Improvements:*
+- `ModelBadge.svelte` - compact badge showing locked model when conversation has messages
+- Model selector shown only when starting new conversation, badge shown once locked
+- `model-display.ts` utility for consistent model name formatting
 
-*Phase 3 - Intelligence (Task Suggestions):*
-- `task-suggestion-parser.ts` - parses AI responses for `[TASK_SUGGEST]` markers
-- `TASK_DETECTION_PROMPT` in system-prompts.ts - teaches AI to detect actionable items
-- `TaskSuggestionCard.svelte` - inline suggestion card after AI messages
-- `TaskModal.svelte` - added `initialValues` prop for pre-filling from suggestions
-- Integrated suggestion parsing, display, and accept/dismiss handlers in Area page
+*Panel Refactoring:*
+- Renamed `DocsPanel` to `ContextPanel` for better semantic naming
+- Added `SpaceSettingsPanel.svelte` and `TaskPanel.svelte` components
+- Refactored `TasksSection.svelte` with collapsible sections and enhanced filtering
 
-*Additional:*
-- `temporal-context.ts` - utility for temporal awareness (scaffolding)
+*Data Model:*
+- Added `estimated_effort` field to tasks (migration `010-tasks-estimated-effort.sql`)
 
 **Files Created:**
-- `src/lib/components/areas/panels/PanelBase.svelte`
-- `src/lib/components/areas/panels/TasksPanel.svelte`
-- `src/lib/components/areas/panels/DocsPanel.svelte`
-- `src/lib/components/areas/AreaHeader.svelte`
-- `src/lib/components/areas/suggestions/TaskSuggestionCard.svelte`
-- `src/lib/utils/task-suggestion-parser.ts`
-- `src/lib/utils/temporal-context.ts`
+- `src/lib/components/ModelBadge.svelte`
+- `src/lib/components/areas/panels/ContextPanel.svelte`
+- `src/lib/components/spaces/SpaceSettingsPanel.svelte`
+- `src/lib/components/spaces/TaskPanel.svelte`
+- `src/lib/server/persistence/migrations/010-tasks-estimated-effort.sql`
+- `src/lib/utils/model-display.ts`
 
 **Files Modified:**
-- `src/lib/components/areas/index.ts`
-- `src/lib/config/system-prompts.ts`
-- `src/lib/components/spaces/TaskModal.svelte`
 - `src/routes/spaces/[space]/[area]/+page.svelte`
+- `src/routes/spaces/[space]/task/[taskId]/+page.svelte`
+- `src/lib/components/spaces/TasksSection.svelte`
+- `src/lib/components/spaces/SpaceDashboard.svelte`
+- `src/lib/types/tasks.ts`
+
+**BEFORE NEXT SESSION - Run migration:**
+```bash
+psql -d stratai -f src/lib/server/persistence/migrations/010-tasks-estimated-effort.sql
+```
 
 **Next steps:**
-- Continue Phase 0.3e: Temporal Awareness (day change detection, cleanup offers)
-- Add keyboard shortcuts for common task actions
-- Wire up DocsPanel to actual document API
+- Continue Phase 0.3e: Day Change Detection + Cleanup Offers
+- Wire up ContextPanel to actual document API
+- Test task creation and navigation end-to-end
 
 ### Previous: 2026-01-06 (Task Dashboard & Scaling UX)
 
