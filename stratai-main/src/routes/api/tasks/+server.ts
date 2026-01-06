@@ -87,13 +87,14 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Check if bulk create
 		if (body.tasks && Array.isArray(body.tasks)) {
-			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string; areaId?: string }) => ({
+			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string; estimatedEffort?: string; areaId?: string }) => ({
 				title: t.title,
 				spaceId: resolvedSpaceId,
 				areaId: t.areaId ?? body.areaId, // Per-task or bulk level
 				priority: t.priority,
 				dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
 				dueDateType: t.dueDateType,
+				estimatedEffort: t.estimatedEffort,
 				source: body.source
 			}));
 
@@ -115,6 +116,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			priority: body.priority,
 			dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
 			dueDateType: body.dueDateType,
+			estimatedEffort: body.estimatedEffort,
 			source: body.source
 		};
 

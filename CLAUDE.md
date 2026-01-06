@@ -75,6 +75,8 @@ Don't revisit without good reason:
 | PostgreSQL | Enterprise-ready, supports team features |
 | AWS Bedrock us-east-1 | Max model availability; use `us.*` inference profile IDs |
 | Areas (not Focus Areas) | Cleaner naming, navigable sub-spaces |
+| Documents at Space-level | Avoids duplication across areas; per-area activation via `contextDocumentIds` |
+| Context Panel (not DocsPanel) | Single panel for "what AI knows": area notes + document activation toggles |
 
 ---
 

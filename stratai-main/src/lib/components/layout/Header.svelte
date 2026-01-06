@@ -6,6 +6,7 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import ModelSelector from '../ModelSelector.svelte';
+	import ModelBadge from '../ModelBadge.svelte';
 	import { SpaceModal } from '../spaces';
 	import type { CreateSpaceInput, UpdateSpaceInput, Space } from '$lib/types/spaces';
 	import { MAX_CUSTOM_SPACES } from '$lib/types/spaces';
@@ -32,6 +33,13 @@
 		const path = $page.url.pathname;
 		const match = path.match(/^\/spaces\/([^/]+)/);
 		return match ? match[1] : null;
+	});
+
+	// Detect if we're on the Space Dashboard (not area or task page)
+	// Pattern: /spaces/[space] but NOT /spaces/[space]/[anything]
+	let isSpaceDashboard = $derived.by(() => {
+		const path = $page.url.pathname;
+		return /^\/spaces\/[^/]+\/?$/.test(path);
 	});
 
 	onMount(() => {
@@ -193,6 +201,17 @@
 					</svg>
 				</button>
 			{/if}
+
+			<!-- All Spaces Link -->
+			<a
+				href="/spaces"
+				class="space-nav-all"
+				title="View all spaces"
+			>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+				</svg>
+			</a>
 		</nav>
 
 		<!-- Mobile Spaces Link -->
@@ -222,8 +241,11 @@
 		</a>
 	</div>
 
-	<!-- Center: Model Selector (only show when no messages in active conversation) -->
-	{#if !chatStore.messages || chatStore.messages.length === 0}
+	<!-- Center: Model Selector (hide on Space Dashboard, show when no messages elsewhere) -->
+	{#if isSpaceDashboard}
+		<!-- No model selector on Space Dashboard -->
+		<div class="flex-1"></div>
+	{:else if !chatStore.messages || chatStore.messages.length === 0}
 		<div class="flex-1 flex justify-center">
 			<div class="w-full max-w-xs">
 				<ModelSelector {selectedModel} disabled={chatStore.isStreaming} onchange={handleModelChange} />
@@ -235,12 +257,9 @@
 
 	<!-- Right: Actions -->
 	<div class="flex items-center gap-2">
-		<!-- Current conversation model badge (show when chat has messages) -->
-		{#if chatStore.messages && chatStore.messages.length > 0 && chatStore.activeConversation}
-			<span class="flex items-center gap-1.5 px-3 py-1.5 bg-surface-800 rounded-lg text-xs text-surface-400">
-				<span class="w-2 h-2 rounded-full bg-accent-500"></span>
-				{chatStore.activeConversation.model.split('/').pop()}
-			</span>
+		<!-- Current conversation model badge (hide on Space Dashboard, show when chat has messages) -->
+		{#if !isSpaceDashboard && chatStore.messages && chatStore.messages.length > 0 && chatStore.activeConversation}
+			<ModelBadge model={chatStore.activeConversation.model} />
 		{/if}
 
 		<!-- Settings -->
@@ -326,6 +345,22 @@
 		color: rgba(255, 255, 255, 0.8);
 		border-color: rgba(255, 255, 255, 0.4);
 		background: rgba(255, 255, 255, 0.05);
+	}
+
+	.space-nav-all {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		color: rgba(255, 255, 255, 0.4);
+		border-radius: 0.375rem;
+		transition: all 0.15s ease;
+	}
+
+	.space-nav-all:hover {
+		color: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.08);
 	}
 
 	.space-nav-edit {

@@ -59,6 +59,9 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		if (body.dueDateType !== undefined) {
 			updates.dueDateType = body.dueDateType || null;
 		}
+		if (body.estimatedEffort !== undefined) {
+			updates.estimatedEffort = body.estimatedEffort || null;
+		}
 		if (body.completionNotes !== undefined) updates.completionNotes = body.completionNotes;
 		if (body.description !== undefined) updates.description = body.description;
 		if (body.staleDismissedAt !== undefined) {

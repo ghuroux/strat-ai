@@ -457,6 +457,51 @@ Brain dump → AI extracts tasks → Confirm in WorkingPanel → Priority check 
 
 ---
 
+### Phase 0.3e+: Context Panel (Area Context Management)
+**Goal**: Single UI for managing "what the AI knows" about an area
+
+> **Core Insight**: Users need one place to answer "What context does the AI have?" - combining area notes and document activation.
+
+**Data Model** (Already Exists):
+- [x] `area.context` - Free-form markdown notes
+- [x] `area.contextDocumentIds` - Array of activated document IDs
+- [x] Documents stored at space-level (avoids duplication across areas)
+- [x] Per-area activation via `contextDocumentIds`
+
+**Context Panel UI** (Replaces DocsPanel):
+- [ ] Rename `DocsPanel` → `ContextPanel`
+- [ ] **Area Notes Section**: View/edit `area.context` inline
+- [ ] **Documents Section**: Single list with activation checkboxes
+- [ ] Search bar (scales to 50+ docs)
+- [ ] Character count display (context budget awareness)
+- [ ] Upload zone with auto-activation
+
+**Document Activation UX**:
+- [ ] Checkbox = in/out of `contextDocumentIds`
+- [ ] Upload → auto-activated (checked by default)
+- [ ] Toggle off = stays in space, not in this area's context
+- [ ] Delete = permanent removal from space (with confirmation)
+
+**Scalability Path**:
+- Phase 1 (MVP): Single list with checkboxes + search
+- Phase 2: Collapsible "Active" / "Available" sections when >15 docs
+- Phase 3: Optional folders/tags when >30 docs
+
+**Wire-up**:
+- [ ] Update `area.context` via area API on notes save
+- [ ] Update `area.contextDocumentIds` via area API on toggle
+- [ ] Pass `area` object to ContextPanel (not just spaceId)
+
+**Success Criteria**:
+- Users manage all area context from one panel
+- Documents can be activated/deactivated without deletion
+- Same document usable in multiple areas
+- Character count shows context budget impact
+
+**Depends on**: Phase 0.3a (Areas)
+
+---
+
 ### Phase 0.3f: Form Pattern + Additional Templates
 **Goal**: Complete template variety with structured input
 

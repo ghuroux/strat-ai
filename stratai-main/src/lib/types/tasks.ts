@@ -29,6 +29,16 @@ export type TaskPriority = 'normal' | 'high';
 export type DueDateType = 'hard' | 'soft';
 
 /**
+ * Estimated effort/time for a task
+ * - quick: < 15 minutes
+ * - short: < 1 hour
+ * - medium: 1-4 hours
+ * - long: 4+ hours
+ * - multi_day: spans multiple days
+ */
+export type EstimatedEffort = 'quick' | 'short' | 'medium' | 'long' | 'multi_day';
+
+/**
  * Source of task creation
  */
 export type TaskSourceType = 'assist' | 'meeting' | 'chat' | 'manual';
@@ -61,6 +71,9 @@ export interface Task {
 	// Due dates
 	dueDate?: Date;
 	dueDateType?: DueDateType;
+
+	// Effort estimate
+	estimatedEffort?: EstimatedEffort;
 
 	// Completion
 	completedAt?: Date;
@@ -109,6 +122,7 @@ export interface CreateTaskInput {
 	priority?: TaskPriority;
 	dueDate?: Date;
 	dueDateType?: DueDateType;
+	estimatedEffort?: EstimatedEffort;
 	source?: TaskSource;
 }
 
@@ -123,6 +137,7 @@ export interface UpdateTaskInput {
 	areaId?: string | null;
 	dueDate?: Date | null;
 	dueDateType?: DueDateType | null;
+	estimatedEffort?: EstimatedEffort | null;
 	completionNotes?: string;
 	staleDismissedAt?: Date | null; // null to clear dismissal
 }
@@ -239,6 +254,7 @@ export interface TaskRow {
 	color: string;
 	dueDate: Date | null;
 	dueDateType: string | null;
+	estimatedEffort: string | null;
 	completedAt: Date | null;
 	completionNotes: string | null;
 	staleDismissedAt: Date | null;
@@ -299,6 +315,7 @@ export function rowToTask(row: TaskRow): Task {
 		color: row.color,
 		dueDate: row.dueDate ?? undefined,
 		dueDateType: (row.dueDateType as DueDateType) ?? undefined,
+		estimatedEffort: (row.estimatedEffort as EstimatedEffort) ?? undefined,
 		completedAt: row.completedAt ?? undefined,
 		completionNotes: row.completionNotes ?? undefined,
 		staleDismissedAt: row.staleDismissedAt ?? undefined,

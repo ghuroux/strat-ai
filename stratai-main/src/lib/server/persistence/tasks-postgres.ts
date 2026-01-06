@@ -59,6 +59,7 @@ function dbRowToTask(row: TaskRow): Task {
 		color: row.color,
 		dueDate: row.dueDate ?? undefined,
 		dueDateType: row.dueDateType as Task['dueDateType'] ?? undefined,
+		estimatedEffort: row.estimatedEffort as Task['estimatedEffort'] ?? undefined,
 		completedAt: row.completedAt ?? undefined,
 		completionNotes: row.completionNotes ?? undefined,
 		source: {
@@ -182,7 +183,7 @@ export const postgresTaskRepository: TaskRepository = {
 		await sql`
 			INSERT INTO tasks (
 				id, title, description, status, priority, color,
-				due_date, due_date_type,
+				due_date, due_date_type, estimated_effort,
 				source_type, source_assist_id, source_conversation_id,
 				area_id,
 				space_id, user_id,
@@ -196,6 +197,7 @@ export const postgresTaskRepository: TaskRepository = {
 				${color},
 				${input.dueDate ?? null},
 				${input.dueDateType ?? null},
+				${input.estimatedEffort ?? null},
 				${input.source?.type ?? 'manual'},
 				${input.source?.assistId ?? null},
 				${input.source?.conversationId ?? null},
@@ -264,6 +266,7 @@ export const postgresTaskRepository: TaskRepository = {
 				area_id = ${updates.areaId === null ? null : updates.areaId ?? sql`area_id`},
 				due_date = ${updates.dueDate === null ? null : updates.dueDate ?? sql`due_date`},
 				due_date_type = ${updates.dueDateType === null ? null : updates.dueDateType ?? sql`due_date_type`},
+				estimated_effort = ${updates.estimatedEffort === null ? null : updates.estimatedEffort ?? sql`estimated_effort`},
 				completion_notes = COALESCE(${updates.completionNotes ?? null}, completion_notes),
 				stale_dismissed_at = ${updates.staleDismissedAt === null ? null : updates.staleDismissedAt ?? sql`stale_dismissed_at`},
 				last_activity_at = NOW(),

@@ -14,8 +14,9 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { SpaceDashboard, SpaceModal } from '$lib/components/spaces';
+	import { SpaceDashboard, SpaceModal, SpaceSettingsPanel } from '$lib/components/spaces';
 	import { AreaModal } from '$lib/components/areas';
+	import Header from '$lib/components/layout/Header.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -82,6 +83,7 @@
 	let showAreaModal = $state(false);
 	let editingArea = $state<Area | null>(null);
 	let showSpaceModal = $state(false);
+	let showSettingsPanel = $state(false);
 	let isLoading = $state(true);
 
 	// Load data on mount
@@ -148,17 +150,20 @@
 	}
 
 	// Space settings handlers
-	function handleOpenSettings() {
-		showSpaceModal = true;
-	}
-
 	function handleCloseSpaceModal() {
 		showSpaceModal = false;
 	}
 
 	async function handleSpaceUpdate(id: string, updates: any) {
 		await spacesStore.updateSpace(id, updates);
-		showSpaceModal = false;
+	}
+
+	async function handleSpaceDelete(id: string) {
+		const success = await spacesStore.deleteSpace(id);
+		if (success) {
+			toastStore.success('Space deleted');
+			goto('/spaces');
+		}
 	}
 
 	// Task handlers
@@ -180,20 +185,23 @@
 	<title>{space?.name || 'Space'} | StratAI</title>
 </svelte:head>
 
-{#if isLoading}
-	<div class="loading-container">
-		<div class="loading-spinner"></div>
-		<p>Loading...</p>
-	</div>
-{:else if space}
-	<SpaceDashboard
+<div class="page-container">
+	<!-- Global Header for navigation -->
+	<Header onSettingsClick={() => showSettingsPanel = true} />
+
+	{#if isLoading}
+		<div class="loading-container">
+			<div class="loading-spinner"></div>
+			<p>Loading...</p>
+		</div>
+	{:else if space}
+		<SpaceDashboard
 		{space}
 		areas={areasWithStats}
 		{recentConversations}
 		{activeTasks}
 		spaceSlug={spaceParam || ''}
 		onCreateArea={handleCreateArea}
-		onOpenSettings={handleOpenSettings}
 		onTaskClick={handleTaskClick}
 		onCreateTask={handleCreateTask}
 	/>
@@ -209,7 +217,18 @@
 		onDelete={handleAreaDelete}
 	/>
 
-	<!-- Space Settings Modal -->
+	<!-- Space Settings Panel -->
+	{#if spaceFromStore}
+		<SpaceSettingsPanel
+			isOpen={showSettingsPanel}
+			space={spaceFromStore}
+			onClose={() => showSettingsPanel = false}
+			onUpdate={handleSpaceUpdate}
+			onDelete={handleSpaceDelete}
+		/>
+	{/if}
+
+	<!-- Space Settings Modal (for creation) -->
 	{#if spaceFromStore}
 		<SpaceModal
 			open={showSpaceModal}
@@ -220,20 +239,33 @@
 		/>
 	{/if}
 {:else}
-	<div class="error-container">
-		<h1>Space not found</h1>
-		<p>The space you're looking for doesn't exist.</p>
-		<a href="/spaces" class="back-link">Back to spaces</a>
-	</div>
-{/if}
+		<div class="error-container">
+			<h1>Space not found</h1>
+			<p>The space you're looking for doesn't exist.</p>
+			<a href="/spaces" class="back-link">Back to spaces</a>
+		</div>
+	{/if}
+</div>
 
 <style>
+	.page-container {
+		height: 100vh;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	/* SpaceDashboard fills remaining space */
+	.page-container :global(.dashboard) {
+		flex: 1;
+		overflow-y: auto;
+	}
 	.loading-container {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		height: 100%;
+		flex: 1;
 		gap: 1rem;
 		color: rgba(255, 255, 255, 0.5);
 	}
@@ -258,7 +290,7 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		height: 100%;
+		flex: 1;
 		gap: 1rem;
 		text-align: center;
 		padding: 2rem;

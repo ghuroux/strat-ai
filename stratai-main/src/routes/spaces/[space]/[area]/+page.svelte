@@ -21,10 +21,11 @@
 	import ConversationSummary from '$lib/components/chat/ConversationSummary.svelte';
 	import SessionSeparator from '$lib/components/chat/SessionSeparator.svelte';
 	import ModelSelector from '$lib/components/ModelSelector.svelte';
+	import ModelBadge from '$lib/components/ModelBadge.svelte';
 	import SecondOpinionPanel from '$lib/components/chat/SecondOpinionPanel.svelte';
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
-	import { TasksPanel, DocsPanel, TaskSuggestionCard } from '$lib/components/areas';
+	import { TasksPanel, ContextPanel, TaskSuggestionCard } from '$lib/components/areas';
 	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
 	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -174,7 +175,7 @@
 
 	// Panel states
 	let tasksPanelOpen = $state(false);
-	let docsPanelOpen = $state(false);
+	let contextPanelOpen = $state(false);
 	let taskModalOpen = $state(false);
 
 	// Task suggestion state
@@ -287,6 +288,13 @@
 		const conversationId = $page.url.searchParams.get('conversation');
 		if (conversationId) {
 			chatStore.setActiveConversation(conversationId);
+		} else {
+			// Context isolation: If current active conversation doesn't belong to this area,
+			// clear it so the Welcome Screen shows (user can continue via "Continue where you left off")
+			const currentConv = chatStore.activeConversation;
+			if (currentConv && currentConv.areaId !== loadedArea.id) {
+				chatStore.setActiveConversation(null);
+			}
 		}
 
 		isLoading = false;
@@ -725,6 +733,11 @@
 		goto(`/spaces/${spaceParam}/task/${taskId}`);
 	}
 
+	// Handle area context/document updates from ContextPanel
+	async function handleAreaUpdate(areaId: string, updates: { context?: string; contextDocumentIds?: string[] }) {
+		await areaStore.updateArea(areaId, updates);
+	}
+
 	// Task creation handler (from TasksPanel)
 	async function handleCreateTask(input: CreateTaskInput): Promise<Task | null> {
 		// Pre-fill with current area if not specified
@@ -794,9 +807,12 @@
 	}
 
 	// Open Task Focus mode for the linked task
+	// Preserve the current conversation so the user sees the same one in task focus
 	function handleOpenTaskFocus() {
 		if (!linkedTask) return;
-		goto(`/spaces/${spaceParam}/task/${linkedTask.id}`);
+		const convId = chatStore.activeConversation?.id;
+		const url = `/spaces/${spaceParam}/task/${linkedTask.id}${convId ? `?conversationId=${convId}` : ''}`;
+		goto(url);
 	}
 
 	// ============================================
@@ -1173,8 +1189,8 @@
 				<button
 					type="button"
 					class="tool-button"
-					onclick={() => docsPanelOpen = true}
-					title="Documents ({spaceDocCount})"
+					onclick={() => contextPanelOpen = true}
+					title="Context ({spaceDocCount} docs)"
 				>
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -1186,10 +1202,15 @@
 			</div>
 
 			<div class="header-right">
-				<ModelSelector
-					selectedModel={effectiveModel}
-					onchange={handleModelChange}
-				/>
+				<!-- Model: Selector when no messages, Badge when locked -->
+				{#if messages.length === 0}
+					<ModelSelector
+						selectedModel={effectiveModel}
+						onchange={handleModelChange}
+					/>
+				{:else}
+					<ModelBadge model={effectiveModel} />
+				{/if}
 				<button
 					type="button"
 					class="new-chat-button"
@@ -1360,13 +1381,17 @@
 			onTaskClick={(task) => goToTask(task.id)}
 		/>
 
-		<!-- Docs Panel -->
-		<DocsPanel
-			isOpen={docsPanelOpen}
-			spaceId={properSpaceId}
-			spaceColor={areaColor}
-			onClose={() => docsPanelOpen = false}
-		/>
+		<!-- Context Panel -->
+		{#if area}
+			<ContextPanel
+				isOpen={contextPanelOpen}
+				{area}
+				spaceId={properSpaceId}
+				spaceColor={areaColor}
+				onClose={() => contextPanelOpen = false}
+				onAreaUpdate={handleAreaUpdate}
+			/>
+		{/if}
 
 		<!-- Task Modal -->
 		<TaskModal

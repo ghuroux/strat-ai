@@ -26,6 +26,7 @@
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
 	import ModelSelector from '$lib/components/ModelSelector.svelte';
+	import ModelBadge from '$lib/components/ModelBadge.svelte';
 	import PlanModePanel from '$lib/components/tasks/PlanModePanel.svelte';
 	import PlanModeConfirmation from '$lib/components/tasks/PlanModeConfirmation.svelte';
 	import SubtaskDashboard from '$lib/components/tasks/SubtaskDashboard.svelte';
@@ -41,8 +42,9 @@
 	let spaceParam = $derived($page.params.space);
 	let taskIdParam = $derived($page.params.taskId);
 
-	// Query params - used for forcing specific view mode
+	// Query params - used for forcing specific view mode or conversation
 	let viewParam = $derived($page.url.searchParams.get('view'));
+	let conversationIdParam = $derived($page.url.searchParams.get('conversationId'));
 
 	// Task from store
 	let task = $derived(taskIdParam ? taskStore.getTask(taskIdParam) : undefined);
@@ -210,13 +212,23 @@
 		// Load conversations
 		await chatStore.refresh();
 
-		// Find and set most recent conversation for this task (initial load)
-		// getConversationsForTask returns sorted by updatedAt DESC
-		const taskConvs = chatStore.getConversationsForTask(taskIdParam);
-		if (taskConvs.length > 0) {
-			chatStore.setActiveConversation(taskConvs[0].id);
+		// Set active conversation - prefer explicit conversationId param (from navigation)
+		// Otherwise fall back to most recent conversation for this task
+		const requestedConvId = $page.url.searchParams.get('conversationId');
+		if (requestedConvId) {
+			// Verify the conversation exists and belongs to this task
+			const conv = chatStore.getConversation(requestedConvId);
+			if (conv && conv.taskId === taskIdParam) {
+				chatStore.setActiveConversation(requestedConvId);
+			} else {
+				// Fallback to most recent if requested conv is invalid
+				const taskConvs = chatStore.getConversationsForTask(taskIdParam);
+				chatStore.setActiveConversation(taskConvs.length > 0 ? taskConvs[0].id : null);
+			}
 		} else {
-			chatStore.setActiveConversation(null);
+			// No explicit conversation - use most recent for this task
+			const taskConvs = chatStore.getConversationsForTask(taskIdParam);
+			chatStore.setActiveConversation(taskConvs.length > 0 ? taskConvs[0].id : null);
 		}
 
 		// Set current task ID (for subsequent navigation detection)
@@ -230,29 +242,31 @@
 		const newTaskId = taskIdParam;
 		if (!newTaskId || isLoading) return;
 
+		// Helper to set conversation - respects conversationId param if valid
+		function setConversationForTask(taskId: string) {
+			const requestedConvId = conversationIdParam;
+			if (requestedConvId) {
+				const conv = chatStore.getConversation(requestedConvId);
+				if (conv && conv.taskId === taskId) {
+					chatStore.setActiveConversation(requestedConvId);
+					return;
+				}
+			}
+			// Fallback to most recent conversation for this task
+			const taskConvs = chatStore.getConversationsForTask(taskId);
+			chatStore.setActiveConversation(taskConvs.length > 0 ? taskConvs[0].id : null);
+		}
+
 		// Only run when task actually changes (not on initial load)
 		if (currentTaskId && currentTaskId !== newTaskId) {
-			// Task changed - update focus and find most recent conversation for new task
+			// Task changed - update focus and find conversation
 			taskStore.setFocusedTask(newTaskId);
 			taskStore.loadTaskContext(newTaskId);
-
-			const taskConvs = chatStore.getConversationsForTask(newTaskId);
-			if (taskConvs.length > 0) {
-				chatStore.setActiveConversation(taskConvs[0].id);
-			} else {
-				// No conversation for this task - clear active conversation
-				chatStore.setActiveConversation(null);
-			}
+			setConversationForTask(newTaskId);
 			currentTaskId = newTaskId;
 		} else if (!currentTaskId && newTaskId) {
-			// Initial load - find most recent conversation for this task
-			const taskConvs = chatStore.getConversationsForTask(newTaskId);
-			if (taskConvs.length > 0) {
-				chatStore.setActiveConversation(taskConvs[0].id);
-			} else {
-				// No conversation for this task - ensure no stale conversation showing
-				chatStore.setActiveConversation(null);
-			}
+			// Initial load via effect - find conversation for this task
+			setConversationForTask(newTaskId);
 			currentTaskId = newTaskId;
 		}
 	});
@@ -1187,10 +1201,15 @@
 				{/if}
 
 				{#if viewMode === 'chat'}
-					<ModelSelector selectedModel={effectiveModel} onchange={handleModelChange} />
+					<!-- Model: Selector when no messages, Badge when locked -->
+					{#if messages.length === 0}
+						<ModelSelector selectedModel={effectiveModel} onchange={handleModelChange} />
+					{:else}
+						<ModelBadge model={effectiveModel} />
+					{/if}
 				{/if}
 
-				{#if viewMode === 'chat' && !isPlanModeActive}
+				{#if viewMode === 'chat' && !isPlanModeActive && panelSubtasks.length > 0}
 					<button
 						type="button"
 						class="panel-toggle"
@@ -1207,7 +1226,7 @@
 		</header>
 
 		<!-- Main Content Area -->
-		<div class="task-content" class:with-panel={showSubtaskPanel && !isPlanModeActive && !showConfirmingView && viewMode === 'chat'}>
+		<div class="task-content" class:with-panel={showSubtaskPanel && !isPlanModeActive && !showConfirmingView && viewMode === 'chat' && panelSubtasks.length > 0}>
 			{#if showPlanConfirmation && task}
 				<!-- Plan Completion Confirmation View -->
 				<PlanModeConfirmation
@@ -1476,7 +1495,7 @@
 			</div>
 
 			<!-- Subtask Panel (when not in Plan Mode, only in chat view) -->
-			{#if showSubtaskPanel && !isPlanModeActive && viewMode === 'chat'}
+			{#if showSubtaskPanel && !isPlanModeActive && viewMode === 'chat' && panelSubtasks.length > 0}
 				<aside class="subtask-panel" transition:fly={{ x: 300, duration: 200 }}>
 					<div class="panel-header">
 						<h3 class="panel-title">
@@ -1495,29 +1514,7 @@
 					</div>
 
 					<div class="panel-content">
-						{#if panelSubtasks.length === 0}
-							<div class="empty-subtasks">
-								<div class="helper-icon">
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-									</svg>
-								</div>
-								<p class="helper-title">No subtasks yet</p>
-								<p class="helper-desc">
-									{#if !isSubtask}
-										Chat about your task and the AI will help break it into actionable steps.
-									{:else}
-										Work through this subtask with AI assistance.
-									{/if}
-								</p>
-								{#if !isSubtask}
-									<button type="button" class="add-subtask-hint" onclick={handleStartPlanMode}>
-										Let the AI help me plan →
-									</button>
-								{/if}
-							</div>
-						{:else}
-							<div class="subtask-list">
+						<div class="subtask-list">
 								{#each panelSubtasks as panelSubtask (panelSubtask.id)}
 									{@const isCompleted = panelSubtask.status === 'completed'}
 									{@const isConversation = panelSubtask.subtaskType === 'conversation'}
@@ -1578,20 +1575,8 @@
 										{/if}
 									</div>
 								{/each}
-							</div>
-						{/if}
-					</div>
-
-					{#if !isSubtask && subtasks.length === 0}
-						<div class="panel-footer">
-							<button type="button" class="plan-mode-cta" onclick={handleStartPlanMode}>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-									<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-								</svg>
-								Help me plan this task
-							</button>
 						</div>
-					{/if}
+					</div>
 				</aside>
 			{/if}
 			{/if}
@@ -2187,65 +2172,6 @@
 		padding: 0.5rem;
 	}
 
-	.empty-subtasks {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		height: 100%;
-		padding: 1.5rem 1rem;
-		text-align: center;
-	}
-
-	.helper-icon {
-		width: 2.5rem;
-		height: 2.5rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: rgba(255, 255, 255, 0.05);
-		border-radius: 0.75rem;
-		margin-bottom: 0.75rem;
-	}
-
-	.helper-icon svg {
-		width: 1.25rem;
-		height: 1.25rem;
-		color: var(--space-accent, #3b82f6);
-		opacity: 0.8;
-	}
-
-	.helper-title {
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: rgba(255, 255, 255, 0.6);
-		margin: 0 0 0.375rem 0;
-	}
-
-	.helper-desc {
-		font-size: 0.75rem;
-		color: rgba(255, 255, 255, 0.4);
-		margin: 0 0 1rem 0;
-		line-height: 1.5;
-		max-width: 200px;
-	}
-
-	.add-subtask-hint {
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--space-accent, #3b82f6);
-		background: rgba(59, 130, 246, 0.1);
-		border: none;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		padding: 0.5rem 0.875rem;
-		transition: all 0.15s ease;
-	}
-
-	.add-subtask-hint:hover {
-		background: rgba(59, 130, 246, 0.2);
-	}
-
 	.subtask-list {
 		display: flex;
 		flex-direction: column;
@@ -2356,38 +2282,6 @@
 		width: 1rem;
 		height: 1rem;
 		color: rgba(255, 255, 255, 0.3);
-	}
-
-	.panel-footer {
-		padding: 0.75rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.06);
-	}
-
-	.plan-mode-cta {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.625rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--space-accent, #3b82f6);
-		background: rgba(59, 130, 246, 0.1);
-		border: 1px dashed rgba(59, 130, 246, 0.3);
-		border-radius: 0.5rem;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.plan-mode-cta:hover {
-		background: rgba(59, 130, 246, 0.15);
-		border-color: rgba(59, 130, 246, 0.5);
-	}
-
-	.plan-mode-cta svg {
-		width: 1rem;
-		height: 1rem;
 	}
 
 	/* Scrollbar */
