@@ -30,6 +30,26 @@ function generateSpaceId(): string {
 	return `sp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
+/**
+ * Resolve a space identifier (slug or ID) to the proper space ID.
+ * This handles the legacy case where slugs were used as IDs.
+ *
+ * @param identifier - Either a space slug (e.g., 'work') or a proper ID (e.g., 'sp_...')
+ * @param userId - The user ID to scope the lookup
+ * @returns The proper space ID, or null if not found
+ */
+export async function resolveSpaceId(identifier: string, userId: string): Promise<string | null> {
+	// If it looks like a proper ID, verify it exists and return it
+	if (identifier.startsWith('sp_')) {
+		const space = await postgresSpaceRepository.findById(identifier, userId);
+		return space?.id ?? null;
+	}
+
+	// Otherwise, treat as a slug and look up the proper ID
+	const space = await postgresSpaceRepository.findBySlug(identifier, userId);
+	return space?.id ?? null;
+}
+
 export const postgresSpaceRepository: SpaceRepository = {
 	/**
 	 * Find all spaces for a user (system + custom)

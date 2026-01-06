@@ -10,6 +10,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
+import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
 import type { CreateAreaInput } from '$lib/types/areas';
 
 // Default user ID for POC (will be replaced with auth in Phase 0.4)
@@ -18,13 +19,23 @@ const DEFAULT_USER_ID = 'admin';
 /**
  * GET /api/areas
  * Query params:
- * - spaceId: Filter by space (work, research, etc.)
+ * - spaceId: Filter by space ID or slug (resolved to proper ID)
  */
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		const spaceId = url.searchParams.get('spaceId') ?? undefined;
+		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
 
-		const areas = await postgresAreaRepository.findAll(DEFAULT_USER_ID, spaceId);
+		// Resolve space identifier (slug or ID) to proper ID
+		let resolvedSpaceId: string | undefined;
+		if (spaceIdParam) {
+			const resolved = await resolveSpaceId(spaceIdParam, DEFAULT_USER_ID);
+			if (!resolved) {
+				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
+			}
+			resolvedSpaceId = resolved;
+		}
+
+		const areas = await postgresAreaRepository.findAll(DEFAULT_USER_ID, resolvedSpaceId);
 
 		return json({ areas });
 	} catch (error) {
@@ -42,6 +53,7 @@ export const GET: RequestHandler = async ({ url }) => {
 /**
  * POST /api/areas
  * Body: { spaceId, name, context?, contextDocumentIds?, color?, icon? }
+ * Note: spaceId can be a slug or proper ID - it will be resolved
  */
 export const POST: RequestHandler = async ({ request }) => {
 	try {
@@ -55,8 +67,14 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'name is required and must be a non-empty string' }, { status: 400 });
 		}
 
+		// Resolve space identifier to proper ID
+		const resolvedSpaceId = await resolveSpaceId(body.spaceId, DEFAULT_USER_ID);
+		if (!resolvedSpaceId) {
+			return json({ error: `Space not found: ${body.spaceId}` }, { status: 404 });
+		}
+
 		const input: CreateAreaInput = {
-			spaceId: body.spaceId,
+			spaceId: resolvedSpaceId,
 			name: body.name.trim(),
 			context: body.context,
 			contextDocumentIds: body.contextDocumentIds,

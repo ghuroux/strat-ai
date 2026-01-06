@@ -21,66 +21,28 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
-	import { SPACES, isValidSpace } from '$lib/config/spaces';
 	import type { Space } from '$lib/types/spaces';
 	import type { Area, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
-	import type { SpaceType } from '$lib/types/chat';
 	import type { CreateTaskInput, Task } from '$lib/types/tasks';
 
-	// Get space from route param
+	// Get space from route param (slug from URL)
 	let spaceParam = $derived($page.params.space);
 
-	// Get space from store (handles both system and custom spaces)
+	// Get space from store - ALWAYS use this for the proper ID
 	let spaceFromStore = $derived.by(() => {
 		if (!spaceParam) return null;
 		return spacesStore.getSpaceBySlug(spaceParam);
 	});
 
-	// Determine if this is a valid system space
-	let isSystemSpace = $derived(spaceParam ? isValidSpace(spaceParam) : false);
-
-	// Get space config (for system spaces) or construct from store (for custom)
-	let spaceConfig = $derived.by(() => {
-		if (isSystemSpace && spaceParam) {
-			const config = SPACES[spaceParam as keyof typeof SPACES];
-			return {
-				id: spaceParam,
-				slug: spaceParam,
-				name: config.name,
-				icon: config.icon,
-				color: config.accentColor,
-				context: '',
-				type: 'system' as const
-			} satisfies Partial<Space>;
-		}
-		if (spaceFromStore) {
-			return spaceFromStore;
-		}
-		return null;
-	});
-
-	// Construct a Space object for the dashboard
+	// Space object for the dashboard - always from store
 	let space = $derived.by((): Space | null => {
-		if (!spaceConfig) return null;
-		return {
-			id: spaceConfig.id || spaceParam || '',
-			slug: spaceConfig.slug || spaceParam || '',
-			name: spaceConfig.name || 'Space',
-			type: spaceConfig.type || 'custom',
-			icon: spaceConfig.icon,
-			color: spaceConfig.color,
-			context: spaceConfig.context,
-			orderIndex: 0,
-			userId: 'admin',
-			createdAt: new Date(),
-			updatedAt: new Date()
-		};
+		return spaceFromStore ?? null;
 	});
 
-	// Get areas for this space
+	// Get areas for this space using proper ID
 	let areas = $derived.by(() => {
-		if (!spaceParam) return [];
-		return areaStore.getAreasForSpace(spaceParam);
+		if (!spaceFromStore) return [];
+		return areaStore.getAreasForSpace(spaceFromStore.id);
 	});
 
 	// Areas with stats (conversation count, last activity)
@@ -98,20 +60,20 @@
 		});
 	});
 
-	// Get recent conversations for this space
+	// Get recent conversations for this space (using proper ID)
 	let recentConversations = $derived.by(() => {
-		if (!spaceParam) return [];
-		// Filter conversations by space ID
+		if (!spaceFromStore) return [];
+		// Filter conversations by proper space ID
 		return chatStore.conversationList
-			.filter((c) => c.spaceId === spaceParam)
+			.filter((c) => c.spaceId === spaceFromStore.id)
 			.slice(0, 10);
 	});
 
-	// Get active tasks for this space (parent tasks only, not subtasks)
+	// Get active tasks for this space (parent tasks only, not subtasks, using proper ID)
 	let activeTasks = $derived.by(() => {
-		if (!spaceParam) return [];
+		if (!spaceFromStore) return [];
 		return taskStore
-			.getTasksForSpaceId(spaceParam)
+			.getTasksForSpaceId(spaceFromStore.id)
 			.filter((t) => (t.status === 'active' || t.status === 'planning') && !t.parentTaskId)
 			.slice(0, 10);
 	});
@@ -129,23 +91,20 @@
 			return;
 		}
 
-		// Validate space exists
-		if (!isSystemSpace && !spaceFromStore) {
-			// Try loading spaces first
-			await spacesStore.loadSpaces();
-			const loaded = spacesStore.getSpaceBySlug(spaceParam);
-			if (!loaded) {
-				toastStore.error('Space not found');
-				goto('/spaces');
-				return;
-			}
+		// Ensure spaces are loaded first to get proper IDs
+		await spacesStore.loadSpaces();
+		const space = spacesStore.getSpaceBySlug(spaceParam);
+		if (!space) {
+			toastStore.error('Space not found');
+			goto('/spaces');
+			return;
 		}
 
-		// Load data in parallel
+		// Load data in parallel using proper space ID
 		await Promise.all([
-			areaStore.loadAreas(spaceParam),
+			areaStore.loadAreas(space.id),
 			chatStore.refresh(),
-			taskStore.loadTasks(spaceParam)
+			taskStore.loadTasks(space.id)
 		]);
 
 		isLoading = false;
@@ -243,7 +202,7 @@
 	<AreaModal
 		open={showAreaModal}
 		area={editingArea}
-		spaceId={spaceParam || ''}
+		spaceId={spaceFromStore?.id || ''}
 		onClose={handleCloseAreaModal}
 		onCreate={handleAreaCreate}
 		onUpdate={handleAreaUpdate}

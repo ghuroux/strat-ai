@@ -12,47 +12,32 @@
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
-	import { SPACES, isValidSpace } from '$lib/config/spaces';
 	import TaskDashboard from '$lib/components/tasks/TaskDashboard.svelte';
 
-	// Get space from route param
+	// Get space from route param (slug from URL)
 	let spaceParam = $derived($page.params.space);
 
-	// Get space from store (handles both system and custom spaces)
+	// Get space from store - ALWAYS use this for the proper ID
 	let spaceFromStore = $derived.by(() => {
 		if (!spaceParam) return null;
 		return spacesStore.getSpaceBySlug(spaceParam);
 	});
 
-	// Determine if this is a valid system space
-	let isSystemSpace = $derived(spaceParam ? isValidSpace(spaceParam) : false);
-
-	// Get space config
+	// Get space config - always use proper ID from store
 	let spaceConfig = $derived.by(() => {
-		if (isSystemSpace && spaceParam) {
-			const config = SPACES[spaceParam as keyof typeof SPACES];
-			return {
-				id: spaceParam,
-				slug: spaceParam,
-				name: config.name,
-				color: config.accentColor
-			};
-		}
-		if (spaceFromStore) {
-			return {
-				id: spaceFromStore.id,
-				slug: spaceFromStore.slug,
-				name: spaceFromStore.name,
-				color: spaceFromStore.color || '#3b82f6'
-			};
-		}
-		return null;
+		if (!spaceFromStore) return null;
+		return {
+			id: spaceFromStore.id,  // Always use proper ID from database
+			slug: spaceFromStore.slug,
+			name: spaceFromStore.name,
+			color: spaceFromStore.color || '#3b82f6'
+		};
 	});
 
-	// Get areas for this space
+	// Get areas for this space using proper ID
 	let areas = $derived.by(() => {
-		if (!spaceParam) return [];
-		return areaStore.getAreasForSpace(spaceParam);
+		if (!spaceFromStore) return [];
+		return areaStore.getAreasForSpace(spaceFromStore.id);
 	});
 
 	// UI state
@@ -65,21 +50,19 @@
 			return;
 		}
 
-		// Validate space exists
-		if (!isSystemSpace && !spaceFromStore) {
-			await spacesStore.loadSpaces();
-			const loaded = spacesStore.getSpaceBySlug(spaceParam);
-			if (!loaded) {
-				toastStore.error('Space not found');
-				goto('/spaces');
-				return;
-			}
+		// Ensure spaces are loaded first to get proper IDs
+		await spacesStore.loadSpaces();
+		const space = spacesStore.getSpaceBySlug(spaceParam);
+		if (!space) {
+			toastStore.error('Space not found');
+			goto('/spaces');
+			return;
 		}
 
-		// Load data in parallel
+		// Load areas and tasks using proper space ID
 		await Promise.all([
-			areaStore.loadAreas(spaceParam),
-			taskStore.loadTasks(spaceParam)
+			areaStore.loadAreas(space.id),
+			taskStore.loadTasks(space.id)
 		]);
 
 		isLoading = false;
