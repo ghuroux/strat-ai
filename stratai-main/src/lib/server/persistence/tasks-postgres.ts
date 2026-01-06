@@ -265,6 +265,7 @@ export const postgresTaskRepository: TaskRepository = {
 				due_date = ${updates.dueDate === null ? null : updates.dueDate ?? sql`due_date`},
 				due_date_type = ${updates.dueDateType === null ? null : updates.dueDateType ?? sql`due_date_type`},
 				completion_notes = COALESCE(${updates.completionNotes ?? null}, completion_notes),
+				stale_dismissed_at = ${updates.staleDismissedAt === null ? null : updates.staleDismissedAt ?? sql`stale_dismissed_at`},
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}
@@ -283,6 +284,23 @@ export const postgresTaskRepository: TaskRepository = {
 				completed_at = NOW(),
 				completion_notes = ${notes ?? null},
 				planning_data = NULL,
+				last_activity_at = NOW(),
+				updated_at = NOW()
+			WHERE id = ${id}
+				AND user_id = ${userId}
+				AND deleted_at IS NULL
+		`;
+
+		return this.findById(id, userId);
+	},
+
+	async reopen(id: string, userId: string): Promise<Task | null> {
+		await sql`
+			UPDATE tasks
+			SET
+				status = 'active',
+				completed_at = NULL,
+				completion_notes = NULL,
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}

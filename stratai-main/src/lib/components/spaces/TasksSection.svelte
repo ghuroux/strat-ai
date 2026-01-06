@@ -232,8 +232,18 @@
 
 <section class="tasks-section" style="--space-color: {spaceColor}">
 	<header class="section-header">
-		<h2 class="section-title">Tasks</h2>
-		<span class="task-count">{tasks.length}</span>
+		<div class="header-left">
+			<h2 class="section-title">Tasks</h2>
+			<span class="task-count">{tasks.length}</span>
+		</div>
+		{#if onViewAllTasks && tasks.length > 0}
+			<button type="button" class="view-all-btn" onclick={onViewAllTasks}>
+				View all
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+				</svg>
+			</button>
+		{/if}
 	</header>
 
 	<div class="tasks-container">
@@ -437,6 +447,13 @@
 	.section-header {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.header-left {
+		display: flex;
+		align-items: center;
 		gap: 0.5rem;
 	}
 
@@ -447,6 +464,30 @@
 		letter-spacing: 0.05em;
 		color: rgba(255, 255, 255, 0.4);
 		margin: 0;
+	}
+
+	.view-all-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--space-color);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		transition: all 0.15s ease;
+	}
+
+	.view-all-btn:hover {
+		background: color-mix(in srgb, var(--space-color) 10%, transparent);
+	}
+
+	.view-all-btn svg {
+		width: 0.75rem;
+		height: 0.75rem;
 	}
 
 	.show-more-button {

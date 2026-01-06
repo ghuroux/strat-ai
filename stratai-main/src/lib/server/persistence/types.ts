@@ -159,6 +159,7 @@ export interface TaskRepository {
 	createBulk(inputs: CreateTaskInput[], userId: string): Promise<Task[]>;
 	update(id: string, updates: UpdateTaskInput, userId: string): Promise<Task | null>;
 	complete(id: string, userId: string, notes?: string): Promise<Task | null>;
+	reopen(id: string, userId: string): Promise<Task | null>;
 	updatePlanningData(id: string, planningData: PlanningData | null, userId: string): Promise<Task | null>;
 	delete(id: string, userId: string): Promise<void>;
 	count(userId: string, filter?: TaskListFilter): Promise<number>;

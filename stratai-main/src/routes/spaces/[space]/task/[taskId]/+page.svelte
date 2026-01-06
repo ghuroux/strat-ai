@@ -30,6 +30,7 @@
 	import PlanModeConfirmation from '$lib/components/tasks/PlanModeConfirmation.svelte';
 	import SubtaskDashboard from '$lib/components/tasks/SubtaskDashboard.svelte';
 	import SubtaskWelcome from '$lib/components/tasks/SubtaskWelcome.svelte';
+	import TaskContextPanel from '$lib/components/tasks/TaskContextPanel.svelte';
 	import CompleteTaskModal from '$lib/components/tasks/CompleteTaskModal.svelte';
 	import type { Task, ProposedSubtask, SubtaskType } from '$lib/types/tasks';
 	import type { SpaceType, Message, FileAttachment } from '$lib/types/chat';
@@ -39,6 +40,9 @@
 	// Route params
 	let spaceParam = $derived($page.params.space);
 	let taskIdParam = $derived($page.params.taskId);
+
+	// Query params - used for forcing specific view mode
+	let viewParam = $derived($page.url.searchParams.get('view'));
 
 	// Task from store
 	let task = $derived(taskIdParam ? taskStore.getTask(taskIdParam) : undefined);
@@ -50,6 +54,15 @@
 	// Subtasks for this task
 	let subtasks = $derived(task ? taskStore.getSubtasksForTask(task.id) : []);
 	let completedSubtasks = $derived(subtasks.filter((s) => s.status === 'completed').length);
+
+	// Sibling subtasks (when viewing a subtask, shows other subtasks from parent)
+	let siblingSubtasks = $derived(
+		isSubtask && parentTask ? taskStore.getSubtasksForTask(parentTask.id) : []
+	);
+
+	// Panel subtasks - show siblings when on subtask, children otherwise
+	let panelSubtasks = $derived(isSubtask ? siblingSubtasks : subtasks);
+	let panelCompletedCount = $derived(panelSubtasks.filter((s) => s.status === 'completed').length);
 
 	// Plan Mode state
 	let planMode = $derived(taskStore.planMode);
@@ -85,10 +98,48 @@
 	// UI state
 	let isLoading = $state(true);
 	let showSubtaskPanel = $state(true);
+	let subtaskPanelInitialized = $state(false);
 	let chatContainer = $state<HTMLElement | undefined>(undefined);
 	let showCompleteModal = $state(false);
 	let showSubtaskWelcome = $state(true);
 	let isCreatingSubtasks = $state(false);
+
+	// Multi-conversation support for subtasks
+	let taskConversations = $derived(
+		taskIdParam ? chatStore.getConversationsForTask(taskIdParam) : []
+	);
+	let hasExistingConversations = $derived(taskConversations.length > 0);
+
+	// Panel collapsed state - persisted per task in localStorage
+	let contextPanelCollapsed = $state(false);
+
+	// Load panel collapsed state from localStorage
+	$effect(() => {
+		if (taskIdParam && typeof window !== 'undefined') {
+			const stored = localStorage.getItem(`task-panel-collapsed-${taskIdParam}`);
+			if (stored !== null) {
+				contextPanelCollapsed = stored === 'true';
+			}
+		}
+	});
+
+	// Persist panel collapsed state
+	function setContextPanelCollapsed(collapsed: boolean) {
+		contextPanelCollapsed = collapsed;
+		if (taskIdParam && typeof window !== 'undefined') {
+			localStorage.setItem(`task-panel-collapsed-${taskIdParam}`, String(collapsed));
+		}
+	}
+
+	// Initialize subtask panel state - collapsed by default for subtasks
+	$effect(() => {
+		if (task && !subtaskPanelInitialized) {
+			// Subtasks: panel collapsed by default (shows siblings when expanded)
+			// Parent tasks: panel expanded by default (shows children)
+			showSubtaskPanel = !isSubtask;
+			subtaskPanelInitialized = true;
+		}
+	});
 
 	// Show full-page confirming view when in confirming phase with proposed subtasks
 	let showConfirmingView = $derived(
@@ -100,17 +151,33 @@
 	// Incomplete subtasks for modal
 	let incompleteSubtasks = $derived(subtasks.filter((s) => s.status !== 'completed'));
 
+	// Task completion state (for read-only mode)
+	let isTaskCompleted = $derived(task?.status === 'completed');
+
 	// View mode: 'dashboard' shows subtask cards, 'chat' shows conversation
 	// Default to 'dashboard' when parent task has subtasks
 	let viewMode = $state<'dashboard' | 'chat'>('chat');
+	let viewModeInitializedForTask = $state<string | null>(null);
 
 	// Should show dashboard? Only for parent tasks with subtasks
 	let shouldShowDashboard = $derived(!isSubtask && subtasks.length > 0);
 
-	// Automatically switch to dashboard view when subtasks are created
+	// Initialize view mode from query param or auto-switch to dashboard
+	// Runs once per task (resets when navigating to a different task)
 	$effect(() => {
-		if (shouldShowDashboard && viewMode === 'chat' && visibleMessages.length === 0) {
-			viewMode = 'dashboard';
+		if (task && taskIdParam && viewModeInitializedForTask !== taskIdParam) {
+			// Reset to chat first, then determine correct view
+			viewMode = 'chat';
+
+			// Check for explicit view query param first
+			if (viewParam === 'dashboard' && shouldShowDashboard) {
+				viewMode = 'dashboard';
+			} else if (shouldShowDashboard && visibleMessages.length === 0) {
+				// Auto-switch to dashboard for parent tasks with subtasks but no messages
+				viewMode = 'dashboard';
+			}
+
+			viewModeInitializedForTask = taskIdParam;
 		}
 	});
 
@@ -143,12 +210,11 @@
 		// Load conversations
 		await chatStore.refresh();
 
-		// Find and set conversation for this task (initial load)
-		const existingConv = chatStore.conversationList.find(
-			(c) => c.taskId === taskIdParam
-		);
-		if (existingConv) {
-			chatStore.setActiveConversation(existingConv.id);
+		// Find and set most recent conversation for this task (initial load)
+		// getConversationsForTask returns sorted by updatedAt DESC
+		const taskConvs = chatStore.getConversationsForTask(taskIdParam);
+		if (taskConvs.length > 0) {
+			chatStore.setActiveConversation(taskConvs[0].id);
 		} else {
 			chatStore.setActiveConversation(null);
 		}
@@ -166,27 +232,23 @@
 
 		// Only run when task actually changes (not on initial load)
 		if (currentTaskId && currentTaskId !== newTaskId) {
-			// Task changed - update focus and find conversation for new task
+			// Task changed - update focus and find most recent conversation for new task
 			taskStore.setFocusedTask(newTaskId);
 			taskStore.loadTaskContext(newTaskId);
 
-			const existingConv = chatStore.conversationList.find(
-				(c) => c.taskId === newTaskId
-			);
-			if (existingConv) {
-				chatStore.setActiveConversation(existingConv.id);
+			const taskConvs = chatStore.getConversationsForTask(newTaskId);
+			if (taskConvs.length > 0) {
+				chatStore.setActiveConversation(taskConvs[0].id);
 			} else {
 				// No conversation for this task - clear active conversation
 				chatStore.setActiveConversation(null);
 			}
 			currentTaskId = newTaskId;
 		} else if (!currentTaskId && newTaskId) {
-			// Initial load - find conversation for this task
-			const existingConv = chatStore.conversationList.find(
-				(c) => c.taskId === newTaskId
-			);
-			if (existingConv) {
-				chatStore.setActiveConversation(existingConv.id);
+			// Initial load - find most recent conversation for this task
+			const taskConvs = chatStore.getConversationsForTask(newTaskId);
+			if (taskConvs.length > 0) {
+				chatStore.setActiveConversation(taskConvs[0].id);
 			} else {
 				// No conversation for this task - ensure no stale conversation showing
 				chatStore.setActiveConversation(null);
@@ -206,6 +268,21 @@
 			});
 		}
 	});
+
+	// Format relative time (for completion timestamps)
+	function formatRelativeTime(date: Date): string {
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+		const diffHours = Math.floor(diffMs / 3600000);
+		const diffDays = Math.floor(diffMs / 86400000);
+
+		if (diffMins < 1) return 'just now';
+		if (diffMins < 60) return `${diffMins}m ago`;
+		if (diffHours < 24) return `${diffHours}h ago`;
+		if (diffDays < 7) return `${diffDays}d ago`;
+		return date.toLocaleDateString();
+	}
 
 	// Handle model change
 	function handleModelChange(modelId: string) {
@@ -721,10 +798,11 @@
 		goto(`/spaces/${spaceParam}/task/${subtaskId}`);
 	}
 
-	// Navigate to parent task
+	// Navigate to parent task (goes to dashboard view if parent has subtasks)
 	function handleParentClick() {
 		if (parentTask) {
-			goto(`/spaces/${spaceParam}/task/${parentTask.id}`);
+			// Parent task likely has subtasks (since we're on a subtask), show dashboard
+			goto(`/spaces/${spaceParam}/task/${parentTask.id}?view=dashboard`);
 		}
 	}
 
@@ -886,9 +964,9 @@
 		if (!task) return;
 		await taskStore.completeTask(task.id);
 		toastStore.success('Subtask completed!');
-		// Navigate to parent task
+		// Navigate to parent task dashboard to see progress
 		if (parentTask) {
-			goto(`/spaces/${spaceParam}/task/${parentTask.id}`);
+			goto(`/spaces/${spaceParam}/task/${parentTask.id}?view=dashboard`);
 		}
 	}
 
@@ -940,15 +1018,69 @@
 		goto(`/spaces/${spaceParam}`);
 	}
 
+	// Reopen a completed task
+	async function handleReopenTask() {
+		if (!task) return;
+		const reopened = await taskStore.reopenTask(task.id);
+		if (reopened) {
+			toastStore.success('Task reopened');
+		}
+	}
+
 	// Dismiss subtask welcome
 	function handleDismissSubtaskWelcome() {
 		showSubtaskWelcome = false;
 	}
 
-	// Start working (dismiss welcome)
+	// Start working (dismiss welcome and collapse panel)
 	function handleStartWorking() {
 		showSubtaskWelcome = false;
+		// Auto-collapse panel when starting to work
+		if (hasExistingConversations) {
+			setContextPanelCollapsed(true);
+		}
 	}
+
+	// Handle conversation selection from TaskContextPanel
+	function handleSelectConversation(conversationId: string) {
+		chatStore.setActiveConversation(conversationId);
+	}
+
+	// Handle new chat creation from TaskContextPanel
+	function handleNewChat() {
+		const newConvId = chatStore.createConversation(settingsStore.selectedModel, {
+			spaceId: spaceParam || undefined,
+			areaId: task?.areaId || undefined,
+			taskId: taskIdParam || undefined
+		});
+		chatStore.setActiveConversation(newConvId);
+	}
+
+	// Handle panel toggle
+	function handleTogglePanelCollapse() {
+		setContextPanelCollapsed(!contextPanelCollapsed);
+	}
+
+	// Handle quick action from panel (prepopulate input)
+	function handleQuickAction(action: string) {
+		// If panel is expanded, collapse it when quick action is used
+		if (!contextPanelCollapsed) {
+			setContextPanelCollapsed(true);
+		}
+	}
+
+	// Auto-collapse panel when first message is sent
+	$effect(() => {
+		if (isSubtask && hasExistingConversations && visibleMessages.length > 0 && !contextPanelCollapsed) {
+			// Panel should auto-collapse once conversation has messages
+			// But only do this once per task visit, not on every message
+			const autoCollapsedKey = `task-panel-auto-collapsed-${taskIdParam}`;
+			if (typeof window !== 'undefined' && !sessionStorage.getItem(autoCollapsedKey)) {
+				setContextPanelCollapsed(true);
+				sessionStorage.setItem(autoCollapsedKey, 'true');
+			}
+		}
+	});
 </script>
 
 <svelte:head>
@@ -1204,20 +1336,57 @@
 					onCompleteTask={handleOpenCompleteModal}
 				/>
 			{:else}
-				<!-- Chat Area -->
-				<div class="chat-area">
-				<ChatMessageList bind:containerRef={chatContainer}>
-					{#if visibleMessages.length === 0}
-						<!-- Welcome State -->
-						{#if isSubtask && parentTask && showSubtaskWelcome}
-							<!-- Subtask Welcome with context -->
-							<SubtaskWelcome
-								subtask={task}
-								{parentTask}
-								onStartWorking={handleStartWorking}
-								onSeeParent={handleParentClick}
-								onDismiss={handleDismissSubtaskWelcome}
-							/>
+				<!-- Chat Area with optional Context Panel -->
+				<div class="chat-area-wrapper">
+					<!-- Context Panel for subtasks with existing conversations -->
+					{#if isSubtask && parentTask && hasExistingConversations}
+						<TaskContextPanel
+							subtask={task}
+							{parentTask}
+							conversations={taskConversations}
+							activeConversationId={activeConversation?.id || null}
+							collapsed={contextPanelCollapsed}
+							isCompleted={isTaskCompleted}
+							onSelectConversation={handleSelectConversation}
+							onNewChat={handleNewChat}
+							onToggleCollapse={handleTogglePanelCollapse}
+							onQuickAction={handleQuickAction}
+						/>
+					{/if}
+
+					<div class="chat-area">
+						<!-- Completion Banner for completed tasks -->
+						{#if isTaskCompleted}
+							<div class="completion-banner" transition:fly={{ y: -20, duration: 200 }}>
+								<div class="completion-info">
+									<svg class="completion-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+									<span class="completion-text">
+										This {isSubtask ? 'subtask' : 'task'} is complete
+										{#if task?.completedAt}
+											<span class="completion-time">· Completed {formatRelativeTime(new Date(task.completedAt))}</span>
+										{/if}
+									</span>
+								</div>
+								<button type="button" class="reopen-btn" onclick={handleReopenTask}>
+									Reopen
+								</button>
+							</div>
+						{/if}
+
+					<ChatMessageList bind:containerRef={chatContainer}>
+						{#if visibleMessages.length === 0}
+							<!-- Welcome State -->
+							{#if isSubtask && parentTask && !hasExistingConversations && showSubtaskWelcome}
+								<!-- First visit: Subtask Welcome with context (centered) -->
+								<SubtaskWelcome
+									subtask={task}
+									{parentTask}
+									onStartWorking={handleStartWorking}
+									onSeeParent={handleParentClick}
+									onDismiss={handleDismissSubtaskWelcome}
+								/>
 						{:else}
 							<div class="welcome-state" in:fade={{ duration: 300 }}>
 								<div class="welcome-card">
@@ -1294,13 +1463,15 @@
 					{/if}
 				</ChatMessageList>
 
-				<!-- Chat Input -->
-				<div class="chat-input-container" class:plan-mode={isPlanModeActive}>
-					<ChatInput
-						onsend={handleSend}
-						onstop={handleStop}
-						disabled={!selectedModel || isGenerating}
-					/>
+					<!-- Chat Input -->
+					<div class="chat-input-container" class:plan-mode={isPlanModeActive} class:completed={isTaskCompleted}>
+						<ChatInput
+							onsend={handleSend}
+							onstop={handleStop}
+							disabled={!selectedModel || isGenerating || isTaskCompleted}
+							placeholder={isTaskCompleted ? 'Reopen to continue chatting...' : undefined}
+						/>
+					</div>
 				</div>
 			</div>
 
@@ -1316,15 +1487,15 @@
 									d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
 								/>
 							</svg>
-							Subtasks
+							{isSubtask ? 'Related Subtasks' : 'Subtasks'}
 						</h3>
-						{#if subtasks.length > 0}
-							<span class="panel-count">{completedSubtasks}/{subtasks.length}</span>
+						{#if panelSubtasks.length > 0}
+							<span class="panel-count">{panelCompletedCount}/{panelSubtasks.length}</span>
 						{/if}
 					</div>
 
 					<div class="panel-content">
-						{#if subtasks.length === 0}
+						{#if panelSubtasks.length === 0}
 							<div class="empty-subtasks">
 								<div class="helper-icon">
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1347,20 +1518,22 @@
 							</div>
 						{:else}
 							<div class="subtask-list">
-								{#each subtasks as subtask (subtask.id)}
-									{@const isCompleted = subtask.status === 'completed'}
-									{@const isConversation = subtask.subtaskType === 'conversation'}
+								{#each panelSubtasks as panelSubtask (panelSubtask.id)}
+									{@const isCompleted = panelSubtask.status === 'completed'}
+									{@const isConversation = panelSubtask.subtaskType === 'conversation'}
+									{@const isCurrent = panelSubtask.id === taskIdParam}
 									<div
 										class="subtask-item"
 										class:completed={isCompleted}
 										class:conversation={isConversation}
+										class:current={isCurrent}
 									>
-										{#if subtask.subtaskType === 'action'}
+										{#if panelSubtask.subtaskType === 'action'}
 											<button
 												type="button"
 												class="subtask-checkbox"
 												class:checked={isCompleted}
-												onclick={() => handleCompleteSubtask(subtask.id)}
+												onclick={() => handleCompleteSubtask(panelSubtask.id)}
 												disabled={isCompleted}
 											>
 												{#if isCompleted}
@@ -1370,14 +1543,20 @@
 												{/if}
 											</button>
 										{:else}
-											<div class="subtask-icon">
-												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-													/>
-												</svg>
+											<div class="subtask-icon" class:current={isCurrent}>
+												{#if isCurrent}
+													<svg viewBox="0 0 24 24" fill="currentColor">
+														<circle cx="12" cy="12" r="4" />
+													</svg>
+												{:else}
+													<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+														/>
+													</svg>
+												{/if}
 											</div>
 										{/if}
 
@@ -1385,13 +1564,14 @@
 											type="button"
 											class="subtask-title"
 											class:strikethrough={isCompleted}
-											onclick={() => handleSubtaskClick(subtask.id)}
-											disabled={isCompleted || subtask.subtaskType === 'action'}
+											class:current={isCurrent}
+											onclick={() => handleSubtaskClick(panelSubtask.id)}
+											disabled={isCompleted || (panelSubtask.subtaskType === 'action' && !isCurrent)}
 										>
-											{subtask.title}
+											{panelSubtask.title}
 										</button>
 
-										{#if isConversation && !isCompleted}
+										{#if isConversation && !isCompleted && !isCurrent}
 											<svg class="subtask-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
 											</svg>
@@ -1769,6 +1949,14 @@
 		gap: 0;
 	}
 
+	/* Chat Area Wrapper - contains optional panel + chat */
+	.chat-area-wrapper {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+		overflow: hidden;
+	}
+
 	/* Chat Area */
 	.chat-area {
 		flex: 1;
@@ -1785,6 +1973,59 @@
 	.chat-input-container.plan-mode {
 		background: rgba(168, 85, 247, 0.05);
 		border-color: rgba(168, 85, 247, 0.2);
+	}
+
+	.chat-input-container.completed {
+		opacity: 0.6;
+	}
+
+	/* Completion Banner */
+	.completion-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.75rem 1.5rem;
+		background: rgba(34, 197, 94, 0.1);
+		border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+	}
+
+	.completion-info {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.completion-icon {
+		width: 1.25rem;
+		height: 1.25rem;
+		color: #22c55e;
+	}
+
+	.completion-text {
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	.completion-time {
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.reopen-btn {
+		padding: 0.375rem 0.75rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.reopen-btn:hover {
+		background: rgba(255, 255, 255, 0.12);
+		border-color: rgba(255, 255, 255, 0.25);
+		color: #fff;
 	}
 
 	/* Welcome State */
@@ -2027,6 +2268,20 @@
 
 	.subtask-item.completed {
 		opacity: 0.5;
+	}
+
+	.subtask-item.current {
+		background: rgba(var(--space-accent-rgb, 59, 130, 246), 0.15);
+		border-left: 2px solid var(--space-accent, #3b82f6);
+	}
+
+	.subtask-icon.current {
+		color: var(--space-accent, #3b82f6);
+	}
+
+	.subtask-title.current {
+		color: var(--space-accent, #3b82f6);
+		font-weight: 500;
 	}
 
 	.subtask-checkbox {

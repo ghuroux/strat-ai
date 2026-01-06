@@ -41,8 +41,8 @@
 	// Remaining subtasks (excluding next up)
 	let remainingSubtasks = $derived(activeSubtasks.slice(1));
 
-	// Show/hide completed section
-	let showCompleted = $state(false);
+	// Show/hide completed section (expanded by default for visibility)
+	let showCompleted = $state(true);
 
 	// Expandable cards state
 	let expandedCards = $state(new Set<string>());
@@ -95,6 +95,27 @@
 	async function handleQuickComplete(e: Event, subtaskId: string) {
 		e.stopPropagation();
 		await taskStore.completeTask(subtaskId);
+	}
+
+	// Reopen a completed subtask
+	async function handleReopenSubtask(e: Event, subtaskId: string) {
+		e.stopPropagation();
+		await taskStore.reopenTask(subtaskId);
+	}
+
+	// Format relative time for completion timestamps
+	function formatRelativeTime(date: Date): string {
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+		const diffHours = Math.floor(diffMs / 3600000);
+		const diffDays = Math.floor(diffMs / 86400000);
+
+		if (diffMins < 1) return 'just now';
+		if (diffMins < 60) return `${diffMins}m ago`;
+		if (diffHours < 24) return `${diffHours}h ago`;
+		if (diffDays < 7) return `${diffDays}d ago`;
+		return date.toLocaleDateString();
 	}
 </script>
 
@@ -301,6 +322,19 @@
 									</svg>
 								</div>
 								<span class="completed-title">{subtask.title}</span>
+								{#if subtask.completedAt}
+									<span class="completed-time">{formatRelativeTime(new Date(subtask.completedAt))}</span>
+								{/if}
+								<button
+									type="button"
+									class="reopen-btn"
+									onclick={(e) => handleReopenSubtask(e, subtask.id)}
+									title="Reopen subtask"
+								>
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+									</svg>
+								</button>
 							</div>
 						{/each}
 					</div>
@@ -688,9 +722,54 @@
 	}
 
 	.completed-title {
+		flex: 1;
 		font-size: 0.8125rem;
 		color: rgba(255, 255, 255, 0.5);
 		text-decoration: line-through;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.completed-time {
+		font-size: 0.6875rem;
+		color: rgba(255, 255, 255, 0.35);
+		flex-shrink: 0;
+	}
+
+	.reopen-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		padding: 0;
+		background: transparent;
+		border: none;
+		border-radius: 0.25rem;
+		cursor: pointer;
+		opacity: 0;
+		transition: all 0.15s ease;
+		flex-shrink: 0;
+	}
+
+	.reopen-btn svg {
+		width: 0.875rem;
+		height: 0.875rem;
+		color: rgba(255, 255, 255, 0.4);
+	}
+
+	.completed-item:hover .reopen-btn {
+		opacity: 1;
+	}
+
+	.reopen-btn:hover {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.reopen-btn:hover svg {
+		color: rgba(255, 255, 255, 0.7);
 	}
 
 	/* Footer */

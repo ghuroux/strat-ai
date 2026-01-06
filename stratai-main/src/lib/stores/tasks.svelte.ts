@@ -206,7 +206,7 @@ class TaskStore {
 		this.error = null;
 
 		try {
-			const params = new URLSearchParams({ spaceId });
+			const params = new URLSearchParams({ spaceId, includeCompleted: 'true' });
 			const response = await fetch(`/api/tasks?${params}`);
 
 			if (!response.ok) {
@@ -408,6 +408,41 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to complete task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to complete task';
+			return null;
+		}
+	}
+
+	/**
+	 * Reopen a completed task (set status back to active)
+	 */
+	async reopenTask(id: string): Promise<Task | null> {
+		this.error = null;
+
+		try {
+			const response = await fetch(`/api/tasks/${id}/reopen`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				if (response.status === 404) {
+					this.tasks.delete(id);
+					this._version++;
+					return null;
+				}
+				throw new Error(`Failed to reopen task: ${response.status}`);
+			}
+
+			const data = await response.json();
+			const task = this.parseTaskDates(data.task);
+
+			// Update in store
+			this.tasks.set(task.id, task);
+			this._version++;
+
+			return task;
+		} catch (e) {
+			console.error('Failed to reopen task:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to reopen task';
 			return null;
 		}
 	}
@@ -1519,11 +1554,105 @@ class TaskStore {
 			...task,
 			dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
 			completedAt: task.completedAt ? new Date(task.completedAt) : undefined,
+			staleDismissedAt: task.staleDismissedAt ? new Date(task.staleDismissedAt) : undefined,
 			lastActivityAt: new Date(task.lastActivityAt),
 			createdAt: new Date(task.createdAt),
 			updatedAt: new Date(task.updatedAt),
 			deletedAt: task.deletedAt ? new Date(task.deletedAt) : undefined
 		};
+	}
+
+	// =====================================================
+	// Stats & Stale Detection Methods
+	// =====================================================
+
+	/**
+	 * Dismiss stale warning for a task
+	 * Sets staleDismissedAt to now, which prevents the task from showing as stale
+	 * until there's new activity and then 7+ more days of inactivity
+	 */
+	async dismissStale(taskId: string): Promise<Task | null> {
+		return this.updateTask(taskId, { staleDismissedAt: new Date() });
+	}
+
+	/**
+	 * Check if a task is stale (7+ days no activity, not dismissed)
+	 */
+	isStale(task: Task): boolean {
+		const sevenDaysAgo = new Date();
+		sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+		// Not stale if recent activity
+		if (new Date(task.lastActivityAt) >= sevenDaysAgo) return false;
+
+		// Stale if never dismissed
+		if (!task.staleDismissedAt) return true;
+
+		// Stale if dismissed before last activity (dismissal was "reset" by activity)
+		return new Date(task.staleDismissedAt) < new Date(task.lastActivityAt);
+	}
+
+	/**
+	 * Get count of tasks completed today for a space
+	 */
+	getCompletedToday(spaceId: string): number {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+
+		return Array.from(this.tasks.values()).filter((t) => {
+			if (t.spaceId !== spaceId) return false;
+			if (t.status !== 'completed') return false;
+			if (!t.completedAt) return false;
+
+			const completedDate = new Date(t.completedAt);
+			completedDate.setHours(0, 0, 0, 0);
+			return completedDate.getTime() === today.getTime();
+		}).length;
+	}
+
+	/**
+	 * Calculate completion streak (consecutive days with at least one completion)
+	 * Streak continues if today has completions, or if yesterday had completions
+	 */
+	calculateStreak(spaceId: string): number {
+		// Get all completed tasks with completedAt for this space
+		const completedTasks = Array.from(this.tasks.values()).filter(
+			(t) => t.spaceId === spaceId && t.status === 'completed' && t.completedAt
+		);
+
+		if (completedTasks.length === 0) return 0;
+
+		// Get unique completion dates (as date strings YYYY-MM-DD)
+		const completionDates = new Set<string>();
+		for (const task of completedTasks) {
+			const date = new Date(task.completedAt!);
+			date.setHours(0, 0, 0, 0);
+			completionDates.add(date.toISOString().split('T')[0]);
+		}
+
+		// Start counting from today
+		let streak = 0;
+		const checkDate = new Date();
+		checkDate.setHours(0, 0, 0, 0);
+
+		const todayStr = checkDate.toISOString().split('T')[0];
+
+		// If nothing completed today, check if streak continues from yesterday
+		if (!completionDates.has(todayStr)) {
+			checkDate.setDate(checkDate.getDate() - 1);
+			const yesterdayStr = checkDate.toISOString().split('T')[0];
+			if (!completionDates.has(yesterdayStr)) {
+				return 0; // No streak - no completions today or yesterday
+			}
+		}
+
+		// Count consecutive days backwards
+		while (completionDates.has(checkDate.toISOString().split('T')[0])) {
+			streak++;
+			checkDate.setDate(checkDate.getDate() - 1);
+		}
+
+		return streak;
 	}
 }
 

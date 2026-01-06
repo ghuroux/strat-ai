@@ -66,6 +66,9 @@ export interface Task {
 	completedAt?: Date;
 	completionNotes?: string;
 
+	// Stale tracking
+	staleDismissedAt?: Date;
+
 	// Source tracking
 	source: TaskSource;
 
@@ -121,6 +124,7 @@ export interface UpdateTaskInput {
 	dueDate?: Date | null;
 	dueDateType?: DueDateType | null;
 	completionNotes?: string;
+	staleDismissedAt?: Date | null; // null to clear dismissal
 }
 
 /**
@@ -237,6 +241,7 @@ export interface TaskRow {
 	dueDateType: string | null;
 	completedAt: Date | null;
 	completionNotes: string | null;
+	staleDismissedAt: Date | null;
 	sourceType: string;
 	sourceAssistId: string | null;
 	sourceConversationId: string | null;
@@ -296,6 +301,7 @@ export function rowToTask(row: TaskRow): Task {
 		dueDateType: (row.dueDateType as DueDateType) ?? undefined,
 		completedAt: row.completedAt ?? undefined,
 		completionNotes: row.completionNotes ?? undefined,
+		staleDismissedAt: row.staleDismissedAt ?? undefined,
 		source: {
 			type: row.sourceType as TaskSourceType,
 			assistId: row.sourceAssistId ?? undefined,

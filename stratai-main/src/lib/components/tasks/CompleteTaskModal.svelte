@@ -71,10 +71,11 @@
 			</div>
 			<div>
 				<h2 id="complete-modal-title" class="text-lg font-semibold text-white">
-					Complete "{task.title}"?
+					Complete Task?
 				</h2>
 				<p class="text-sm text-zinc-400 mt-1">
-					{incompleteSubtasks.length} subtask{incompleteSubtasks.length === 1 ? '' : 's'} still incomplete
+					<strong class="text-amber-400">{incompleteSubtasks.length} subtask{incompleteSubtasks.length === 1 ? '' : 's'}</strong> still incomplete.
+					They will be marked as completed.
 				</p>
 			</div>
 		</div>
@@ -145,7 +146,7 @@
 							d="M5 13l4 4L19 7"
 						/>
 					</svg>
-					Complete all ({incompleteSubtasks.length + 1} items)
+					Complete All
 				{/if}
 			</button>
 

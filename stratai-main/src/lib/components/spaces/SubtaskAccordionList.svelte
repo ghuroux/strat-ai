@@ -32,9 +32,9 @@
 		goto(`/spaces/${spaceParam}/task/${subtaskId}`);
 	}
 
-	// Navigate to parent task
+	// Navigate to parent task dashboard
 	function handleViewFullTask() {
-		goto(`/spaces/${spaceParam}/task/${parentTaskId}`);
+		goto(`/spaces/${spaceParam}/task/${parentTaskId}?view=dashboard`);
 	}
 
 	// Quick complete action item

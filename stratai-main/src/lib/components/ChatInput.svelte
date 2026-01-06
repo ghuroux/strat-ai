@@ -19,6 +19,7 @@
 	// Svelte 5: Use $props with callback props instead of createEventDispatcher
 	let {
 		disabled = false,
+		placeholder,
 		onsend,
 		onstop,
 		onsummarize,
@@ -27,6 +28,7 @@
 		isCompacting = false
 	}: {
 		disabled?: boolean;
+		placeholder?: string;
 		onsend?: (message: string, attachments?: FileAttachment[]) => void;
 		onstop?: () => void;
 		onsummarize?: () => void;
@@ -45,6 +47,11 @@
 	// Show summarize button when conversation has 6+ messages
 	let showSummarizeButton = $derived(chatStore.messages.length >= 6);
 	let hasSummary = $derived(!!chatStore.activeConversation?.summary);
+
+	// Effective placeholder (uses prop if provided, otherwise default)
+	let effectivePlaceholder = $derived(
+		placeholder ?? (chatStore.isStreaming ? 'AI is responding...' : 'Type a message... (Shift+Enter for new line)')
+	);
 
 	// Context window usage calculation
 	let currentModel = $derived(chatStore.activeConversation?.model || settingsStore.selectedModel);
@@ -321,7 +328,7 @@
 						oninput={autoResize}
 						onfocus={() => (isFocused = true)}
 						onblur={() => (isFocused = false)}
-						placeholder={chatStore.isStreaming ? 'AI is responding...' : 'Type a message... (Shift+Enter for new line)'}
+						placeholder={effectivePlaceholder}
 						rows="1"
 						class="w-full bg-transparent text-surface-100 placeholder-surface-500
 							   resize-none focus:outline-none leading-relaxed"
