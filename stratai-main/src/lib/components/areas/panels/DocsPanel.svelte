@@ -64,6 +64,7 @@
 	// Get file icon based on mime type
 	function getFileIcon(mimeType: string): string {
 		if (mimeType === 'application/pdf') return 'pdf';
+		if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'word';
 		if (mimeType.startsWith('text/')) return 'text';
 		return 'generic';
 	}
@@ -98,17 +99,19 @@
 	}
 
 	async function uploadFiles(files: File[]) {
-		// Filter for supported types
+		// Filter for supported types (matches file-parser.ts capabilities)
 		const supported = files.filter(f =>
 			f.type === 'application/pdf' ||
+			f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
 			f.type === 'text/plain' ||
 			f.type === 'text/markdown' ||
 			f.name.endsWith('.md') ||
-			f.name.endsWith('.txt')
+			f.name.endsWith('.txt') ||
+			f.name.endsWith('.docx')
 		);
 
 		if (supported.length < files.length) {
-			toastStore.warning('Some files were skipped (only PDF, TXT, MD supported)');
+			toastStore.warning('Some files were skipped (only PDF, DOCX, TXT, MD supported)');
 		}
 
 		if (supported.length === 0) return;
@@ -172,13 +175,13 @@
 							browse
 							<input
 								type="file"
-								accept=".pdf,.txt,.md,text/plain,text/markdown,application/pdf"
+								accept=".pdf,.docx,.txt,.md,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 								multiple
 								onchange={handleFileSelect}
 							/>
 						</label>
 					</p>
-					<span class="file-types">PDF, TXT, MD</span>
+					<span class="file-types">PDF, DOCX, TXT, MD</span>
 				{/if}
 			</div>
 
@@ -194,10 +197,14 @@
 							onclick={() => onDocumentClick?.(doc)}
 							onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onDocumentClick?.(doc)}
 						>
-							<div class="doc-icon" class:pdf={icon === 'pdf'} class:text={icon === 'text'}>
+							<div class="doc-icon" class:pdf={icon === 'pdf'} class:word={icon === 'word'} class:text={icon === 'text'}>
 								{#if icon === 'pdf'}
 									<svg viewBox="0 0 24 24" fill="currentColor">
 										<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 2l5 5h-5V4zm-3 9c.55 0 1-.45 1-1s-.45-1-1-1H7v4h1v-1h2c.55 0 1-.45 1-1zM8 10h2v1H8v-1zm6 4c.55 0 1-.45 1-1v-2c0-.55-.45-1-1-1h-3v4h3zm-2-3h1v2h-1v-2zm5 3c.55 0 1-.45 1-1v-2c0-.55-.45-1-1-1h-1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h1zm0-3v2h-1v-2h1z"/>
+									</svg>
+								{:else if icon === 'word'}
+									<svg viewBox="0 0 24 24" fill="currentColor">
+										<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-4.5-8.5l-1.5 6-1.5-6H9l2.25 7.5h1.5L14.5 13l1.75 6h1.5L20 11.5h-1.5l-1.5 6-1.5-6h-1.5z"/>
 									</svg>
 								{:else}
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -354,6 +361,11 @@
 	.doc-icon.pdf {
 		background: rgba(239, 68, 68, 0.1);
 		color: #ef4444;
+	}
+
+	.doc-icon.word {
+		background: rgba(59, 130, 246, 0.1);
+		color: #3b82f6;
 	}
 
 	.doc-icon.text {

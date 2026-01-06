@@ -1,4 +1,4 @@
--- Migration 009: Normalize space_id values in areas, tasks, and conversations tables
+-- Migration 009: Normalize space_id values in areas, tasks, conversations, and documents tables
 --
 -- Problem: Legacy data used space slugs (e.g., 'work') as space_id,
 -- but the spaces table uses proper IDs (e.g., 'sp_1766329543471_qr47k5q').
@@ -75,6 +75,23 @@ WHERE c.space_id = s.slug
 -- Step 8: Clean up orphaned conversations with invalid space_id
 -- (Don't delete conversations with NULL space_id - those are valid legacy conversations)
 UPDATE conversations
+SET deleted_at = NOW()
+WHERE space_id IS NOT NULL
+  AND space_id != ''
+  AND space_id NOT IN (SELECT id FROM spaces WHERE deleted_at IS NULL)
+  AND space_id NOT IN (SELECT slug FROM spaces WHERE deleted_at IS NULL)
+  AND deleted_at IS NULL;
+
+-- Step 9: Update documents table - convert slug-based space_id to proper ID
+UPDATE documents d
+SET space_id = s.id
+FROM spaces s
+WHERE d.space_id = s.slug
+  AND d.space_id != s.id
+  AND d.deleted_at IS NULL;
+
+-- Step 10: Clean up orphaned documents with invalid space_id
+UPDATE documents
 SET deleted_at = NOW()
 WHERE space_id IS NOT NULL
   AND space_id != ''

@@ -91,10 +91,14 @@
 		};
 	});
 
-	// Load area
+	// Always use proper space ID from store for API calls and store operations
+	// This ensures consistency with database IDs vs URL slugs
+	let properSpaceId = $derived(spaceFromStore?.id ?? '');
+
+	// Load area (uses proper space ID for lookup)
 	let area = $derived.by((): Area | null => {
-		if (!spaceParam || !areaParam) return null;
-		return areaStore.getAreaBySlug(spaceParam, areaParam) ?? null;
+		if (!properSpaceId || !areaParam) return null;
+		return areaStore.getAreaBySlug(properSpaceId, areaParam) ?? null;
 	});
 
 	// Derive colors
@@ -158,8 +162,8 @@
 	// Conversations from other areas in same space
 	let otherAreaConversations = $derived(chatStore.groupedConversations.otherInSpace);
 
-	// All areas in this space (for area lookup in drawer)
-	let allAreasInSpace = $derived(spaceParam ? areaStore.getAreasForSpace(spaceParam) : []);
+	// All areas in this space (for area lookup in drawer, uses proper space ID)
+	let allAreasInSpace = $derived(properSpaceId ? areaStore.getAreasForSpace(properSpaceId) : []);
 
 	// Task info lookup for drawer badges
 	function getTaskInfo(taskId: string): { id: string; title: string; color?: string } | null {
@@ -206,12 +210,12 @@
 	// Counts for header badges
 	let areaTaskCount = $derived(areaTasks.length);
 	let spaceDocCount = $derived.by(() => {
-		if (!spaceParam) return 0;
-		return documentStore.getDocuments(spaceParam).length;
+		if (!properSpaceId) return 0;
+		return documentStore.getDocuments(properSpaceId).length;
 	});
 
-	// All areas for TaskModal
-	let allAreas = $derived(spaceParam ? areaStore.getAreasForSpace(spaceParam) : []);
+	// All areas for TaskModal (uses proper space ID)
+	let allAreas = $derived(properSpaceId ? areaStore.getAreasForSpace(properSpaceId) : []);
 
 	// Apply area color
 	$effect(() => {
@@ -254,23 +258,25 @@
 			return;
 		}
 
-		// Load spaces, areas, and tasks
-		await Promise.all([
-			spacesStore.loadSpaces(),
-			areaStore.loadAreas(spaceParam),
-			chatStore.refresh(),
-			taskStore.loadTasks(spaceParam)
-		]);
-
-		// Validate space and area exist
-		const loadedSpace = isSystemSpace || spacesStore.getSpaceBySlug(spaceParam);
+		// Load spaces first to get proper IDs
+		await spacesStore.loadSpaces();
+		const loadedSpace = spacesStore.getSpaceBySlug(spaceParam);
 		if (!loadedSpace) {
 			toastStore.error('Space not found');
 			goto('/spaces');
 			return;
 		}
 
-		const loadedArea = areaStore.getAreaBySlug(spaceParam, areaParam);
+		// Load areas, chat, tasks, and documents using proper space ID
+		await Promise.all([
+			areaStore.loadAreas(loadedSpace.id),
+			chatStore.refresh(),
+			taskStore.loadTasks(loadedSpace.id),
+			documentStore.loadDocuments(loadedSpace.id)
+		]);
+
+		// Validate area exists (use proper space ID for lookup)
+		const loadedArea = areaStore.getAreaBySlug(loadedSpace.id, areaParam);
 		if (!loadedArea) {
 			toastStore.error('Area not found');
 			goto(`/spaces/${spaceParam}`);
@@ -1357,7 +1363,7 @@
 		<!-- Docs Panel -->
 		<DocsPanel
 			isOpen={docsPanelOpen}
-			spaceId={spaceParam || ''}
+			spaceId={properSpaceId}
 			spaceColor={areaColor}
 			onClose={() => docsPanelOpen = false}
 		/>
@@ -1365,7 +1371,7 @@
 		<!-- Task Modal -->
 		<TaskModal
 			open={taskModalOpen}
-			spaceId={spaceParam || ''}
+			spaceId={properSpaceId}
 			areas={allAreas}
 			spaceColor={areaColor}
 			initialValues={suggestionPreFill}

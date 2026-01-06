@@ -284,6 +284,8 @@ class DocumentStore {
 	 * Get documents linked to a task (from cache)
 	 */
 	getDocumentsForTask(taskId: string): TaskDocumentLink[] {
+		// Reference _version for Svelte reactivity
+		void this._version;
 		return this.taskDocuments.get(taskId) ?? [];
 	}
 
@@ -291,6 +293,8 @@ class DocumentStore {
 	 * Get a document by ID
 	 */
 	getDocumentById(id: string): Document | undefined {
+		// Reference _version for Svelte reactivity
+		void this._version;
 		return this.documents.get(id);
 	}
 
@@ -298,6 +302,8 @@ class DocumentStore {
 	 * Get all documents (optionally filtered by space)
 	 */
 	getDocuments(spaceId?: string): Document[] {
+		// Reference _version for Svelte reactivity
+		void this._version;
 		const docs = Array.from(this.documents.values());
 		if (spaceId) {
 			return docs.filter((d) => d.spaceId === spaceId);

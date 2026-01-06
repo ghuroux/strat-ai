@@ -9,6 +9,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { parseFile, validateFile } from '$lib/server/file-parser';
+import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
 
 // Default user ID for POC (will be replaced with auth in Phase 0.4)
 const DEFAULT_USER_ID = 'admin';
@@ -16,15 +17,25 @@ const DEFAULT_USER_ID = 'admin';
 /**
  * GET /api/documents
  * Query params:
- * - spaceId: Filter by space ID
+ * - spaceId: Filter by space ID or slug (resolved to proper ID)
  */
 export const GET: RequestHandler = async ({ url }) => {
 	try {
-		const spaceId = url.searchParams.get('spaceId') ?? undefined;
+		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
+
+		// Resolve space identifier (slug or ID) to proper ID
+		let resolvedSpaceId: string | undefined;
+		if (spaceIdParam) {
+			const resolved = await resolveSpaceId(spaceIdParam, DEFAULT_USER_ID);
+			if (!resolved) {
+				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
+			}
+			resolvedSpaceId = resolved;
+		}
 
 		const documents = await postgresDocumentRepository.findAll(
 			DEFAULT_USER_ID,
-			spaceId
+			resolvedSpaceId
 		);
 
 		// Return without full content to reduce payload size
@@ -62,18 +73,28 @@ export const GET: RequestHandler = async ({ url }) => {
  * Content-Type: multipart/form-data
  * Fields:
  * - file: The file to upload
- * - spaceId: (optional) Space ID to associate with the document
+ * - spaceId: (optional) Space ID or slug to associate with the document
  * - title: (optional) Custom title for the document
  */
 export const POST: RequestHandler = async ({ request }) => {
 	try {
 		const formData = await request.formData();
 		const file = formData.get('file');
-		const spaceId = formData.get('spaceId') as string | null;
+		const spaceIdParam = formData.get('spaceId') as string | null;
 		const title = formData.get('title') as string | null;
 
 		if (!file || !(file instanceof File)) {
 			return json({ error: 'No file provided' }, { status: 400 });
+		}
+
+		// Resolve space identifier (slug or ID) to proper ID
+		let resolvedSpaceId: string | undefined;
+		if (spaceIdParam) {
+			const resolved = await resolveSpaceId(spaceIdParam, DEFAULT_USER_ID);
+			if (!resolved) {
+				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
+			}
+			resolvedSpaceId = resolved;
 		}
 
 		// Validate file type and size
@@ -107,7 +128,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				charCount: parsed.charCount,
 				pageCount: parsed.pageCount,
 				truncated: parsed.truncated,
-				spaceId: spaceId ?? undefined,
+				spaceId: resolvedSpaceId,
 				title: title ?? undefined
 			},
 			DEFAULT_USER_ID
