@@ -107,7 +107,39 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-07 (Multiple Plan Mode & Model Selection)
+### Latest: 2026-01-07 (Area Deletion Feature)
+
+**Completed:**
+
+*Area Deletion with Content Preservation:*
+- Created `DeleteAreaModal.svelte` - confirmation modal with two deletion modes:
+  - "Keep content" (default): Moves conversations to General area, unlinks tasks
+  - "Delete everything": Permanently removes all conversations and tasks
+- Enhanced `areas-postgres.ts` `delete()` method to handle both deletion modes
+- Updated API endpoint to accept `?deleteContent=true` query parameter
+- Added context menu to `AreaCard.svelte` (three-dot button) with Edit/Delete options on hover
+- Protected General area from deletion
+- Toast notifications confirm successful actions
+
+**Files Created:**
+- `src/lib/components/areas/DeleteAreaModal.svelte`
+
+**Files Modified:**
+- `src/lib/server/persistence/areas-postgres.ts`
+- `src/routes/api/areas/[id]/+server.ts`
+- `src/lib/stores/areas.svelte.ts`
+- `src/lib/server/persistence/types.ts`
+- `src/lib/components/areas/index.ts`
+- `src/lib/components/spaces/AreaCard.svelte`
+- `src/lib/components/spaces/SpaceDashboard.svelte`
+- `src/routes/spaces/[space]/+page.svelte`
+
+**Next steps:**
+- Continue Phase 0.3e: Day Change Detection + Cleanup Offers
+- Wire up actual AI planning with selected model
+- Add "Start Planning" button flow that uses TaskPlanningModelModal
+
+### Previous: 2026-01-07 (Multiple Plan Mode & Model Selection)
 
 **Completed:**
 
