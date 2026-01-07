@@ -107,7 +107,59 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-06 (Task Focus UX & Navigation Fixes)
+### Latest: 2026-01-07 (Multiple Plan Mode & Model Selection)
+
+**Completed:**
+
+*Documents API Fix:*
+- Diagnosed documents with slug-style space_ids ('work') instead of UUIDs after migration 009
+- Ran UPDATE query to normalize 8 documents
+- Created migration `011-documents-space-id-normalize.sql`
+
+*Task Loading Race Condition Fix:*
+- Fixed race condition when switching spaces - tasks weren't loading because `onMount` only runs once
+- Changed to reactive `$effect` that loads tasks whenever `spaceParam` changes
+
+*Multiple Plan Mode Support (Phase 1):*
+- Modified task store to allow multiple tasks in planning simultaneously
+- Added `planningTasks` array and `planningTaskCount` derived values
+- Changed `startPlanMode()` return type to include `existingPlanningCount`
+- Created `PlanningTasksIndicator.svelte` - purple badge in header with dropdown to manage planning tasks
+- Integrated indicator into Header component
+- Toast notifications when starting additional planning tasks
+
+*Task Planning Model Selection (Phase 2):*
+- Extended `ModelCapabilities` interface with `TaskPlanningCapabilities`:
+  - `tier`: 'recommended' | 'capable' | 'experimental'
+  - `structuredOutput`, `verbosity`, `needsFewShotExamples`, `warnings`, `planningNote`
+- Added taskPlanning capabilities to recommended models (Claude Opus 4.5, Sonnet 4.5, Sonnet 4, 3.7 Sonnet, GPT-5.1, GPT-5.2, GPT-5.2 Pro)
+- All other models default to 'experimental' tier
+- Added helper functions: `getTaskPlanningCapabilities()`, `getModelsGroupedByTaskPlanningTier()`, etc.
+- Created `TaskPlanningModelModal.svelte` - tiered model selection with localStorage persistence
+
+**Files Created:**
+- `src/lib/components/tasks/PlanningTasksIndicator.svelte`
+- `src/lib/components/tasks/TaskPlanningModelModal.svelte`
+- `src/lib/server/persistence/migrations/011-documents-space-id-normalize.sql`
+
+**Files Modified:**
+- `src/lib/stores/tasks.svelte.ts`
+- `src/lib/config/model-capabilities.ts`
+- `src/lib/components/layout/Header.svelte`
+- `src/routes/spaces/[space]/+page.svelte`
+- `src/routes/spaces/[space]/task/[taskId]/+page.svelte`
+
+**BEFORE NEXT SESSION - Run migration:**
+```bash
+psql -d stratai -f src/lib/server/persistence/migrations/011-documents-space-id-normalize.sql
+```
+
+**Next steps:**
+- Phase 2 continuation: Wire up actual AI planning with selected model
+- Add "Start Planning" button flow that uses TaskPlanningModelModal
+- Continue Phase 0.3e: Day Change Detection + Cleanup Offers
+
+### Previous: 2026-01-06 (Task Focus UX & Navigation Fixes)
 
 **Completed:**
 
@@ -129,31 +181,6 @@ Don't revisit without good reason:
 
 *Data Model:*
 - Added `estimated_effort` field to tasks (migration `010-tasks-estimated-effort.sql`)
-
-**Files Created:**
-- `src/lib/components/ModelBadge.svelte`
-- `src/lib/components/areas/panels/ContextPanel.svelte`
-- `src/lib/components/spaces/SpaceSettingsPanel.svelte`
-- `src/lib/components/spaces/TaskPanel.svelte`
-- `src/lib/server/persistence/migrations/010-tasks-estimated-effort.sql`
-- `src/lib/utils/model-display.ts`
-
-**Files Modified:**
-- `src/routes/spaces/[space]/[area]/+page.svelte`
-- `src/routes/spaces/[space]/task/[taskId]/+page.svelte`
-- `src/lib/components/spaces/TasksSection.svelte`
-- `src/lib/components/spaces/SpaceDashboard.svelte`
-- `src/lib/types/tasks.ts`
-
-**BEFORE NEXT SESSION - Run migration:**
-```bash
-psql -d stratai -f src/lib/server/persistence/migrations/010-tasks-estimated-effort.sql
-```
-
-**Next steps:**
-- Continue Phase 0.3e: Day Change Detection + Cleanup Offers
-- Wire up ContextPanel to actual document API
-- Test task creation and navigation end-to-end
 
 ### Previous: 2026-01-06 (Task Dashboard & Scaling UX)
 
