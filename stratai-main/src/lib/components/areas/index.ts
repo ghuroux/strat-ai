@@ -8,6 +8,7 @@
 // Area management
 export { default as AreaPills } from './AreaPills.svelte';
 export { default as AreaModal } from './AreaModal.svelte';
+export { default as DeleteAreaModal } from './DeleteAreaModal.svelte';
 
 // Area page components
 export { default as AreaHeader } from './AreaHeader.svelte';

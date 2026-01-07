@@ -104,23 +104,36 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 /**
  * DELETE /api/areas/[id]
  * Soft deletes the area. General areas cannot be deleted.
- * Tasks linked to this area will have their linked_area_id set to NULL.
+ *
+ * Query params:
+ * - deleteContent=true: Delete all conversations and tasks in this area
+ * - deleteContent=false (default): Move conversations to General, unlink tasks
  */
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, url }) => {
 	try {
-		const deleted = await postgresAreaRepository.delete(params.id, DEFAULT_USER_ID);
+		// Parse deleteContent option from query string
+		const deleteContent = url.searchParams.get('deleteContent') === 'true';
+
+		const deleted = await postgresAreaRepository.delete(params.id, DEFAULT_USER_ID, {
+			deleteContent
+		});
 
 		if (!deleted) {
 			return json({ error: 'Area not found' }, { status: 404 });
 		}
 
-		return json({ success: true });
+		return json({ success: true, deleteContent });
 	} catch (error) {
 		console.error('Failed to delete area:', error);
 
 		// Handle General area delete attempt
 		if (error instanceof Error && error.message.includes('Cannot delete the General area')) {
 			return json({ error: error.message }, { status: 400 });
+		}
+
+		// Handle missing General area
+		if (error instanceof Error && error.message.includes('Cannot find General area')) {
+			return json({ error: error.message }, { status: 500 });
 		}
 
 		return json(

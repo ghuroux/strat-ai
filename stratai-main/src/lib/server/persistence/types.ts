@@ -231,7 +231,7 @@ export interface AreaRepository {
 	create(input: CreateAreaInput, userId: string): Promise<Area>;
 	createGeneral(spaceId: string, userId: string): Promise<Area>;
 	update(id: string, updates: UpdateAreaInput, userId: string): Promise<Area | null>;
-	delete(id: string, userId: string): Promise<boolean>;
+	delete(id: string, userId: string, options?: { deleteContent?: boolean }): Promise<boolean>;
 	reorder(spaceId: string, orderedIds: string[], userId: string): Promise<void>;
 	getTaskCount(id: string, userId: string): Promise<number>;
 	getConversationCount(id: string, userId: string): Promise<number>;

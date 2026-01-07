@@ -256,11 +256,21 @@ export const postgresAreaRepository: AreaRepository = {
 	},
 
 	/**
-	 * Soft delete an area
+	 * Soft delete an area with options for handling related content
 	 * General areas cannot be deleted
-	 * Note: Tasks linked to this area will have their linked_area_id set to NULL
+	 *
+	 * @param id - Area ID to delete
+	 * @param userId - User ID
+	 * @param options.deleteContent - If true, deletes all conversations and tasks.
+	 *                                If false, moves conversations to General and unlinks tasks.
 	 */
-	async delete(id: string, userId: string): Promise<boolean> {
+	async delete(
+		id: string,
+		userId: string,
+		options: { deleteContent?: boolean } = {}
+	): Promise<boolean> {
+		const { deleteContent = false } = options;
+
 		// Check if it's a General area
 		const area = await this.findById(id, userId);
 		if (!area) return false;
@@ -269,6 +279,60 @@ export const postgresAreaRepository: AreaRepository = {
 			throw new Error('Cannot delete the General area');
 		}
 
+		// Find the General area for this space (needed for moving conversations)
+		const generalArea = await this.findGeneral(area.spaceId, userId);
+		if (!generalArea && !deleteContent) {
+			throw new Error('Cannot find General area to move conversations to');
+		}
+
+		if (deleteContent) {
+			// Option 1: Delete all related content
+
+			// Delete conversations in this area (soft delete)
+			await sql`
+				UPDATE conversations
+				SET deleted_at = NOW()
+				WHERE area_id = ${id}
+				  AND user_id = ${userId}
+				  AND deleted_at IS NULL
+			`;
+
+			// Delete tasks linked to this area (soft delete)
+			// This will cascade to subtasks due to parent_task_id relationship
+			await sql`
+				UPDATE tasks
+				SET deleted_at = NOW()
+				WHERE area_id = ${id}
+				  AND user_id = ${userId}
+				  AND deleted_at IS NULL
+			`;
+		} else {
+			// Option 2: Move conversations to General, unlink tasks
+
+			// Move conversations to General area
+			if (generalArea) {
+				await sql`
+					UPDATE conversations
+					SET area_id = ${generalArea.id},
+					    updated_at = NOW()
+					WHERE area_id = ${id}
+					  AND user_id = ${userId}
+					  AND deleted_at IS NULL
+				`;
+			}
+
+			// Unlink tasks from this area (set area_id to NULL)
+			await sql`
+				UPDATE tasks
+				SET area_id = NULL,
+				    updated_at = NOW()
+				WHERE area_id = ${id}
+				  AND user_id = ${userId}
+				  AND deleted_at IS NULL
+			`;
+		}
+
+		// Finally, soft delete the area itself
 		const result = await sql`
 			UPDATE areas
 			SET deleted_at = NOW()

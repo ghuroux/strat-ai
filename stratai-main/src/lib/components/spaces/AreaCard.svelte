@@ -7,6 +7,7 @@
 	 * - Conversation count and last activity
 	 * - Hover effects and visual feedback
 	 * - Special styling for General area
+	 * - Context menu for edit/delete
 	 */
 	import type { Area } from '$lib/types/areas';
 
@@ -16,6 +17,8 @@
 		lastActivity?: Date | null;
 		spaceColor?: string;
 		onclick: () => void;
+		onEdit?: (area: Area) => void;
+		onDelete?: (area: Area) => void;
 	}
 
 	let {
@@ -23,8 +26,34 @@
 		conversationCount = 0,
 		lastActivity = null,
 		spaceColor = '#3b82f6',
-		onclick
+		onclick,
+		onEdit,
+		onDelete
 	}: Props = $props();
+
+	// Menu state
+	let showMenu = $state(false);
+
+	function handleMenuClick(e: Event) {
+		e.stopPropagation();
+		showMenu = !showMenu;
+	}
+
+	function handleEdit(e: Event) {
+		e.stopPropagation();
+		showMenu = false;
+		onEdit?.(area);
+	}
+
+	function handleDelete(e: Event) {
+		e.stopPropagation();
+		showMenu = false;
+		onDelete?.(area);
+	}
+
+	function closeMenu() {
+		showMenu = false;
+	}
 
 	// Format relative time
 	function formatRelativeTime(date: Date | null): string {
@@ -49,6 +78,16 @@
 	let cardColor = $derived(area.color || spaceColor);
 </script>
 
+<!-- Backdrop to close menu when clicking outside -->
+{#if showMenu}
+	<button
+		type="button"
+		class="menu-backdrop"
+		onclick={closeMenu}
+		aria-label="Close menu"
+	></button>
+{/if}
+
 <button
 	type="button"
 	class="area-card"
@@ -56,6 +95,44 @@
 	style="--card-color: {cardColor}"
 	onclick={onclick}
 >
+	<!-- Menu button (visible on hover) -->
+	{#if onEdit || (onDelete && !area.isGeneral)}
+		<button
+			type="button"
+			class="menu-trigger"
+			onclick={handleMenuClick}
+			title="Options"
+		>
+			<svg viewBox="0 0 24 24" fill="currentColor">
+				<circle cx="12" cy="6" r="1.5" />
+				<circle cx="12" cy="12" r="1.5" />
+				<circle cx="12" cy="18" r="1.5" />
+			</svg>
+		</button>
+
+		<!-- Dropdown menu -->
+		{#if showMenu}
+			<div class="menu-dropdown">
+				{#if onEdit}
+					<button type="button" class="menu-item" onclick={handleEdit}>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+						</svg>
+						Edit
+					</button>
+				{/if}
+				{#if onDelete && !area.isGeneral}
+					<button type="button" class="menu-item danger" onclick={handleDelete}>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+						</svg>
+						Delete
+					</button>
+				{/if}
+			</div>
+		{/if}
+	{/if}
+
 	<div class="card-header">
 		<div class="card-icon">
 			{#if area.icon}
@@ -250,5 +327,100 @@
 	.area-card:hover .card-arrow {
 		color: var(--card-color);
 		transform: translateY(-50%) translateX(4px);
+	}
+
+	/* Menu backdrop */
+	.menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background: transparent;
+		border: none;
+		cursor: default;
+	}
+
+	/* Menu trigger button */
+	.menu-trigger {
+		position: absolute;
+		top: 0.75rem;
+		right: 0.75rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		background: transparent;
+		border: none;
+		border-radius: 0.375rem;
+		color: rgba(255, 255, 255, 0.3);
+		cursor: pointer;
+		opacity: 0;
+		transition: all 0.15s ease;
+		z-index: 10;
+	}
+
+	.menu-trigger svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.area-card:hover .menu-trigger {
+		opacity: 1;
+	}
+
+	.menu-trigger:hover {
+		background: rgba(255, 255, 255, 0.1);
+		color: rgba(255, 255, 255, 0.7);
+	}
+
+	/* Menu dropdown */
+	.menu-dropdown {
+		position: absolute;
+		top: 2.5rem;
+		right: 0.75rem;
+		min-width: 120px;
+		padding: 0.375rem;
+		background: #1e1e1e;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 0.5rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+		z-index: 50;
+	}
+
+	.menu-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.5rem 0.625rem;
+		font-size: 0.8125rem;
+		color: rgba(255, 255, 255, 0.8);
+		background: transparent;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		text-align: left;
+	}
+
+	.menu-item svg {
+		width: 0.875rem;
+		height: 0.875rem;
+		flex-shrink: 0;
+	}
+
+	.menu-item:hover {
+		background: rgba(255, 255, 255, 0.08);
+		color: #fff;
+	}
+
+	.menu-item.danger {
+		color: #f87171;
+	}
+
+	.menu-item.danger:hover {
+		background: rgba(239, 68, 68, 0.15);
+		color: #fca5a5;
 	}
 </style>

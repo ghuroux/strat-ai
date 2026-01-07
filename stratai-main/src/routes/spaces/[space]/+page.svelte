@@ -14,7 +14,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { SpaceDashboard, SpaceModal, SpaceSettingsPanel } from '$lib/components/spaces';
-	import { AreaModal } from '$lib/components/areas';
+	import { AreaModal, DeleteAreaModal } from '$lib/components/areas';
 	import Header from '$lib/components/layout/Header.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -85,6 +85,21 @@
 	let showSettingsPanel = $state(false);
 	let isLoading = $state(true);
 
+	// Delete area modal state
+	let showDeleteAreaModal = $state(false);
+	let deletingArea = $state<Area | null>(null);
+
+	// Computed counts for the area being deleted
+	let deletingAreaConversationCount = $derived.by(() => {
+		if (!deletingArea) return 0;
+		return chatStore.getConversationsByArea(deletingArea.id).length;
+	});
+
+	let deletingAreaTaskCount = $derived.by(() => {
+		if (!deletingArea) return 0;
+		return taskStore.getTasksForAreaId(deletingArea.id).length;
+	});
+
 	// Track the currently loaded space ID to avoid redundant loads
 	let loadedSpaceId = $state<string | null>(null);
 
@@ -152,16 +167,52 @@
 	}
 
 	async function handleAreaDelete(id: string) {
-		const success = await areaStore.deleteArea(id);
-		if (success) {
-			toastStore.success('Area deleted');
-			showAreaModal = false;
+		// Open delete modal instead of deleting directly
+		const area = areaStore.getAreaById(id);
+		if (area) {
+			deletingArea = area;
+			showDeleteAreaModal = true;
 		}
+		showAreaModal = false;
+	}
+
+	async function handleConfirmAreaDelete(deleteContent: boolean) {
+		if (!deletingArea) return;
+
+		const areaName = deletingArea.name;
+		const success = await areaStore.deleteArea(deletingArea.id, { deleteContent });
+
+		if (success) {
+			const message = deleteContent
+				? `"${areaName}" and all its content deleted`
+				: `"${areaName}" deleted. Content moved to General.`;
+			toastStore.success(message);
+		}
+
+		showDeleteAreaModal = false;
+		deletingArea = null;
+	}
+
+	function handleCloseDeleteAreaModal() {
+		showDeleteAreaModal = false;
+		deletingArea = null;
 	}
 
 	function handleCloseAreaModal() {
 		showAreaModal = false;
 		editingArea = null;
+	}
+
+	// Handlers for area card menu
+	function handleEditArea(area: Area) {
+		editingArea = area;
+		showAreaModal = true;
+	}
+
+	function handleDeleteAreaFromCard(area: Area) {
+		// Skip AreaModal, go directly to delete confirmation
+		deletingArea = area;
+		showDeleteAreaModal = true;
 	}
 
 	// Space settings handlers
@@ -217,6 +268,8 @@
 		{activeTasks}
 		spaceSlug={spaceParam || ''}
 		onCreateArea={handleCreateArea}
+		onEditArea={handleEditArea}
+		onDeleteArea={handleDeleteAreaFromCard}
 		onTaskClick={handleTaskClick}
 		onCreateTask={handleCreateTask}
 	/>
@@ -230,6 +283,17 @@
 		onCreate={handleAreaCreate}
 		onUpdate={handleAreaUpdate}
 		onDelete={handleAreaDelete}
+	/>
+
+	<!-- Delete Area Confirmation Modal -->
+	<DeleteAreaModal
+		open={showDeleteAreaModal}
+		area={deletingArea}
+		conversationCount={deletingAreaConversationCount}
+		taskCount={deletingAreaTaskCount}
+		spaceColor={spaceFromStore?.color}
+		onClose={handleCloseDeleteAreaModal}
+		onConfirm={handleConfirmAreaDelete}
 	/>
 
 	<!-- Space Settings Panel -->

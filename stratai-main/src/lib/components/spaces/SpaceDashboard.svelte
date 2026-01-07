@@ -36,6 +36,8 @@
 		activeTasks: Task[];
 		spaceSlug: string;
 		onCreateArea: () => void;
+		onEditArea?: (area: Area) => void;
+		onDeleteArea?: (area: Area) => void;
 		onTaskClick?: (task: Task) => void;
 		onCreateTask?: (input: CreateTaskInput) => Promise<Task | null>;
 	}
@@ -47,6 +49,8 @@
 		activeTasks,
 		spaceSlug,
 		onCreateArea,
+		onEditArea,
+		onDeleteArea,
 		onTaskClick,
 		onCreateTask
 	}: Props = $props();
@@ -214,6 +218,8 @@
 							lastActivity={area.lastActivity ?? null}
 							{spaceColor}
 							onclick={() => handleAreaClick(area)}
+							onEdit={onEditArea}
+							onDelete={onDeleteArea}
 						/>
 					{/each}
 					<CreateAreaCard {spaceColor} onclick={onCreateArea} />

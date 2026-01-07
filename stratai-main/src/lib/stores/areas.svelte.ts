@@ -189,8 +189,17 @@ class AreaStore {
 
 	/**
 	 * Delete an area (General areas cannot be deleted)
+	 *
+	 * @param id - Area ID to delete
+	 * @param options.deleteContent - If true, deletes all conversations and tasks.
+	 *                                If false (default), moves conversations to General and unlinks tasks.
 	 */
-	async deleteArea(id: string): Promise<boolean> {
+	async deleteArea(
+		id: string,
+		options: { deleteContent?: boolean } = {}
+	): Promise<boolean> {
+		const { deleteContent = false } = options;
+
 		this.isLoading = true;
 		this.error = null;
 
@@ -204,9 +213,10 @@ class AreaStore {
 				return false;
 			}
 
-			const response = await fetch(`/api/areas/${id}`, {
-				method: 'DELETE'
-			});
+			const response = await fetch(
+				`/api/areas/${id}?deleteContent=${deleteContent}`,
+				{ method: 'DELETE' }
+			);
 
 			if (!response.ok) {
 				const errorData = await response.json();
@@ -357,8 +367,8 @@ class AreaStore {
 		return this.updateArea(id, updates);
 	}
 
-	async deleteFocusArea(id: string): Promise<boolean> {
-		return this.deleteArea(id);
+	async deleteFocusArea(id: string, options?: { deleteContent?: boolean }): Promise<boolean> {
+		return this.deleteArea(id, options);
 	}
 
 	getFocusAreasForSpace(spaceId: string): Area[] {
