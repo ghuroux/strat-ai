@@ -33,6 +33,7 @@
 	import SubtaskWelcome from '$lib/components/tasks/SubtaskWelcome.svelte';
 	import TaskContextPanel from '$lib/components/tasks/TaskContextPanel.svelte';
 	import CompleteTaskModal from '$lib/components/tasks/CompleteTaskModal.svelte';
+	import TaskPlanningModelModal from '$lib/components/tasks/TaskPlanningModelModal.svelte';
 	import type { Task, ProposedSubtask, SubtaskType } from '$lib/types/tasks';
 	import type { SpaceType, Message, FileAttachment } from '$lib/types/chat';
 	import type { TaskContextInfo } from '$lib/utils/context-builder';
@@ -104,6 +105,7 @@
 	let chatContainer = $state<HTMLElement | undefined>(undefined);
 	let showCompleteModal = $state(false);
 	let showSubtaskWelcome = $state(true);
+	let showPlanningModelModal = $state(false);
 	let isCreatingSubtasks = $state(false);
 
 	// Multi-conversation support for subtasks
@@ -513,15 +515,14 @@
 						if (extracted.length > 0) {
 							// If not in Plan Mode, auto-start it
 							if (!isPlanModeActive) {
-								const started = await taskStore.startPlanMode(taskIdParam, conversationId);
-								if (!started) {
-									const blockingTask = taskStore.planningTask;
-									if (blockingTask) {
-										toastStore.error(`Another task is in planning mode: "${blockingTask.title}". Exit it first.`);
-									} else {
-										toastStore.error('Failed to start Plan Mode');
-									}
+								const result = await taskStore.startPlanMode(taskIdParam, conversationId);
+								if (!result.success) {
+									toastStore.error('Failed to start Plan Mode');
 									return;
+								}
+								// Show toast if there are other tasks in planning
+								if (result.existingPlanningCount > 0) {
+									toastStore.info(`Now planning "${task?.title}". ${result.existingPlanningCount + 1} tasks in planning.`);
 								}
 							}
 							await taskStore.setProposedSubtasks(extracted);
@@ -825,14 +826,47 @@
 		await taskStore.completeTask(subtaskId);
 	}
 
-	// Start Plan Mode
-	async function handleStartPlanMode() {
+	// LocalStorage keys for task planning modal
+	const PLANNING_STORAGE_KEY_LAST_MODEL = 'stratai-task-planning-model';
+	const PLANNING_STORAGE_KEY_SKIP_MODAL = 'stratai-task-planning-skip-modal';
+
+	// Check if we should skip the model selection modal
+	function shouldSkipPlanningModal(): { skip: boolean; savedModel: string | null } {
+		if (typeof window === 'undefined') return { skip: false, savedModel: null };
+		const skipModal = localStorage.getItem(PLANNING_STORAGE_KEY_SKIP_MODAL) === 'true';
+		const savedModel = localStorage.getItem(PLANNING_STORAGE_KEY_LAST_MODEL);
+		return { skip: skipModal && !!savedModel, savedModel };
+	}
+
+	// Handle "Help me plan this" button click
+	function handlePlanButtonClick() {
+		const { skip, savedModel } = shouldSkipPlanningModal();
+		if (skip && savedModel) {
+			// Skip modal and use saved model
+			handleStartPlanMode(savedModel);
+		} else {
+			// Show model selection modal
+			showPlanningModelModal = true;
+		}
+	}
+
+	// Handle model selection from modal
+	function handlePlanningModelSelect(modelId: string) {
+		showPlanningModelModal = false;
+		handleStartPlanMode(modelId);
+	}
+
+	// Start Plan Mode with specified model
+	async function handleStartPlanMode(modelId?: string) {
 		if (!task || !taskIdParam) return;
 
-		// Create a new conversation for planning if needed
+		// Use provided model or fall back to settings
+		const planningModel = modelId || settingsStore.selectedModel;
+
+		// Create a new conversation for planning with the selected model
 		let conversationId = chatStore.activeConversation?.id;
 		if (!conversationId) {
-			conversationId = chatStore.createConversation(settingsStore.selectedModel, {
+			conversationId = chatStore.createConversation(planningModel, {
 				spaceId: spaceParam || undefined,
 				areaId: task.areaId || undefined,
 				taskId: taskIdParam
@@ -841,7 +875,16 @@
 			chatStore.setActiveConversation(conversationId);
 		}
 
-		await taskStore.startPlanMode(taskIdParam, conversationId);
+		const result = await taskStore.startPlanMode(taskIdParam, conversationId);
+		if (!result.success) {
+			toastStore.error('Failed to start Plan Mode');
+			return;
+		}
+
+		// Show toast if there are other tasks in planning
+		if (result.existingPlanningCount > 0) {
+			toastStore.info(`Now planning "${task.title}". ${result.existingPlanningCount + 1} tasks in planning.`);
+		}
 
 		// Send initial planning message
 		await handleSend(
@@ -967,10 +1010,10 @@
 	}
 
 	// Manually add a subtask (not through Plan Mode)
-	async function handleManualAddSubtask() {
+	function handleManualAddSubtask() {
 		// For now, start plan mode to add subtasks
 		// Could be enhanced to show a quick-add modal later
-		await handleStartPlanMode();
+		handlePlanButtonClick();
 	}
 
 	// Handle completing a subtask (conversation type)
@@ -1440,7 +1483,7 @@
 											<button
 												type="button"
 												class="plan-button"
-												onclick={handleStartPlanMode}
+												onclick={handlePlanButtonClick}
 											>
 												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 													<path
@@ -1594,6 +1637,16 @@
 				onCompleteAll={handleCompleteAll}
 				onCompleteTaskOnly={handleCompleteTaskOnly}
 				onCancel={() => (showCompleteModal = false)}
+			/>
+		{/if}
+
+		<!-- Task Planning Model Selection Modal -->
+		{#if task}
+			<TaskPlanningModelModal
+				open={showPlanningModelModal}
+				taskTitle={task.title}
+				onSelect={handlePlanningModelSelect}
+				onCancel={() => (showPlanningModelModal = false)}
 			/>
 		{/if}
 	</div>

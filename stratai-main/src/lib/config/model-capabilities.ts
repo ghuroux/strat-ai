@@ -7,9 +7,35 @@
  * - Extended thinking / reasoning support
  * - Vision (image) support
  * - Tool use support
+ * - Task planning capabilities (for "Help me plan this" feature)
  *
- * Last updated: December 2025
+ * Last updated: January 2026
  */
+
+/**
+ * Task Planning Capabilities
+ * Defines how well a model performs for the "Help me plan this" task breakdown feature.
+ * This is separate from extended thinking/reasoning - it's about breaking down tasks into subtasks.
+ */
+export interface TaskPlanningCapabilities {
+	/** Model tier for task planning - determines UI grouping and recommendations */
+	tier: 'recommended' | 'capable' | 'experimental';
+
+	/** How reliable is structured output (JSON, markers, specific formats) */
+	structuredOutput: 'reliable' | 'mostly' | 'variable';
+
+	/** Tendency toward verbosity in responses */
+	verbosity: 'concise' | 'moderate' | 'verbose';
+
+	/** Whether prompts need few-shot examples for reliable output */
+	needsFewShotExamples: boolean;
+
+	/** Warnings to show user when selecting this model for planning */
+	warnings?: string[];
+
+	/** Short description of planning behavior for UI display */
+	planningNote?: string;
+}
 
 export interface ModelCapabilities {
 	/** Display name for the model */
@@ -35,6 +61,8 @@ export interface ModelCapabilities {
 		input: number;
 		output: number;
 	};
+	/** Optional: Task planning capabilities for "Help me plan this" feature */
+	taskPlanning?: TaskPlanningCapabilities;
 }
 
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
@@ -51,7 +79,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Most capable Claude model for complex reasoning',
-		pricing: { input: 5, output: 25 }
+		pricing: { input: 5, output: 25 },
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'concise',
+			needsFewShotExamples: false,
+			planningNote: 'Excellent task breakdown with nuanced understanding'
+		}
 	},
 
 	'claude-sonnet-4-5': {
@@ -63,7 +98,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Best balance of performance, speed, and cost',
-		pricing: { input: 3, output: 15 }
+		pricing: { input: 3, output: 15 },
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'concise',
+			needsFewShotExamples: false,
+			planningNote: 'Best balance of quality and speed for planning'
+		}
 	},
 
 	'claude-sonnet-4': {
@@ -75,7 +117,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Previous generation Sonnet model',
-		pricing: { input: 3, output: 15 }
+		pricing: { input: 3, output: 15 },
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'concise',
+			needsFewShotExamples: false,
+			planningNote: 'Reliable task planning with clear structure'
+		}
 	},
 
 	'claude-3-7-sonnet': {
@@ -87,7 +136,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Claude 3.7 with full thinking output',
-		pricing: { input: 3, output: 15 }
+		pricing: { input: 3, output: 15 },
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'concise',
+			needsFewShotExamples: false,
+			planningNote: 'Strong task planning with visible reasoning'
+		}
 	},
 
 	'claude-haiku-4-5': {
@@ -128,7 +184,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'],
 		description: 'Latest flagship with reasoning',
-		pricing: { input: 1.75, output: 14 }
+		pricing: { input: 1.75, output: 14 },
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'moderate',
+			needsFewShotExamples: false,
+			planningNote: 'Strong analytical task breakdown'
+		}
 	},
 
 	'gpt-5.2-pro': {
@@ -140,7 +203,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		reasoningEffortLevels: ['medium', 'high', 'xhigh'],
-		description: 'Premium reasoning for maximum accuracy'
+		description: 'Premium reasoning for maximum accuracy',
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'moderate',
+			needsFewShotExamples: false,
+			planningNote: 'Premium reasoning for complex task planning'
+		}
 	},
 
 	'gpt-5.2-chat-latest': {
@@ -167,7 +237,14 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
-		description: 'Flagship for coding & agentic tasks with adaptive reasoning'
+		description: 'Flagship for coding & agentic tasks with adaptive reasoning',
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'moderate',
+			needsFewShotExamples: false,
+			planningNote: 'Great for coding and agentic task breakdown'
+		}
 	},
 
 	'gpt-5.1-chat-latest': {
@@ -540,4 +617,73 @@ export function formatContextWindow(tokens: number): string {
 		return `${(tokens / 1000000).toFixed(tokens % 1000000 === 0 ? 0 : 1)}M`;
 	}
 	return `${Math.round(tokens / 1000)}K`;
+}
+
+// ============================================
+// TASK PLANNING HELPERS
+// ============================================
+
+/**
+ * Default task planning capabilities for models without explicit config.
+ * Models are experimental by default until tested and classified.
+ */
+export const DEFAULT_TASK_PLANNING: TaskPlanningCapabilities = {
+	tier: 'experimental',
+	structuredOutput: 'variable',
+	verbosity: 'moderate',
+	needsFewShotExamples: true,
+	warnings: ['This model has not been tested for task planning. Results may vary.'],
+	planningNote: 'Not yet tested for task planning'
+};
+
+/**
+ * Get task planning capabilities for a model.
+ * Returns explicit config if available, otherwise returns default experimental config.
+ */
+export function getTaskPlanningCapabilities(modelId: string): TaskPlanningCapabilities {
+	const model = MODEL_CAPABILITIES[modelId];
+	if (model?.taskPlanning) {
+		return model.taskPlanning;
+	}
+	return DEFAULT_TASK_PLANNING;
+}
+
+/**
+ * Check if a model is recommended for task planning
+ */
+export function isRecommendedForTaskPlanning(modelId: string): boolean {
+	return getTaskPlanningCapabilities(modelId).tier === 'recommended';
+}
+
+/**
+ * Get all models with a specific task planning tier
+ */
+export function getModelsByTaskPlanningTier(
+	tier: 'recommended' | 'capable' | 'experimental'
+): Array<{ id: string; capabilities: ModelCapabilities; taskPlanning: TaskPlanningCapabilities }> {
+	const results: Array<{ id: string; capabilities: ModelCapabilities; taskPlanning: TaskPlanningCapabilities }> = [];
+
+	for (const [id, capabilities] of Object.entries(MODEL_CAPABILITIES)) {
+		const taskPlanning = getTaskPlanningCapabilities(id);
+		if (taskPlanning.tier === tier) {
+			results.push({ id, capabilities, taskPlanning });
+		}
+	}
+
+	return results;
+}
+
+/**
+ * Get all models grouped by task planning tier, for use in model selection UI
+ */
+export function getModelsGroupedByTaskPlanningTier(): {
+	recommended: Array<{ id: string; capabilities: ModelCapabilities; taskPlanning: TaskPlanningCapabilities }>;
+	capable: Array<{ id: string; capabilities: ModelCapabilities; taskPlanning: TaskPlanningCapabilities }>;
+	experimental: Array<{ id: string; capabilities: ModelCapabilities; taskPlanning: TaskPlanningCapabilities }>;
+} {
+	return {
+		recommended: getModelsByTaskPlanningTier('recommended'),
+		capable: getModelsByTaskPlanningTier('capable'),
+		experimental: getModelsByTaskPlanningTier('experimental')
+	};
 }

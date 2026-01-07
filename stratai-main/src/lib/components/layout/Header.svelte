@@ -7,6 +7,7 @@
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import ModelSelector from '../ModelSelector.svelte';
 	import ModelBadge from '../ModelBadge.svelte';
+	import PlanningTasksIndicator from '../tasks/PlanningTasksIndicator.svelte';
 	import { SpaceModal } from '../spaces';
 	import type { CreateSpaceInput, UpdateSpaceInput, Space } from '$lib/types/spaces';
 	import { MAX_CUSTOM_SPACES } from '$lib/types/spaces';
@@ -257,6 +258,9 @@
 
 	<!-- Right: Actions -->
 	<div class="flex items-center gap-2">
+		<!-- Planning tasks indicator -->
+		<PlanningTasksIndicator />
+
 		<!-- Current conversation model badge (hide on Space Dashboard, show when chat has messages) -->
 		{#if !isSpaceDashboard && chatStore.messages && chatStore.messages.length > 0 && chatStore.activeConversation}
 			<ModelBadge model={chatStore.activeConversation.model} />

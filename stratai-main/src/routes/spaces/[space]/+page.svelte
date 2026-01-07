@@ -11,7 +11,6 @@
 	 * - Recent activity overview
 	 * - Active tasks section
 	 */
-	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { SpaceDashboard, SpaceModal, SpaceSettingsPanel } from '$lib/components/spaces';
@@ -86,30 +85,46 @@
 	let showSettingsPanel = $state(false);
 	let isLoading = $state(true);
 
-	// Load data on mount
-	onMount(async () => {
-		if (!spaceParam) {
+	// Track the currently loaded space ID to avoid redundant loads
+	let loadedSpaceId = $state<string | null>(null);
+
+	// Load data when space changes (handles both initial mount and navigation)
+	$effect(() => {
+		const currentSpaceParam = spaceParam;
+		if (!currentSpaceParam) {
 			goto('/spaces');
 			return;
 		}
 
-		// Ensure spaces are loaded first to get proper IDs
-		await spacesStore.loadSpaces();
-		const space = spacesStore.getSpaceBySlug(spaceParam);
-		if (!space) {
-			toastStore.error('Space not found');
-			goto('/spaces');
-			return;
-		}
+		// Run async loading in the effect
+		(async () => {
+			// Ensure spaces are loaded first to get proper IDs
+			await spacesStore.loadSpaces();
+			const space = spacesStore.getSpaceBySlug(currentSpaceParam);
+			if (!space) {
+				toastStore.error('Space not found');
+				goto('/spaces');
+				return;
+			}
 
-		// Load data in parallel using proper space ID
-		await Promise.all([
-			areaStore.loadAreas(space.id),
-			chatStore.refresh(),
-			taskStore.loadTasks(space.id)
-		]);
+			// Skip if we already loaded this space's data
+			if (loadedSpaceId === space.id) {
+				isLoading = false;
+				return;
+			}
 
-		isLoading = false;
+			isLoading = true;
+
+			// Load data in parallel using proper space ID
+			await Promise.all([
+				areaStore.loadAreas(space.id),
+				chatStore.refresh(),
+				taskStore.loadTasks(space.id)
+			]);
+
+			loadedSpaceId = space.id;
+			isLoading = false;
+		})();
 	});
 
 	// Area modal handlers

@@ -151,11 +151,36 @@ class TaskStore {
 	});
 
 	/**
-	 * The task currently in planning status (if any)
-	 * There can only be one task in planning at a time
+	 * All tasks currently in planning status
+	 * Multiple tasks can be in planning simultaneously
+	 */
+	planningTasks = $derived.by(() => {
+		const _ = this._version;
+		return Array.from(this.tasks.values()).filter((task) => task.status === 'planning');
+	});
+
+	/**
+	 * Count of tasks in planning mode
+	 */
+	planningTaskCount = $derived.by(() => {
+		return this.planningTasks.length;
+	});
+
+	/**
+	 * The currently focused planning task (if any)
+	 * Returns the focused task if it's in planning, otherwise the first planning task
+	 * Maintained for backward compatibility
 	 */
 	planningTask = $derived.by(() => {
 		const _ = this._version;
+		// If focused task is in planning, return it
+		if (this.focusedTaskId) {
+			const focused = this.tasks.get(this.focusedTaskId);
+			if (focused?.status === 'planning') {
+				return focused;
+			}
+		}
+		// Otherwise return first planning task (for backward compat)
 		for (const task of this.tasks.values()) {
 			if (task.status === 'planning') {
 				return task;
@@ -804,16 +829,14 @@ class TaskStore {
 	/**
 	 * Start Plan Mode for a task
 	 * Sets task status to 'planning' and initializes planning_data
+	 * Multiple tasks can be in planning simultaneously
 	 */
-	async startPlanMode(taskId: string, conversationId?: string): Promise<boolean> {
+	async startPlanMode(taskId: string, conversationId?: string): Promise<{ success: boolean; existingPlanningCount: number }> {
 		const task = this.tasks.get(taskId);
-		if (!task) return false;
+		if (!task) return { success: false, existingPlanningCount: 0 };
 
-		// Check if another task is already in planning
-		if (this.planningTask && this.planningTask.id !== taskId) {
-			this.error = 'Another task is already in planning mode. Resume or cancel it first.';
-			return false;
-		}
+		// Track how many tasks are already in planning (for toast notification)
+		const existingPlanningCount = this.planningTaskCount;
 
 		const planningData: PlanningData = {
 			phase: 'eliciting',
@@ -859,11 +882,11 @@ class TaskStore {
 			// Set guard timestamp to prevent accidental immediate exits
 			this.planModeStartTime = Date.now();
 
-			return true;
+			return { success: true, existingPlanningCount };
 		} catch (e) {
 			console.error('Failed to start plan mode:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to start plan mode';
-			return false;
+			return { success: false, existingPlanningCount };
 		}
 	}
 
