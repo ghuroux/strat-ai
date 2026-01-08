@@ -405,7 +405,7 @@
 			<!-- Action buttons -->
 			{#if !isStreamingEmpty && !message.error && displayContent && showCopyButton && !isEditing}
 				<div
-					class="absolute -top-2 {isUser ? '-left-8' : '-right-8'} flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+					class="absolute -bottom-2 {isUser ? '-left-8' : '-right-8'} flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
 					transition:fade={{ duration: 150 }}
 				>
 					{#if isUser}

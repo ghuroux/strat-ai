@@ -328,6 +328,11 @@ class ChatStore {
 		return this.conversations.size;
 	});
 
+	// Count of conversations in main nav only (no spaceId)
+	mainConversationCount = $derived.by(() => {
+		return Array.from(this.conversations.values()).filter((c) => !c.spaceId).length;
+	});
+
 	// Conversations filtered by active space (for space sidebar views)
 	conversationsBySpace = $derived.by(() => {
 		if (!this.activeSpaceId) return this.conversationList;
@@ -924,6 +929,35 @@ class ChatStore {
 		if (typeof window !== 'undefined') {
 			localStorage.removeItem(STORAGE_KEY);
 		}
+	}
+
+	/**
+	 * Clear only main nav conversations (those without a spaceId)
+	 * Preserves all space/area conversations
+	 */
+	clearMainConversations(): number {
+		const mainConversationIds: string[] = [];
+
+		// Find all conversations without a spaceId
+		for (const [id, conv] of this.conversations) {
+			if (!conv.spaceId) {
+				mainConversationIds.push(id);
+			}
+		}
+
+		// Delete each from API and local store
+		for (const id of mainConversationIds) {
+			this.deleteFromApi(id);
+			this.conversations.delete(id);
+		}
+
+		// Clear active conversation if it was a main nav conversation
+		if (this.activeConversationId && mainConversationIds.includes(this.activeConversationId)) {
+			this.activeConversationId = null;
+		}
+
+		this.schedulePersist();
+		return mainConversationIds.length;
 	}
 
 	// Search conversations by title or content (maintains pin order)

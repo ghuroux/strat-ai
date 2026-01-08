@@ -5,6 +5,7 @@
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import ConversationItem from './ConversationItem.svelte';
+	import ClearConversationsModal from './ClearConversationsModal.svelte';
 
 	interface Props {
 		onNewChat: () => void;
@@ -19,6 +20,7 @@
 	let isSearchFocused = $state(false);
 	let openMenuId = $state<string | null>(null);
 	let otherContextsExpanded = $state(false);
+	let showClearModal = $state(false);
 
 	function handleMenuToggle(id: string, isOpen: boolean) {
 		openMenuId = isOpen ? id : null;
@@ -430,16 +432,12 @@
 	<!-- Footer -->
 	<div class="p-4 border-t border-surface-800">
 		<div class="flex items-center justify-between text-xs text-surface-500">
-			<span>{chatStore.conversationCount} conversation{chatStore.conversationCount === 1 ? '' : 's'}</span>
-			{#if chatStore.conversationCount > 0}
+			<span>{chatStore.mainConversationCount} conversation{chatStore.mainConversationCount === 1 ? '' : 's'}</span>
+			{#if chatStore.mainConversationCount > 0}
 				<button
 					type="button"
 					class="text-surface-500 hover:text-red-400 transition-colors"
-					onclick={() => {
-						if (confirm('Delete all conversations?')) {
-							chatStore.clearAll();
-						}
-					}}
+					onclick={() => showClearModal = true}
 				>
 					Clear all
 				</button>
@@ -447,3 +445,14 @@
 		</div>
 	</div>
 </aside>
+
+<!-- Clear Conversations Modal -->
+<ClearConversationsModal
+	open={showClearModal}
+	conversationCount={chatStore.mainConversationCount}
+	onClose={() => showClearModal = false}
+	onConfirm={() => {
+		chatStore.clearMainConversations();
+		showClearModal = false;
+	}}
+/>
