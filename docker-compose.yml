@@ -56,14 +56,20 @@ services:
     networks:
       - stratai_network
 
-  # Bifrost - Agent framework
+  # Bifrost - LLM Gateway (testing as LiteLLM alternative)
   bifrost:
     image: maximhq/bifrost:latest
     container_name: bifrost
     ports:
       - "8080:8080"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION_NAME=${AWS_REGION_NAME}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
     volumes:
-      # Mounts a local directory named 'data' to store Bifrost's data persistently
       - ./data:/app/data
     restart: unless-stopped
     networks:

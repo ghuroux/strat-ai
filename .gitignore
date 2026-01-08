@@ -16,6 +16,9 @@ stratai-main/.svelte-kit/
 
 # Exports and data
 exports/
+data/*.db
+data/*.db-shm
+data/*.db-wal
 
 # Large deployment packages
 *.tar.gz
