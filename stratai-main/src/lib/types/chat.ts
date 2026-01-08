@@ -76,6 +76,7 @@ export interface Conversation {
 	model: string;
 	createdAt: number;
 	updatedAt: number;
+	lastViewedAt?: number; // When user last opened/viewed this conversation
 	pinned?: boolean;
 	summary?: StructuredSummary | string; // Can be structured or legacy string
 	// Context compacting / session continuation fields

@@ -477,6 +477,34 @@ class ChatStore {
 		} else if (this.conversations.has(id)) {
 			this.activeConversationId = id;
 			this.schedulePersist();
+
+			// Mark conversation as viewed (update lastViewedAt)
+			this.markAsViewed(id);
+		}
+	}
+
+	/**
+	 * Mark a conversation as viewed
+	 * Updates lastViewedAt locally and syncs to server
+	 */
+	private async markAsViewed(id: string): Promise<void> {
+		const conversation = this.conversations.get(id);
+		if (!conversation) return;
+
+		// Update locally
+		const now = Date.now();
+		this.conversations.set(id, {
+			...conversation,
+			lastViewedAt: now
+		});
+
+		// Sync to server (fire and forget, don't block UI)
+		if (typeof window !== 'undefined') {
+			fetch(`/api/conversations/${id}/viewed`, {
+				method: 'POST'
+			}).catch((err) => {
+				console.warn('Failed to mark conversation as viewed:', err);
+			});
 		}
 	}
 

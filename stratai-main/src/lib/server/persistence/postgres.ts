@@ -23,6 +23,7 @@ interface ConversationRow {
 	tags: string[] | null;
 	createdAt: Date;
 	updatedAt: Date;
+	lastViewedAt: Date | null;
 	deletedAt: Date | null;
 }
 
@@ -58,7 +59,8 @@ function rowToConversation(row: ConversationRow): Conversation {
 		taskId: row.taskId ?? null,
 		tags: row.tags ?? [],
 		createdAt: toTimestamp(row.createdAt) ?? Date.now(),
-		updatedAt: toTimestamp(row.updatedAt) ?? Date.now()
+		updatedAt: toTimestamp(row.updatedAt) ?? Date.now(),
+		lastViewedAt: toTimestamp(row.lastViewedAt)
 	};
 }
 
@@ -77,7 +79,7 @@ export const postgresConversationRepository: ConversationRepository = {
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
 				user_id, team_id, space_id, area_id, task_id,
-				created_at, updated_at, deleted_at
+				created_at, updated_at, last_viewed_at, deleted_at
 			FROM conversations
 			WHERE user_id = ${userId}
 				AND deleted_at IS NULL
@@ -92,7 +94,7 @@ export const postgresConversationRepository: ConversationRepository = {
 				id, title, model, messages, pinned, summary,
 				continued_from_id, continuation_summary, refreshed_at,
 				user_id, team_id, space_id, area_id, task_id,
-				created_at, updated_at, deleted_at
+				created_at, updated_at, last_viewed_at, deleted_at
 			FROM conversations
 			WHERE id = ${id}
 				AND user_id = ${userId}
@@ -265,14 +267,31 @@ export async function findBySpaceId(
 			id, title, model, messages, pinned, summary,
 			continued_from_id, continuation_summary, refreshed_at,
 			user_id, team_id, space_id, area_id, task_id, tags,
-			created_at, updated_at, deleted_at
+			created_at, updated_at, last_viewed_at, deleted_at
 		FROM conversations
 		WHERE user_id = ${userId}
 			AND space_id = ${spaceId}
 			AND deleted_at IS NULL
-		ORDER BY pinned DESC, updated_at DESC
+		ORDER BY pinned DESC, last_viewed_at DESC NULLS LAST
 	`;
 	return rows.map(rowToConversation);
+}
+
+/**
+ * Mark a conversation as viewed (updates last_viewed_at)
+ * Call this when user opens/views a conversation
+ */
+export async function markConversationAsViewed(
+	conversationId: string,
+	userId: string
+): Promise<void> {
+	await sql`
+		UPDATE conversations
+		SET last_viewed_at = NOW()
+		WHERE id = ${conversationId}
+			AND user_id = ${userId}
+			AND deleted_at IS NULL
+	`;
 }
 
 /**
@@ -289,7 +308,7 @@ export async function searchConversations(
 			id, title, model, messages, pinned, summary,
 			continued_from_id, continuation_summary, refreshed_at,
 			user_id, team_id, space_id, area_id, task_id, tags,
-			created_at, updated_at, deleted_at
+			created_at, updated_at, last_viewed_at, deleted_at
 		FROM conversations
 		WHERE user_id = ${userId}
 			AND deleted_at IS NULL
@@ -300,7 +319,7 @@ export async function searchConversations(
 					WHERE msg->>'content' ILIKE ${'%' + query + '%'}
 				)
 			)
-		ORDER BY updated_at DESC
+		ORDER BY last_viewed_at DESC NULLS LAST
 		LIMIT ${limit}
 	`;
 	return rows.map(rowToConversation);
@@ -323,12 +342,12 @@ export async function getConversationsPaginated(
 					id, title, model, messages, pinned, summary,
 					continued_from_id, continuation_summary, refreshed_at,
 					user_id, team_id, space_id, area_id, task_id, tags,
-					created_at, updated_at, deleted_at
+					created_at, updated_at, last_viewed_at, deleted_at
 				FROM conversations
 				WHERE user_id = ${userId}
 					AND space_id = ${spaceId}
 					AND deleted_at IS NULL
-				ORDER BY pinned DESC, updated_at DESC
+				ORDER BY pinned DESC, last_viewed_at DESC NULLS LAST
 				OFFSET ${offset}
 				LIMIT ${limit}
 			`
@@ -337,11 +356,11 @@ export async function getConversationsPaginated(
 					id, title, model, messages, pinned, summary,
 					continued_from_id, continuation_summary, refreshed_at,
 					user_id, team_id, space_id, area_id, task_id, tags,
-					created_at, updated_at, deleted_at
+					created_at, updated_at, last_viewed_at, deleted_at
 				FROM conversations
 				WHERE user_id = ${userId}
 					AND deleted_at IS NULL
-				ORDER BY pinned DESC, updated_at DESC
+				ORDER BY pinned DESC, last_viewed_at DESC NULLS LAST
 				OFFSET ${offset}
 				LIMIT ${limit}
 			`,

@@ -68,9 +68,11 @@
 
 	// Recent conversations only (for quick resume) - includes area chats and subtask chats
 	// Show 10 items initially, with option to show more
+	// Sort by lastViewedAt (when user actually opened) not updatedAt (when modified)
 	let maxRecentItems = $state(10);
 	let recentActivity = $derived.by(() => {
 		return recentConversations
+			.filter((conv) => conv.lastViewedAt) // Only show conversations user has actually viewed
 			.map((conv) => {
 				const area = areas.find((a) => a.id === conv.areaId);
 				// Find associated task if this is a task conversation (use taskStore to include subtasks)
@@ -90,7 +92,7 @@
 					taskTitle: task?.title,
 					isSubtask,
 					parentTaskTitle: parentTask?.title,
-					timestamp: new Date(conv.updatedAt)
+					timestamp: new Date(conv.lastViewedAt!)
 				};
 			})
 			.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
