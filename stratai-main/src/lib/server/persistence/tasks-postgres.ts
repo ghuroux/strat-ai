@@ -62,6 +62,8 @@ function dbRowToTask(row: TaskRow): Task {
 		estimatedEffort: row.estimatedEffort as Task['estimatedEffort'] ?? undefined,
 		completedAt: row.completedAt ?? undefined,
 		completionNotes: row.completionNotes ?? undefined,
+		staleDismissedAt: row.staleDismissedAt ?? undefined,
+		approachChosenAt: row.approachChosenAt ?? undefined,
 		source: {
 			type: row.sourceType as Task['source']['type'],
 			assistId: row.sourceAssistId ?? undefined,
@@ -269,6 +271,7 @@ export const postgresTaskRepository: TaskRepository = {
 				estimated_effort = ${updates.estimatedEffort === null ? null : updates.estimatedEffort ?? sql`estimated_effort`},
 				completion_notes = COALESCE(${updates.completionNotes ?? null}, completion_notes),
 				stale_dismissed_at = ${updates.staleDismissedAt === null ? null : updates.staleDismissedAt ?? sql`stale_dismissed_at`},
+				approach_chosen_at = ${updates.approachChosenAt === null ? null : updates.approachChosenAt ?? sql`approach_chosen_at`},
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}

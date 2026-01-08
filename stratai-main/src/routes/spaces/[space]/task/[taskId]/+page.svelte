@@ -32,6 +32,8 @@
 	import SubtaskDashboard from '$lib/components/tasks/SubtaskDashboard.svelte';
 	import SubtaskWelcome from '$lib/components/tasks/SubtaskWelcome.svelte';
 	import TaskContextPanel from '$lib/components/tasks/TaskContextPanel.svelte';
+	import TaskApproachModal from '$lib/components/tasks/TaskApproachModal.svelte';
+	import TaskWorkWelcome from '$lib/components/tasks/TaskWorkWelcome.svelte';
 	import CompleteTaskModal from '$lib/components/tasks/CompleteTaskModal.svelte';
 	import TaskPlanningModelModal from '$lib/components/tasks/TaskPlanningModelModal.svelte';
 	import type { Task, ProposedSubtask, SubtaskType } from '$lib/types/tasks';
@@ -157,6 +159,37 @@
 
 	// Task completion state (for read-only mode)
 	let isTaskCompleted = $derived(task?.status === 'completed');
+
+	// Work Unit detection (parent task without subtasks)
+	let isWorkUnit = $derived(!isSubtask && subtasks.length === 0);
+
+	// Show approach modal on first visit to a parent task without subtasks/conversations
+	let shouldShowApproachModal = $derived(
+		task &&
+		!task.approachChosenAt &&
+		task.linkedConversationIds.length === 0 &&
+		subtasks.length === 0 &&
+		task.status !== 'planning' &&
+		!isSubtask
+	);
+
+	// Show work welcome after choosing "Work directly", before first message
+	let shouldShowWorkWelcome = $derived(
+		task &&
+		task.approachChosenAt &&
+		!hasExistingConversations &&
+		task.status !== 'planning' &&
+		!isSubtask &&
+		subtasks.length === 0
+	);
+
+	// Show context panel for work units
+	// Panel stays visible during planning (shows "Cancel Planning" button)
+	// Panel naturally hides when subtasks are created (isWorkUnit becomes false)
+	let shouldShowWorkUnitPanel = $derived(
+		isWorkUnit &&
+		task?.approachChosenAt
+	);
 
 	// View mode: 'dashboard' shows subtask cards, 'chat' shows conversation
 	// Default to 'dashboard' when parent task has subtasks
@@ -847,24 +880,78 @@
 		handleStartPlanMode(modelId);
 	}
 
+	// Handle "Work directly" choice from approach modal
+	async function handleChooseWork() {
+		if (!taskIdParam) return;
+		await taskStore.setApproachChosen(taskIdParam);
+		// Work welcome will automatically show based on shouldShowWorkWelcome
+	}
+
+	// Handle "Break into subtasks" choice from approach modal
+	function handleChoosePlan() {
+		// First set approach chosen so modal doesn't reappear
+		if (taskIdParam) {
+			taskStore.setApproachChosen(taskIdParam);
+		}
+		// Show the model selection modal for planning
+		showPlanningModelModal = true;
+	}
+
+	// Handle quick start from work welcome (prepopulate and send)
+	async function handleWorkQuickStart(prompt: string) {
+		await handleSend(prompt);
+	}
+
+	// Handle cancel planning mode (from context panel)
+	async function handleCancelPlanMode() {
+		await taskStore.exitPlanMode();
+		toastStore.info('Exited planning mode');
+	}
+
 	// Start Plan Mode with specified model
 	async function handleStartPlanMode(modelId?: string) {
 		if (!task || !taskIdParam) return;
 
-		// Use provided model or fall back to settings
 		const planningModel = modelId || settingsStore.selectedModel;
 
-		// Create a new conversation for planning with the selected model
-		let conversationId = chatStore.activeConversation?.id;
-		if (!conversationId) {
+		// Check existing conversation for context preservation
+		const existingConv = chatStore.activeConversation;
+		const existingMessages = existingConv?.messages.filter(m => !m.isStreaming && !m.error) || [];
+		const hasExistingContext = existingMessages.length > 0;
+		const isSwitchingModels = existingConv && existingConv.model !== planningModel;
+
+		let conversationId: string;
+
+		if (hasExistingContext && isSwitchingModels) {
+			// Switching models - create new conversation with history preserved
 			conversationId = chatStore.createConversation(planningModel, {
 				spaceId: spaceParam || undefined,
 				areaId: task.areaId || undefined,
 				taskId: taskIdParam
 			});
-			// Set the new conversation as active so messages display
-			chatStore.setActiveConversation(conversationId);
+
+			// Copy message history for context continuity
+			for (const msg of existingMessages) {
+				chatStore.addMessage(conversationId, {
+					role: msg.role,
+					content: msg.content,
+					attachments: msg.attachments,
+					hidden: msg.hidden
+				});
+			}
+		} else if (hasExistingContext && !isSwitchingModels) {
+			// Same model with existing context - reuse conversation
+			conversationId = existingConv!.id;
+		} else {
+			// No existing context - create fresh conversation
+			conversationId = chatStore.createConversation(planningModel, {
+				spaceId: spaceParam || undefined,
+				areaId: task.areaId || undefined,
+				taskId: taskIdParam
+			});
 		}
+
+		chatStore.setActiveConversation(conversationId);
 
 		const result = await taskStore.startPlanMode(taskIdParam, conversationId);
 		if (!result.success) {
@@ -877,10 +964,18 @@
 			toastStore.info(`Now planning "${task.title}". ${result.existingPlanningCount + 1} tasks in planning.`);
 		}
 
-		// Send initial planning message
-		await handleSend(
-			`I need help breaking down this task: "${task.title}". Can you ask me some clarifying questions to understand what needs to be done?`
-		);
+		// Send appropriate planning message based on context
+		if (hasExistingContext) {
+			// Continue from existing context - ask model to proceed with planning
+			await handleSend(
+				`Based on our discussion above, please help me break down "${task.title}" into actionable subtasks. What would be a good breakdown based on what we've discussed?`
+			);
+		} else {
+			// Fresh start - ask clarifying questions first
+			await handleSend(
+				`I need help breaking down this task: "${task.title}". Can you ask me some clarifying questions to understand what needs to be done?`
+			);
+		}
 	}
 
 	// Exit Plan Mode
@@ -1405,6 +1500,23 @@
 							onToggleCollapse={handleTogglePanelCollapse}
 							onQuickAction={handleQuickAction}
 						/>
+					{:else if shouldShowWorkUnitPanel && task}
+						<!-- Context Panel for work units (parent tasks without subtasks) -->
+						<TaskContextPanel
+							{task}
+							isWorkUnit={true}
+							isPlanningMode={isPlanModeActive}
+							conversations={taskConversations}
+							activeConversationId={activeConversation?.id || null}
+							collapsed={contextPanelCollapsed}
+							isCompleted={isTaskCompleted}
+							onSelectConversation={handleSelectConversation}
+							onNewChat={handleNewChat}
+							onToggleCollapse={handleTogglePanelCollapse}
+							onQuickAction={handleQuickAction}
+							onStartPlanMode={handlePlanButtonClick}
+							onCancelPlanMode={handleCancelPlanMode}
+						/>
 					{/if}
 
 					<div class="chat-area">
@@ -1440,6 +1552,12 @@
 									onSeeParent={handleParentClick}
 									onDismiss={handleDismissSubtaskWelcome}
 								/>
+							{:else if shouldShowWorkWelcome && task}
+								<!-- Work Unit Welcome (after choosing "Work directly") -->
+								<TaskWorkWelcome
+									{task}
+									onQuickStart={handleWorkQuickStart}
+								/>
 						{:else}
 							<div class="welcome-state" in:fade={{ duration: 300 }}>
 								<div class="welcome-card">
@@ -1469,7 +1587,7 @@
 										{/if}
 									</p>
 
-									{#if !isSubtask && subtasks.length === 0}
+									{#if !isSubtask && subtasks.length === 0 && !task.approachChosenAt}
 										<div class="welcome-actions">
 											<button
 												type="button"
@@ -1638,6 +1756,17 @@
 				taskTitle={task.title}
 				onSelect={handlePlanningModelSelect}
 				onCancel={() => (showPlanningModelModal = false)}
+			/>
+		{/if}
+
+		<!-- Task Approach Modal (first visit to parent task without subtasks) -->
+		{#if task && shouldShowApproachModal}
+			<TaskApproachModal
+				open={true}
+				taskTitle={task.title}
+				taskColor={task.color}
+				onChooseWork={handleChooseWork}
+				onChoosePlan={handleChoosePlan}
 			/>
 		{/if}
 	</div>

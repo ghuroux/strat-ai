@@ -75,6 +75,9 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		if (body.staleDismissedAt !== undefined) {
 			updates.staleDismissedAt = body.staleDismissedAt ? new Date(body.staleDismissedAt) : null;
 		}
+		if (body.approachChosenAt !== undefined) {
+			updates.approachChosenAt = body.approachChosenAt ? new Date(body.approachChosenAt) : null;
+		}
 
 		const task = await postgresTaskRepository.update(params.id, updates, DEFAULT_USER_ID);
 

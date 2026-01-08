@@ -1584,6 +1584,7 @@ class TaskStore {
 			dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
 			completedAt: task.completedAt ? new Date(task.completedAt) : undefined,
 			staleDismissedAt: task.staleDismissedAt ? new Date(task.staleDismissedAt) : undefined,
+			approachChosenAt: task.approachChosenAt ? new Date(task.approachChosenAt) : undefined,
 			lastActivityAt: new Date(task.lastActivityAt),
 			createdAt: new Date(task.createdAt),
 			updatedAt: new Date(task.updatedAt),
@@ -1602,6 +1603,38 @@ class TaskStore {
 	 */
 	async dismissStale(taskId: string): Promise<Task | null> {
 		return this.updateTask(taskId, { staleDismissedAt: new Date() });
+	}
+
+	/**
+	 * Set approach chosen for a task (for Task Approach Modal)
+	 * Called when user chooses "Work directly" or "Break into subtasks"
+	 * Marks the modal as dismissed so it won't show again
+	 */
+	async setApproachChosen(taskId: string): Promise<boolean> {
+		try {
+			const response = await fetch(`/api/tasks/${taskId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ approachChosenAt: new Date().toISOString() })
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to set approach chosen: ${response.status}`);
+			}
+
+			const data = await response.json();
+			const task = this.parseTaskDates(data.task);
+
+			// Update in store
+			this.tasks.set(taskId, task);
+			this._version++;
+
+			return true;
+		} catch (e) {
+			console.error('Failed to set approach chosen:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to set approach chosen';
+			return false;
+		}
 	}
 
 	/**

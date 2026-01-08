@@ -15,6 +15,7 @@ import { ASSISTS } from '$lib/config/assists';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
+const MIN_CONVERSATIONS_ON_QUOTA = 10; // Minimum to keep when quota exceeded
 
 function generateId(): string {
 	return crypto.randomUUID();
@@ -226,18 +227,53 @@ class ChatStore {
 	private persistToLocalStorage(): void {
 		if (typeof window === 'undefined') return;
 
-		try {
-			// Get sorted conversations and limit to MAX_CONVERSATIONS
-			const sorted = Array.from(this.conversations.values())
-				.sort((a, b) => b.updatedAt - a.updatedAt)
-				.slice(0, MAX_CONVERSATIONS);
-			const data = {
-				conversations: sorted.map((c) => [c.id, c]),
-				activeId: this.activeConversationId
-			};
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-		} catch (e) {
-			console.warn('Failed to persist chat store:', e);
+		// Get sorted conversations
+		const sorted = Array.from(this.conversations.values())
+			.sort((a, b) => b.updatedAt - a.updatedAt);
+
+		// Try with progressively fewer conversations if quota exceeded
+		let limit = MAX_CONVERSATIONS;
+		while (limit >= MIN_CONVERSATIONS_ON_QUOTA) {
+			try {
+				const toStore = sorted.slice(0, limit);
+				const data = {
+					conversations: toStore.map((c) => [c.id, c]),
+					activeId: this.activeConversationId
+				};
+				localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+				// Success - if we had to reduce, log it
+				if (limit < MAX_CONVERSATIONS) {
+					console.info(`localStorage quota: reduced cache to ${limit} conversations`);
+				}
+				return;
+			} catch (e) {
+				if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+					// Reduce limit and try again
+					limit = Math.floor(limit * 0.6); // Reduce by 40% each iteration
+					if (limit < MIN_CONVERSATIONS_ON_QUOTA) {
+						console.warn(`localStorage quota exceeded. Clearing local cache. Data is safe in database.`);
+						// Last resort: clear and only save active conversation
+						try {
+							const activeConv = this.activeConversationId
+								? this.conversations.get(this.activeConversationId)
+								: null;
+							const data = {
+								conversations: activeConv ? [[activeConv.id, activeConv]] : [],
+								activeId: this.activeConversationId
+							};
+							localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+						} catch {
+							// Complete failure - clear localStorage for this key
+							localStorage.removeItem(STORAGE_KEY);
+						}
+						return;
+					}
+				} else {
+					console.warn('Failed to persist chat store:', e);
+					return;
+				}
+			}
 		}
 	}
 

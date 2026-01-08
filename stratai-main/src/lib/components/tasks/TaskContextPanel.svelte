@@ -1,9 +1,12 @@
 <script lang="ts">
 	/**
-	 * TaskContextPanel - Collapsible side panel for subtask context and conversations
+	 * TaskContextPanel - Collapsible side panel for task context and conversations
 	 *
-	 * Shows when user returns to a subtask (has existing conversations):
-	 * - Rich context (Why This Matters, Done When, Tips)
+	 * Supports two modes:
+	 * 1. Subtask mode: Shows rich context from Plan Mode, parent task info
+	 * 2. Work unit mode: Shows task details, description, "Help me plan" action
+	 *
+	 * Both modes show:
 	 * - Conversation list with cards
 	 * - New Chat button
 	 * - Quick Start actions
@@ -16,8 +19,16 @@
 	import { getQuickActions } from '$lib/utils/subtask-welcome';
 
 	interface Props {
-		subtask: Task;
-		parentTask: Task;
+		// For subtask mode
+		subtask?: Task;
+		parentTask?: Task;
+		// For work unit mode
+		task?: Task;
+		isWorkUnit?: boolean;
+		isPlanningMode?: boolean;
+		onStartPlanMode?: () => void;
+		onCancelPlanMode?: () => void;
+		// Common props
 		conversations: Conversation[];
 		activeConversationId: string | null;
 		collapsed: boolean;
@@ -31,6 +42,11 @@
 	let {
 		subtask,
 		parentTask,
+		task,
+		isWorkUnit = false,
+		isPlanningMode = false,
+		onStartPlanMode,
+		onCancelPlanMode,
 		conversations,
 		activeConversationId,
 		collapsed,
@@ -41,9 +57,12 @@
 		onQuickAction
 	}: Props = $props();
 
-	// Parse rich context from subtask.contextSummary
+	// Derive the actual task to work with
+	let displayTask = $derived(isWorkUnit ? task : subtask);
+
+	// Parse rich context from subtask.contextSummary (subtask mode only)
 	let richContext = $derived.by((): SubtaskContext | null => {
-		if (!subtask.contextSummary) return null;
+		if (!subtask?.contextSummary) return null;
 		try {
 			return JSON.parse(subtask.contextSummary) as SubtaskContext;
 		} catch {
@@ -52,7 +71,36 @@
 	});
 
 	let hasRichContext = $derived(richContext !== null);
-	let quickActions = $derived(getQuickActions(subtask));
+	let quickActions = $derived(displayTask ? getQuickActions(displayTask) : []);
+
+	// Format due date for display
+	function formatDueDate(date: Date): string {
+		const now = new Date();
+		const tomorrow = new Date(now);
+		tomorrow.setDate(tomorrow.getDate() + 1);
+
+		const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+		const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		const tomorrowOnly = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
+
+		if (dateOnly.getTime() === todayOnly.getTime()) return 'Today';
+		if (dateOnly.getTime() === tomorrowOnly.getTime()) return 'Tomorrow';
+		if (dateOnly < todayOnly) return 'Overdue';
+
+		return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+	}
+
+	// Format estimated effort
+	function formatEffort(effort: string): string {
+		const labels: Record<string, string> = {
+			quick: '< 15 min',
+			short: '< 1 hour',
+			medium: '1-4 hours',
+			long: '4+ hours',
+			multi_day: 'Multi-day'
+		};
+		return labels[effort] || effort;
+	}
 
 	// Context section expand/collapse state
 	let contextExpanded = $state(false);
@@ -121,7 +169,7 @@
 	<aside class="context-panel" transition:fly={{ x: -280, duration: 200 }}>
 		<!-- Header with collapse button -->
 		<header class="panel-header">
-			<h3 class="panel-title">Subtask Context</h3>
+			<h3 class="panel-title">{isWorkUnit ? 'Task Context' : 'Subtask Context'}</h3>
 			<button
 				type="button"
 				class="collapse-btn"
@@ -141,8 +189,68 @@
 
 		<!-- Scrollable content -->
 		<div class="panel-content">
-			<!-- Rich Context Section - Expandable card -->
-			{#if hasRichContext && richContext}
+			<!-- Work Unit Mode: Task Details -->
+			{#if isWorkUnit && task}
+				<section class="details-section">
+					<h4 class="section-label">Details</h4>
+					<div class="details-grid">
+						{#if task.dueDate}
+							<div class="detail-item">
+								<span class="detail-label">Due</span>
+								<span class="detail-value" class:overdue={task.dueDate < new Date()}>
+									{formatDueDate(task.dueDate)}
+									{#if task.dueDateType === 'hard'}
+										<span class="hard-badge">Hard</span>
+									{/if}
+								</span>
+							</div>
+						{/if}
+						{#if task.priority === 'high'}
+							<div class="detail-item">
+								<span class="detail-label">Priority</span>
+								<span class="detail-value high-priority">High</span>
+							</div>
+						{/if}
+						{#if task.estimatedEffort}
+							<div class="detail-item">
+								<span class="detail-label">Effort</span>
+								<span class="detail-value">{formatEffort(task.estimatedEffort)}</span>
+							</div>
+						{/if}
+					</div>
+				</section>
+
+				{#if task.description}
+					<section class="description-section">
+						<h4 class="section-label">Description</h4>
+						<p class="description-text">{task.description}</p>
+					</section>
+				{/if}
+
+				<!-- Planning Mode Actions -->
+				{#if isPlanningMode}
+					<section class="action-section">
+						<button type="button" class="cancel-plan-btn" onclick={onCancelPlanMode}>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+							Cancel Planning
+						</button>
+					</section>
+				{:else if !isCompleted && onStartPlanMode}
+					<section class="action-section">
+						<button type="button" class="plan-btn" onclick={onStartPlanMode}>
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+							</svg>
+							Help me plan this
+						</button>
+					</section>
+				{/if}
+
+				<div class="divider"></div>
+			<!-- Subtask Mode: Rich Context Section - Expandable card -->
+			{:else if hasRichContext && richContext}
 				<section class="context-card" class:expanded={contextExpanded}>
 					<!-- Clickable header to toggle expand -->
 					<button
@@ -207,8 +315,8 @@
 						</div>
 					{/if}
 				</section>
-			{:else}
-				<!-- Minimal context when no rich context -->
+			{:else if parentTask}
+				<!-- Minimal context when no rich context (subtask mode only) -->
 				<section class="context-card minimal">
 					<div class="context-preview">
 						<div class="preview-row">
@@ -726,5 +834,149 @@
 		color: rgba(255, 255, 255, 0.9);
 		background: rgba(255, 255, 255, 0.1);
 		border-color: rgba(255, 255, 255, 0.2);
+	}
+
+	/* Work Unit Mode Styles */
+	.details-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.section-label {
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: rgba(255, 255, 255, 0.5);
+		margin: 0;
+	}
+
+	.details-grid {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.detail-item {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.375rem 0.5rem;
+		background: rgba(255, 255, 255, 0.02);
+		border-radius: 0.375rem;
+	}
+
+	.detail-label {
+		font-size: 0.6875rem;
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.detail-value {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.8);
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.detail-value.overdue {
+		color: #ef4444;
+	}
+
+	.detail-value.high-priority {
+		color: #f59e0b;
+	}
+
+	.hard-badge {
+		font-size: 0.5625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		padding: 0.125rem 0.25rem;
+		background: rgba(239, 68, 68, 0.2);
+		color: #ef4444;
+		border-radius: 0.25rem;
+	}
+
+	.description-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.description-text {
+		font-size: 0.75rem;
+		color: rgba(255, 255, 255, 0.6);
+		line-height: 1.5;
+		margin: 0;
+		padding: 0.5rem;
+		background: rgba(255, 255, 255, 0.02);
+		border-radius: 0.375rem;
+		border-left: 2px solid var(--task-color, #3b82f6);
+	}
+
+	.action-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.plan-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.625rem 0.875rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: #4ade80;
+		background: rgba(34, 197, 94, 0.1);
+		border: 1px solid rgba(34, 197, 94, 0.3);
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.plan-btn:hover {
+		background: rgba(34, 197, 94, 0.15);
+		border-color: rgba(34, 197, 94, 0.5);
+	}
+
+	.plan-btn svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.cancel-plan-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 0.625rem 0.875rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: #f87171;
+		background: rgba(239, 68, 68, 0.1);
+		border: 1px solid rgba(239, 68, 68, 0.3);
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.cancel-plan-btn:hover {
+		background: rgba(239, 68, 68, 0.15);
+		border-color: rgba(239, 68, 68, 0.5);
+	}
+
+	.cancel-plan-btn svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.divider {
+		height: 1px;
+		background: rgba(255, 255, 255, 0.06);
+		margin: 0.25rem 0;
 	}
 </style>

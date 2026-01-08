@@ -82,6 +82,9 @@ export interface Task {
 	// Stale tracking
 	staleDismissedAt?: Date;
 
+	// Task approach tracking (for Task Approach Modal)
+	approachChosenAt?: Date;
+
 	// Source tracking
 	source: TaskSource;
 
@@ -140,6 +143,7 @@ export interface UpdateTaskInput {
 	estimatedEffort?: EstimatedEffort | null;
 	completionNotes?: string;
 	staleDismissedAt?: Date | null; // null to clear dismissal
+	approachChosenAt?: Date | null; // null to clear (reset to show modal again)
 }
 
 /**
@@ -258,6 +262,7 @@ export interface TaskRow {
 	completedAt: Date | null;
 	completionNotes: string | null;
 	staleDismissedAt: Date | null;
+	approachChosenAt: Date | null;
 	sourceType: string;
 	sourceAssistId: string | null;
 	sourceConversationId: string | null;
@@ -319,6 +324,7 @@ export function rowToTask(row: TaskRow): Task {
 		completedAt: row.completedAt ?? undefined,
 		completionNotes: row.completionNotes ?? undefined,
 		staleDismissedAt: row.staleDismissedAt ?? undefined,
+		approachChosenAt: row.approachChosenAt ?? undefined,
 		source: {
 			type: row.sourceType as TaskSourceType,
 			assistId: row.sourceAssistId ?? undefined,
