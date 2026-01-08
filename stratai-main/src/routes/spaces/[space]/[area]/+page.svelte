@@ -168,10 +168,23 @@
 	// All areas in this space (for area lookup in drawer, uses proper space ID)
 	let allAreasInSpace = $derived(properSpaceId ? areaStore.getAreasForSpace(properSpaceId) : []);
 
-	// Task info lookup for drawer badges
-	function getTaskInfo(taskId: string): { id: string; title: string; color?: string } | null {
+	// Task info lookup for drawer badges (includes subtask info)
+	function getTaskInfo(taskId: string): { id: string; title: string; color?: string; isSubtask?: boolean; parentTaskTitle?: string } | null {
 		const task = taskStore.getTask(taskId);
 		if (!task) return null;
+
+		// Check if this is a subtask and get parent info
+		if (task.parentTaskId) {
+			const parentTask = taskStore.getTask(task.parentTaskId);
+			return {
+				id: task.id,
+				title: task.title,
+				color: task.color,
+				isSubtask: true,
+				parentTaskTitle: parentTask?.title
+			};
+		}
+
 		return { id: task.id, title: task.title, color: task.color };
 	}
 

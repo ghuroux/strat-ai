@@ -18,6 +18,8 @@
 		id: string;
 		title: string;
 		color?: string;
+		isSubtask?: boolean;
+		parentTaskTitle?: string;
 	}
 
 	interface Props {
@@ -92,6 +94,10 @@
 	// Group by pinned and recent
 	let pinnedConversations = $derived(filteredConversations.filter(c => c.pinned));
 	let recentConversations = $derived(filteredConversations.filter(c => !c.pinned));
+
+	// Split non-pinned by task linkage
+	let taskConversations = $derived(recentConversations.filter(c => c.taskId));
+	let generalConversations = $derived(recentConversations.filter(c => !c.taskId));
 
 	// Format relative time
 	function formatRelativeTime(timestamp: number): string {
@@ -400,14 +406,113 @@
 					</div>
 				{/if}
 
-				<!-- Recent Section -->
-				{#if recentConversations.length > 0}
+				<!-- General Conversations Section -->
+				{#if generalConversations.length > 0}
 					<div class="px-3 pt-2 pb-2">
-						<h3 class="px-2 py-1 text-[10px] font-semibold text-surface-500 uppercase tracking-wider">
-							{pinnedConversations.length > 0 ? 'Recent' : 'All Conversations'}
+						<h3 class="section-header" style="color: {area.color || '#6b7280'}">
+							<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
+							</svg>
+							General
 						</h3>
 						<div class="space-y-0.5">
-							{#each recentConversations as conv (conv.id)}
+							{#each generalConversations as conv (conv.id)}
+								<div class="relative group">
+									<button
+										type="button"
+										class="w-full px-3 py-2 text-left rounded-lg transition-colors
+											   {activeConversationId === conv.id
+												? 'bg-primary-500/15 text-primary-400'
+												: 'hover:bg-surface-800 text-surface-300 hover:text-surface-100'}"
+										onclick={() => handleSelect(conv.id)}
+									>
+										<div class="flex-1 min-w-0">
+											<div class="flex items-center justify-between gap-2">
+												<p class="text-sm truncate flex-1 pr-6">{getPreview(conv)}</p>
+												<span class="text-xs text-surface-500 flex-shrink-0">{formatRelativeTime(conv.updatedAt)}</span>
+											</div>
+										</div>
+									</button>
+
+									<!-- Menu button -->
+									{#if onPinConversation}
+										<button
+											type="button"
+											class="absolute right-2 top-2 p-1 rounded text-surface-500 hover:text-surface-300 hover:bg-surface-700 opacity-0 group-hover:opacity-100 transition-opacity"
+											onclick={(e) => toggleMenu(e, conv.id)}
+										>
+											<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+												<path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+											</svg>
+										</button>
+
+										<!-- Dropdown menu -->
+										{#if activeMenuId === conv.id}
+											<div
+												class="absolute right-2 top-8 w-36 py-1 bg-surface-800 border border-surface-700 rounded-lg shadow-xl z-10"
+												transition:fade={{ duration: 100 }}
+											>
+												<button
+													type="button"
+													class="w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
+													onclick={(e) => handleStartRename(e, conv)}
+												>
+													<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+														<path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+													</svg>
+													Rename
+												</button>
+												<button
+													type="button"
+													class="w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
+													onclick={(e) => handleTogglePin(e, conv)}
+												>
+													<svg class="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
+														<path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+													</svg>
+													Pin
+												</button>
+												<button
+													type="button"
+													class="w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
+													onclick={(e) => handleExport(e, conv.id)}
+												>
+													<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+														<path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
+													</svg>
+													Export
+												</button>
+												<div class="border-t border-surface-700 my-1"></div>
+												<button
+													type="button"
+													class="w-full px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+													onclick={(e) => handleDelete(e, conv.id)}
+												>
+													<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+														<path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/>
+													</svg>
+													Delete
+												</button>
+											</div>
+										{/if}
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Task Conversations Section -->
+				{#if taskConversations.length > 0}
+					<div class="px-3 pt-2 pb-2">
+						<h3 class="section-header" style="color: {area.color || '#6b7280'}">
+							<svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+							</svg>
+							Task Conversations
+						</h3>
+						<div class="space-y-0.5">
+							{#each taskConversations as conv (conv.id)}
 								{@const taskInfo = conv.taskId && getTaskInfo ? getTaskInfo(conv.taskId) : null}
 								<div class="relative group">
 									<button
@@ -424,14 +529,23 @@
 												<span class="text-xs text-surface-500 flex-shrink-0">{formatRelativeTime(conv.updatedAt)}</span>
 											</div>
 											{#if taskInfo}
-												<div class="mt-1">
-													<span
-														class="text-[10px] px-1.5 py-0.5 rounded font-medium truncate inline-block max-w-[180px]"
-														style="color: {taskInfo.color || '#3b82f6'}; background: color-mix(in srgb, {taskInfo.color || '#3b82f6'} 15%, transparent);"
-														title={taskInfo.title}
-													>
-														{taskInfo.title}
-													</span>
+												<div class="mt-1 flex items-center gap-1.5 flex-wrap">
+													{#if taskInfo.isSubtask}
+														<span class="subtask-badge">Subtask</span>
+														{#if taskInfo.parentTaskTitle}
+															<span class="parent-task-badge" title={taskInfo.parentTaskTitle}>
+																{taskInfo.parentTaskTitle}
+															</span>
+														{/if}
+													{:else}
+														<span
+															class="task-badge"
+															style="color: {taskInfo.color || '#a78bfa'}; background: color-mix(in srgb, {taskInfo.color || '#a78bfa'} 15%, transparent);"
+															title={taskInfo.title}
+														>
+															{taskInfo.title}
+														</span>
+													{/if}
 												</div>
 											{/if}
 										</div>
@@ -637,3 +751,57 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	/* Section header with area color */
+	.section-header {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	/* Task and subtask badges matching RecentActivitySection */
+	.task-badge {
+		display: inline-block;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		border-radius: 0.25rem;
+		max-width: 180px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		vertical-align: middle;
+	}
+
+	.subtask-badge {
+		display: inline-block;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: #f472b6;
+		background: rgba(244, 114, 182, 0.15);
+		border-radius: 0.25rem;
+		vertical-align: middle;
+	}
+
+	.parent-task-badge {
+		display: inline-block;
+		padding: 0.125rem 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.65);
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 0.25rem;
+		max-width: 120px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		vertical-align: middle;
+	}
+</style>
