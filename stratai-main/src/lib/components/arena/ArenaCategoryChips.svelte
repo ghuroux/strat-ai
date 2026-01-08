@@ -6,7 +6,7 @@
 	 * "General" is the default, AI Judge can suggest a more specific
 	 * category after analyzing the prompt.
 	 */
-	import { MessageSquare, Code2, Brain, Palette, BarChart3 } from 'lucide-svelte';
+	import { MessageSquare, Code2, Brain, Palette, BarChart3, Globe } from 'lucide-svelte';
 	import { TEMPLATE_CATEGORIES, type TemplateCategory } from '$lib/config/battle-templates';
 
 	interface Props {
@@ -23,7 +23,8 @@
 		{ id: 'coding', icon: Code2 },
 		{ id: 'reasoning', icon: Brain },
 		{ id: 'creative', icon: Palette },
-		{ id: 'analysis', icon: BarChart3 }
+		{ id: 'analysis', icon: BarChart3 },
+		{ id: 'research', icon: Globe }
 	];
 </script>
 

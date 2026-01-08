@@ -11,13 +11,14 @@ export interface BattleTemplate {
 	prompt: string;
 }
 
-export type TemplateCategory = 'coding' | 'creative' | 'analysis' | 'reasoning' | 'general';
+export type TemplateCategory = 'coding' | 'creative' | 'analysis' | 'reasoning' | 'research' | 'general';
 
-export const TEMPLATE_CATEGORIES: Record<TemplateCategory, { label: string; color: string }> = {
+export const TEMPLATE_CATEGORIES: Record<TemplateCategory, { label: string; color: string; requiresTools?: boolean }> = {
 	coding: { label: 'Coding', color: 'text-green-400 bg-green-500/20' },
 	creative: { label: 'Creative', color: 'text-purple-400 bg-purple-500/20' },
 	analysis: { label: 'Analysis', color: 'text-blue-400 bg-blue-500/20' },
 	reasoning: { label: 'Reasoning', color: 'text-amber-400 bg-amber-500/20' },
+	research: { label: 'Research', color: 'text-cyan-400 bg-cyan-500/20', requiresTools: true },
 	general: { label: 'General', color: 'text-surface-400 bg-surface-500/20' }
 };
 
@@ -244,6 +245,78 @@ Discuss:
 3. Virtue ethics perspective
 4. Your reasoned conclusion
 5. How should AI systems be programmed to handle such scenarios?`
+	},
+
+	// Research Templates (require web search / tool use)
+	{
+		id: 'current-events',
+		name: 'Current Events',
+		category: 'research',
+		icon: '📰',
+		description: 'Research recent news and developments',
+		prompt: `Research the latest developments in AI regulation and policy from the past month.
+
+Provide:
+1. Key recent announcements or legislation
+2. Which countries/regions are leading
+3. Industry reactions
+4. Potential impact on businesses
+5. Sources for your information
+
+Focus on factual, verifiable information from reliable sources.`
+	},
+	{
+		id: 'market-research',
+		name: 'Market Research',
+		category: 'research',
+		icon: '📊',
+		description: 'Research market trends and data',
+		prompt: `Research the current state of the electric vehicle market.
+
+Include:
+1. Top manufacturers by market share (with recent numbers)
+2. Latest trends in battery technology
+3. Government incentives currently available
+4. Price trends over the past year
+5. Predictions from industry analysts
+
+Cite your sources where possible.`
+	},
+	{
+		id: 'competitor-analysis',
+		name: 'Competitor Analysis',
+		category: 'research',
+		icon: '🔎',
+		description: 'Research and compare companies',
+		prompt: `Research and compare the current offerings of major cloud providers (AWS, Azure, Google Cloud).
+
+Analyze:
+1. Latest pricing changes (if any recent updates)
+2. New services launched this year
+3. Market share trends
+4. Strengths and weaknesses
+5. Recent customer reviews or case studies
+
+Provide factual, up-to-date information.`
+	},
+	{
+		id: 'fact-check',
+		name: 'Fact Checker',
+		category: 'research',
+		icon: '✅',
+		description: 'Verify claims with sources',
+		prompt: `Fact-check and research the following claim:
+
+"[INSERT CLAIM TO VERIFY]"
+
+Provide:
+1. Verdict: True, False, Partially True, or Unverifiable
+2. Evidence supporting your verdict
+3. Context that might be missing from the claim
+4. Original sources where the claim originated
+5. Reliable sources that confirm or refute it
+
+Be thorough and cite your sources.`
 	},
 
 	// General Templates

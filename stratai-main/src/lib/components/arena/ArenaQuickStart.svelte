@@ -20,6 +20,7 @@
 		{ value: 'creative', label: 'Creative' },
 		{ value: 'analysis', label: 'Analysis' },
 		{ value: 'reasoning', label: 'Reasoning' },
+		{ value: 'research', label: 'Research' },
 		{ value: 'general', label: 'General' }
 	];
 

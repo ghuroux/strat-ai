@@ -48,6 +48,13 @@ const CATEGORY_TOP_MODELS: Record<TemplateCategory, string[]> = {
 		'gpt-5-2-pro',
 		'o3-mini'
 	],
+	research: [
+		// Models with tool/web search support
+		'claude-sonnet-4-5',
+		'claude-opus-4-5',
+		'gpt-5-2-pro',
+		'gemini-3-pro'
+	],
 	general: [
 		'claude-sonnet-4-5',
 		'gpt-5-2-pro',
