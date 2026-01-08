@@ -4,6 +4,8 @@
  * Generates contextual welcome messages for subtask chat views.
  * Uses parent task context and planning conversation to create
  * helpful, actionable opening messages.
+ *
+ * Note: Quick start actions are now handled by $lib/utils/quick-starts.ts
  */
 
 import type { Task } from '$lib/types/tasks';
@@ -89,41 +91,6 @@ export function generateSubtaskWelcome(
 		suggestedStart,
 		parentTaskTitle: parentTask.title
 	};
-}
-
-/**
- * Generate quick action suggestions based on subtask type
- */
-export function getQuickActions(subtask: Task): string[] {
-	const title = subtask.title.toLowerCase();
-
-	// Common patterns and their suggested actions
-	if (title.includes('research') || title.includes('explore')) {
-		return ['Find resources', 'Summarize findings', 'Compare options'];
-	}
-
-	if (title.includes('design') || title.includes('plan')) {
-		return ['Outline approach', 'List requirements', 'Identify risks'];
-	}
-
-	if (title.includes('implement') || title.includes('build') || title.includes('create')) {
-		return ['Break down steps', 'Identify blockers', 'Draft outline'];
-	}
-
-	if (title.includes('test') || title.includes('review')) {
-		return ['Create checklist', 'Define criteria', 'Note concerns'];
-	}
-
-	if (title.includes('write') || title.includes('draft')) {
-		return ['Create outline', 'Gather inputs', 'Set structure'];
-	}
-
-	// Default actions
-	if (subtask.subtaskType === 'action') {
-		return ['Get started', 'Ask questions', 'Mark complete'];
-	}
-
-	return ['Explore ideas', 'Ask questions', 'Get help'];
 }
 
 /**

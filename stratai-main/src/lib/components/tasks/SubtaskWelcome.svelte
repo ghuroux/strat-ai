@@ -72,7 +72,7 @@
 			description: subtask.description,
 			parentTaskTitle: parentTask.title,
 			isSubtask: true,
-			richContext: subtask.richContext
+			richContext: subtask.contextSummary
 		})
 	);
 

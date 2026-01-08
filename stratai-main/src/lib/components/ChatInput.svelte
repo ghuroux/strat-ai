@@ -75,6 +75,24 @@
 	let textarea: HTMLTextAreaElement | undefined = $state();
 	let isFocused = $state(false);
 
+	// Listen for prepopulate-input events (from quick start buttons, etc.)
+	$effect(() => {
+		function handlePrepopulate(e: CustomEvent<{ text: string }>) {
+			input = e.detail.text;
+			// Auto-resize and focus the textarea
+			setTimeout(() => {
+				autoResize();
+				textarea?.focus();
+			}, 0);
+		}
+
+		document.addEventListener('prepopulate-input', handlePrepopulate as EventListener);
+
+		return () => {
+			document.removeEventListener('prepopulate-input', handlePrepopulate as EventListener);
+		};
+	});
+
 	// Drag and drop state
 	let isDragging = $state(false);
 	let isUploading = $state(false);

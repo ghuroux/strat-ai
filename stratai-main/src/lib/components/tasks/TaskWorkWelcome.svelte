@@ -48,8 +48,7 @@
 		getQuickStarts({
 			title: task.title,
 			description: task.description,
-			isSubtask: false,
-			richContext: task.richContext
+			isSubtask: false
 		}).slice(0, 2) // Only show first 2 for work welcome
 	);
 
