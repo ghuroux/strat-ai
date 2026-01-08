@@ -138,8 +138,18 @@ export function isSystemSpace(id: string): id is SystemSpaceId {
 }
 
 /**
- * Validate space ID (currently just system spaces)
+ * Validate space ID - accepts system space slugs, UUIDs, or sp_ prefixed IDs
  */
 export function isValidSpaceId(id: string): boolean {
-	return isSystemSpace(id);
+	// Accept system space slugs (work, research, random, personal)
+	if (isSystemSpace(id)) {
+		return true;
+	}
+	// Accept sp_ prefixed IDs (custom spaces from database)
+	if (id.startsWith('sp_')) {
+		return true;
+	}
+	// Accept UUIDs
+	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+	return uuidRegex.test(id);
 }
