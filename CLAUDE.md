@@ -107,14 +107,50 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-07 (Session Log Cleanup)
+### Latest: 2026-01-08 (Model Arena Redesign)
+
+**Completed:**
+
+*Arena UX Improvements (Phases 1-5, 7):*
+- Phase 1: Added `isArena` route check to Header, removed sidebar from Arena page for focused experience
+- Phase 2: Created `ArenaCategoryChips.svelte` for filtering battles by category (coding, analysis, creative, general, etc.)
+- Phase 3: Extended AI Judge endpoint with automatic category detection - suggests category when "general" selected
+- Phase 4: Created `ArenaContextPicker.svelte` for injecting Space/Area context into battle prompts
+- Phase 5: Created `ArenaContinueModal.svelte` for continuing winning battles as full conversations
+- Phase 7: Updated BACKLOG.md with Arena Rankings Dashboard future feature
+
+*Arena Store Enhancements:*
+- Added category state and `BattleSettings` type to arena store
+- Category persistence across battles
+
+*Deferred to Future:*
+- Phase 6 (BattleOutcome): Comprehensive data model and migration documented in BACKLOG.md
+
+**Files Created:**
+- `src/lib/components/arena/ArenaCategoryChips.svelte`
+- `src/lib/components/arena/ArenaContextPicker.svelte`
+- `src/lib/components/arena/ArenaContinueModal.svelte`
+- `src/lib/components/arena/index.ts`
+
+**Files Modified:**
+- `src/lib/components/layout/Header.svelte`
+- `src/routes/arena/+page.svelte`
+- `src/lib/stores/arena.svelte.ts`
+- `src/routes/api/arena/judge/+server.ts`
+- `BACKLOG.md`
+
+**Next steps:**
+- Implement BattleOutcome persistence (Phase 6) when ready for Arena Rankings Dashboard
+- Continue with Areas Architecture Redesign work
+
+### Previous: 2026-01-07 (Session Log Cleanup)
 
 **Verified as Complete:**
 
 *Task Planning Model Selection - FULLY WIRED:*
 - `TaskPlanningModelModal.svelte` shows tiered model selection
-- "Help me plan this" button → `handlePlanButtonClick()` → shows modal (or skips if preference saved)
-- Modal selection → `handlePlanningModelSelect()` → `handleStartPlanMode(modelId)`
+- "Help me plan this" button -> `handlePlanButtonClick()` -> shows modal (or skips if preference saved)
+- Modal selection -> `handlePlanningModelSelect()` -> `handleStartPlanMode(modelId)`
 - Conversation created WITH selected model, initial planning message sent
 - Skip modal option with localStorage persistence works
 
