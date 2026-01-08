@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fly, scale } from 'svelte/transition';
 	import MarkdownRenderer from '$lib/components/chat/MarkdownRenderer.svelte';
 	import ThinkingDisplay from '$lib/components/chat/ThinkingDisplay.svelte';
 	import AIResponseIndicator from '$lib/components/chat/AIResponseIndicator.svelte';
@@ -6,6 +7,8 @@
 	import type { ArenaResponse } from '$lib/stores/arena.svelte';
 	import { MODEL_CAPABILITIES } from '$lib/config/model-capabilities';
 	import { extractCodeBlocks } from '$lib/utils/codeBlocks';
+	import { toastStore } from '$lib/stores/toast.svelte';
+	import { Maximize2, Minimize2, Copy, Check } from 'lucide-svelte';
 
 	interface Props {
 		response: ArenaResponse;
@@ -19,6 +22,9 @@
 		canVote?: boolean;
 		blindMode?: boolean;
 		hasVoted?: boolean;
+		isFocused?: boolean;
+		isOtherFocused?: boolean;
+		onToggleFocus?: () => void;
 	}
 
 	let {
@@ -32,8 +38,14 @@
 		onVote,
 		canVote = false,
 		blindMode = false,
-		hasVoted = false
+		hasVoted = false,
+		isFocused = false,
+		isOtherFocused = false,
+		onToggleFocus
 	}: Props = $props();
+
+	// Copy state
+	let justCopied = $state(false);
 
 	// Determine if model name should be revealed
 	let showModelName = $derived(!blindMode || hasVoted || isUserVote);
@@ -108,10 +120,25 @@
 			? response.firstTokenAt - response.startedAt
 			: undefined
 	);
+
+	// Copy response content to clipboard
+	async function handleCopy() {
+		if (!response.content) return;
+		try {
+			await navigator.clipboard.writeText(response.content);
+			justCopied = true;
+			setTimeout(() => {
+				justCopied = false;
+			}, 2000);
+		} catch (err) {
+			toastStore.error('Failed to copy to clipboard');
+		}
+	}
 </script>
 
 <div
-	class="arena-response-card flex flex-col h-full min-h-[400px] rounded-2xl border transition-all duration-300
+	class="arena-response-card flex flex-col rounded-2xl border transition-all duration-300
+		   {isFocused ? 'max-h-none min-h-[400px] z-10 order-first' : isOtherFocused ? 'opacity-40 scale-[0.97] max-h-[180px] overflow-hidden' : 'h-full min-h-[300px] max-h-[600px]'}
 		   {isWinner
 			? 'bg-accent-500/5 border-accent-500/50 shadow-glow-accent'
 			: isUserVote
@@ -122,11 +149,21 @@
 	<div class="flex items-center justify-between p-4 border-b border-surface-700/50">
 		<div class="flex items-center gap-2">
 			{#if showModelName}
-				<span class="px-2 py-0.5 rounded text-xs font-medium border {getProviderColor(provider)}">
+				<!-- Revealed model info with animation -->
+				<span
+					class="px-2 py-0.5 rounded text-xs font-medium border {getProviderColor(provider)}"
+					in:scale={{ duration: 300, start: 0.8 }}
+				>
 					{provider}
 				</span>
-				<span class="font-medium text-surface-100 truncate">{modelName}</span>
+				<span
+					class="font-medium text-surface-100 truncate"
+					in:fly={{ x: -10, duration: 300, delay: 100 }}
+				>
+					{modelName}
+				</span>
 			{:else}
+				<!-- Hidden state -->
 				<span class="px-2 py-0.5 rounded text-xs font-medium border bg-surface-600/50 text-surface-400 border-surface-500/30">
 					Hidden
 				</span>
@@ -137,17 +174,23 @@
 		<div class="flex items-center gap-2">
 			<!-- Score badge -->
 			{#if score !== undefined && showModelName}
-				<span class="px-2 py-0.5 rounded text-xs font-medium
+				<span
+					class="px-2 py-0.5 rounded text-xs font-medium
 							 {score >= 8 ? 'bg-green-500/20 text-green-400' :
 							  score >= 6 ? 'bg-amber-500/20 text-amber-400' :
-							  'bg-red-500/20 text-red-400'}">
+							  'bg-red-500/20 text-red-400'}"
+					in:scale={{ duration: 300, delay: 200, start: 0.5 }}
+				>
 					{score}/10
 				</span>
 			{/if}
 
 			<!-- Winner badge -->
 			{#if isWinner && showModelName}
-				<span class="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-accent-500/20 text-accent-400">
+				<span
+					class="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-accent-500/20 text-accent-400"
+					in:scale={{ duration: 400, delay: 300, start: 0.3 }}
+				>
 					<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
 						<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
 					</svg>
@@ -160,6 +203,38 @@
 				<span class="text-xs text-surface-500">
 					{formatDuration(response.durationMs)}
 				</span>
+			{/if}
+
+			<!-- Copy button (only when content available) -->
+			{#if response.content && !response.isStreaming}
+				<button
+					type="button"
+					onclick={handleCopy}
+					class="p-1.5 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-700 transition-colors"
+					title="Copy response"
+				>
+					{#if justCopied}
+						<Check class="w-4 h-4 text-green-400" />
+					{:else}
+						<Copy class="w-4 h-4" />
+					{/if}
+				</button>
+			{/if}
+
+			<!-- Focus toggle button (only when content available) -->
+			{#if onToggleFocus && response.content && !response.isStreaming}
+				<button
+					type="button"
+					onclick={onToggleFocus}
+					class="p-1.5 rounded-lg text-surface-400 hover:text-surface-200 hover:bg-surface-700 transition-colors"
+					title={isFocused ? 'Exit focus mode' : 'Focus on this response'}
+				>
+					{#if isFocused}
+						<Minimize2 class="w-4 h-4" />
+					{:else}
+						<Maximize2 class="w-4 h-4" />
+					{/if}
+				</button>
 			{/if}
 		</div>
 	</div>
@@ -193,7 +268,7 @@
 
 			<!-- Main content -->
 			{#if response.content}
-				<div class="prose prose-invert prose-sm max-w-none">
+				<div class="prose prose-invert max-w-none prose-p:leading-relaxed prose-p:text-surface-200 prose-headings:text-surface-100 prose-code:text-primary-300 prose-pre:bg-surface-900 prose-pre:border prose-pre:border-surface-700">
 					<MarkdownRenderer content={response.content} />
 				</div>
 
@@ -234,22 +309,25 @@
 
 	<!-- Metrics bar -->
 	{#if (response.metrics || timeToFirstToken || response.durationMs) && aiState === 'complete'}
-		<div class="px-4 py-2 border-t border-surface-700/30 bg-surface-800/50">
-			<div class="flex items-center justify-between text-xs text-surface-500">
-				<div class="flex items-center gap-3">
-					<!-- Tokens -->
+		{@const totalTokens = (response.metrics?.inputTokens || 0) + (response.metrics?.outputTokens || 0)}
+		<div class="px-4 py-2.5 border-t border-surface-700/30 bg-surface-800/50">
+			<div class="flex items-center justify-between text-xs">
+				<div class="flex items-center gap-4">
+					<!-- Tokens breakdown -->
 					{#if response.metrics?.inputTokens || response.metrics?.outputTokens}
-						<span class="flex items-center gap-1" title="Input / Output tokens">
-							<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-							</svg>
-							{formatTokens(response.metrics?.inputTokens)} / {formatTokens(response.metrics?.outputTokens)}
-						</span>
+						<div class="flex items-center gap-2">
+							<span class="px-1.5 py-0.5 rounded bg-surface-700/50 text-surface-300 font-medium" title="Total tokens">
+								{formatTokens(totalTokens)} tok
+							</span>
+							<span class="text-surface-500" title="Input / Output tokens">
+								({formatTokens(response.metrics?.inputTokens)} in / {formatTokens(response.metrics?.outputTokens)} out)
+							</span>
+						</div>
 					{/if}
 
 					<!-- Time to first token -->
 					{#if timeToFirstToken}
-						<span class="flex items-center gap-1" title="Time to first token">
+						<span class="flex items-center gap-1 text-surface-400" title="Time to first token">
 							<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
 							</svg>
@@ -260,10 +338,7 @@
 
 				<!-- Cost -->
 				{#if estimatedCost}
-					<span class="flex items-center gap-1 text-surface-400" title="Estimated cost">
-						<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-						</svg>
+					<span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-surface-700/50 text-surface-300 font-medium" title="Estimated cost">
 						{formatCost(estimatedCost)}
 					</span>
 				{/if}

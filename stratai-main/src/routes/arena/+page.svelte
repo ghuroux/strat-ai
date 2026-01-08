@@ -1,16 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { Swords, StopCircle, Plus, MessageSquare, RefreshCw, Sliders } from 'lucide-svelte';
 	import Header from '$lib/components/layout/Header.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
-	import ArenaModelSelector from '$lib/components/arena/ArenaModelSelector.svelte';
+	import ArenaTabs from '$lib/components/arena/ArenaTabs.svelte';
+	import ArenaQuickStart from '$lib/components/arena/ArenaQuickStart.svelte';
+	import ArenaModelSelection from '$lib/components/arena/ArenaModelSelection.svelte';
 	import ArenaCategoryChips from '$lib/components/arena/ArenaCategoryChips.svelte';
 	import ArenaContextPicker from '$lib/components/arena/ArenaContextPicker.svelte';
 	import ArenaContinueModal from '$lib/components/arena/ArenaContinueModal.svelte';
+	import ArenaVotingPrompt from '$lib/components/arena/ArenaVotingPrompt.svelte';
 	import ArenaInput from '$lib/components/arena/ArenaInput.svelte';
 	import ArenaGrid from '$lib/components/arena/ArenaGrid.svelte';
 	import ArenaResponseCard from '$lib/components/arena/ArenaResponseCard.svelte';
 	import ArenaJudgment from '$lib/components/arena/ArenaJudgment.svelte';
-	import ArenaWelcome from '$lib/components/arena/ArenaWelcome.svelte';
 	import { arenaStore, type ArenaModel, type BattleSettings, type ResponseMetrics } from '$lib/stores/arena.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
@@ -19,10 +22,17 @@
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { goto } from '$app/navigation';
-	import type { TemplateCategory } from '$lib/config/battle-templates';
+	import type { TemplateCategory, BattleTemplate } from '$lib/config/battle-templates';
 
 	let settingsOpen = $state(false);
 	let showContinueModal = $state(false);
+	let votingSkipped = $state(false);
+	let battleTransitionDelay = $state(false); // Delay UI transition for animation
+	let focusedModelId = $state<string | null>(null); // Focus mode for a single response
+
+	// Tab state
+	type Tab = 'battle' | 'results' | 'rankings';
+	let activeTab = $state<Tab>('battle');
 
 	// Category selection (default: general)
 	let selectedCategory = $state<TemplateCategory>('general');
@@ -30,6 +40,15 @@
 	// Context selection (optional Space/Area)
 	let contextSpaceId = $state<string | null>(null);
 	let contextAreaId = $state<string | null>(null);
+
+	// Template selection (when using Quick Start)
+	let selectedTemplate = $state<BattleTemplate | null>(null);
+
+	// Track if user is in custom mode (interacted with Customize section)
+	let hasCustomized = $state(false);
+
+	// Quick start prompt from template
+	let quickStartPrompt = $state<string | null>(null);
 
 	// Derived state from arena store
 	let activeBattle = $derived(arenaStore.activeBattle);
@@ -65,6 +84,41 @@
 	function handleContextSelect(spaceId: string | null, areaId: string | null) {
 		contextSpaceId = spaceId;
 		contextAreaId = areaId;
+		// Mark as customized when user selects context
+		if (spaceId) {
+			hasCustomized = true;
+		}
+	}
+
+	// Handle category selection from Customize section
+	function handleCategorySelect(category: TemplateCategory) {
+		selectedCategory = category;
+		// Mark as customized when user changes category
+		hasCustomized = true;
+	}
+
+	// Handle Quick Start template selection
+	function handleSelectTemplate(template: BattleTemplate) {
+		selectedTemplate = template;
+		selectedCategory = template.category;
+		quickStartPrompt = template.prompt;
+		hasCustomized = false; // Back to template mode
+	}
+
+	// Handle template reset (back to default state - show both sections)
+	function handleResetTemplate() {
+		selectedTemplate = null;
+		quickStartPrompt = null;
+		hasCustomized = false; // Show both sections again
+	}
+
+	// Handle tab change
+	function handleTabChange(tab: Tab) {
+		if (tab === 'results' || tab === 'rankings') {
+			toastStore.info('Coming soon! Battle history and rankings are in development.');
+			return;
+		}
+		activeTab = tab;
 	}
 
 	function applyTheme(theme: 'dark' | 'light' | 'system') {
@@ -94,6 +148,17 @@
 			toastStore.warning('Enter a prompt to start the battle');
 			return;
 		}
+
+		// Start transition delay - keep setup visible while API calls start in background
+		battleTransitionDelay = true;
+		setTimeout(() => {
+			battleTransitionDelay = false;
+		}, 1000);
+
+		// Clear quick start prompt, template, and customization state after use
+		quickStartPrompt = null;
+		selectedTemplate = null;
+		hasCustomized = false;
 
 		// Build ArenaModel objects from selected model IDs
 		const models: ArenaModel[] = selectedModels.map((id) => ({
@@ -370,6 +435,27 @@
 	// Handle new battle (clear active)
 	function handleNewBattle() {
 		arenaStore.setActiveBattle(null);
+		votingSkipped = false;
+		focusedModelId = null;
+	}
+
+	// Toggle focus mode for a response
+	function toggleFocus(modelId: string) {
+		focusedModelId = focusedModelId === modelId ? null : modelId;
+	}
+
+	// Handle keyboard shortcuts
+	function handleKeydown(e: KeyboardEvent) {
+		// Escape to exit focus mode
+		if (e.key === 'Escape' && focusedModelId) {
+			e.preventDefault();
+			focusedModelId = null;
+		}
+	}
+
+	// Handle skip voting
+	function handleSkipVoting() {
+		votingSkipped = true;
 	}
 
 	// Handle continue conversation with winning model
@@ -433,11 +519,20 @@
 		const model = activeBattle.models.find((m) => m.id === activeBattle.userVote);
 		return model?.displayName || activeBattle.userVote;
 	});
+
+	// Derived: Get winner model provider for display
+	let winnerProvider = $derived.by(() => {
+		if (!activeBattle?.userVote) return '';
+		const model = activeBattle.models.find((m) => m.id === activeBattle.userVote);
+		return model?.provider || '';
+	});
 </script>
 
 <svelte:head>
 	<title>Model Arena - StratAI</title>
 </svelte:head>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class="h-screen flex flex-col overflow-hidden">
 	<!-- Header -->
@@ -445,173 +540,237 @@
 
 	<!-- Main Content (full width, no sidebar) -->
 	<main class="flex-1 flex flex-col overflow-hidden bg-surface-950">
-			{#if !activeBattle}
-				<!-- No active battle - Show welcome/setup -->
-				<div class="flex-1 overflow-y-auto p-4 md:p-6">
-					<div class="max-w-5xl mx-auto">
-						<ArenaWelcome />
-
-						<!-- Category Selection -->
-						<div class="mt-8">
-							<ArenaCategoryChips
-								selected={selectedCategory}
-								onSelect={(cat) => selectedCategory = cat}
-							/>
+		{#if !activeBattle || battleTransitionDelay}
+			<!-- No active battle - Show welcome/setup -->
+			<div class="flex-1 overflow-y-auto p-4 md:p-6">
+				<div class="max-w-5xl mx-auto space-y-8">
+					<!-- Hero Section -->
+					<div class="text-center space-y-4">
+						<div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-500/20">
+							<Swords class="w-7 h-7 text-primary-400" />
 						</div>
-
-						<!-- Context Selection -->
-						<div class="mt-6">
-							<ArenaContextPicker
-								selectedSpaceId={contextSpaceId}
-								selectedAreaId={contextAreaId}
-								onSelect={handleContextSelect}
-							/>
-						</div>
-
-						<!-- Model Selection -->
-						<div class="mt-6">
-							<h2 class="text-lg font-semibold text-surface-100 mb-4">Select Models to Compare</h2>
-							<ArenaModelSelector />
+						<div>
+							<h1 class="text-2xl font-bold text-surface-100">Model Arena</h1>
+							<p class="mt-1 text-surface-400">Compare AI models side-by-side and find the best for your needs</p>
 						</div>
 					</div>
-				</div>
 
-				<!-- Input -->
+					<!-- Tabs -->
+					<div class="flex justify-center">
+						<ArenaTabs {activeTab} onTabChange={handleTabChange} />
+					</div>
+
+					{#if activeTab === 'battle'}
+						<!-- Quick Start Section (hidden when user is customizing) -->
+						{#if !hasCustomized}
+							<ArenaQuickStart
+								{selectedTemplate}
+								onSelectTemplate={handleSelectTemplate}
+								onReset={handleResetTemplate}
+							/>
+						{/if}
+
+						<!-- Customize Your Battle Section (hidden when template is selected) -->
+						{#if !selectedTemplate}
+							<div class="customize-battle-section p-6 rounded-2xl bg-surface-800/30 border border-surface-700/50">
+								<div class="flex items-center justify-between mb-4">
+									<div class="flex items-center gap-3">
+										<div class="w-8 h-8 rounded-lg bg-surface-700 flex items-center justify-center">
+											<Sliders class="w-4 h-4 text-surface-400" />
+										</div>
+										<div>
+											<h3 class="text-sm font-medium text-surface-200">Customize Your Battle</h3>
+											<p class="text-xs text-surface-500">Fine-tune your comparison for better results</p>
+										</div>
+									</div>
+									{#if hasCustomized}
+										<button
+											type="button"
+											onclick={() => { hasCustomized = false; selectedCategory = 'general'; contextSpaceId = null; contextAreaId = null; }}
+											class="text-xs text-surface-400 hover:text-surface-200 underline"
+										>
+											Show templates
+										</button>
+									{/if}
+								</div>
+
+								<!-- Category Selection with helper text -->
+								<div class="space-y-2 mb-4">
+									<div class="flex items-center gap-2">
+										<span class="text-xs font-medium text-surface-400 uppercase tracking-wider">Category</span>
+										<span class="text-xs text-surface-500">(helps the community learn which models excel where)</span>
+									</div>
+									<ArenaCategoryChips
+										selected={selectedCategory}
+										onSelect={handleCategorySelect}
+									/>
+								</div>
+
+								<!-- Context Selection - full width, dropdowns side by side -->
+								<ArenaContextPicker
+									selectedSpaceId={contextSpaceId}
+									selectedAreaId={contextAreaId}
+									onSelect={handleContextSelect}
+								/>
+							</div>
+						{/if}
+
+						<!-- Model Selection -->
+						<ArenaModelSelection category={selectedCategory} />
+					{:else if activeTab === 'results'}
+						<!-- Results Tab Placeholder -->
+						<div class="text-center py-16">
+							<div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface-800 mb-4">
+								<svg class="w-8 h-8 text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+								</svg>
+							</div>
+							<h2 class="text-xl font-semibold text-surface-200 mb-2">Battle History Coming Soon</h2>
+							<p class="text-surface-400 max-w-md mx-auto">
+								Track your battle history, see your model preferences by category, and revisit past comparisons.
+							</p>
+						</div>
+					{:else if activeTab === 'rankings'}
+						<!-- Rankings Tab Placeholder -->
+						<div class="text-center py-16">
+							<div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-surface-800 mb-4">
+								<svg class="w-8 h-8 text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+								</svg>
+							</div>
+							<h2 class="text-xl font-semibold text-surface-200 mb-2">Rankings Coming Soon</h2>
+							<p class="text-surface-400 max-w-md mx-auto">
+								View community rankings, see which models excel in different categories, and discover trending performers.
+							</p>
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Input (only for battle tab) -->
+			{#if activeTab === 'battle'}
 				<ArenaInput
 					onStartBattle={handleStartBattle}
 					disabled={selectedModels.length < 2}
 					{isStreaming}
+					initialPrompt={quickStartPrompt}
 				/>
-			{:else}
-				<!-- Active battle - Show responses -->
-				<div class="flex-1 overflow-y-auto p-4 md:p-6">
-					<div class="max-w-7xl mx-auto">
-						<!-- Battle prompt header -->
-						<div class="mb-6 p-4 bg-surface-800/50 rounded-2xl border border-surface-700">
-							<div class="flex items-center flex-wrap gap-2 mb-1">
-								<span class="text-sm text-surface-400">Prompt</span>
-								{#if activeBattle.settings.category}
-									<span class="text-xs px-2 py-0.5 rounded-full bg-surface-700 text-surface-300">
-										{activeBattle.settings.category}
+			{/if}
+		{:else}
+			<!-- Active battle - Show responses -->
+			<div class="flex-1 overflow-y-auto p-4 md:p-6">
+				<div class="max-w-7xl mx-auto">
+					<!-- Battle prompt header -->
+					<div class="mb-6 p-4 bg-surface-800/50 rounded-2xl border border-surface-700">
+						<div class="flex items-center flex-wrap gap-2 mb-1">
+							<span class="text-sm text-surface-400">Prompt</span>
+							{#if activeBattle.settings.category}
+								<span class="text-xs px-2 py-0.5 rounded-full bg-surface-700 text-surface-300">
+									{activeBattle.settings.category}
+								</span>
+							{/if}
+							{#if activeBattle.suggestedCategory && activeBattle.suggestedCategory !== activeBattle.settings.category}
+								<span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+									AI suggests: {activeBattle.suggestedCategory}
+								</span>
+							{/if}
+							{#if activeBattle.settings.contextAreaId}
+								{@const area = areaStore.getAreaById(activeBattle.settings.contextAreaId)}
+								{#if area}
+									<span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+										+ context: {area.name}
 									</span>
 								{/if}
-								{#if activeBattle.suggestedCategory && activeBattle.suggestedCategory !== activeBattle.settings.category}
-									<span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
-										AI suggests: {activeBattle.suggestedCategory}
-									</span>
-								{/if}
-								{#if activeBattle.settings.contextAreaId}
-									{@const area = areaStore.getAreaById(activeBattle.settings.contextAreaId)}
-									{#if area}
-										<span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-											+ context: {area.name}
-										</span>
-									{/if}
-								{/if}
-							</div>
-							<div class="text-surface-100">{activeBattle.prompt}</div>
+							{/if}
 						</div>
+						<div class="text-surface-100">{activeBattle.prompt}</div>
+					</div>
 
-						<!-- Response Grid -->
-						<ArenaGrid modelCount={activeBattle.models.length}>
-							{#each activeBattle.responses as response}
-								{@const model = activeBattle.models.find((m) => m.id === response.modelId)}
-								<ArenaResponseCard
-									{response}
-									modelId={response.modelId}
-									modelName={model?.displayName || response.modelId}
-									provider={model?.provider || 'unknown'}
-									isWinner={activeBattle.aiJudgment?.winnerId === response.modelId}
-									isUserVote={activeBattle.userVote === response.modelId}
-									score={activeBattle.aiJudgment?.scores[response.modelId]}
-									onVote={() => handleVote(response.modelId)}
-									canVote={activeBattle.status === 'complete' || activeBattle.status === 'judged'}
-									blindMode={activeBattle.settings.blindMode}
-									hasVoted={!!activeBattle.userVote}
-								/>
-							{/each}
-						</ArenaGrid>
-
-						<!-- AI Judgment -->
-						{#if activeBattle.aiJudgment || activeBattle.status === 'judging'}
-							<ArenaJudgment
-								judgment={activeBattle.aiJudgment}
-								isJudging={activeBattle.status === 'judging'}
-								models={activeBattle.models}
-								userVote={activeBattle.userVote}
+					<!-- Response Grid -->
+					<ArenaGrid modelCount={activeBattle.models.length} hasFocused={focusedModelId !== null}>
+						{#each activeBattle.responses as response}
+							{@const model = activeBattle.models.find((m) => m.id === response.modelId)}
+							<ArenaResponseCard
+								{response}
+								modelId={response.modelId}
+								modelName={model?.displayName || response.modelId}
+								provider={model?.provider || 'unknown'}
+								isWinner={activeBattle.aiJudgment?.winnerId === response.modelId && (!!activeBattle.userVote || votingSkipped)}
+								isUserVote={activeBattle.userVote === response.modelId}
+								score={(!!activeBattle.userVote || votingSkipped) ? activeBattle.aiJudgment?.scores[response.modelId] : undefined}
+								onVote={() => handleVote(response.modelId)}
+								canVote={activeBattle.status === 'complete' || activeBattle.status === 'judged'}
+								blindMode={activeBattle.settings.blindMode}
+								hasVoted={!!activeBattle.userVote}
+								isFocused={focusedModelId === response.modelId}
+								isOtherFocused={focusedModelId !== null && focusedModelId !== response.modelId}
+								onToggleFocus={() => toggleFocus(response.modelId)}
 							/>
-						{/if}
+						{/each}
+					</ArenaGrid>
+
+					<!-- Voting Prompt - Show when responses complete but user hasn't voted/skipped -->
+					{#if (activeBattle.status === 'complete' || activeBattle.status === 'judged') && !activeBattle.userVote && !votingSkipped && !isStreaming}
+						<ArenaVotingPrompt
+							models={activeBattle.models}
+							onVote={handleVote}
+							onSkip={handleSkipVoting}
+						/>
+					{/if}
+
+					<!-- AI Judgment - Show after voting or skipping -->
+					{#if (activeBattle.aiJudgment || activeBattle.status === 'judging') && (activeBattle.userVote || votingSkipped)}
+						<ArenaJudgment
+							judgment={activeBattle.aiJudgment}
+							isJudging={activeBattle.status === 'judging'}
+							models={activeBattle.models}
+							userVote={activeBattle.userVote}
+						/>
+					{/if}
+				</div>
+			</div>
+
+			<!-- Stop button when streaming -->
+			{#if isStreaming}
+				<div class="p-4 border-t border-surface-800 bg-surface-900/80 backdrop-blur-sm">
+					<div class="max-w-5xl mx-auto flex justify-center">
+						<button
+							type="button"
+							onclick={handleStop}
+							class="btn-secondary px-6 py-2.5 flex items-center gap-2"
+						>
+							<StopCircle class="w-4 h-4" />
+							Stop All
+						</button>
 					</div>
 				</div>
-
-				<!-- Stop button when streaming -->
-				{#if isStreaming}
-					<div class="p-4 border-t border-surface-800 bg-surface-900/80 backdrop-blur-sm">
-						<div class="max-w-5xl mx-auto flex justify-center">
+			{:else if activeBattle.status === 'judged' || activeBattle.status === 'complete'}
+				<!-- Action buttons after battle -->
+				<div class="p-4 border-t border-surface-800 bg-surface-900/80 backdrop-blur-sm">
+					<div class="max-w-5xl mx-auto flex justify-center gap-3">
+						{#if activeBattle.userVote}
 							<button
 								type="button"
-								onclick={handleStop}
-								class="btn-secondary px-6 py-2.5 flex items-center gap-2"
+								onclick={() => showContinueModal = true}
+								class="btn-primary px-6 py-2.5 flex items-center gap-2"
 							>
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-									/>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
-									/>
-								</svg>
-								Stop All
+								<MessageSquare class="w-4 h-4" />
+								Continue with {winnerModelName}
 							</button>
-						</div>
+						{/if}
+						<button
+							type="button"
+							onclick={handleNewBattle}
+							class="btn-secondary px-6 py-2.5 flex items-center gap-2"
+						>
+							<RefreshCw class="w-4 h-4" />
+							New Battle
+						</button>
 					</div>
-				{:else if activeBattle.status === 'judged' || activeBattle.status === 'complete'}
-					<!-- Action buttons after battle -->
-					<div class="p-4 border-t border-surface-800 bg-surface-900/80 backdrop-blur-sm">
-						<div class="max-w-5xl mx-auto flex justify-center gap-3">
-							{#if activeBattle.userVote}
-								<button
-									type="button"
-									onclick={() => showContinueModal = true}
-									class="btn-primary px-6 py-2.5 flex items-center gap-2"
-								>
-									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-										/>
-									</svg>
-									Continue with {winnerModelName}
-								</button>
-							{/if}
-							<button
-								type="button"
-								onclick={handleNewBattle}
-								class="btn-secondary px-6 py-2.5 flex items-center gap-2"
-							>
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M12 4v16m8-8H4"
-									/>
-								</svg>
-								New Battle
-							</button>
-						</div>
-					</div>
-				{/if}
+				</div>
 			{/if}
-		</main>
+		{/if}
+	</main>
 </div>
 
 <!-- Settings Panel -->
@@ -623,6 +782,7 @@
 		isOpen={showContinueModal}
 		winnerModelId={activeBattle.userVote || ''}
 		{winnerModelName}
+		{winnerProvider}
 		battleContextSpaceId={activeBattle.settings.contextSpaceId}
 		battleContextAreaId={activeBattle.settings.contextAreaId}
 		onConfirm={handleContinue}

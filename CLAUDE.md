@@ -82,9 +82,12 @@ Don't revisit without good reason:
 
 ## Known Issues
 
+- [ ] **Mobile responsiveness** - App-wide issue; layouts break on small screens (Arena, Spaces, Chat). Needs systematic review.
+- [ ] **localStorage quota exceeded** - Chat store hitting storage limits; consider IndexedDB or server-side persistence
 - [ ] localStorage keys use `strathost-` prefix (will lose POC data on rename)
 - [ ] README.md outdated (needs rewrite)
 - [ ] No error boundaries (add before production)
+- [ ] Missing favicon.png (404 errors in console)
 
 ---
 
@@ -107,41 +110,50 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-08 (Model Arena Redesign)
+### Latest: 2026-01-08 (Model Arena Redesign - COMPLETE)
 
-**Completed:**
+**Model Arena UX Redesign - All Phases Complete:**
 
-*Arena UX Improvements (Phases 1-5, 7):*
-- Phase 1: Added `isArena` route check to Header, removed sidebar from Arena page for focused experience
-- Phase 2: Created `ArenaCategoryChips.svelte` for filtering battles by category (coding, analysis, creative, general, etc.)
-- Phase 3: Extended AI Judge endpoint with automatic category detection - suggests category when "general" selected
-- Phase 4: Created `ArenaContextPicker.svelte` for injecting Space/Area context into battle prompts
-- Phase 5: Created `ArenaContinueModal.svelte` for continuing winning battles as full conversations
-- Phase 7: Updated BACKLOG.md with Arena Rankings Dashboard future feature
+*Setup Screen (Phases 1-2):*
+- Quick Start template dropdown with category filtering
+- "Customize Your Battle" section with category chips + context picker
+- Mutually exclusive modes: template selected hides customize, customizing hides templates
+- Smart model selection with grid expansion, "Surprise me", click-outside collapse
 
-*Arena Store Enhancements:*
-- Added category state and `BattleSettings` type to arena store
-- Category persistence across battles
+*Battle Experience:*
+- Sword burst animation on battle start (900ms, 10 particles)
+- 2-column max response grid for readability
+- Focus mode: expand button to view single response full-width (Escape to exit)
+- Copy response button with visual feedback
+- Enhanced token usage display (total + breakdown)
 
-*Deferred to Future:*
-- Phase 6 (BattleOutcome): Comprehensive data model and migration documented in BACKLOG.md
+*Voting & Results:*
+- Winner badge timing fix: only shows after user votes/skips
+- Blind mode reveal animation (cascading scale/fly transitions)
+- Vote-first flow with ArenaVotingPrompt
+- AI Judge with score comparison
 
-**Files Created:**
-- `src/lib/components/arena/ArenaCategoryChips.svelte`
-- `src/lib/components/arena/ArenaContextPicker.svelte`
-- `src/lib/components/arena/ArenaContinueModal.svelte`
-- `src/lib/components/arena/index.ts`
+*Post-Battle:*
+- Continue conversation modal with Space/Area pre-fill
+- New Battle options
 
 **Files Modified:**
-- `src/lib/components/layout/Header.svelte`
-- `src/routes/arena/+page.svelte`
-- `src/lib/stores/arena.svelte.ts`
-- `src/routes/api/arena/judge/+server.ts`
-- `BACKLOG.md`
+- `src/routes/arena/+page.svelte` - Main arena page with all features
+- `src/lib/components/arena/ArenaResponseCard.svelte` - Focus mode, copy, tokens, reveal animation
+- `src/lib/components/arena/ArenaGrid.svelte` - Focus mode layout support
+- `src/lib/components/arena/ArenaQuickStart.svelte` - Template dropdown
+- `src/lib/components/arena/ArenaModelSelection.svelte` - Grid improvements
+- `src/lib/components/arena/ArenaInput.svelte` - Sword burst animation, template reset
+- `src/lib/components/arena/ArenaCategoryChips.svelte` - Removed duplicate label
+- `src/lib/components/arena/ArenaContextPicker.svelte` - Side-by-side layout
+
+**Deferred to Future:**
+- Phase 6 (BattleOutcome persistence): Documented in BACKLOG.md for Rankings Dashboard
+- Mobile responsiveness: Added to Known Issues (app-wide concern)
 
 **Next steps:**
-- Implement BattleOutcome persistence (Phase 6) when ready for Arena Rankings Dashboard
 - Continue with Areas Architecture Redesign work
+- Address mobile responsiveness across application
 
 ### Previous: 2026-01-07 (Session Log Cleanup)
 

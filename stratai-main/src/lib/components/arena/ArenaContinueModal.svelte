@@ -9,11 +9,13 @@
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import type { Area } from '$lib/types/areas';
 	import { fly, fade } from 'svelte/transition';
+	import { MessageSquare, FolderOpen, Lock, X, ChevronDown, ArrowRight, Check } from 'lucide-svelte';
 
 	interface Props {
 		isOpen: boolean;
 		winnerModelId: string;
 		winnerModelName: string;
+		winnerProvider?: string;
 		battleContextSpaceId?: string;
 		battleContextAreaId?: string;
 		onConfirm: (spaceId: string | null, areaId: string | null) => void;
@@ -24,11 +26,16 @@
 		isOpen,
 		winnerModelId,
 		winnerModelName,
+		winnerProvider = 'AI',
 		battleContextSpaceId,
 		battleContextAreaId,
 		onConfirm,
 		onClose
 	}: Props = $props();
+
+	// Destination type: 'main' for Main Chat, 'space' for Space/Area
+	type DestinationType = 'main' | 'space';
+	let destinationType = $state<DestinationType>(battleContextSpaceId ? 'space' : 'main');
 
 	// Pre-fill from battle context if available
 	let selectedSpaceId = $state<string | null>(battleContextSpaceId || null);
@@ -37,8 +44,22 @@
 	// Sync with battle context when modal opens
 	$effect(() => {
 		if (isOpen) {
-			selectedSpaceId = battleContextSpaceId || null;
-			selectedAreaId = battleContextAreaId || null;
+			if (battleContextSpaceId) {
+				destinationType = 'space';
+				selectedSpaceId = battleContextSpaceId;
+				selectedAreaId = battleContextAreaId || null;
+			} else {
+				destinationType = 'main';
+				selectedSpaceId = null;
+				selectedAreaId = null;
+			}
+		}
+	});
+
+	// Load areas when space is selected (handles both initial load and user changes)
+	$effect(() => {
+		if (selectedSpaceId && isOpen) {
+			areaStore.loadAreas(selectedSpaceId);
 		}
 	});
 
@@ -50,6 +71,32 @@
 		if (!selectedSpaceId) return [];
 		return areaStore.getAreasForSpace(selectedSpaceId);
 	});
+
+	// Get provider color for badge
+	function getProviderColor(provider: string): string {
+		switch (provider.toLowerCase()) {
+			case 'anthropic':
+				return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+			case 'openai':
+				return 'bg-green-500/20 text-green-400 border-green-500/30';
+			case 'google':
+				return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+			case 'meta':
+				return 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30';
+			case 'deepseek':
+				return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
+			default:
+				return 'bg-surface-600/50 text-surface-400 border-surface-500/30';
+		}
+	}
+
+	function handleDestinationChange(type: DestinationType) {
+		destinationType = type;
+		if (type === 'main') {
+			selectedSpaceId = null;
+			selectedAreaId = null;
+		}
+	}
 
 	function handleSpaceChange(e: Event) {
 		const target = e.target as HTMLSelectElement;
@@ -69,7 +116,11 @@
 	}
 
 	function handleConfirm() {
-		onConfirm(selectedSpaceId, selectedAreaId);
+		if (destinationType === 'main') {
+			onConfirm(null, null);
+		} else {
+			onConfirm(selectedSpaceId, selectedAreaId);
+		}
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -101,71 +152,129 @@
 		<div class="modal-header">
 			<h2 id="modal-title" class="modal-title">Continue Conversation</h2>
 			<button type="button" class="close-btn" onclick={onClose} aria-label="Close">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-				</svg>
+				<X class="w-5 h-5" />
 			</button>
 		</div>
 
 		<div class="modal-body">
-			<p class="description">
-				Continue this conversation with <strong>{winnerModelName}</strong> in your workspace.
-			</p>
-
-			<div class="fields">
-				<!-- Space selector -->
-				<div class="field">
-					<label class="field-label" for="space-select">Space</label>
-					<div class="select-wrapper">
-						<select
-							id="space-select"
-							class="select"
-							value={selectedSpaceId || ''}
-							onchange={handleSpaceChange}
-						>
-							<option value="">Select a space...</option>
-							{#each spaces as space}
-								<option value={space.id}>{space.name}</option>
-							{/each}
-						</select>
-						<svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-						</svg>
-					</div>
+			<!-- Locked model badge -->
+			<div class="model-badge">
+				<div class="flex items-center gap-2">
+					<Lock class="w-4 h-4 text-surface-400" />
+					<span class="text-sm text-surface-400">Locked to</span>
 				</div>
+				<div class="flex items-center gap-2 mt-1">
+					<span class="px-2 py-0.5 rounded text-xs font-medium border {getProviderColor(winnerProvider)}">
+						{winnerProvider}
+					</span>
+					<span class="font-semibold text-surface-100">{winnerModelName}</span>
+				</div>
+			</div>
 
-				<!-- Area selector -->
-				{#if selectedSpaceId}
+			<!-- Destination options -->
+			<div class="destination-label">Where to continue?</div>
+
+			<div class="destination-options">
+				<!-- Main Chat option -->
+				<button
+					type="button"
+					class="destination-option {destinationType === 'main' ? 'selected' : ''}"
+					onclick={() => handleDestinationChange('main')}
+				>
+					<div class="option-icon">
+						<MessageSquare class="w-5 h-5" />
+					</div>
+					<div class="option-content">
+						<div class="option-title">Main Chat</div>
+						<div class="option-desc">Quick conversation without context</div>
+					</div>
+					{#if destinationType === 'main'}
+						<div class="option-check">
+							<Check class="w-5 h-5" />
+						</div>
+					{/if}
+				</button>
+
+				<!-- Space/Area option -->
+				<button
+					type="button"
+					class="destination-option {destinationType === 'space' ? 'selected' : ''}"
+					onclick={() => handleDestinationChange('space')}
+				>
+					<div class="option-icon">
+						<FolderOpen class="w-5 h-5" />
+					</div>
+					<div class="option-content">
+						<div class="option-title">Space / Area</div>
+						<div class="option-desc">Continue with workspace context</div>
+					</div>
+					{#if destinationType === 'space'}
+						<div class="option-check">
+							<Check class="w-5 h-5" />
+						</div>
+					{/if}
+				</button>
+			</div>
+
+			<!-- Space/Area selectors (shown when space destination selected) -->
+			{#if destinationType === 'space'}
+				<div class="fields">
+					<!-- Space selector -->
 					<div class="field">
-						<label class="field-label" for="area-select">Area</label>
+						<label class="field-label" for="space-select">Space</label>
 						<div class="select-wrapper">
 							<select
-								id="area-select"
+								id="space-select"
 								class="select"
-								value={selectedAreaId || ''}
-								onchange={handleAreaChange}
-								disabled={areas.length === 0}
+								value={selectedSpaceId || ''}
+								onchange={handleSpaceChange}
 							>
-								<option value="">Select an area...</option>
-								{#each areas as area}
-									<option value={area.id}>{area.icon || ''} {area.name}</option>
+								<option value="">Select a space...</option>
+								{#each spaces as space}
+									<option value={space.id}>{space.name}</option>
 								{/each}
 							</select>
-							<svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-							</svg>
+							<ChevronDown class="select-arrow" />
 						</div>
 					</div>
-				{/if}
-			</div>
+
+					<!-- Area selector -->
+					{#if selectedSpaceId}
+						<div class="field">
+							<label class="field-label" for="area-select">Area (optional)</label>
+							<div class="select-wrapper">
+								<select
+									id="area-select"
+									class="select"
+									value={selectedAreaId || ''}
+									onchange={handleAreaChange}
+									disabled={areas.length === 0}
+								>
+									<option value="">No specific area</option>
+									{#each areas as area}
+										<option value={area.id}>{area.icon || ''} {area.name}</option>
+									{/each}
+								</select>
+								<ChevronDown class="select-arrow" />
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</div>
 
 		<div class="modal-footer">
 			<button type="button" class="btn-cancel" onclick={onClose}>
 				Cancel
 			</button>
-			<button type="button" class="btn-continue" onclick={handleConfirm}>
+			<button
+				type="button"
+				class="btn-continue"
+				onclick={handleConfirm}
+				disabled={destinationType === 'space' && !selectedSpaceId}
+			>
 				Continue
+				<ArrowRight class="w-4 h-4" />
 			</button>
 		</div>
 	</div>
@@ -189,7 +298,7 @@
 		transform: translate(-50%, -50%);
 		z-index: 101;
 		width: 90%;
-		max-width: 400px;
+		max-width: 440px;
 		background: #1a1a1a;
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 1rem;
@@ -231,30 +340,102 @@
 		color: rgba(255, 255, 255, 0.8);
 	}
 
-	.close-btn svg {
-		width: 1.25rem;
-		height: 1.25rem;
-	}
-
 	.modal-body {
 		padding: 1.25rem;
 	}
 
-	.description {
-		font-size: 0.875rem;
-		color: rgba(255, 255, 255, 0.7);
-		margin: 0 0 1.25rem 0;
-		line-height: 1.5;
+	/* Locked model badge */
+	.model-badge {
+		padding: 0.875rem 1rem;
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 0.75rem;
+		margin-bottom: 1.25rem;
 	}
 
-	.description strong {
+	/* Destination section */
+	.destination-label {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.5);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin-bottom: 0.75rem;
+	}
+
+	.destination-options {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.destination-option {
+		display: flex;
+		align-items: center;
+		gap: 0.875rem;
+		padding: 0.875rem 1rem;
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 0.75rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+		text-align: left;
+		width: 100%;
+	}
+
+	.destination-option:hover {
+		background: rgba(255, 255, 255, 0.06);
+		border-color: rgba(255, 255, 255, 0.15);
+	}
+
+	.destination-option.selected {
+		background: rgba(99, 102, 241, 0.1);
+		border-color: rgba(99, 102, 241, 0.4);
+	}
+
+	.option-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		background: rgba(255, 255, 255, 0.05);
+		border-radius: 0.625rem;
+		color: rgba(255, 255, 255, 0.6);
+	}
+
+	.destination-option.selected .option-icon {
+		background: rgba(99, 102, 241, 0.2);
+		color: #818cf8;
+	}
+
+	.option-content {
+		flex: 1;
+	}
+
+	.option-title {
+		font-size: 0.875rem;
+		font-weight: 500;
 		color: #fff;
 	}
 
+	.option-desc {
+		font-size: 0.75rem;
+		color: rgba(255, 255, 255, 0.5);
+		margin-top: 0.125rem;
+	}
+
+	.option-check {
+		color: #818cf8;
+	}
+
+	/* Space/Area selectors */
 	.fields {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		padding-top: 0.5rem;
 	}
 
 	.field {
@@ -308,7 +489,7 @@
 		color: #fff;
 	}
 
-	.select-arrow {
+	:global(.select-arrow) {
 		position: absolute;
 		right: 0.75rem;
 		top: 50%;
@@ -345,6 +526,9 @@
 	}
 
 	.btn-continue {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		padding: 0.5rem 1.25rem;
 		font-size: 0.875rem;
 		font-weight: 500;
@@ -356,8 +540,13 @@
 		transition: all 0.15s ease;
 	}
 
-	.btn-continue:hover {
+	.btn-continue:hover:not(:disabled) {
 		filter: brightness(1.1);
 		transform: translateY(-1px);
+	}
+
+	.btn-continue:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 </style>

@@ -41,7 +41,9 @@
 	import { SPACES, isValidSpace } from '$lib/config/spaces';
 	import type { FileAttachment } from '$lib/types/chat';
 	import type { Area } from '$lib/types/areas';
-	import type { Space } from '$lib/types/spaces';
+	import type { Space, SystemSpaceSlug } from '$lib/types/spaces';
+	import { isSystemSpace as checkIsSystemSpace } from '$lib/types/spaces';
+	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 
 	// Route params
 	let spaceParam = $derived($page.params.space);
@@ -1146,7 +1148,11 @@
 				</button>
 				<div class="breadcrumb">
 					<button type="button" class="breadcrumb-space" onclick={goToSpaceDashboard}>
-						{#if space.icon}<span class="space-icon">{space.icon}</span>{/if}
+						{#if checkIsSystemSpace(space.slug)}
+							<SpaceIcon space={space.slug as SystemSpaceSlug} size="sm" class="space-icon-svg" />
+						{:else if space.icon}
+							<span class="space-icon">{space.icon}</span>
+						{/if}
 						{space.name}
 					</button>
 					<span class="breadcrumb-separator">/</span>
@@ -1483,6 +1489,12 @@
 
 	.space-icon {
 		font-size: 1rem;
+	}
+
+	/* SVG space icon styling */
+	:global(.space-icon-svg) {
+		flex-shrink: 0;
+		opacity: 0.8;
 	}
 
 	.breadcrumb-separator {

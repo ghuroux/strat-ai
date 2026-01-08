@@ -9,6 +9,7 @@
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import type { Area } from '$lib/types/areas';
+	import { ChevronDown, CheckCircle } from 'lucide-svelte';
 
 	interface Props {
 		selectedSpaceId: string | null;
@@ -88,8 +89,8 @@
 	</div>
 
 	<div class="picker-row">
-		<!-- Space selector -->
-		<div class="select-wrapper">
+		<!-- Space selector (left half) -->
+		<div class="select-wrapper half">
 			<select
 				class="select"
 				value={selectedSpaceId || ''}
@@ -101,14 +102,12 @@
 					<option value={space.id}>{space.name}</option>
 				{/each}
 			</select>
-			<svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-			</svg>
+			<ChevronDown class="select-arrow" />
 		</div>
 
-		<!-- Area selector (only if space is selected) -->
+		<!-- Area selector (right half, only if space is selected) -->
 		{#if selectedSpaceId}
-			<div class="select-wrapper">
+			<div class="select-wrapper half">
 				<select
 					class="select"
 					value={selectedAreaId || ''}
@@ -123,9 +122,7 @@
 						</option>
 					{/each}
 				</select>
-				<svg class="select-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-				</svg>
+				<ChevronDown class="select-arrow" />
 			</div>
 		{/if}
 	</div>
@@ -134,9 +131,7 @@
 	{#if selectedAreaContext}
 		<div class="context-preview">
 			<div class="preview-header">
-				<svg class="preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-				</svg>
+				<CheckCircle class="w-3.5 h-3.5 text-green-500" />
 				<span>Context from {selectedAreaName}</span>
 			</div>
 			<p class="preview-text">{truncateContext(selectedAreaContext, 150)}</p>
@@ -198,13 +193,15 @@
 
 	.picker-row {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
+		gap: 1rem;
 	}
 
 	.select-wrapper {
 		position: relative;
-		flex: 1;
+	}
+
+	.select-wrapper.half {
+		flex: 0 0 calc(50% - 0.5rem);
 		min-width: 150px;
 	}
 
@@ -241,7 +238,7 @@
 		color: #fff;
 	}
 
-	.select-arrow {
+	:global(.select-arrow) {
 		position: absolute;
 		right: 0.5rem;
 		top: 50%;
@@ -276,12 +273,6 @@
 		margin-bottom: 0.375rem;
 	}
 
-	.preview-icon {
-		width: 0.875rem;
-		height: 0.875rem;
-		color: #22c55e;
-	}
-
 	.preview-text {
 		font-size: 0.8125rem;
 		color: rgba(255, 255, 255, 0.5);
@@ -290,12 +281,15 @@
 	}
 
 	/* Responsive */
-	@media (max-width: 480px) {
+	@media (max-width: 640px) {
 		.picker-row {
 			flex-direction: column;
+			gap: 0.5rem;
 		}
 
-		.select-wrapper {
+		.select-wrapper.half {
+			flex: none;
+			width: 100%;
 			min-width: unset;
 		}
 	}

@@ -45,6 +45,14 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 	try {
 		const body = await request.json();
 
+		// Validate: subtasks cannot have 'planning' status
+		if (body.status === 'planning') {
+			const existingTask = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+			if (existingTask?.parentTaskId) {
+				return json({ error: 'Subtasks cannot enter planning mode' }, { status: 400 });
+			}
+		}
+
 		const updates: UpdateTaskInput = {};
 
 		if (body.title !== undefined) updates.title = body.title;

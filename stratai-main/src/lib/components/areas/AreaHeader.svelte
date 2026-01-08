@@ -12,7 +12,9 @@
 -->
 <script lang="ts">
 	import ModelSelector from '$lib/components/ModelSelector.svelte';
-	import type { Space } from '$lib/types/spaces';
+	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
+	import type { Space, SystemSpaceSlug } from '$lib/types/spaces';
+	import { isSystemSpace } from '$lib/types/spaces';
 	import type { Area } from '$lib/types/areas';
 
 	interface Props {
@@ -61,7 +63,11 @@
 		</button>
 		<div class="breadcrumb">
 			<button type="button" class="breadcrumb-space" onclick={onBack}>
-				{#if space.icon}<span class="space-icon">{space.icon}</span>{/if}
+				{#if isSystemSpace(space.slug)}
+					<SpaceIcon space={space.slug as SystemSpaceSlug} size="sm" class="space-icon-svg" />
+				{:else if space.icon}
+					<span class="space-icon">{space.icon}</span>
+				{/if}
 				{space.name}
 			</button>
 			<span class="breadcrumb-separator">/</span>
@@ -230,6 +236,12 @@
 	.space-icon,
 	.area-icon {
 		font-size: 1rem;
+	}
+
+	/* SVG space icon styling */
+	:global(.space-icon-svg) {
+		flex-shrink: 0;
+		opacity: 0.8;
 	}
 
 	.breadcrumb-separator {

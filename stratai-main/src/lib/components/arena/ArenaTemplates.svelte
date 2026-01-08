@@ -5,6 +5,7 @@
 		type BattleTemplate,
 		type TemplateCategory
 	} from '$lib/config/battle-templates';
+	import { LayoutGrid, ChevronDown, ChevronRight } from 'lucide-svelte';
 
 	interface Props {
 		onSelectTemplate: (prompt: string) => void;
@@ -59,18 +60,9 @@
 				: 'bg-surface-800/50 border-surface-700 text-surface-400 hover:text-surface-200 hover:bg-surface-700/50'}"
 		title="Use a battle template"
 	>
-		<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-		</svg>
+		<LayoutGrid class="w-4 h-4" />
 		<span class="hidden sm:inline">Templates</span>
-		<svg
-			class="w-3 h-3 transition-transform {isOpen ? 'rotate-180' : ''}"
-			fill="none"
-			stroke="currentColor"
-			viewBox="0 0 24 24"
-		>
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-		</svg>
+		<ChevronDown class="w-3 h-3 transition-transform {isOpen ? 'rotate-180' : ''}" />
 	</button>
 
 	<!-- Dropdown panel -->
@@ -124,14 +116,7 @@
 									</div>
 									<p class="text-xs text-surface-400 line-clamp-2">{template.description}</p>
 								</div>
-								<svg
-									class="w-4 h-4 text-surface-500 group-hover:text-primary-400 transition-colors shrink-0 mt-1"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-								</svg>
+								<ChevronRight class="w-4 h-4 text-surface-500 group-hover:text-primary-400 transition-colors shrink-0 mt-1" />
 							</div>
 						</button>
 					{/each}

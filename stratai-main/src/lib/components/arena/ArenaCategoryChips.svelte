@@ -6,6 +6,7 @@
 	 * "General" is the default, AI Judge can suggest a more specific
 	 * category after analyzing the prompt.
 	 */
+	import { MessageSquare, Code2, Brain, Palette, BarChart3 } from 'lucide-svelte';
 	import { TEMPLATE_CATEGORIES, type TemplateCategory } from '$lib/config/battle-templates';
 
 	interface Props {
@@ -16,33 +17,28 @@
 
 	let { selected = 'general', onSelect, disabled = false }: Props = $props();
 
-	// Define category order (general first as default)
-	const categories: TemplateCategory[] = ['general', 'coding', 'reasoning', 'creative', 'analysis'];
-
-	// Category icons
-	const categoryIcons: Record<TemplateCategory, string> = {
-		general: '💬',
-		coding: '💻',
-		reasoning: '🧠',
-		creative: '🎨',
-		analysis: '📊'
-	};
+	// Define category order and icons (general first as default)
+	const categoryConfig: Array<{ id: TemplateCategory; icon: typeof MessageSquare }> = [
+		{ id: 'general', icon: MessageSquare },
+		{ id: 'coding', icon: Code2 },
+		{ id: 'reasoning', icon: Brain },
+		{ id: 'creative', icon: Palette },
+		{ id: 'analysis', icon: BarChart3 }
+	];
 </script>
 
 <div class="category-chips" class:disabled>
-	<span class="label">Category</span>
 	<div class="chips">
-		{#each categories as cat}
-			{@const config = TEMPLATE_CATEGORIES[cat]}
+		{#each categoryConfig as cat}
+			{@const config = TEMPLATE_CATEGORIES[cat.id]}
 			<button
 				type="button"
 				class="chip"
-				class:active={selected === cat}
-				style="--chip-color: {config.color}"
-				onclick={() => onSelect(cat)}
+				class:active={selected === cat.id}
+				onclick={() => onSelect(cat.id)}
 				{disabled}
 			>
-				<span class="icon">{categoryIcons[cat]}</span>
+				<cat.icon class="w-4 h-4" />
 				<span class="text">{config.label}</span>
 			</button>
 		{/each}
@@ -59,14 +55,6 @@
 	.category-chips.disabled {
 		opacity: 0.5;
 		pointer-events: none;
-	}
-
-	.label {
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: rgba(255, 255, 255, 0.5);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
 	}
 
 	.chips {
@@ -104,11 +92,6 @@
 
 	.chip:disabled {
 		cursor: not-allowed;
-	}
-
-	.icon {
-		font-size: 0.875rem;
-		line-height: 1;
 	}
 
 	.text {

@@ -3,13 +3,14 @@
 
 	interface Props {
 		modelCount: number;
+		hasFocused?: boolean;
 		children: Snippet;
 	}
 
-	let { modelCount, children }: Props = $props();
+	let { modelCount, hasFocused = false, children }: Props = $props();
 </script>
 
-<div class="arena-grid" data-count={modelCount}>
+<div class="arena-grid" data-count={modelCount} data-focused={hasFocused}>
 	{@render children()}
 </div>
 
@@ -18,6 +19,7 @@
 		display: grid;
 		gap: 1rem;
 		width: 100%;
+		transition: all 0.3s ease;
 	}
 
 	/* 2 models - 2 columns */
@@ -25,42 +27,40 @@
 		grid-template-columns: repeat(2, 1fr);
 	}
 
-	/* 3 models - 3 columns */
+	/* 3 models - 2x2 grid (last cell empty or spans) */
 	.arena-grid[data-count="3"] {
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(2, 1fr);
 	}
 
-	/* 4 models - 2x2 grid */
+	/* 4 models - 2x2 grid (always, for readability) */
 	.arena-grid[data-count="4"] {
 		grid-template-columns: repeat(2, 1fr);
 	}
 
-	/* Large screens - 4 models in a row */
-	@media (min-width: 1280px) {
-		.arena-grid[data-count="4"] {
-			grid-template-columns: repeat(4, 1fr);
-		}
+	/* When in focus mode, switch to single column for proper layout */
+	.arena-grid[data-focused="true"] {
+		grid-template-columns: 1fr;
 	}
 
-	/* Tablet - 3 models becomes 2+1 */
+	/* Tablet - keep 2 columns */
 	@media (max-width: 1024px) {
-		.arena-grid[data-count="3"] {
+		.arena-grid[data-count="2"],
+		.arena-grid[data-count="3"],
+		.arena-grid[data-count="4"] {
 			grid-template-columns: repeat(2, 1fr);
 		}
-		.arena-grid[data-count="3"] > :global(:last-child) {
-			grid-column: span 2;
+
+		.arena-grid[data-focused="true"] {
+			grid-template-columns: 1fr;
 		}
 	}
 
-	/* Mobile - all stack */
+	/* Mobile - stack to single column */
 	@media (max-width: 768px) {
 		.arena-grid[data-count="2"],
 		.arena-grid[data-count="3"],
 		.arena-grid[data-count="4"] {
 			grid-template-columns: 1fr;
-		}
-		.arena-grid[data-count="3"] > :global(:last-child) {
-			grid-column: span 1;
 		}
 	}
 </style>

@@ -835,6 +835,12 @@ class TaskStore {
 		const task = this.tasks.get(taskId);
 		if (!task) return { success: false, existingPlanningCount: 0 };
 
+		// Subtasks cannot enter planning mode - they can't have children
+		if (task.parentTaskId) {
+			console.warn('Cannot start plan mode on a subtask:', taskId);
+			return { success: false, existingPlanningCount: 0 };
+		}
+
 		// Track how many tasks are already in planning (for toast notification)
 		const existingPlanningCount = this.planningTaskCount;
 

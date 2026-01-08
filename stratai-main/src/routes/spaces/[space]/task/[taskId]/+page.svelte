@@ -502,7 +502,10 @@
 			});
 
 			// Check for subtask proposals in AI response
-			if (taskIdParam) {
+			// Only process AI proposals when user explicitly entered Plan Mode
+			// Planning mode requires explicit user action ("Help me plan this" button)
+			// This prevents automatic state changes from normal conversations
+			if (taskIdParam && isPlanModeActive) {
 				const finalConv = chatStore.getConversation(conversationId!);
 				const finalMessage = finalConv?.messages.find(m => m.id === assistantMessageId);
 
@@ -513,18 +516,6 @@
 						const extracted = extractProposedSubtasks(finalMessage.content);
 
 						if (extracted.length > 0) {
-							// If not in Plan Mode, auto-start it
-							if (!isPlanModeActive) {
-								const result = await taskStore.startPlanMode(taskIdParam, conversationId);
-								if (!result.success) {
-									toastStore.error('Failed to start Plan Mode');
-									return;
-								}
-								// Show toast if there are other tasks in planning
-								if (result.existingPlanningCount > 0) {
-									toastStore.info(`Now planning "${task?.title}". ${result.existingPlanningCount + 1} tasks in planning.`);
-								}
-							}
 							await taskStore.setProposedSubtasks(extracted);
 
 							// Generate synopsis in background (non-blocking)
@@ -533,7 +524,7 @@
 							await taskStore.setPlanModePhase('confirming');
 							toastStore.success(`Extracted ${extracted.length} subtasks!`);
 						}
-					} else if (isPlanModeActive) {
+					} else {
 						// If we're in 'proposing' phase but AI didn't output a valid proposal,
 						// revert back to 'eliciting' so conversation can continue normally
 						if (planMode?.phase === 'proposing') {
