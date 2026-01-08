@@ -123,7 +123,63 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-08 (Pricing Strategy)
+### Latest: 2026-01-08 (LLM Gateway Evaluation & Enterprise Architecture)
+
+**Completed:**
+
+*LLM Gateway Evaluation - LiteLLM vs Bifrost:*
+- Researched Bifrost OSS vs LiteLLM OSS for B2B multi-tenant requirements
+- Tested both gateways with load testing scripts
+- **Key finding:** Bifrost OSS is SQLite-only (PostgreSQL requires Enterprise license)
+  - This breaks horizontal scaling for production multi-tenant deployment
+- **Recommendation:** LiteLLM OSS remains the right choice
+  - PostgreSQL included in OSS version
+  - Enables horizontal scaling
+  - Virtual keys for per-customer API key management
+- Created comprehensive evaluation: `stratai-main/docs/llm-gateway-evaluation.md`
+
+*Enterprise Architecture Roadmap:*
+- Analyzed gaps between current single-tenant app and B2B enterprise vision
+- Clarified "Modules" terminology = Model Access Tiers (Basic/Standard/Premium)
+- **Auth decision:** Auth0 recommended (3 days vs 3 weeks to build custom)
+  - SSO-ready for enterprise upsell
+  - RBAC support built-in
+- **SSO analysis:** Phase 3 feature (enterprise tier upsell, not launch blocker)
+- Multi-tenancy architecture designed:
+  - Org -> Group -> User hierarchy
+  - `org_id` column migration for all tenant-scoped tables
+  - Row-level security considerations
+- 4-week implementation timeline:
+  - Phase 1: Auth0 integration (3 days)
+  - Phase 2: Multi-tenancy core (5 days)
+  - Phase 3: Model tiers + virtual keys (4 days)
+  - Phase 4: Usage tracking (3 days)
+- Created comprehensive roadmap: `stratai-main/docs/enterprise-roadmap.md`
+
+**Files Created:**
+- `stratai-main/docs/llm-gateway-evaluation.md` - LiteLLM vs Bifrost comparison
+- `stratai-main/docs/enterprise-roadmap.md` - Full B2B transformation plan
+
+**Files Modified:**
+- `docker-compose.yml` - Added Bifrost environment variables for testing
+- `.gitignore` - Added Bifrost SQLite files (data/*.db)
+
+**Key Decisions Made:**
+1. **LiteLLM OSS** - Stick with it (PostgreSQL enables horizontal scaling)
+2. **Modules = Model Tiers** - Basic/Standard/Premium model access levels
+3. **Auth0** for authentication (speed to market, SSO-ready)
+4. **SSO in Phase 3** - Enterprise upsell, not launch requirement
+5. **Admin via RBAC** - In main app, not separate admin routes
+
+**Next Steps:**
+- Phase 1: Auth0 integration (3 days)
+- Phase 2: Multi-tenancy core with org_id migration (5 days)
+- Phase 3: Model tiers + virtual keys (4 days)
+- Phase 4: Usage tracking (3 days)
+- Internal pilot target: ~3-4 weeks
+- External beta target: +1 month
+
+### Previous: 2026-01-08 (Pricing Strategy)
 
 **Completed:**
 
