@@ -14,6 +14,7 @@
 		onpin?: () => void;
 		onrename?: (newTitle: string) => void;
 		onexport?: () => void;
+		onmove?: () => void;
 		onFocusTask?: (taskId: string) => void;
 	}
 
@@ -27,6 +28,7 @@
 		onpin,
 		onrename,
 		onexport,
+		onmove,
 		onFocusTask
 	}: Props = $props();
 
@@ -123,6 +125,13 @@
 		e.stopPropagation();
 		onMenuToggle?.(false);
 		onexport?.();
+	}
+
+	function doMove(e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		onMenuToggle?.(false);
+		onmove?.();
 	}
 
 	function handleMenuMouseLeave() {
@@ -260,6 +269,13 @@
 						d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 				</svg>
 				Export
+			</button>
+			<button type="button" class="dropdown-item" onclick={doMove}>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+						d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+				</svg>
+				Move Chat...
 			</button>
 			<div class="dropdown-divider"></div>
 			<button type="button" class="dropdown-item dropdown-item-danger" onclick={doDelete}>

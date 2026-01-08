@@ -4,6 +4,7 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
+	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import ConversationItem from './ConversationItem.svelte';
 	import ClearConversationsModal from './ClearConversationsModal.svelte';
 
@@ -112,6 +113,13 @@
 
 	function handleFocusTask(taskId: string) {
 		taskStore.setFocusedTask(taskId);
+	}
+
+	function handleMoveConversation(id: string) {
+		const conversation = chatStore.conversations.get(id);
+		if (conversation) {
+			moveChatModalStore.open(conversation);
+		}
 	}
 
 	function handleExportConversation(id: string) {
@@ -304,6 +312,7 @@
 							onpin={() => handlePinConversation(conversation.id)}
 							onrename={(title) => handleRenameConversation(conversation.id, title)}
 							onexport={() => handleExportConversation(conversation.id)}
+							onmove={() => handleMoveConversation(conversation.id)}
 							onFocusTask={handleFocusTask}
 						/>
 					{/each}
@@ -336,6 +345,7 @@
 						onpin={() => handlePinConversation(conversation.id)}
 						onrename={(title) => handleRenameConversation(conversation.id, title)}
 						onexport={() => handleExportConversation(conversation.id)}
+						onmove={() => handleMoveConversation(conversation.id)}
 						onFocusTask={handleFocusTask}
 					/>
 				{/each}
@@ -377,6 +387,7 @@
 								onpin={() => handlePinConversation(conversation.id)}
 								onrename={(title) => handleRenameConversation(conversation.id, title)}
 								onexport={() => handleExportConversation(conversation.id)}
+								onmove={() => handleMoveConversation(conversation.id)}
 								onFocusTask={handleFocusTask}
 							/>
 						{/each}
@@ -420,6 +431,7 @@
 								onpin={() => handlePinConversation(conversation.id)}
 								onrename={(title) => handleRenameConversation(conversation.id, title)}
 								onexport={() => handleExportConversation(conversation.id)}
+								onmove={() => handleMoveConversation(conversation.id)}
 								onFocusTask={handleFocusTask}
 							/>
 						{/each}

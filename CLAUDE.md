@@ -110,7 +110,74 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-08 (Model Arena Redesign - COMPLETE)
+### Latest: 2026-01-08 (Quick Starts, Clear Modal, Move Chat)
+
+**Completed:**
+
+*Contextual Quick Starts with Prepopulate Support:*
+- `src/lib/utils/quick-starts.ts` - unified utility with template library
+- Task type detection via keywords (audit, plan, research, create, fix, document)
+- SVG icons instead of emojis in all welcome components
+- Added `prepopulate-input` event listener to ChatInput
+- Quick start badges now populate chat input when clicked
+- Updated TaskWorkWelcome, SubtaskWelcome, TaskContextPanel components
+
+*Clear Conversations Modal:*
+- `ClearConversationsModal.svelte` with styled warning UI
+- `clearMainConversations()` method that preserves space/area chats
+- `mainConversationCount` derived property for accurate footer count
+- "Clear all" now only affects main nav conversations, keeps Space conversations safe
+- Proper confirmation modal instead of browser's native confirm()
+
+*Area Conversation Drawer Improvements:*
+- Enhanced TaskInfo interface with `isSubtask` and `parentTaskTitle` fields
+- Split conversations into **General** and **Task Conversations** groups
+- General conversations appear first (before Task Conversations)
+- Section headers use area color styling
+- Subtask badges show "Subtask" label + parent task name
+- Fixed badge ellipsis using inline-block instead of inline-flex
+
+*Move Chat Modal (WIP):*
+- `MoveChatModal.svelte` - destination picker for moving conversations
+- `moveChatModal.svelte.ts` - global store for modal state
+- Context menu "Move Chat..." option on conversation items
+- Space/Area selection with auto-load of areas
+- Wired into Sidebar and +layout.svelte (global modal)
+
+*Backlog Update:*
+- Added "Settings Architecture Review" section documenting system prompt scope concerns
+
+**Files Created:**
+- `src/lib/utils/quick-starts.ts`
+- `src/lib/components/layout/ClearConversationsModal.svelte`
+- `src/lib/components/chat/MoveChatModal.svelte`
+- `src/lib/stores/moveChatModal.svelte.ts`
+
+**Files Modified:**
+- `src/lib/components/ChatInput.svelte`
+- `src/lib/components/tasks/TaskWorkWelcome.svelte`
+- `src/lib/components/tasks/SubtaskWelcome.svelte`
+- `src/lib/components/tasks/TaskContextPanel.svelte`
+- `src/lib/utils/subtask-welcome.ts`
+- `src/lib/components/layout/Sidebar.svelte`
+- `src/lib/stores/chat.svelte.ts`
+- `src/lib/components/chat/ConversationDrawer.svelte`
+- `src/routes/spaces/[space]/[area]/+page.svelte`
+- `src/lib/components/layout/ConversationItem.svelte`
+- `src/routes/+layout.svelte`
+- `src/routes/+page.svelte`
+- `BACKLOG.md`
+
+**Commits Made:**
+- `69ae980` - feat: Add contextual quick starts with prepopulate support
+- `18ea44f` - feat: Add confirmation modal for clearing main nav conversations
+- `ececd9d` - feat: Improve area conversation drawer grouping and styling
+
+**Next steps:**
+- Complete Move Chat Modal integration (test and debug)
+- Continue Areas Architecture work
+
+### Previous: 2026-01-08 (Model Arena Redesign - COMPLETE)
 
 **Model Arena UX Redesign - All Phases Complete:**
 

@@ -1216,6 +1216,15 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 - [ ] Fork conversation from any point
 - [ ] Dark/light/system theme (complete)
 
+### Settings Architecture Review
+- [ ] **System Prompt Scope**: Currently global (affects all conversations). Consider:
+  - Per-Space system prompts (different personas for Work vs Personal)
+  - Per-Area system prompts (e.g., "coding assistant" in Coding area)
+  - Per-Conversation overrides (maximum flexibility)
+  - Inheritance: Global → Space → Area → Conversation
+- [ ] **Impact Analysis**: Changing global system prompt affects ALL future messages in ALL conversations - users may not expect this
+- [ ] **UX Clarity**: Settings panel doesn't indicate scope - users may think it's per-conversation
+
 ---
 
 ## Priority Matrix
