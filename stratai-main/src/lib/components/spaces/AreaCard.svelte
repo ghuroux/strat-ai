@@ -92,6 +92,7 @@
 	type="button"
 	class="area-card"
 	class:general={area.isGeneral}
+	class:menu-open={showMenu}
 	style="--card-color: {cardColor}"
 	onclick={onclick}
 >
@@ -206,6 +207,12 @@
 		border-color: color-mix(in srgb, var(--card-color) 40%, transparent);
 		transform: translateY(-2px);
 		box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.3);
+	}
+
+	/* Disable transform when menu is open to prevent flicker */
+	.area-card.menu-open,
+	.area-card.menu-open:hover {
+		transform: none;
 	}
 
 	.area-card:focus-visible {
@@ -365,7 +372,8 @@
 		height: 1rem;
 	}
 
-	.area-card:hover .menu-trigger {
+	.area-card:hover .menu-trigger,
+	.area-card.menu-open .menu-trigger {
 		opacity: 1;
 	}
 

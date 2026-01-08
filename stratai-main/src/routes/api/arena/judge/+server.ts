@@ -1,13 +1,16 @@
 import type { RequestHandler } from './$types';
 import { LITELLM_BASE_URL, LITELLM_API_KEY } from '$env/static/private';
+import type { TemplateCategory } from '$lib/config/battle-templates';
 
 /**
  * Arena Judge API Endpoint
  * Uses Claude Sonnet 4.5 to evaluate model responses objectively
+ * Also detects/suggests category when "general" is selected
  */
 
 interface JudgeRequest {
 	prompt: string;
+	category?: TemplateCategory;
 	responses: Array<{
 		modelId: string;
 		modelName: string;
@@ -20,6 +23,8 @@ interface JudgeResponse {
 	analysis: string;
 	scores: Record<string, number>;
 	criteria: string[];
+	suggestedCategory?: TemplateCategory;
+	categoryConfidence?: number;
 }
 
 const JUDGE_MODEL = 'anthropic/claude-sonnet-4-20250514';
@@ -56,6 +61,21 @@ Scores should be from 1-10:
 - 5-6: Adequate
 - 3-4: Below average
 - 1-2: Poor quality`;
+
+// Extended prompt for category detection
+const CATEGORY_DETECTION_ADDENDUM = `
+
+CATEGORY DETECTION:
+The user selected "general" as the category. Based on the prompt content, determine the most appropriate specific category:
+- coding: Programming, debugging, algorithms, code review, technical implementation
+- reasoning: Logic puzzles, math problems, analysis, ethical dilemmas, step-by-step problem solving
+- creative: Writing, storytelling, marketing copy, explanations, brainstorming
+- analysis: Comparisons, summaries, research synthesis, pros/cons, evaluations
+- general: If none of the above fit well
+
+Add these fields to your JSON response:
+- "suggestedCategory": The detected category (coding, reasoning, creative, analysis, or general)
+- "categoryConfidence": A number 0.0-1.0 indicating confidence in the category detection`;
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	// Verify session
@@ -110,6 +130,12 @@ ${responsesText}
 
 Please evaluate these responses and provide your judgment in the specified JSON format.`;
 
+		// Include category detection for "general" category
+		const shouldDetectCategory = !body.category || body.category === 'general';
+		const systemPrompt = shouldDetectCategory
+			? JUDGE_SYSTEM_PROMPT + CATEGORY_DETECTION_ADDENDUM
+			: JUDGE_SYSTEM_PROMPT;
+
 		// Call the judge model
 		const response = await fetch(`${LITELLM_BASE_URL}/chat/completions`, {
 			method: 'POST',
@@ -120,11 +146,11 @@ Please evaluate these responses and provide your judgment in the specified JSON 
 			body: JSON.stringify({
 				model: JUDGE_MODEL,
 				messages: [
-					{ role: 'system', content: JUDGE_SYSTEM_PROMPT },
+					{ role: 'system', content: systemPrompt },
 					{ role: 'user', content: userPrompt }
 				],
 				temperature: 0.3, // Lower temperature for more consistent evaluations
-				max_tokens: 1000
+				max_tokens: 1200 // Slightly higher to accommodate category detection
 			})
 		});
 
@@ -185,6 +211,16 @@ Please evaluate these responses and provide your judgment in the specified JSON 
 		}
 		if (!judgment.criteria || !Array.isArray(judgment.criteria)) {
 			judgment.criteria = ['accuracy', 'clarity', 'completeness'];
+		}
+
+		// Validate suggested category if present
+		const validCategories: TemplateCategory[] = ['coding', 'reasoning', 'creative', 'analysis', 'general'];
+		if (judgment.suggestedCategory && !validCategories.includes(judgment.suggestedCategory)) {
+			judgment.suggestedCategory = undefined;
+		}
+		if (judgment.categoryConfidence !== undefined) {
+			// Clamp confidence to 0-1 range
+			judgment.categoryConfidence = Math.max(0, Math.min(1, judgment.categoryConfidence));
 		}
 
 		// Ensure winnerId is valid (exists in responses) or null

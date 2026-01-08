@@ -3,28 +3,43 @@
 	import Header from '$lib/components/layout/Header.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
 	import ArenaModelSelector from '$lib/components/arena/ArenaModelSelector.svelte';
+	import ArenaCategoryChips from '$lib/components/arena/ArenaCategoryChips.svelte';
+	import ArenaContextPicker from '$lib/components/arena/ArenaContextPicker.svelte';
+	import ArenaContinueModal from '$lib/components/arena/ArenaContinueModal.svelte';
 	import ArenaInput from '$lib/components/arena/ArenaInput.svelte';
 	import ArenaGrid from '$lib/components/arena/ArenaGrid.svelte';
 	import ArenaResponseCard from '$lib/components/arena/ArenaResponseCard.svelte';
 	import ArenaJudgment from '$lib/components/arena/ArenaJudgment.svelte';
-	import ArenaBattleList from '$lib/components/arena/ArenaBattleList.svelte';
 	import ArenaWelcome from '$lib/components/arena/ArenaWelcome.svelte';
-	import { arenaStore, type ArenaModel, type ArenaBattle, type BattleSettings, type ResponseMetrics } from '$lib/stores/arena.svelte';
+	import { arenaStore, type ArenaModel, type BattleSettings, type ResponseMetrics } from '$lib/stores/arena.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
+	import { spacesStore } from '$lib/stores/spaces.svelte';
+	import { areaStore } from '$lib/stores/areas.svelte';
+	import { chatStore } from '$lib/stores/chat.svelte';
+	import { goto } from '$app/navigation';
+	import type { TemplateCategory } from '$lib/config/battle-templates';
 
 	let settingsOpen = $state(false);
+	let showContinueModal = $state(false);
+
+	// Category selection (default: general)
+	let selectedCategory = $state<TemplateCategory>('general');
+
+	// Context selection (optional Space/Area)
+	let contextSpaceId = $state<string | null>(null);
+	let contextAreaId = $state<string | null>(null);
 
 	// Derived state from arena store
 	let activeBattle = $derived(arenaStore.activeBattle);
 	let selectedModels = $derived(arenaStore.selectedModels);
 	let isStreaming = $derived(arenaStore.isStreaming);
-	let battleList = $derived(arenaStore.battleList);
 
-	// Apply theme on mount
+	// Apply theme on mount and load spaces
 	onMount(() => {
 		applyTheme(settingsStore.theme);
+		spacesStore.loadSpaces();
 
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 		const handleChange = () => {
@@ -35,6 +50,22 @@
 		mediaQuery.addEventListener('change', handleChange);
 		return () => mediaQuery.removeEventListener('change', handleChange);
 	});
+
+	// Build context prefix from selected area
+	function buildContextPrefix(): string {
+		if (!contextAreaId) return '';
+
+		const area = areaStore.getAreaById(contextAreaId);
+		if (!area?.context) return '';
+
+		return `[Context: ${area.name}]\n${area.context}\n\n---\n\n`;
+	}
+
+	// Handle context selection
+	function handleContextSelect(spaceId: string | null, areaId: string | null) {
+		contextSpaceId = spaceId;
+		contextAreaId = areaId;
+	}
 
 	function applyTheme(theme: 'dark' | 'light' | 'system') {
 		const root = document.documentElement;
@@ -71,20 +102,27 @@
 			provider: modelCapabilitiesStore.capabilities[id]?.provider || 'unknown'
 		}));
 
+		// Build context prefix and full prompt
+		const contextPrefix = buildContextPrefix();
+		const fullPrompt = contextPrefix + prompt;
+
 		const settings: BattleSettings = {
 			webSearchEnabled: settingsStore.webSearchEnabled,
 			extendedThinkingEnabled: settingsStore.extendedThinkingEnabled,
 			thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
 			temperature: settingsStore.temperature,
 			reasoningEffort,
-			blindMode
+			blindMode,
+			category: selectedCategory,
+			contextSpaceId: contextSpaceId || undefined,
+			contextAreaId: contextAreaId || undefined
 		};
 
-		// Create the battle
+		// Create the battle (store the user's original prompt for display)
 		const battleId = arenaStore.createBattle(prompt, models, settings);
 
-		// Start parallel streaming for all models
-		await streamAllModels(battleId, prompt, models, settings);
+		// Start parallel streaming for all models (with context prefix)
+		await streamAllModels(battleId, fullPrompt, models, settings);
 	}
 
 	// Stream responses from all models in parallel
@@ -284,6 +322,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					prompt: battle.prompt,
+					category: battle.settings.category,
 					responses: battle.responses.map((r) => ({
 						modelId: r.modelId,
 						modelName: battle.models.find((m) => m.id === r.modelId)?.displayName || r.modelId,
@@ -297,8 +336,17 @@
 			}
 
 			const judgment = await response.json();
+
+			// Handle suggested category from AI Judge
+			if (judgment.suggestedCategory && battle.settings.category === 'general') {
+				arenaStore.updateBattleSuggestedCategory(battleId, judgment.suggestedCategory);
+			}
+
 			arenaStore.setAiJudgment(battleId, {
-				...judgment,
+				winnerId: judgment.winnerId,
+				analysis: judgment.analysis,
+				scores: judgment.scores,
+				criteria: judgment.criteria,
 				timestamp: Date.now()
 			});
 		} catch (err) {
@@ -324,28 +372,67 @@
 		arenaStore.setActiveBattle(null);
 	}
 
-	// Handle select battle from history
-	function handleSelectBattle(battleId: string) {
-		arenaStore.setActiveBattle(battleId);
+	// Handle continue conversation with winning model
+	async function handleContinue(spaceId: string | null, areaId: string | null) {
+		if (!activeBattle || !activeBattle.userVote) return;
+
+		const winnerModelId = activeBattle.userVote;
+		const winnerResponse = activeBattle.responses.find((r) => r.modelId === winnerModelId);
+
+		if (!winnerResponse) {
+			toastStore.error('Could not find winner response');
+			return;
+		}
+
+		try {
+			// Create a new conversation with the winning model
+			const conversationId = await chatStore.createConversation(winnerModelId, {
+				spaceId: spaceId || undefined,
+				areaId: areaId || undefined
+			});
+
+			if (!conversationId) {
+				toastStore.error('Failed to create conversation');
+				return;
+			}
+
+			// Add the initial exchange
+			await chatStore.addMessage(conversationId, {
+				role: 'user',
+				content: activeBattle.prompt
+			});
+			await chatStore.addMessage(conversationId, {
+				role: 'assistant',
+				content: winnerResponse.content,
+				thinking: winnerResponse.thinking
+			});
+
+			// Navigate to the conversation
+			const space = spaceId ? spacesStore.getSpaceById(spaceId) : null;
+			const area = areaId ? areaStore.getAreaById(areaId) : null;
+
+			if (space && area) {
+				goto(`/spaces/${space.slug}/${area.slug}?conversationId=${conversationId}`);
+			} else if (space) {
+				goto(`/spaces/${space.slug}?conversationId=${conversationId}`);
+			} else {
+				goto(`/?conversationId=${conversationId}`);
+			}
+
+			showContinueModal = false;
+			toastStore.success('Conversation created');
+		} catch (err) {
+			console.error('Failed to continue conversation:', err);
+			toastStore.error('Failed to continue conversation');
+		}
 	}
 
-	// Handle rerun battle (create new battle with same prompt/models/settings)
-	async function handleRerunBattle(battle: ArenaBattle) {
-		// Use the exact models from the original battle
-		const models = battle.models;
-
-		// Use the exact settings from the original battle
-		const settings = battle.settings;
-
-		// Create a new battle with the same prompt
-		const battleId = arenaStore.createBattle(battle.prompt, models, settings);
-
-		// Toast notification
-		toastStore.info('Rerunning battle with same configuration');
-
-		// Start parallel streaming for all models
-		await streamAllModels(battleId, battle.prompt, models, settings);
-	}
+	// Derived: Get winner model name for display
+	let winnerModelName = $derived.by(() => {
+		if (!activeBattle?.userVote) return '';
+		const model = activeBattle.models.find((m) => m.id === activeBattle.userVote);
+		return model?.displayName || activeBattle.userVote;
+	});
 </script>
 
 <svelte:head>
@@ -354,28 +441,35 @@
 
 <div class="h-screen flex flex-col overflow-hidden">
 	<!-- Header -->
-	<Header onModelChange={() => {}} onSettingsClick={() => (settingsOpen = true)} />
+	<Header onSettingsClick={() => (settingsOpen = true)} />
 
-	<div class="flex-1 flex overflow-hidden">
-		<!-- Battle History Sidebar -->
-		<ArenaBattleList
-			battles={battleList}
-			activeBattleId={activeBattle?.id || null}
-			onSelectBattle={handleSelectBattle}
-			onNewBattle={handleNewBattle}
-			onRerunBattle={handleRerunBattle}
-		/>
-
-		<!-- Main Content -->
-		<main class="flex-1 flex flex-col overflow-hidden bg-surface-950">
+	<!-- Main Content (full width, no sidebar) -->
+	<main class="flex-1 flex flex-col overflow-hidden bg-surface-950">
 			{#if !activeBattle}
 				<!-- No active battle - Show welcome/setup -->
 				<div class="flex-1 overflow-y-auto p-4 md:p-6">
 					<div class="max-w-5xl mx-auto">
 						<ArenaWelcome />
 
-						<!-- Model Selection -->
+						<!-- Category Selection -->
 						<div class="mt-8">
+							<ArenaCategoryChips
+								selected={selectedCategory}
+								onSelect={(cat) => selectedCategory = cat}
+							/>
+						</div>
+
+						<!-- Context Selection -->
+						<div class="mt-6">
+							<ArenaContextPicker
+								selectedSpaceId={contextSpaceId}
+								selectedAreaId={contextAreaId}
+								onSelect={handleContextSelect}
+							/>
+						</div>
+
+						<!-- Model Selection -->
+						<div class="mt-6">
 							<h2 class="text-lg font-semibold text-surface-100 mb-4">Select Models to Compare</h2>
 							<ArenaModelSelector />
 						</div>
@@ -394,7 +488,27 @@
 					<div class="max-w-7xl mx-auto">
 						<!-- Battle prompt header -->
 						<div class="mb-6 p-4 bg-surface-800/50 rounded-2xl border border-surface-700">
-							<div class="text-sm text-surface-400 mb-1">Prompt</div>
+							<div class="flex items-center flex-wrap gap-2 mb-1">
+								<span class="text-sm text-surface-400">Prompt</span>
+								{#if activeBattle.settings.category}
+									<span class="text-xs px-2 py-0.5 rounded-full bg-surface-700 text-surface-300">
+										{activeBattle.settings.category}
+									</span>
+								{/if}
+								{#if activeBattle.suggestedCategory && activeBattle.suggestedCategory !== activeBattle.settings.category}
+									<span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+										AI suggests: {activeBattle.suggestedCategory}
+									</span>
+								{/if}
+								{#if activeBattle.settings.contextAreaId}
+									{@const area = areaStore.getAreaById(activeBattle.settings.contextAreaId)}
+									{#if area}
+										<span class="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+											+ context: {area.name}
+										</span>
+									{/if}
+								{/if}
+							</div>
 							<div class="text-surface-100">{activeBattle.prompt}</div>
 						</div>
 
@@ -458,13 +572,30 @@
 						</div>
 					</div>
 				{:else if activeBattle.status === 'judged' || activeBattle.status === 'complete'}
-					<!-- New Battle button -->
+					<!-- Action buttons after battle -->
 					<div class="p-4 border-t border-surface-800 bg-surface-900/80 backdrop-blur-sm">
-						<div class="max-w-5xl mx-auto flex justify-center">
+						<div class="max-w-5xl mx-auto flex justify-center gap-3">
+							{#if activeBattle.userVote}
+								<button
+									type="button"
+									onclick={() => showContinueModal = true}
+									class="btn-primary px-6 py-2.5 flex items-center gap-2"
+								>
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+										/>
+									</svg>
+									Continue with {winnerModelName}
+								</button>
+							{/if}
 							<button
 								type="button"
 								onclick={handleNewBattle}
-								class="btn-primary px-6 py-2.5 flex items-center gap-2"
+								class="btn-secondary px-6 py-2.5 flex items-center gap-2"
 							>
 								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path
@@ -481,8 +612,20 @@
 				{/if}
 			{/if}
 		</main>
-	</div>
 </div>
 
 <!-- Settings Panel -->
 <SettingsPanel open={settingsOpen} onclose={() => (settingsOpen = false)} />
+
+<!-- Continue Conversation Modal -->
+{#if activeBattle}
+	<ArenaContinueModal
+		isOpen={showContinueModal}
+		winnerModelId={activeBattle.userVote || ''}
+		{winnerModelName}
+		battleContextSpaceId={activeBattle.settings.contextSpaceId}
+		battleContextAreaId={activeBattle.settings.contextAreaId}
+		onConfirm={handleContinue}
+		onClose={() => showContinueModal = false}
+	/>
+{/if}

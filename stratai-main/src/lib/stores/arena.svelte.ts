@@ -10,6 +10,7 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import type { ModelRanking } from '$lib/server/persistence/types';
+import type { TemplateCategory } from '$lib/config/battle-templates';
 
 const STORAGE_KEY = 'strathost-arena-battles';
 const MAX_BATTLES = 50; // Increased limit since we have DB storage
@@ -73,6 +74,9 @@ export interface BattleSettings {
 	temperature: number;
 	reasoningEffort: 'low' | 'medium' | 'high';
 	blindMode: boolean;
+	category: TemplateCategory;
+	contextSpaceId?: string;
+	contextAreaId?: string;
 }
 
 export interface ResponseMetrics {
@@ -97,6 +101,7 @@ export interface ArenaBattle {
 	settings: BattleSettings;
 	status: BattleStatus;
 	createdAt: number;
+	suggestedCategory?: TemplateCategory; // AI Judge suggested category
 }
 
 // Svelte 5 reactive state using $state rune in a class
@@ -670,6 +675,17 @@ class ArenaStore {
 	getBattleTitle(battle: ArenaBattle): string {
 		if (battle.title) return battle.title;
 		return battle.prompt.slice(0, 50) + (battle.prompt.length > 50 ? '...' : '');
+	}
+
+	// Update suggested category (from AI Judge)
+	updateBattleSuggestedCategory(id: string, category: TemplateCategory): void {
+		const battle = this.battles.get(id);
+		if (!battle) return;
+
+		this.battles.set(id, { ...battle, suggestedCategory: category });
+		this._version++;
+		this.schedulePersist();
+		this.patchBattle(id, { suggestedCategory: category });
 	}
 
 	// Store abort controller for a model

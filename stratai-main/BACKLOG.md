@@ -1067,6 +1067,82 @@ To User:       "Spur should consider these legal strategies..."
 - [x] AI-powered judging
 - [x] User voting
 - [x] Battle history
+- [x] Category selection (general, coding, reasoning, creative, analysis)
+- [x] AI Judge category detection (suggests category when "general" selected)
+- [x] Space/Area context injection (add context to Arena prompts)
+- [x] Continue Conversation flow (continue battle with chosen model)
+
+### Arena Rankings Dashboard (Future)
+- [ ] `/arena/rankings` page
+- [ ] Per-category leaderboards (best model for coding, creative, etc.)
+- [ ] User votes vs AI judge comparison
+- [ ] Win rate trends over time
+- [ ] Head-to-head comparison charts
+- [ ] Filter by time period (week, month, all time)
+- [ ] Model performance insights
+
+### BattleOutcome Data Model (Prerequisites for Rankings)
+
+**Status**: Designed, not yet implemented
+
+**Purpose**: Replace full battle storage with lightweight outcome records for analytics. Currently, Arena stores complete battle data including full model responses in localStorage. This is heavy and unnecessary for long-term analytics. BattleOutcome captures only what's needed for rankings and insights.
+
+**Type Definition** (`src/lib/types/arena.ts`):
+```typescript
+export interface BattleOutcome {
+  id: string;                          // Battle ID (primary key)
+  promptSnippet: string;               // First 150 chars (for display, not full storage)
+  category: TemplateCategory;          // User-selected category
+  suggestedCategory?: TemplateCategory; // AI Judge's suggestion (if detected)
+  modelIds: string[];                  // Models that participated
+  aiWinnerId: string | null;           // Model chosen by AI Judge
+  aiScores: Record<string, number>;    // Per-model scores from judge (0-100)
+  userWinnerId: string | null;         // Model chosen by user vote
+  contextAreaId?: string;              // If context was injected from an Area
+  continuedAsConversationId?: string;  // If user continued conversation
+  timestamp: number;                   // Battle completion time
+}
+```
+
+**Database Migration** (`migrations/012-arena-outcomes.sql`):
+```sql
+CREATE TABLE IF NOT EXISTS arena_outcomes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  prompt_snippet TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT 'general',
+  suggested_category TEXT,
+  model_ids TEXT[] NOT NULL,
+  ai_winner_id TEXT,
+  ai_scores JSONB,
+  user_winner_id TEXT,
+  context_area_id TEXT,
+  continued_as_conversation_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Indexes for rankings queries
+CREATE INDEX idx_arena_outcomes_user ON arena_outcomes(user_id);
+CREATE INDEX idx_arena_outcomes_category ON arena_outcomes(category);
+CREATE INDEX idx_arena_outcomes_created ON arena_outcomes(created_at DESC);
+CREATE INDEX idx_arena_outcomes_ai_winner ON arena_outcomes(ai_winner_id);
+CREATE INDEX idx_arena_outcomes_user_winner ON arena_outcomes(user_winner_id);
+```
+
+**Implementation Tasks**:
+- [ ] Create `src/lib/types/arena.ts` with BattleOutcome interface
+- [ ] Create migration `012-arena-outcomes.sql`
+- [ ] Add `POST /api/arena/outcomes` endpoint
+- [ ] Add `saveBattleOutcome()` to arena store (called after judging completes)
+- [ ] Add `GET /api/arena/outcomes` endpoint with filtering (for rankings page)
+- [ ] Remove full battle sync to PostgreSQL (only persist outcomes)
+- [ ] Reduce localStorage to active battle + user preferences only
+
+**Design Decisions**:
+- **No foreign keys**: Models/areas may be deleted; outcome records should survive
+- **Prompt snippet only**: Privacy + storage efficiency; 150 chars enough for display
+- **Dual winner tracking**: Compare AI vs user choices for "judge accuracy" insights
+- **JSONB scores**: Flexible structure for future scoring enhancements
 
 ### Phase 2: Context-Aware Arena
 - [ ] "Send to Arena" from chat (with conversation context)

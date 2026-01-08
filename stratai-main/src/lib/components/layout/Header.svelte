@@ -43,6 +43,11 @@
 		return /^\/spaces\/[^/]+\/?$/.test(path);
 	});
 
+	// Detect if we're in the Arena
+	let isArena = $derived.by(() => {
+		return $page.url.pathname.startsWith('/arena');
+	});
+
 	onMount(() => {
 		spacesStore.loadSpaces();
 	});
@@ -242,9 +247,9 @@
 		</a>
 	</div>
 
-	<!-- Center: Model Selector (hide on Space Dashboard, show when no messages elsewhere) -->
-	{#if isSpaceDashboard}
-		<!-- No model selector on Space Dashboard -->
+	<!-- Center: Model Selector (hide on Space Dashboard and Arena, show when no messages elsewhere) -->
+	{#if isSpaceDashboard || isArena}
+		<!-- No model selector on Space Dashboard or Arena (Arena has its own) -->
 		<div class="flex-1"></div>
 	{:else if !chatStore.messages || chatStore.messages.length === 0}
 		<div class="flex-1 flex justify-center">
@@ -261,8 +266,8 @@
 		<!-- Planning tasks indicator -->
 		<PlanningTasksIndicator />
 
-		<!-- Current conversation model badge (hide on Space Dashboard, show when chat has messages) -->
-		{#if !isSpaceDashboard && chatStore.messages && chatStore.messages.length > 0 && chatStore.activeConversation}
+		<!-- Current conversation model badge (hide on Space Dashboard and Arena) -->
+		{#if !isSpaceDashboard && !isArena && chatStore.messages && chatStore.messages.length > 0 && chatStore.activeConversation}
 			<ModelBadge model={chatStore.activeConversation.model} />
 		{/if}
 

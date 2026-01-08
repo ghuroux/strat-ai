@@ -107,166 +107,75 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-07 (Area Deletion Feature)
+### Latest: 2026-01-07 (Session Log Cleanup)
 
-**Completed:**
+**Verified as Complete:**
 
-*Area Deletion with Content Preservation:*
-- Created `DeleteAreaModal.svelte` - confirmation modal with two deletion modes:
-  - "Keep content" (default): Moves conversations to General area, unlinks tasks
-  - "Delete everything": Permanently removes all conversations and tasks
-- Enhanced `areas-postgres.ts` `delete()` method to handle both deletion modes
-- Updated API endpoint to accept `?deleteContent=true` query parameter
-- Added context menu to `AreaCard.svelte` (three-dot button) with Edit/Delete options on hover
-- Protected General area from deletion
-- Toast notifications confirm successful actions
+*Task Planning Model Selection - FULLY WIRED:*
+- `TaskPlanningModelModal.svelte` shows tiered model selection
+- "Help me plan this" button → `handlePlanButtonClick()` → shows modal (or skips if preference saved)
+- Modal selection → `handlePlanningModelSelect()` → `handleStartPlanMode(modelId)`
+- Conversation created WITH selected model, initial planning message sent
+- Skip modal option with localStorage persistence works
 
-**Files Created:**
-- `src/lib/components/areas/DeleteAreaModal.svelte`
+*Day Change Detection - FULLY IMPLEMENTED:*
+- `temporal-context.ts` - tracks visits, detects new day/Monday/absence (3+ days)
+- `greeting.ts` - generates context-aware greetings based on tasks, urgency, time of day
+- `GreetingMessage.svelte` - displays greeting with task previews and action buttons
+- `FocusSuggestion.svelte` - uses temporal context for suggestions
 
-**Files Modified:**
-- `src/lib/server/persistence/areas-postgres.ts`
-- `src/routes/api/areas/[id]/+server.ts`
-- `src/lib/stores/areas.svelte.ts`
-- `src/lib/server/persistence/types.ts`
-- `src/lib/components/areas/index.ts`
-- `src/lib/components/spaces/AreaCard.svelte`
-- `src/lib/components/spaces/SpaceDashboard.svelte`
-- `src/routes/spaces/[space]/+page.svelte`
+*Area Deletion (from previous session):*
+- `DeleteAreaModal.svelte` with keep/delete content options
+- Context menu on `AreaCard.svelte` (three-dot button)
+- General area protected from deletion
 
-**Next steps:**
-- Continue Phase 0.3e: Day Change Detection + Cleanup Offers
-- Wire up actual AI planning with selected model
-- Add "Start Planning" button flow that uses TaskPlanningModelModal
+**Note:** Previous "Next steps" were stale - these features were already complete.
 
 ### Previous: 2026-01-07 (Multiple Plan Mode & Model Selection)
 
 **Completed:**
 
 *Documents API Fix:*
-- Diagnosed documents with slug-style space_ids ('work') instead of UUIDs after migration 009
-- Ran UPDATE query to normalize 8 documents
-- Created migration `011-documents-space-id-normalize.sql`
+- Normalized documents with slug-style space_ids to UUIDs
+- Migration `011-documents-space-id-normalize.sql` (already applied)
 
 *Task Loading Race Condition Fix:*
-- Fixed race condition when switching spaces - tasks weren't loading because `onMount` only runs once
-- Changed to reactive `$effect` that loads tasks whenever `spaceParam` changes
+- Changed from `onMount` to reactive `$effect` for space switching
 
-*Multiple Plan Mode Support (Phase 1):*
-- Modified task store to allow multiple tasks in planning simultaneously
-- Added `planningTasks` array and `planningTaskCount` derived values
-- Changed `startPlanMode()` return type to include `existingPlanningCount`
-- Created `PlanningTasksIndicator.svelte` - purple badge in header with dropdown to manage planning tasks
-- Integrated indicator into Header component
-- Toast notifications when starting additional planning tasks
+*Multiple Plan Mode Support:*
+- Multiple tasks can be in planning simultaneously
+- `PlanningTasksIndicator.svelte` - purple badge in header with dropdown
 
-*Task Planning Model Selection (Phase 2):*
-- Extended `ModelCapabilities` interface with `TaskPlanningCapabilities`:
-  - `tier`: 'recommended' | 'capable' | 'experimental'
-  - `structuredOutput`, `verbosity`, `needsFewShotExamples`, `warnings`, `planningNote`
-- Added taskPlanning capabilities to recommended models (Claude Opus 4.5, Sonnet 4.5, Sonnet 4, 3.7 Sonnet, GPT-5.1, GPT-5.2, GPT-5.2 Pro)
-- All other models default to 'experimental' tier
-- Added helper functions: `getTaskPlanningCapabilities()`, `getModelsGroupedByTaskPlanningTier()`, etc.
-- Created `TaskPlanningModelModal.svelte` - tiered model selection with localStorage persistence
-
-**Files Created:**
-- `src/lib/components/tasks/PlanningTasksIndicator.svelte`
-- `src/lib/components/tasks/TaskPlanningModelModal.svelte`
-- `src/lib/server/persistence/migrations/011-documents-space-id-normalize.sql`
-
-**Files Modified:**
-- `src/lib/stores/tasks.svelte.ts`
-- `src/lib/config/model-capabilities.ts`
-- `src/lib/components/layout/Header.svelte`
-- `src/routes/spaces/[space]/+page.svelte`
-- `src/routes/spaces/[space]/task/[taskId]/+page.svelte`
-
-**BEFORE NEXT SESSION - Run migration:**
-```bash
-psql -d stratai -f src/lib/server/persistence/migrations/011-documents-space-id-normalize.sql
-```
-
-**Next steps:**
-- Phase 2 continuation: Wire up actual AI planning with selected model
-- Add "Start Planning" button flow that uses TaskPlanningModelModal
-- Continue Phase 0.3e: Day Change Detection + Cleanup Offers
+*Task Planning Model Selection:*
+- `TaskPlanningCapabilities` interface with tiers (recommended/capable/experimental)
+- `TaskPlanningModelModal.svelte` - tiered model selection with localStorage persistence
+- Full flow wired: button → modal → model selection → conversation creation → planning
 
 ### Previous: 2026-01-06 (Task Focus UX & Navigation Fixes)
 
 **Completed:**
-
-*Navigation & UX Fixes:*
 - Fixed "Open Task Focus" to preserve current conversation via `conversationId` query param
-- Hidden empty subtasks panel - only shows when subtasks actually exist (~90 lines dead CSS removed)
-- Added context isolation: clears conversation when entering area if it doesn't belong to that area
-- Cleaner, less cluttered task focus experience for simple tasks
-
-*Model Display Improvements:*
-- `ModelBadge.svelte` - compact badge showing locked model when conversation has messages
-- Model selector shown only when starting new conversation, badge shown once locked
-- `model-display.ts` utility for consistent model name formatting
-
-*Panel Refactoring:*
-- Renamed `DocsPanel` to `ContextPanel` for better semantic naming
-- Added `SpaceSettingsPanel.svelte` and `TaskPanel.svelte` components
-- Refactored `TasksSection.svelte` with collapsible sections and enhanced filtering
-
-*Data Model:*
-- Added `estimated_effort` field to tasks (migration `010-tasks-estimated-effort.sql`)
+- Hidden empty subtasks panel - only shows when subtasks actually exist
+- Added context isolation: clears conversation when entering area if it doesn't belong
+- `ModelBadge.svelte` - compact badge showing locked model
+- Renamed `DocsPanel` to `ContextPanel`
+- Added `estimated_effort` field to tasks
 
 ### Previous: 2026-01-06 (Task Dashboard & Scaling UX)
 
 **Completed:**
-
-*Task Dashboard (`/spaces/[space]/tasks`):*
-- `TaskDashboard.svelte` - main dashboard with time-based task grouping
-- `TaskGroupSection.svelte` - reusable section component with "Show More" pattern (caps at 5 visible tasks)
-- `TaskCard.svelte` - individual task card with subtask progress, area badges, due dates
-- `StatsRow.svelte` - shows completion streak and daily stats
-- `FocusSuggestion.svelte` - suggests what to work on based on priority/overdue
-
-*Recently Completed Section:*
-- `RecentlyCompletedSection.svelte` - shows today's completions by default
-- Expands to show this month's completions (flat list, newest first)
-- Fixed visibility bug - now shows even when no tasks completed today
-- Reopen action to restore completed tasks
-- TODO added for future pagination if 100+ completions
-
-*Stale Task Detection:*
-- Tasks flagged as stale after 7+ days no activity
-- `stale_dismissed_at` column for users to dismiss stale warnings
-- Migration `008-task-stale-dismissed.sql` adds the column
-- `dismissStale()` method in store and API
-
-*Reopen Task:*
-- New API endpoint `/api/tasks/[id]/reopen`
-- `reopenTask()` method in store
-- Clears `completedAt` and sets status back to active
-
-*Bug Fixes:*
-- Fixed nested button error (button inside button) using div with role="button"
-- Fixed visibility condition for Recently Completed section
-
-**BEFORE STARTING NEXT SESSION - Run database migration:**
-```bash
-psql -d stratai -f src/lib/server/persistence/migrations/008-task-stale-dismissed.sql
-```
-This adds the `stale_dismissed_at` column to the tasks table. Without this, stale dismissal will fail.
-
-**Next steps:**
-- Continue Phase 0.3e: Temporal Awareness (day change detection, cleanup offers)
-- Add keyboard shortcuts for common task actions
-- Consider adding task time estimates
+- `TaskDashboard.svelte` - time-based task grouping
+- `TaskGroupSection.svelte`, `TaskCard.svelte`, `StatsRow.svelte`, `FocusSuggestion.svelte`
+- `RecentlyCompletedSection.svelte` with reopen action
+- Stale task detection (7+ days no activity)
+- `dismissStale()` and `reopenTask()` methods
 
 ### Previous: 2026-01-04 (Task Planning & AI Prompt Engineering)
 
 **Completed:**
-- `TaskModal.svelte` - modal for task creation with title, due date, deadline type (soft/hard), priority (normal/high), and area linking
-- `TasksSection.svelte` - task list component with modal-based creation (replaced inline input)
-- `SpaceDashboard.svelte` - integrated TaskModal with full `CreateTaskInput` type support
+- `TaskModal.svelte` - modal for task creation
 - ConversationDrawer, TaskContextBanner, AreaWelcomeScreen components
 - Space dashboard components and area routing
-- Migrations 005-areas-rename-migrate.sql and 006-tasks-area-rename.sql
 
 ---
 

@@ -14,7 +14,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { SpaceDashboard, SpaceModal, SpaceSettingsPanel } from '$lib/components/spaces';
-	import { AreaModal, DeleteAreaModal } from '$lib/components/areas';
+	import { AreaModal, AreaEditPanel, DeleteAreaModal } from '$lib/components/areas';
 	import Header from '$lib/components/layout/Header.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -80,6 +80,7 @@
 
 	// UI state
 	let showAreaModal = $state(false);
+	let showAreaEditPanel = $state(false);
 	let editingArea = $state<Area | null>(null);
 	let showSpaceModal = $state(false);
 	let showSettingsPanel = $state(false);
@@ -161,8 +162,12 @@
 	async function handleAreaUpdate(id: string, updates: UpdateAreaInput) {
 		const updated = await areaStore.updateArea(id, updates);
 		if (updated) {
-			toastStore.success('Area updated');
-			showAreaModal = false;
+			// Panel shows its own toast, modal doesn't
+			if (showAreaModal) {
+				toastStore.success('Area updated');
+				showAreaModal = false;
+			}
+			// Panel closes itself and shows toast
 		}
 	}
 
@@ -206,7 +211,12 @@
 	// Handlers for area card menu
 	function handleEditArea(area: Area) {
 		editingArea = area;
-		showAreaModal = true;
+		showAreaEditPanel = true;
+	}
+
+	function handleCloseAreaEditPanel() {
+		showAreaEditPanel = false;
+		editingArea = null;
 	}
 
 	function handleDeleteAreaFromCard(area: Area) {
@@ -274,16 +284,28 @@
 		onCreateTask={handleCreateTask}
 	/>
 
-	<!-- Area Modal -->
+	<!-- Area Modal (for creating new areas) -->
 	<AreaModal
 		open={showAreaModal}
-		area={editingArea}
+		area={null}
 		spaceId={spaceFromStore?.id || ''}
 		onClose={handleCloseAreaModal}
 		onCreate={handleAreaCreate}
 		onUpdate={handleAreaUpdate}
 		onDelete={handleAreaDelete}
 	/>
+
+	<!-- Area Edit Panel (for editing existing areas) -->
+	{#if editingArea && spaceFromStore}
+		<AreaEditPanel
+			isOpen={showAreaEditPanel}
+			area={editingArea}
+			spaceId={spaceFromStore.id}
+			spaceColor={spaceFromStore.color}
+			onClose={handleCloseAreaEditPanel}
+			onUpdate={handleAreaUpdate}
+		/>
+	{/if}
 
 	<!-- Delete Area Confirmation Modal -->
 	<DeleteAreaModal
