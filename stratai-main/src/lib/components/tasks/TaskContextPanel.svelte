@@ -16,7 +16,7 @@
 	import { slide, fly } from 'svelte/transition';
 	import type { Task, SubtaskContext } from '$lib/types/tasks';
 	import type { Conversation } from '$lib/types/chat';
-	import { getQuickActions } from '$lib/utils/subtask-welcome';
+	import { getQuickStarts } from '$lib/utils/quick-starts';
 
 	interface Props {
 		// For subtask mode
@@ -71,7 +71,19 @@
 	});
 
 	let hasRichContext = $derived(richContext !== null);
-	let quickActions = $derived(displayTask ? getQuickActions(displayTask) : []);
+
+	// Contextual quick starts based on task type and context
+	let quickStarts = $derived(
+		displayTask
+			? getQuickStarts({
+					title: displayTask.title,
+					description: displayTask.description,
+					parentTaskTitle: parentTask?.title,
+					isSubtask: !isWorkUnit,
+					richContext: displayTask.richContext
+				})
+			: []
+	);
 
 	// Format due date for display
 	function formatDueDate(date: Date): string {
@@ -131,14 +143,14 @@
 		return 'New conversation';
 	}
 
-	// Handle quick action click
-	function handleQuickAction(action: string) {
+	// Handle quick start click - sends full contextual prompt
+	function handleQuickStart(prompt: string, label: string) {
 		const event = new CustomEvent('prepopulate-input', {
-			detail: { text: action },
+			detail: { text: prompt },
 			bubbles: true
 		});
 		document.dispatchEvent(event);
-		onQuickAction(action);
+		onQuickAction(label);
 	}
 </script>
 
