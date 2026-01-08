@@ -20,9 +20,13 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 
 **Key value props:** Enterprise governance, productivity spaces/templates, quality AI experience, user education via Model Arena.
 
-**Current phase:** Areas Architecture Redesign - building navigable sub-spaces within Spaces.
+**Current phase:** Context Management Architecture - building intelligent memory and context persistence.
 
-See `stratai-main/PRODUCT_VISION.md` and `stratai-main/BACKLOG.md` for details.
+**Strategic Documents:**
+- `stratai-main/CONTEXT_STRATEGY.md` - **Foundational context/memory architecture** (moat-level work)
+- `stratai-main/PRICING_STRATEGY.md` - **Pricing strategy V1 (launch) + V2 (evolution)**
+- `stratai-main/PRODUCT_VISION.md` - Product vision and roadmap
+- `stratai-main/BACKLOG.md` - Feature backlog and priorities
 
 ---
 
@@ -77,13 +81,22 @@ Don't revisit without good reason:
 | Areas (not Focus Areas) | Cleaner naming, navigable sub-spaces |
 | Documents at Space-level | Avoids duplication across areas; per-area activation via `contextDocumentIds` |
 | Context Panel (not DocsPanel) | Single panel for "what AI knows": area notes + document activation toggles |
+| PostgreSQL + pgvector | Simplicity over dedicated vector DB; existing stack, sufficient scale |
+| text-embedding-3-small | Cost efficiency ($0.02/1M tokens), good performance for memory search |
+| Bi-temporal memory model | Enterprise compliance needs; track when events occurred AND when learned |
+| Hybrid search (semantic + keyword) | Research shows 67% improvement over semantic-only |
+| Hierarchical memory | Space → Area → Task mirrors cognitive memory patterns (research-backed) |
+| Memory unlimited on paid tiers | Core value prop; monetize collaboration/governance instead |
+| $29 Pro price point | Signals enterprise quality, above commodity ($10-15), below enterprise ($50+) |
+| V2 as evolution not pivot | V1 proves value and funds V2 development; smooth transition |
+| Premium models at cost + 25% | Transparency builds trust; competitive margin |
 
 ---
 
 ## Known Issues
 
 - [ ] **Mobile responsiveness** - App-wide issue; layouts break on small screens (Arena, Spaces, Chat). Needs systematic review.
-- [ ] **localStorage quota exceeded** - Chat store hitting storage limits; consider IndexedDB or server-side persistence
+- [ ] **localStorage quota exceeded** - Chat store hitting storage limits. **Addressed by CONTEXT_STRATEGY.md Phase 1** (server-side persistence)
 - [ ] localStorage keys use `strathost-` prefix (will lose POC data on rename)
 - [ ] README.md outdated (needs rewrite)
 - [ ] No error boundaries (add before production)
@@ -110,7 +123,138 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-08 (Quick Starts, Clear Modal, Move Chat)
+### Latest: 2026-01-08 (Pricing Strategy)
+
+**Completed:**
+
+*Pricing Strategy Document - PRICING_STRATEGY.md:*
+
+**V1: Launch Pricing (Per-Seat Model)**
+- **Explorer** (Free): 100 msgs/mo, 1 space, session memory only - conversion funnel entry
+- **Pro** ($29/user/mo): Unlimited messages, full memory persistence, all standard models
+- **Team** ($45/user/mo, min 3 seats): Shared spaces, team context, basic admin
+- **Enterprise** (Custom ~$65+): Org memory, governance, SSO/SAML, audit logs, SLA
+
+*Strategic Principles:*
+- Memory unlimited on paid tiers (don't monetize the moat)
+- Premium models at cost + 25% (transparency builds trust)
+- Volume discounts encourage adoption (10-20% based on seats)
+- Annual commitment: 17% off (2 months free)
+
+**V2: Enterprise AI Operating System (Future Evolution)**
+- Pricing shifts to % of AI spend managed (8-15% based on tier)
+- AI Spend Dashboard with real-time cost tracking by team/project
+- Intelligent Cost Optimization (smart model routing, recommendations)
+- ROI Measurement (the holy grail - prove AI investment returns)
+- Path to $1B valuation with <200 enterprise customers
+
+*Revenue Projections (V1):*
+- Year 1: ~$750k ARR (conservative)
+- Year 2: ~$4.5M ARR (growth)
+- Year 3: ~$19M ARR (scale)
+
+*Key Strategic Insight:*
+- V1 proves the value, funds development, builds data foundation
+- V2 captures full enterprise opportunity once platform and market ready
+- The "AI Tax" play: become the financial control plane for enterprise AI
+
+**Files Created:**
+- `stratai-main/PRICING_STRATEGY.md` - Comprehensive pricing strategy document
+
+**Files Modified:**
+- `CLAUDE.md` - Added pricing strategy reference
+
+**Key Decisions:**
+- Memory unlimited (don't monetize core value prop)
+- $29 Pro signals quality, not commodity
+- V2 as evolution, not pivot (smooth transition path)
+
+**Next steps:**
+- Begin CONTEXT_STRATEGY.md Phase 1 implementation
+- Build billing infrastructure when ready for launch
+- Gather usage data to validate pricing assumptions
+
+### Previous: 2026-01-08 (Context Management Strategy + Organizational Knowledge)
+
+**Completed:**
+
+*Strategic Research - Context Management:*
+- Launched 6 parallel research agents covering:
+  - LLM memory architectures (MemGPT/Letta, MemoryOS, hierarchical systems)
+  - RAG and retrieval innovations (GraphRAG, Agentic RAG, hybrid search)
+  - Commercial product patterns (ChatGPT Memory, Claude Projects, Cursor/Windsurf)
+  - Academic research (long context models, attention optimization, infinite context)
+  - Startup innovations (Mem0, Zep/Graphiti, LangMem)
+  - Database/storage strategies (vector DBs, graph DBs, hybrid patterns)
+
+*CONTEXT_STRATEGY.md - Comprehensive Architecture Document:*
+
+**Phase 1: Foundation**
+- PostgreSQL + pgvector, conversation persistence migration
+- Memory search (semantic + keyword + hybrid)
+- Basic memory UI in Context Panel
+
+**Phase 2: Active Memory**
+- Memory extraction pipeline (post-conversation)
+- Memory evaluation and deduplication
+- Decay and consolidation services
+- Context assembly service
+
+**Phase 3: Shared Context** (NEW)
+- Space-level and Area-level shared context
+- Approval workflows for memory sharing
+- Memory proposals and review system
+- Context inheritance queries
+
+**Phase 4: Organizational Intelligence** (NEW)
+- Multi-tenant infrastructure (organizations, groups)
+- Full context hierarchy: Org → Group → Space → Area → User
+- Admin dashboards and governance tools
+- Compliance and audit features
+
+*Organizational Knowledge Architecture:*
+- Knowledge propagation model with clear hierarchy
+- Contribution mechanism (explicit sharing + auto-detection)
+- Conflict resolution strategies (temporal, admin, scope, confidence)
+- Privacy and governance controls at every level
+- Integration with planned admin panel hierarchy
+- Business case: "Your organization's AI brain"
+- Network effects: more users = smarter AI for everyone
+
+*Database Schemas Added:*
+- `organizations` - Multi-tenant support
+- `groups` - Teams/departments within orgs
+- `user_memberships` - Roles and permissions
+- `memory_proposals` - Approval workflow
+- `context_audit_log` - Compliance tracking
+
+*UI Fix:*
+- Standardized chat input styling across space/area/task pages
+- Removed redundant input-container border that created visual inconsistency
+
+**Files Created:**
+- `stratai-main/CONTEXT_STRATEGY.md` - Strategic architecture document (1800+ lines)
+
+**Files Modified:**
+- `src/routes/spaces/[space]/[area]/+page.svelte` - Removed input-container wrapper
+- `src/routes/spaces/[space]/task/[taskId]/+page.svelte` - Removed redundant border
+- `CLAUDE.md` - Updated with new phase, decisions, and strategy reference
+
+**Commits Made:**
+- `a7096c6` - fix: Standardize chat input styling across space/area/task pages
+
+**Key Strategic Decisions:**
+- Hierarchical inheritance mirrors org structure (Org → Group → Space → Area)
+- Approval workflow for sharing (trust and quality control)
+- Temporal conflict resolution as default (most intuitive, auditable)
+- Network effects as moat (knowledge compounds with usage)
+
+**Next steps:**
+- Review CONTEXT_STRATEGY.md and validate organizational approach
+- Begin Phase 1: Database migrations, embedding service
+- Design memory UI components in parallel
+
+### Previous: 2026-01-08 (Quick Starts, Clear Modal, Move Chat)
 
 **Completed:**
 
