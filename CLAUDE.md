@@ -137,12 +137,13 @@ Don't revisit without good reason:
 - Subtask badges show "Subtask" label + parent task name
 - Fixed badge ellipsis using inline-block instead of inline-flex
 
-*Move Chat Modal (WIP):*
-- `MoveChatModal.svelte` - destination picker for moving conversations
-- `moveChatModal.svelte.ts` - global store for modal state
-- Context menu "Move Chat..." option on conversation items
-- Space/Area selection with auto-load of areas
-- Wired into Sidebar and +layout.svelte (global modal)
+*Move Chat Modal:*
+- `MoveChatModal.svelte` - destination picker for moving conversations between Main Chat, Spaces, and Areas
+- `moveChatModal.svelte.ts` - global store for modal state (open/close/move methods)
+- Context menu "Move Chat..." option on conversation items in sidebar
+- Dynamic area loading when space is selected, auto-selects General area
+- Shows success toast on move completion
+- Refactored from per-page to global store pattern for reusability
 
 *Backlog Update:*
 - Added "Settings Architecture Review" section documenting system prompt scope concerns
@@ -172,10 +173,11 @@ Don't revisit without good reason:
 - `69ae980` - feat: Add contextual quick starts with prepopulate support
 - `18ea44f` - feat: Add confirmation modal for clearing main nav conversations
 - `ececd9d` - feat: Improve area conversation drawer grouping and styling
+- `9843552` - feat: Add Move Chat modal for relocating conversations
 
 **Next steps:**
-- Complete Move Chat Modal integration (test and debug)
 - Continue Areas Architecture work
+- Test Move Chat functionality across different scenarios
 
 ### Previous: 2026-01-08 (Model Arena Redesign - COMPLETE)
 
