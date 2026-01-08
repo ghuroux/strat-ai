@@ -2123,14 +2123,9 @@
 		min-width: 0;
 	}
 
-	.chat-input-container {
-		padding: 1rem 2rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.06);
-	}
-
 	.chat-input-container.plan-mode {
 		background: rgba(168, 85, 247, 0.05);
-		border-color: rgba(168, 85, 247, 0.2);
+		border-top: 1px solid rgba(168, 85, 247, 0.2);
 	}
 
 	.chat-input-container.completed {

@@ -1320,13 +1320,11 @@
 			</ChatMessageList>
 
 			<!-- Chat input -->
-			<div class="input-container">
-				<ChatInput
-					onsend={handleSend}
-					onstop={handleStop}
-					disabled={!selectedModel}
-				/>
-			</div>
+			<ChatInput
+				onsend={handleSend}
+				onstop={handleStop}
+				disabled={!selectedModel}
+			/>
 		</main>
 
 		<!-- Second Opinion Panel -->
@@ -1635,12 +1633,6 @@
 		padding: 0 2rem;
 		max-width: 48rem;
 		margin: 0 auto;
-	}
-
-	.input-container {
-		padding: 1rem 2rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.06);
-		background: var(--bg-chat, #0f0f11);
 	}
 
 	/* Conversation menu */
