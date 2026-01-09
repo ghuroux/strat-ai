@@ -6,6 +6,7 @@
 	import SearchToggle from './chat/SearchToggle.svelte';
 	import ThinkingToggle from './chat/ThinkingToggle.svelte';
 	import SummarizeButton from './chat/SummarizeButton.svelte';
+	import PromptOptimizeButton from './chat/PromptOptimizeButton.svelte';
 	import FileUploadButton from './chat/FileUploadButton.svelte';
 	import FilePreview from './chat/FilePreview.svelte';
 	import ContextIndicator from './chat/ContextIndicator.svelte';
@@ -171,6 +172,23 @@
 
 	function handleStop() {
 		onstop?.();
+	}
+
+	// Prompt optimization handlers
+	function handleOptimizedPrompt(optimizedText: string) {
+		input = optimizedText;
+		setTimeout(() => {
+			autoResize();
+			textarea?.focus();
+		}, 0);
+	}
+
+	function handleUndoOptimization(originalText: string) {
+		input = originalText;
+		setTimeout(() => {
+			autoResize();
+			textarea?.focus();
+		}, 0);
 	}
 
 	// Upload a file (shared by click upload and drag-drop)
@@ -367,6 +385,16 @@
 							/>
 						</div>
 					{/if}
+
+					<!-- Prompt Optimize Button -->
+					<div class="relative group">
+						<PromptOptimizeButton
+							inputText={input}
+							disabled={disabled || chatStore.isStreaming}
+							onoptimize={handleOptimizedPrompt}
+							onundo={handleUndoOptimization}
+						/>
+					</div>
 
 					<!-- Extended Thinking Toggle (for Claude models) -->
 					<div class="relative group">
