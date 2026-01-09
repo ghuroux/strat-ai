@@ -5,6 +5,9 @@ declare global {
 		interface Locals {
 			session: {
 				userId: string;
+				organizationId: string;
+				displayName: string | null;
+				role: 'owner' | 'admin' | 'member';
 				createdAt: number;
 			} | null;
 		}

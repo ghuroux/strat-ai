@@ -8,17 +8,20 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * POST /api/tasks/[id]/reopen
  * Reopen a completed task (set status back to active)
  */
-export const POST: RequestHandler = async ({ params }) => {
+export const POST: RequestHandler = async ({ params, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+
 		// Check if task exists first
-		const existing = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const existing = await postgresTaskRepository.findById(params.id, userId);
 
 		if (!existing) {
 			return json({ error: 'Task not found' }, { status: 404 });
@@ -28,7 +31,7 @@ export const POST: RequestHandler = async ({ params }) => {
 			return json({ error: 'Task is not completed' }, { status: 400 });
 		}
 
-		const task = await postgresTaskRepository.reopen(params.id, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.reopen(params.id, userId);
 
 		if (!task) {
 			return json({ error: 'Failed to reopen task' }, { status: 500 });

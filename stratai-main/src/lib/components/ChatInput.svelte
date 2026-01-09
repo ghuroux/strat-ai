@@ -294,7 +294,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="chat-input-container border-t border-surface-800 p-4 bg-surface-900/80 backdrop-blur-xl relative"
+	class="chat-input-container border-t border-surface-800 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-surface-900/80 backdrop-blur-xl relative"
 	ondragenter={handleDragEnter}
 	ondragleave={handleDragLeave}
 	ondragover={handleDragOver}

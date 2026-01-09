@@ -12,24 +12,26 @@ import { postgresDocumentRepository } from '$lib/server/persistence/documents-po
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { DocumentContextRole } from '$lib/types/documents';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/tasks/[id]/documents
  * List all documents linked to this task
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id: taskId } = params;
 
 		// Verify task exists
-		const task = await postgresTaskRepository.findById(taskId, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.findById(taskId, userId);
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
 
-		const documents = await postgresDocumentRepository.getDocumentsForTask(taskId, DEFAULT_USER_ID);
+		const documents = await postgresDocumentRepository.getDocumentsForTask(taskId, userId);
 
 		// Return summaries without full content
 		const summaries = documents.map((doc) => ({
@@ -63,8 +65,13 @@ export const GET: RequestHandler = async ({ params }) => {
  * Link a document to this task
  * Body: { documentId, contextRole?, contextNote? }
  */
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id: taskId } = params;
 		const body = await request.json();
 
@@ -84,7 +91,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		}
 
 		// Verify task exists
-		const task = await postgresTaskRepository.findById(taskId, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.findById(taskId, userId);
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
@@ -94,7 +101,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			documentId,
 			taskId,
 			contextRole ?? 'reference',
-			DEFAULT_USER_ID,
+			userId,
 			contextNote
 		);
 
@@ -121,8 +128,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
  * DELETE /api/tasks/[id]/documents?documentId=
  * Unlink a document from this task
  */
-export const DELETE: RequestHandler = async ({ params, url }) => {
+export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id: taskId } = params;
 		const documentId = url.searchParams.get('documentId');
 
@@ -131,12 +143,12 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 		}
 
 		// Verify task exists
-		const task = await postgresTaskRepository.findById(taskId, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.findById(taskId, userId);
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
 
-		await postgresDocumentRepository.unlinkFromTask(documentId, taskId, DEFAULT_USER_ID);
+		await postgresDocumentRepository.unlinkFromTask(documentId, taskId, userId);
 
 		return json({ success: true });
 	} catch (error) {

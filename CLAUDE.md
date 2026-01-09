@@ -23,10 +23,14 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 **Current phase:** Context Management Architecture - building intelligent memory and context persistence.
 
 **Strategic Documents:**
-- `stratai-main/CONTEXT_STRATEGY.md` - **Foundational context/memory architecture** (moat-level work)
+- `stratai-main/ENTITY_MODEL.md` - **Authoritative data architecture** (implementation source of truth)
+- `stratai-main/docs/CONTEXT_STRATEGY.md` - **Context/memory architecture** (WHAT to store - moat-level work)
+- `stratai-main/docs/context-loading-architecture.md` - **Just-in-time context loading** (HOW to load via tool calling)
+- `stratai-main/docs/UI_AUDIT.md` - **UI cleanup audit** (mobile, light mode, consistency)
 - `stratai-main/PRICING_STRATEGY.md` - **Pricing strategy V1 (launch) + V2 (evolution)**
 - `stratai-main/PRODUCT_VISION.md` - Product vision and roadmap
 - `stratai-main/BACKLOG.md` - Feature backlog and priorities
+- `stratai-main/docs/enterprise-roadmap.md` - Implementation phases and timeline
 
 ---
 
@@ -90,6 +94,11 @@ Don't revisit without good reason:
 | $29 Pro price point | Signals enterprise quality, above commodity ($10-15), below enterprise ($50+) |
 | V2 as evolution not pivot | V1 proves value and funds V2 development; smooth transition |
 | Premium models at cost + 25% | Transparency builds trust; competitive margin |
+| Models as first-class entities | Enable per-model guardrails, not just tier-level |
+| Two Space types (org/personal) | Clear governance boundary, appropriate context propagation |
+| Areas as collaboration unit | Granular sharing without exposing entire Spaces |
+| Separate subscription from governance | Tiers for billing, guardrails for access control (orthogonal) |
+| `space_id` in usage_records | Enable V2 project-based cost attribution |
 
 ---
 
@@ -123,7 +132,64 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-08 (LLM Gateway Evaluation & Enterprise Architecture)
+### Latest: 2026-01-09 (Entity Model Architecture)
+
+**Completed:**
+
+*Entity Model Document - ENTITY_MODEL.md:*
+- Created authoritative data architecture reference (implementation source of truth)
+- Comprehensive 1800+ line document covering all entity definitions
+
+*Key Architectural Decisions:*
+- **Models as first-class entities**: Separate `models` table (individual LLMs) from `model_tiers` (subscription bundles) - enables per-model guardrails
+- **Two Space types**: `organizational` (org-provided, auto-access via groups) vs `personal` (user-created) - clear governance boundary
+- **Areas as collaboration unit**: Granular sharing via `area_memberships` (users + groups) without exposing entire Spaces
+- **Separate subscription from governance**: Tiers for billing, guardrails for access control (orthogonal concerns)
+- **Private Areas in Org Spaces**: Users can create restricted areas for incubation before sharing
+
+*Entity Hierarchy Defined:*
+```
+Platform: Models, Model Tiers, Guardrails
+Organization: Organizations, Groups, Users, Profiles, Memberships
+Workspace: Spaces (org/personal), Areas, Tasks
+Context: Conversations, Messages, Memories, Documents
+Operations: Usage Records, Budgets, Invoices, Audit Log
+```
+
+*Complete Schema Defined:*
+- 25+ tables with full DDL
+- All constraints and relationships
+- Access resolution algorithms (Space, Area, Model access)
+- Guardrails resolution logic (stacking, most-restrictive-wins)
+- Comprehensive index strategy for all query patterns
+- Migration path from current state (8 phases)
+
+*Clarifications from Discussion:*
+- "Modules" = "Model Tiers" (subscription bundles for billing)
+- Individual model guardrails = governance layer (separate from tiers)
+- Spaces = broad context container (Work, Department)
+- Areas = sub-context with collaboration (Client, Project)
+
+**Files Created:**
+- `stratai-main/ENTITY_MODEL.md` - Complete entity model reference
+
+**Files Modified:**
+- `CLAUDE.md` - Added entity model to strategic documents, added decisions to Decision Log
+
+**Key Decisions Made:**
+1. Models as first-class entities (enable per-model guardrails)
+2. Two Space types (organizational/personal) with clear governance boundary
+3. Areas as collaboration unit with group + user invites
+4. `is_restricted` flag for private Areas in org Spaces
+5. `space_id` in usage_records for V2 project attribution
+6. Separate document from enterprise-roadmap (schema vs implementation)
+
+**Next Steps:**
+- Review ENTITY_MODEL.md for final approval
+- Begin Phase 1 migrations (organization infrastructure)
+- Update enterprise-roadmap.md to reference entity model for schema details
+
+### Previous: 2026-01-08 (LLM Gateway Evaluation & Enterprise Architecture)
 
 **Completed:**
 

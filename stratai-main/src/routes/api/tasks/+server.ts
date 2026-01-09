@@ -11,9 +11,6 @@ import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
 import type { CreateTaskInput, TaskListFilter, TaskStatus } from '$lib/types/tasks';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/tasks
  * Query params:
@@ -22,7 +19,13 @@ const DEFAULT_USER_ID = 'admin';
  * - status: Filter by status (active, completed, deferred) - can be comma-separated
  * - includeCompleted: Include completed tasks (default: false)
  */
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
+	if (!locals.session) {
+		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+	}
+
+	const userId = locals.session.userId;
+
 	try {
 		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
 		const areaId = url.searchParams.get('areaId');
@@ -35,7 +38,7 @@ export const GET: RequestHandler = async ({ url }) => {
 
 		// Resolve space identifier (slug or ID) to proper ID
 		if (spaceIdParam) {
-			const resolvedSpaceId = await resolveSpaceId(spaceIdParam, DEFAULT_USER_ID);
+			const resolvedSpaceId = await resolveSpaceId(spaceIdParam, userId);
 			if (!resolvedSpaceId) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}
@@ -52,7 +55,7 @@ export const GET: RequestHandler = async ({ url }) => {
 			filter.status = statuses.length === 1 ? statuses[0] : statuses;
 		}
 
-		const tasks = await postgresTaskRepository.findAll(DEFAULT_USER_ID, filter);
+		const tasks = await postgresTaskRepository.findAll(userId, filter);
 
 		return json({ tasks });
 	} catch (error) {
@@ -71,7 +74,13 @@ export const GET: RequestHandler = async ({ url }) => {
  * - Bulk tasks: { tasks: [...], spaceId, areaId?, source? }
  * Note: spaceId can be a slug or proper ID - it will be resolved
  */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	if (!locals.session) {
+		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+	}
+
+	const userId = locals.session.userId;
+
 	try {
 		const body = await request.json();
 
@@ -80,7 +89,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			return json({ error: 'Missing required field: spaceId' }, { status: 400 });
 		}
 
-		const resolvedSpaceId = await resolveSpaceId(body.spaceId, DEFAULT_USER_ID);
+		const resolvedSpaceId = await resolveSpaceId(body.spaceId, userId);
 		if (!resolvedSpaceId) {
 			return json({ error: `Space not found: ${body.spaceId}` }, { status: 404 });
 		}
@@ -98,7 +107,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				source: body.source
 			}));
 
-			const tasks = await postgresTaskRepository.createBulk(inputs, DEFAULT_USER_ID);
+			const tasks = await postgresTaskRepository.createBulk(inputs, userId);
 
 			return json({ tasks }, { status: 201 });
 		}
@@ -120,7 +129,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			source: body.source
 		};
 
-		const task = await postgresTaskRepository.create(input, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.create(input, userId);
 
 		return json({ task }, { status: 201 });
 	} catch (error) {

@@ -157,12 +157,18 @@ export async function createChatCompletion(request: ChatCompletionRequest): Prom
 	const isReasoningModel = isOpenAIReasoningModel(request.model);
 
 	// Build the request body
+	const isStreaming = request.stream !== false; // Default to true unless explicitly false
 	const body: Record<string, unknown> = {
 		model: request.model,
 		messages: request.messages,
-		stream: request.stream !== false, // Default to true unless explicitly false
+		stream: isStreaming,
 		max_tokens: request.max_tokens
 	};
+
+	// Request usage data in streaming responses (required for usage tracking)
+	if (isStreaming) {
+		body.stream_options = { include_usage: true };
+	}
 
 	// Only add temperature for non-reasoning models (OpenAI reasoning models don't support it)
 	if (!isReasoningModel) {
@@ -275,13 +281,19 @@ export async function createChatCompletionWithTools(request: ChatCompletionReque
 	const isReasoningModel = isOpenAIReasoningModel(request.model);
 
 	// Build the request body
+	const isStreaming = request.stream === true; // Default to non-streaming for tool detection
 	const body: Record<string, unknown> = {
 		model: request.model,
 		messages: request.messages,
 		max_tokens: request.max_tokens,
 		tools: request.tools,
-		stream: request.stream ?? false // Default to non-streaming for tool detection
+		stream: isStreaming
 	};
+
+	// Request usage data in streaming responses (required for usage tracking)
+	if (isStreaming) {
+		body.stream_options = { include_usage: true };
+	}
 
 	// Only add temperature for non-reasoning models (OpenAI reasoning models don't support it)
 	if (!isReasoningModel) {

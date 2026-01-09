@@ -10,16 +10,18 @@ import type { RequestHandler } from './$types';
 import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres';
 import type { CreateSpaceInput } from '$lib/types/spaces';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/spaces
  * Returns all spaces (system + custom) for the user
  */
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals }) => {
+	// Require authentication
+	if (!locals.session) {
+		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+	}
+
 	try {
-		const spaces = await postgresSpaceRepository.findAll(DEFAULT_USER_ID);
+		const spaces = await postgresSpaceRepository.findAll(locals.session.userId);
 		return json({ spaces });
 	} catch (error) {
 		console.error('Failed to fetch spaces:', error);
@@ -37,7 +39,12 @@ export const GET: RequestHandler = async () => {
  * POST /api/spaces
  * Body: { name, context?, contextDocumentIds?, color?, icon? }
  */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	// Require authentication
+	if (!locals.session) {
+		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+	}
+
 	try {
 		const body = await request.json();
 
@@ -54,7 +61,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			icon: body.icon
 		};
 
-		const space = await postgresSpaceRepository.create(input, DEFAULT_USER_ID);
+		const space = await postgresSpaceRepository.create(input, locals.session.userId);
 
 		return json({ space }, { status: 201 });
 	} catch (error) {

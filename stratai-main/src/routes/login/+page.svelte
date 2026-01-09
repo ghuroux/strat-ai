@@ -34,6 +34,20 @@
 				</div>
 			{/if}
 
+			<div class="mb-4">
+				<label for="username" class="block text-sm font-medium mb-2 text-gray-300">
+					Username or Email
+				</label>
+				<input
+					type="text"
+					id="username"
+					name="username"
+					class="input-field"
+					placeholder="username or email (optional for admin)"
+					autocomplete="username"
+				/>
+			</div>
+
 			<div class="mb-6">
 				<label for="password" class="block text-sm font-medium mb-2 text-gray-300">
 					Password
@@ -44,7 +58,7 @@
 					name="password"
 					required
 					class="input-field"
-					placeholder="Enter admin password"
+					placeholder="Enter password"
 					autocomplete="current-password"
 				/>
 			</div>

@@ -4,6 +4,20 @@
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<script>
+			// Theme hydration - prevent flash of wrong theme
+			(function() {
+				try {
+					const settings = localStorage.getItem('strathost-settings');
+					const theme = settings ? JSON.parse(settings).theme || 'dark' : 'dark';
+					const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+					const isDark = theme === 'dark' || (theme === 'system' && prefersDark);
+					document.documentElement.classList.add(isDark ? 'dark' : 'light');
+				} catch (e) {
+					document.documentElement.classList.add('dark');
+				}
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

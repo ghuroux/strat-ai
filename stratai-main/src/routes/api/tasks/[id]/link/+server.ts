@@ -9,16 +9,18 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * POST /api/tasks/[id]/link
  * Link a conversation to a task
  * Body: { conversationId: string }
  */
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 		const { conversationId } = body;
 
@@ -27,16 +29,16 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		}
 
 		// Check if task exists
-		const task = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.findById(params.id, userId);
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
 
 		// Link the conversation
-		await postgresTaskRepository.linkConversation(params.id, conversationId, DEFAULT_USER_ID);
+		await postgresTaskRepository.linkConversation(params.id, conversationId, userId);
 
 		// Return updated task
-		const updatedTask = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const updatedTask = await postgresTaskRepository.findById(params.id, userId);
 
 		return json({ task: updatedTask });
 	} catch (error) {
@@ -53,8 +55,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
  * Unlink a conversation from a task
  * Body: { conversationId: string }
  */
-export const DELETE: RequestHandler = async ({ params, request }) => {
+export const DELETE: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 		const { conversationId } = body;
 
@@ -63,16 +70,16 @@ export const DELETE: RequestHandler = async ({ params, request }) => {
 		}
 
 		// Check if task exists
-		const task = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.findById(params.id, userId);
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
 
 		// Unlink the conversation
-		await postgresTaskRepository.unlinkConversation(params.id, conversationId, DEFAULT_USER_ID);
+		await postgresTaskRepository.unlinkConversation(params.id, conversationId, userId);
 
 		// Return updated task
-		const updatedTask = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const updatedTask = await postgresTaskRepository.findById(params.id, userId);
 
 		return json({ task: updatedTask });
 	} catch (error) {

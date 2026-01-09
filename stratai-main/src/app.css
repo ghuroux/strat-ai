@@ -893,6 +893,16 @@
 		@apply focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:ring-offset-2 focus:ring-offset-surface-900;
 	}
 
+	/* Focus ring - light mode */
+	html.light .focus-ring {
+		@apply focus:ring-offset-white;
+	}
+
+	/* Fix ring-offset for light mode */
+	html.light [class*="ring-offset-surface-900"] {
+		--tw-ring-offset-color: white;
+	}
+
 	/* Gradient animation */
 	.animate-gradient {
 		background-size: 200% 200%;
@@ -984,4 +994,3684 @@ html.task-focus-mode .focus-indicator {
 
 html.task-focus-mode.high-priority .chat-input-field:not(:focus-within) {
 	animation: focus-pulse 2s ease-in-out infinite;
+}
+
+/* ==========================================
+   LIGHT MODE - Component Overrides
+   ========================================== */
+
+/* --- AreaCard Component --- */
+html.light .area-card {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .area-card:hover {
+	background: rgba(0, 0, 0, 0.04) !important;
+	border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+html.light .area-card.general {
+	border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .area-card .title {
+	color: #18181b !important;
+}
+
+html.light .area-card .card-meta,
+html.light .area-card .stat,
+html.light .area-card .activity,
+html.light .area-card .context-indicator {
+	color: #71717a !important;
+}
+
+html.light .area-card .separator {
+	color: #a1a1aa !important;
+}
+
+html.light .area-card .card-arrow {
+	color: #a1a1aa !important;
+}
+
+html.light .area-card .menu-trigger {
+	color: #71717a !important;
+}
+
+html.light .area-card .menu-trigger:hover {
+	background: rgba(0, 0, 0, 0.06) !important;
+	color: #18181b !important;
+}
+
+html.light .area-card .menu-dropdown {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+html.light .area-card .menu-item {
+	color: #27272a !important;
+}
+
+html.light .area-card .menu-item:hover {
+	background: #f4f4f5 !important;
+	color: #18181b !important;
+}
+
+html.light .area-card .menu-item.danger {
+	color: #dc2626 !important;
+}
+
+html.light .area-card .menu-item.danger:hover {
+	background: rgba(220, 38, 38, 0.1) !important;
+	color: #dc2626 !important;
+}
+
+/* --- TaskCard Component --- */
+html.light .task-card {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-card:hover {
+	background: rgba(0, 0, 0, 0.04) !important;
+	border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .task-card.attention {
+	background: rgba(245, 158, 11, 0.08) !important;
+	border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+html.light .task-card.attention:hover {
+	background: rgba(245, 158, 11, 0.12) !important;
+	border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+html.light .task-card .task-title {
+	color: #18181b !important;
+}
+
+html.light .task-card .subtask-badge {
+	color: #52525b !important;
+	background: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-card .task-arrow,
+html.light .task-card .task-chevron {
+	color: #a1a1aa !important;
+}
+
+html.light .task-card .accordion-content {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-card .action-btn {
+	background: rgba(0, 0, 0, 0.04) !important;
+	color: #52525b !important;
+}
+
+html.light .task-card .action-btn:hover {
+	background: rgba(0, 0, 0, 0.08) !important;
+	color: #18181b !important;
+}
+
+html.light .task-card .due-badge.due-later {
+	background: rgba(0, 0, 0, 0.06) !important;
+	color: #52525b !important;
+}
+
+/* --- Space Page Loading/Error States --- */
+html.light .loading-container {
+	color: rgba(0, 0, 0, 0.5) !important;
+}
+
+html.light .loading-spinner {
+	border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .error-container h1 {
+	color: rgba(0, 0, 0, 0.9) !important;
+}
+
+html.light .error-container p {
+	color: rgba(0, 0, 0, 0.5) !important;
+}
+
+html.light .back-link {
+	background: rgba(59, 130, 246, 0.1) !important;
+}
+
+html.light .back-link:hover {
+	background: rgba(59, 130, 246, 0.15) !important;
+}
+
+/* --- Space Header Text --- */
+html.light .space-header-title {
+	color: #18181b !important;
+}
+
+html.light .space-header-description {
+	color: #52525b !important;
+}
+
+/* --- Space Dashboard Sections --- */
+html.light .dashboard-section-title {
+	color: #18181b !important;
+}
+
+html.light .dashboard-section-subtitle {
+	color: #52525b !important;
+}
+
+/* Add Area Card (Create New) */
+html.light .area-card.create-card {
+	background: rgba(0, 0, 0, 0.01) !important;
+	border-style: dashed !important;
+	border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+html.light .area-card.create-card:hover {
+	background: rgba(0, 0, 0, 0.03) !important;
+	border-color: rgba(0, 0, 0, 0.25) !important;
+}
+
+html.light .area-card.create-card .title {
+	color: #3b82f6 !important;
+}
+
+/* --- Header Space Navigation --- */
+html.light .space-nav-item {
+	color: #52525b !important;
+}
+
+html.light .space-nav-item:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .space-nav-item.active {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .space-nav-separator {
+	background: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .space-nav-add {
+	color: #71717a !important;
+	border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+html.light .space-nav-add:hover {
+	color: #18181b !important;
+	border-color: rgba(0, 0, 0, 0.3) !important;
+	background: rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .space-nav-all {
+	color: #71717a !important;
+}
+
+html.light .space-nav-all:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .space-nav-edit {
+	color: #71717a !important;
+}
+
+html.light .space-nav-edit:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* --- ConversationItem Component --- */
+html.light .conversation-item {
+	background: transparent !important;
+}
+
+html.light .conversation-item:hover {
+	background-color: #f4f4f5 !important;
+}
+
+html.light .conversation-item.active {
+	background-color: rgba(99, 102, 241, 0.1) !important;
+}
+
+html.light .conversation-item .item-title {
+	color: #27272a !important;
+}
+
+html.light .conversation-item .item-time {
+	color: #71717a !important;
+}
+
+html.light .conversation-item .item-preview {
+	color: #71717a !important;
+}
+
+html.light .conversation-item .rename-input {
+	background-color: #ffffff !important;
+	border-color: #6366f1 !important;
+	color: #18181b !important;
+}
+
+html.light .conversation-item .pin-indicator {
+	color: #f59e0b !important;
+}
+
+html.light .conversation-item .menu-trigger {
+	color: #71717a !important;
+}
+
+html.light .conversation-item .menu-trigger:hover {
+	background-color: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .conversation-item .dropdown-menu {
+	background-color: #ffffff !important;
+	border-color: #e4e4e7 !important;
+	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .conversation-item .dropdown-item {
+	color: #27272a !important;
+}
+
+html.light .conversation-item .dropdown-item:hover {
+	background-color: #f4f4f5 !important;
+}
+
+html.light .conversation-item .dropdown-item.danger {
+	color: #dc2626 !important;
+}
+
+html.light .conversation-item .dropdown-item.danger:hover {
+	background-color: rgba(220, 38, 38, 0.1) !important;
+}
+
+html.light .conversation-item .dropdown-divider {
+	background-color: #e4e4e7 !important;
+}
+
+/* Task pill in conversation item */
+html.light .conversation-item .task-pill {
+	color: var(--task-color, #3b82f6) !important;
+}
+
+/* --- Header Component --- */
+html.light .header-container {
+	background: rgba(255, 255, 255, 0.9) !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .header-logo-text {
+	color: #18181b !important;
+}
+
+/* Model selector badge */
+html.light .model-badge {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #27272a !important;
+}
+
+html.light .model-badge:hover {
+	background: #e4e4e7 !important;
+	border-color: #d4d4d8 !important;
+}
+
+/* --- White text override (for titles that use text-white) --- */
+html.light .text-white {
+	color: #18181b !important;
+}
+
+/* But preserve white text on colored backgrounds */
+html.light .bg-primary-600 .text-white,
+html.light .bg-primary-500 .text-white,
+html.light .bg-red-600 .text-white,
+html.light .bg-green-600 .text-white,
+html.light [class*="bg-gradient-primary"] .text-white,
+html.light .btn-primary,
+html.light .message-user,
+html.light .avatar-user,
+html.light .avatar-assistant {
+	color: #ffffff !important;
+}
+
+/* --- Sidebar specific --- */
+html.light .sidebar {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .sidebar .search-container input {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .sidebar .search-container input::placeholder {
+	color: #a1a1aa !important;
+}
+
+/* --- Task Dashboard Components --- */
+html.light .task-group-section {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-group-header {
+	color: #18181b !important;
+}
+
+html.light .task-group-count {
+	color: #71717a !important;
+}
+
+html.light .stats-row {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .stat-item .stat-value {
+	color: #18181b !important;
+}
+
+html.light .stat-item .stat-label {
+	color: #71717a !important;
+}
+
+/* --- Focus Suggestion --- */
+html.light .focus-suggestion {
+	background: rgba(59, 130, 246, 0.05) !important;
+	border-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+html.light .focus-suggestion-title {
+	color: #18181b !important;
+}
+
+html.light .focus-suggestion-reason {
+	color: #52525b !important;
+}
+
+/* --- Welcome screens --- */
+html.light .welcome-container {
+	color: #18181b !important;
+}
+
+html.light .welcome-title {
+	color: #18181b !important;
+}
+
+html.light .welcome-subtitle {
+	color: #52525b !important;
+}
+
+html.light .quick-start-badge {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #27272a !important;
+}
+
+html.light .quick-start-badge:hover {
+	background: #e4e4e7 !important;
+	border-color: #d4d4d8 !important;
+}
+
+/* --- Modals --- */
+html.light .modal-backdrop {
+	background: rgba(0, 0, 0, 0.4) !important;
+}
+
+html.light .modal-content {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .modal-header {
+	border-color: #e4e4e7 !important;
+}
+
+html.light .modal-title {
+	color: #18181b !important;
+}
+
+html.light .modal-body {
+	color: #27272a !important;
+}
+
+html.light .modal-footer {
+	border-color: #e4e4e7 !important;
+}
+
+/* --- General text overrides for surface colors --- */
+html.light .text-surface-100,
+html.light .text-surface-200 {
+	color: #18181b !important;
+}
+
+html.light .text-surface-300 {
+	color: #27272a !important;
+}
+
+html.light .text-surface-400 {
+	color: #52525b !important;
+}
+
+/* --- Hover states for surface backgrounds --- */
+html.light .hover\:bg-surface-800:hover {
+	background-color: #f4f4f5 !important;
+}
+
+html.light .hover\:bg-surface-700:hover {
+	background-color: #e4e4e7 !important;
+}
+
+/* --- Planning tasks indicator --- */
+html.light .planning-indicator {
+	background: rgba(139, 92, 246, 0.1) !important;
+	border-color: rgba(139, 92, 246, 0.3) !important;
+}
+
+html.light .planning-indicator-count {
+	background: #8b5cf6 !important;
+	color: #ffffff !important;
+}
+
+/* --- Context panel --- */
+html.light .context-panel {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .context-panel-header {
+	border-color: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .context-panel-section-title {
+	color: #52525b !important;
+}
+
+/* --- Document items in context --- */
+html.light .document-item {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .document-item:hover {
+	background: #e4e4e7 !important;
+}
+
+html.light .document-item-title {
+	color: #18181b !important;
+}
+
+html.light .document-item-meta {
+	color: #71717a !important;
+}
+
+/* --- SpaceDashboard Component --- */
+html.light .space-name {
+	color: #18181b !important;
+}
+
+html.light .space-description {
+	color: #52525b !important;
+}
+
+html.light .section-title {
+	color: #71717a !important;
+}
+
+html.light .section-count {
+	background: rgba(0, 0, 0, 0.06) !important;
+	color: #52525b !important;
+}
+
+html.light .activity-sections {
+	border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .show-more-activity {
+	color: #52525b !important;
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .show-more-activity:hover {
+	background: rgba(0, 0, 0, 0.04) !important;
+	color: #18181b !important;
+}
+
+html.light .empty-dashboard {
+	color: #52525b !important;
+}
+
+html.light .empty-title {
+	color: #18181b !important;
+}
+
+html.light .empty-text {
+	color: #71717a !important;
+}
+
+html.light .empty-icon {
+	color: #a1a1aa !important;
+}
+
+/* --- RecentActivitySection --- */
+html.light .activity-item {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .activity-item:hover {
+	background: rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .activity-title {
+	color: #18181b !important;
+}
+
+html.light .activity-meta {
+	color: #71717a !important;
+}
+
+html.light .activity-time {
+	color: #a1a1aa !important;
+}
+
+/* --- TasksSection Component --- */
+html.light .tasks-section {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .tasks-header {
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .tasks-header-title {
+	color: #18181b !important;
+}
+
+html.light .tasks-empty {
+	color: #71717a !important;
+}
+
+html.light .view-all-btn {
+	color: #52525b !important;
+}
+
+html.light .view-all-btn:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.04) !important;
+}
+
+/* --- CreateAreaCard --- */
+html.light .create-area-card {
+	background: rgba(0, 0, 0, 0.01) !important;
+	border-style: dashed !important;
+	border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+html.light .create-area-card:hover {
+	background: rgba(0, 0, 0, 0.03) !important;
+	border-color: rgba(0, 0, 0, 0.25) !important;
+}
+
+html.light .create-area-card .create-icon {
+	color: #3b82f6 !important;
+}
+
+html.light .create-area-card .create-title {
+	color: #3b82f6 !important;
+}
+
+/* --- Chat message content in light mode --- */
+html.light .message-assistant {
+	background-color: #f4f4f5 !important;
+	color: #18181b !important;
+}
+
+html.light .message-assistant h1,
+html.light .message-assistant h2,
+html.light .message-assistant h3,
+html.light .message-assistant h4,
+html.light .message-assistant h5,
+html.light .message-assistant h6 {
+	color: #18181b !important;
+}
+
+html.light .message-assistant strong,
+html.light .message-assistant b {
+	color: #18181b !important;
+}
+
+html.light .message-assistant code {
+	background-color: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .message-assistant pre {
+	background-color: #1e1e2e !important;
+}
+
+html.light .message-assistant a {
+	color: #2563eb !important;
+}
+
+html.light .message-assistant a:hover {
+	color: #1d4ed8 !important;
+}
+
+/* --- Arena page light mode refinements --- */
+html.light .arena-setup-card {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .arena-category-chip {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .arena-category-chip.active {
+	background: rgba(59, 130, 246, 0.1) !important;
+	border-color: rgba(59, 130, 246, 0.3) !important;
+	color: #2563eb !important;
+}
+
+html.light .arena-context-picker {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #27272a !important;
+}
+
+html.light .arena-model-chip {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #27272a !important;
+}
+
+html.light .arena-model-chip:hover {
+	background: #e4e4e7 !important;
+}
+
+/* Arena vote button */
+html.light .arena-vote-btn {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #27272a !important;
+}
+
+html.light .arena-vote-btn:hover {
+	background: #e4e4e7 !important;
+}
+
+/* Arena verdict section */
+html.light .arena-verdict {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .arena-verdict-header {
+	background: #f4f4f5 !important;
+}
+
+html.light .arena-ranking-item {
+	background: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* --- ChatInput light mode --- */
+html.light .chat-input-container {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .chat-input-field {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .chat-input-field::placeholder {
+	color: #a1a1aa !important;
+}
+
+html.light .chat-input-field:focus {
+	border-color: #3b82f6 !important;
+}
+
+/* Chat input action buttons */
+html.light .chat-action-btn {
+	color: #71717a !important;
+}
+
+html.light .chat-action-btn:hover {
+	color: #18181b !important;
+	background: #f4f4f5 !important;
+}
+
+/* --- Thinking block in messages --- */
+html.light .thinking-block {
+	background: rgba(245, 158, 11, 0.08) !important;
+	border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+html.light .thinking-header {
+	color: #b45309 !important;
+}
+
+html.light .thinking-content {
+	color: #52525b !important;
+}
+
+/* --- Sources section --- */
+html.light .sources-section {
+	border-color: #e4e4e7 !important;
+}
+
+html.light .sources-header {
+	color: #52525b !important;
+}
+
+html.light .source-link {
+	color: #2563eb !important;
+}
+
+html.light .source-link:hover {
+	color: #1d4ed8 !important;
+	background: rgba(37, 99, 235, 0.05) !important;
+}
+
+/* --- TasksSection additional overrides --- */
+html.light .task-count {
+	background: rgba(0, 0, 0, 0.06) !important;
+	color: #52525b !important;
+}
+
+html.light .show-more-button {
+	color: #52525b !important;
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .show-more-button:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.04) !important;
+	border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .empty-tasks {
+	color: #71717a !important;
+}
+
+html.light .empty-tasks .empty-text {
+	color: #71717a !important;
+}
+
+html.light .empty-tasks .empty-icon {
+	color: #a1a1aa !important;
+}
+
+/* Task item in TasksSection */
+html.light .task-item {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-item:hover {
+	background: rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .task-item .task-title {
+	color: #18181b !important;
+}
+
+html.light .task-item .task-meta {
+	color: #71717a !important;
+}
+
+html.light .task-item .task-time {
+	color: #a1a1aa !important;
+}
+
+/* --- RecentActivitySection additional overrides --- */
+html.light .activity-item .item-title {
+	color: #18181b !important;
+}
+
+html.light .activity-item .item-area {
+	color: #52525b !important;
+}
+
+html.light .activity-item .item-time {
+	color: #a1a1aa !important;
+}
+
+html.light .activity-item .task-badge {
+	background: rgba(0, 0, 0, 0.06) !important;
+	color: #52525b !important;
+}
+
+/* --- Settings Panel --- */
+html.light .settings-panel {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .settings-header {
+	border-color: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .settings-section-title {
+	color: #18181b !important;
+}
+
+html.light .settings-label {
+	color: #27272a !important;
+}
+
+html.light .settings-description {
+	color: #71717a !important;
+}
+
+/* Theme toggle specific */
+html.light .theme-option {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+	color: #27272a !important;
+}
+
+html.light .theme-option.active {
+	background: rgba(59, 130, 246, 0.1) !important;
+	border-color: rgba(59, 130, 246, 0.3) !important;
+	color: #2563eb !important;
+}
+
+html.light .theme-option:hover {
+	background: #e4e4e7 !important;
+}
+
+/* --- AreaWelcome / Welcome screens --- */
+html.light .area-welcome {
+	color: #18181b !important;
+}
+
+html.light .area-welcome-title {
+	color: #18181b !important;
+}
+
+html.light .area-welcome-subtitle {
+	color: #52525b !important;
+}
+
+/* --- Context banner --- */
+html.light .task-context-banner {
+	background: rgba(0, 0, 0, 0.02) !important;
+	border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .task-context-banner .banner-title {
+	color: #18181b !important;
+}
+
+html.light .task-context-banner .banner-subtitle {
+	color: #52525b !important;
+}
+
+/* --- Dropdown menus (generic) --- */
+html.light .dropdown-menu,
+html.light [class*="dropdown"] {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .dropdown-item {
+	color: #27272a !important;
+}
+
+html.light .dropdown-item:hover {
+	background: #f4f4f5 !important;
+}
+
+/* --- Second opinion panel --- */
+html.light .second-opinion-panel {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .second-opinion-header {
+	border-color: #e4e4e7 !important;
+}
+
+html.light .second-opinion-content {
+	color: #18181b !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Premium Refinements
+   ========================================== */
+
+/* --- Main Content Area Backgrounds --- */
+html.light main,
+html.light .main-content {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+html.light .bg-surface-950 {
+	background-color: #fafafa !important;
+}
+
+html.light .bg-surface-900 {
+	background-color: #ffffff !important;
+}
+
+/* --- Space Dashboard Page --- */
+html.light .dashboard {
+	background: transparent !important;
+}
+
+html.light .dashboard-content {
+	background: transparent !important;
+}
+
+/* Area Cards - Premium styling */
+html.light .area-card {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+}
+
+html.light .area-card:hover {
+	background: #ffffff !important;
+	border-color: #d4d4d8 !important;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+	transform: translateY(-1px);
+}
+
+/* Create Area Card */
+html.light .create-area-card,
+html.light .area-card.create-card {
+	background: #fafafa !important;
+	border: 2px dashed #d4d4d8 !important;
+	box-shadow: none !important;
+}
+
+html.light .create-area-card:hover,
+html.light .area-card.create-card:hover {
+	background: #f4f4f5 !important;
+	border-color: #a1a1aa !important;
+}
+
+/* --- Task Items in Space Dashboard --- */
+html.light .task-item {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .task-item:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Task wrapper */
+html.light .task-wrapper {
+	background: transparent !important;
+}
+
+/* --- Tasks Dashboard Page (/spaces/[space]/tasks) --- */
+html.light .tasks-page,
+html.light .task-dashboard {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+/* Focus Suggestion Card */
+html.light .focus-suggestion,
+html.light .greeting-card {
+	background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.02) !important;
+}
+
+html.light .focus-suggestion:hover,
+html.light .greeting-card:hover {
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08), 0 3px 6px rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .greeting-message {
+	color: #52525b !important;
+}
+
+html.light .greeting-task-title {
+	color: #18181b !important;
+}
+
+html.light .greeting-task-subtitle {
+	color: #71717a !important;
+}
+
+/* Stats Row */
+html.light .stats-row {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .stat-item {
+	border-color: #e4e4e7 !important;
+}
+
+html.light .stat-value {
+	color: #18181b !important;
+}
+
+html.light .stat-label {
+	color: #71717a !important;
+}
+
+/* Task Group Sections */
+html.light .task-group-section,
+html.light .task-section {
+	background: transparent !important;
+	border: none !important;
+}
+
+html.light .task-group-header,
+html.light .group-header {
+	color: #52525b !important;
+}
+
+html.light .group-count {
+	background: #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+/* Task Cards in Dashboard */
+html.light .task-card {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .task-card:hover {
+	background: #ffffff !important;
+	border-color: #d4d4d8 !important;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-card.attention {
+	background: #fffbeb !important;
+	border-color: #fcd34d !important;
+}
+
+html.light .task-card.attention:hover {
+	box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15) !important;
+}
+
+/* Empty state in task sections */
+html.light .empty-group,
+html.light .nothing-due {
+	color: #a1a1aa !important;
+	background: #fafafa !important;
+	border: 1px dashed #e4e4e7 !important;
+}
+
+/* --- Area Page (/spaces/[space]/[area]) --- */
+html.light .area-page,
+html.light .area-content {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+/* Area Welcome Screen */
+html.light .area-welcome,
+html.light .welcome-container {
+	background: transparent !important;
+}
+
+html.light .area-welcome-icon {
+	background: linear-gradient(135deg, #f4f4f5 0%, #e4e4e7 100%) !important;
+}
+
+html.light .area-welcome-title,
+html.light .area-name {
+	color: #18181b !important;
+}
+
+html.light .area-welcome-description,
+html.light .area-context {
+	color: #52525b !important;
+}
+
+/* Continue Card */
+html.light .continue-card,
+html.light .resume-card {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .continue-card:hover,
+html.light .resume-card:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .continue-title {
+	color: #18181b !important;
+}
+
+html.light .continue-time {
+	color: #71717a !important;
+}
+
+/* Recent Conversations in Area */
+html.light .recent-section-title {
+	color: #52525b !important;
+}
+
+html.light .recent-count {
+	color: #a1a1aa !important;
+}
+
+html.light .recent-item,
+html.light .conversation-row {
+	background: #ffffff !important;
+	border: 1px solid #f4f4f5 !important;
+}
+
+html.light .recent-item:hover,
+html.light .conversation-row:hover {
+	background: #fafafa !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .recent-item-title {
+	color: #18181b !important;
+}
+
+html.light .recent-item-time {
+	color: #a1a1aa !important;
+}
+
+/* Reference Documents indicator */
+html.light .documents-indicator {
+	color: #71717a !important;
+}
+
+/* --- Task Focus Page (/spaces/[space]/task/[task]) --- */
+html.light .task-focus-page,
+html.light .task-chat-page {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+/* Task Header Banner */
+html.light .task-header,
+html.light .task-banner,
+html.light .task-context-banner {
+	background: #ffffff !important;
+	border-bottom: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .task-header-title,
+html.light .banner-task-title {
+	color: #18181b !important;
+}
+
+html.light .task-header-due,
+html.light .banner-due-date {
+	color: #71717a !important;
+}
+
+/* Priority badge in light mode */
+html.light .priority-badge.high {
+	background: #fef2f2 !important;
+	color: #dc2626 !important;
+	border: 1px solid #fecaca !important;
+}
+
+/* --- Chat Area in All Pages --- */
+html.light .chat-container,
+html.light .messages-container {
+	background: transparent !important;
+}
+
+/* Assistant message bubble - premium styling */
+html.light .message-assistant {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+	color: #18181b !important;
+}
+
+/* User message bubble - keep primary color */
+html.light .message-user {
+	box-shadow: 0 2px 8px rgba(26, 109, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* --- Quick Start Badges --- */
+html.light .quick-start-badge {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #27272a !important;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .quick-start-badge:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* --- Activity Items in Recent Conversations --- */
+html.light .activity-item {
+	background: #ffffff !important;
+	border: 1px solid #f4f4f5 !important;
+	box-shadow: none !important;
+}
+
+html.light .activity-item:hover {
+	background: #fafafa !important;
+	border-color: #e4e4e7 !important;
+}
+
+/* Task badge in activity items */
+html.light .task-badge,
+html.light .area-badge {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+/* --- Conversation Drawer (in areas) --- */
+html.light .conversation-drawer {
+	background: #ffffff !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .drawer-header {
+	border-color: #e4e4e7 !important;
+	background: #fafafa !important;
+}
+
+html.light .drawer-section-title {
+	color: #52525b !important;
+}
+
+/* --- Show More Buttons --- */
+html.light .show-more-button,
+html.light .show-more-activity,
+html.light .load-more-btn {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .show-more-button:hover,
+html.light .show-more-activity:hover,
+html.light .load-more-btn:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+/* --- Context Panel (Right side) --- */
+html.light .context-panel {
+	background: #ffffff !important;
+	border-left: 1px solid #e4e4e7 !important;
+}
+
+html.light .context-panel-header {
+	background: #fafafa !important;
+	border-bottom: 1px solid #e4e4e7 !important;
+}
+
+/* --- Subtasks Panel --- */
+html.light .subtasks-panel {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .subtask-item {
+	background: #fafafa !important;
+	border: 1px solid #f4f4f5 !important;
+}
+
+html.light .subtask-item:hover {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+}
+
+/* --- Header Refinements --- */
+html.light header,
+html.light .header-container,
+html.light [class*="header"] {
+	background: rgba(255, 255, 255, 0.95) !important;
+	backdrop-filter: blur(12px) !important;
+	border-color: #e4e4e7 !important;
+}
+
+/* Breadcrumb in header */
+html.light .breadcrumb {
+	color: #71717a !important;
+}
+
+html.light .breadcrumb-link {
+	color: #52525b !important;
+}
+
+html.light .breadcrumb-link:hover {
+	color: #18181b !important;
+}
+
+html.light .breadcrumb-separator {
+	color: #d4d4d8 !important;
+}
+
+/* --- Sidebar Refinements --- */
+html.light .sidebar {
+	background: #ffffff !important;
+	border-right: 1px solid #e4e4e7 !important;
+}
+
+html.light .sidebar-header {
+	border-bottom: 1px solid #f4f4f5 !important;
+}
+
+/* New Chat button */
+html.light .new-chat-btn {
+	background: linear-gradient(135deg, #1a6dff 0%, #00dcd5 100%) !important;
+	color: #ffffff !important;
+}
+
+/* --- Footer / Chat Input Area --- */
+html.light .chat-input-container {
+	background: #ffffff !important;
+	border-top: 1px solid #e4e4e7 !important;
+	box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.02) !important;
+}
+
+html.light .chat-input-field {
+	background: #fafafa !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .chat-input-field:focus {
+	background: #ffffff !important;
+	border-color: #3b82f6 !important;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Input action buttons */
+html.light .input-action-btn {
+	color: #71717a !important;
+}
+
+html.light .input-action-btn:hover {
+	color: #18181b !important;
+	background: #f4f4f5 !important;
+}
+
+/* --- Keyboard shortcuts indicator --- */
+html.light .keyboard-hint {
+	color: #a1a1aa !important;
+}
+
+html.light kbd {
+	background: #f4f4f5 !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+/* --- Tooltip styling --- */
+html.light .tooltip {
+	background: #18181b !important;
+	color: #ffffff !important;
+}
+
+/* --- Dropdown/Select styling --- */
+html.light select,
+html.light .select-field {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light select:focus,
+html.light .select-field:focus {
+	border-color: #3b82f6 !important;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* --- Toggle/Switch styling --- */
+html.light .toggle-track {
+	background: #e4e4e7 !important;
+}
+
+html.light .toggle-track.active {
+	background: #3b82f6 !important;
+}
+
+/* --- Badge refinements --- */
+html.light .badge {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .badge-primary {
+	background: rgba(59, 130, 246, 0.1) !important;
+	color: #2563eb !important;
+	border-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+html.light .badge-success {
+	background: rgba(34, 197, 94, 0.1) !important;
+	color: #16a34a !important;
+	border-color: rgba(34, 197, 94, 0.2) !important;
+}
+
+html.light .badge-warning {
+	background: rgba(245, 158, 11, 0.1) !important;
+	color: #d97706 !important;
+	border-color: rgba(245, 158, 11, 0.2) !important;
+}
+
+html.light .badge-danger {
+	background: rgba(239, 68, 68, 0.1) !important;
+	color: #dc2626 !important;
+	border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+/* --- Scrollbar for light mode (refined) --- */
+html.light ::-webkit-scrollbar-track {
+	background: #fafafa !important;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+	background: #d4d4d8 !important;
+	border-radius: 4px !important;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+	background: #a1a1aa !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Task Dashboard Deep Overrides
+   ========================================== */
+
+/* --- TaskDashboard Component --- */
+html.light .task-dashboard {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+html.light .dashboard-header {
+	background: rgba(255, 255, 255, 0.95) !important;
+	border-bottom: 1px solid #e4e4e7 !important;
+	backdrop-filter: blur(8px) !important;
+}
+
+html.light .back-button {
+	color: #52525b !important;
+}
+
+html.light .back-button:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .dashboard-title {
+	color: #18181b !important;
+}
+
+html.light .task-total {
+	background: #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .header-center {
+	color: #18181b !important;
+}
+
+/* --- FocusSuggestion Deep Overrides --- */
+html.light .focus-suggestion {
+	background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.02) !important;
+}
+
+html.light .context-message {
+	color: #52525b !important;
+}
+
+html.light .suggested-task {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .suggested-task:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-indicator {
+	background: rgba(251, 191, 36, 0.15) !important;
+	color: #d97706 !important;
+}
+
+html.light .task-content .task-title {
+	color: #18181b !important;
+}
+
+html.light .task-content .task-reason {
+	color: #71717a !important;
+}
+
+html.light .task-action {
+	color: #a1a1aa !important;
+}
+
+html.light .suggested-task:hover .task-action {
+	color: #52525b !important;
+}
+
+/* --- StatsRow Deep Overrides --- */
+html.light .stats-row {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .stat {
+	color: #71717a !important;
+}
+
+html.light .stat.has-value {
+	color: rgba(34, 197, 94, 0.9) !important;
+}
+
+html.light .stat-icon {
+	color: inherit !important;
+}
+
+html.light .stat-value {
+	color: #18181b !important;
+}
+
+html.light .stat.has-value .stat-value {
+	color: #16a34a !important;
+}
+
+html.light .stat-label {
+	color: #71717a !important;
+}
+
+html.light .stat-streak .stat-value {
+	color: #52525b !important;
+}
+
+html.light .stat-streak.streak-warm .stat-value {
+	color: #d97706 !important;
+}
+
+html.light .stat-streak.streak-hot .stat-value {
+	color: #ea580c !important;
+}
+
+/* --- TaskGroupSection Deep Overrides --- */
+html.light .task-group {
+	background: transparent !important;
+}
+
+html.light .section-header {
+	background: transparent !important;
+}
+
+html.light .section-title {
+	color: #71717a !important;
+}
+
+html.light .task-group.warning .section-title {
+	color: #d97706 !important;
+}
+
+html.light .task-count {
+	background: #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .task-group.warning .task-count {
+	background: rgba(245, 158, 11, 0.15) !important;
+	color: #d97706 !important;
+}
+
+html.light .chevron {
+	color: #a1a1aa !important;
+}
+
+html.light .empty-message {
+	color: #a1a1aa !important;
+}
+
+html.light .show-more-btn {
+	color: #52525b !important;
+	background: #ffffff !important;
+	border: 1px dashed #d4d4d8 !important;
+}
+
+html.light .show-more-btn:hover {
+	color: #18181b !important;
+	background: #fafafa !important;
+	border-color: #a1a1aa !important;
+}
+
+/* --- Delete Confirmation Modal --- */
+html.light .confirm-modal {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15) !important;
+}
+
+html.light .confirm-title {
+	color: #18181b !important;
+}
+
+html.light .confirm-message {
+	color: #52525b !important;
+}
+
+html.light .btn-cancel {
+	background: #f4f4f5 !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .btn-cancel:hover:not(:disabled) {
+	background: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+/* --- Empty State --- */
+html.light .empty-state {
+	color: #52525b !important;
+}
+
+html.light .empty-state .empty-icon {
+	color: rgba(34, 197, 94, 0.5) !important;
+}
+
+html.light .empty-state .empty-title {
+	color: #18181b !important;
+}
+
+html.light .empty-state .empty-text {
+	color: #71717a !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Area Welcome Screen Overrides
+   ========================================== */
+
+/* Recent conversations in area welcome */
+html.light [style*="border-color: rgba(255,255,255"] {
+	border-color: #e4e4e7 !important;
+}
+
+/* Hover state for area items using surface colors */
+html.light .hover\:bg-surface-800\/50:hover {
+	background-color: #f4f4f5 !important;
+}
+
+html.light .group-hover\:text-surface-100 {
+	color: #18181b !important;
+}
+
+html.light .group-hover\:text-surface-400 {
+	color: #52525b !important;
+}
+
+/* Text colors for welcome screen */
+html.light .text-surface-500 {
+	color: #71717a !important;
+}
+
+html.light .text-surface-600 {
+	color: #52525b !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Recently Completed Section
+   ========================================== */
+
+html.light .recently-completed-section {
+	background: transparent !important;
+}
+
+html.light .recently-completed-header {
+	color: #71717a !important;
+}
+
+html.light .completed-task-item {
+	background: #ffffff !important;
+	border: 1px solid #f4f4f5 !important;
+}
+
+html.light .completed-task-item:hover {
+	background: #fafafa !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .completed-task-title {
+	color: #71717a !important;
+}
+
+html.light .reopen-btn {
+	color: #52525b !important;
+}
+
+html.light .reopen-btn:hover {
+	color: #2563eb !important;
+	background: rgba(37, 99, 235, 0.05) !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Task Card Deep Overrides
+   ========================================== */
+
+/* TaskCard component specific */
+html.light .task-card .complete-btn {
+	border-color: #d4d4d8 !important;
+}
+
+html.light .task-card .complete-btn:hover {
+	background: rgba(34, 197, 94, 0.1) !important;
+	border-color: #22c55e !important;
+}
+
+html.light .task-card .area-name {
+	color: #71717a !important;
+}
+
+html.light .task-card .due-indicator {
+	color: #71717a !important;
+}
+
+html.light .task-card .due-indicator.overdue {
+	color: #dc2626 !important;
+}
+
+html.light .task-card .due-indicator.today {
+	color: #d97706 !important;
+}
+
+/* Stale badge */
+html.light .stale-badge {
+	background: rgba(245, 158, 11, 0.1) !important;
+	color: #d97706 !important;
+	border: 1px solid rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Overdue badge */
+html.light .overdue-badge {
+	background: rgba(239, 68, 68, 0.1) !important;
+	color: #dc2626 !important;
+	border: 1px solid rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Task card accordion content */
+html.light .accordion-content {
+	background: #fafafa !important;
+	border-top: 1px solid #e4e4e7 !important;
+}
+
+html.light .accordion-content .action-btn {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .accordion-content .action-btn:hover {
+	background: #f4f4f5 !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+html.light .accordion-content .action-btn.danger:hover {
+	background: rgba(239, 68, 68, 0.1) !important;
+	border-color: rgba(239, 68, 68, 0.3) !important;
+	color: #dc2626 !important;
+}
+
+/* ==========================================
+   LIGHT MODE - RecentlyCompletedSection Overrides
+   ========================================== */
+
+html.light .completed-section {
+	border-top-color: #e4e4e7 !important;
+}
+
+html.light .completed-section .section-title {
+	color: #71717a !important;
+}
+
+html.light .completed-section .check-icon {
+	color: rgba(34, 197, 94, 0.7) !important;
+}
+
+html.light .completed-task {
+	background: #ffffff !important;
+	border: 1px solid #f4f4f5 !important;
+}
+
+html.light .completed-task:hover {
+	background: #fafafa !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .completed-task .task-title {
+	color: #71717a !important;
+	text-decoration-color: #d4d4d8 !important;
+}
+
+html.light .completed-task .task-date {
+	color: #a1a1aa !important;
+}
+
+html.light .completed-task .reopen-btn {
+	color: #52525b !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .completed-task .reopen-btn:hover {
+	color: #2563eb !important;
+	background: rgba(37, 99, 235, 0.05) !important;
+	border-color: rgba(37, 99, 235, 0.2) !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Main Chat Page Overrides
+   ========================================== */
+
+/* Main page wrapper when in light mode */
+html.light .chat-page,
+html.light .main-chat {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+/* Welcome message area */
+html.light .welcome-message {
+	color: #18181b !important;
+}
+
+html.light .welcome-subtitle {
+	color: #52525b !important;
+}
+
+/* Model selector in main chat */
+html.light .model-selector {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .model-selector:hover {
+	border-color: #d4d4d8 !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Subtask Welcome/Chat Overrides
+   ========================================== */
+
+html.light .subtask-welcome {
+	background: transparent !important;
+}
+
+html.light .subtask-title {
+	color: #18181b !important;
+}
+
+html.light .subtask-description {
+	color: #52525b !important;
+}
+
+html.light .parent-task-link {
+	color: #71717a !important;
+}
+
+html.light .parent-task-link:hover {
+	color: #18181b !important;
+}
+
+/* ==========================================
+   LIGHT MODE - TaskContextBanner Overrides
+   ========================================== */
+
+html.light .task-banner {
+	background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+	border-bottom: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .task-banner .label {
+	color: #71717a !important;
+}
+
+html.light .task-banner .focus-button {
+	background: rgba(0, 0, 0, 0.04) !important;
+	border: 1px solid rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .task-banner .focus-button:hover {
+	background: rgba(0, 0, 0, 0.08) !important;
+	border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* ==========================================
+   LIGHT MODE - TaskCard Additional Overrides
+   ========================================== */
+
+/* Task card main styles */
+html.light .task-card {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .task-card:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light .task-card.attention {
+	background: #fffbeb !important;
+	border-color: #fcd34d !important;
+}
+
+html.light .task-card.attention:hover {
+	background: #fef3c7 !important;
+	border-color: #fbbf24 !important;
+}
+
+/* Task title */
+html.light .task-card .task-title {
+	color: #18181b !important;
+}
+
+/* Subtask badge */
+html.light .task-card .subtask-badge {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+/* Task area badge */
+html.light .task-card .task-area {
+	/* Keep color-mix for area color but adjust for light mode */
+}
+
+/* Due date badges - light mode refinements */
+html.light .due-badge.due-later {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+/* Action buttons */
+html.light .task-card .action-buttons {
+	background: rgba(255, 255, 255, 0.95) !important;
+}
+
+html.light .task-card .action-btn {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .task-card .action-btn:hover {
+	background: #f4f4f5 !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+html.light .task-card .action-btn.action-done:hover {
+	background: rgba(34, 197, 94, 0.1) !important;
+	border-color: #22c55e !important;
+	color: #16a34a !important;
+}
+
+html.light .task-card .action-btn.action-delete:hover {
+	background: rgba(239, 68, 68, 0.1) !important;
+	border-color: #ef4444 !important;
+	color: #dc2626 !important;
+}
+
+/* Task arrow/chevron */
+html.light .task-card .task-arrow,
+html.light .task-card .task-chevron {
+	color: #a1a1aa !important;
+}
+
+/* Checkbox styling */
+html.light .task-card .checkbox {
+	background: rgba(34, 197, 94, 0.1) !important;
+	border-color: rgba(34, 197, 94, 0.5) !important;
+}
+
+html.light .task-card .checkbox:hover {
+	background: rgba(34, 197, 94, 0.2) !important;
+	border-color: #22c55e !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Task Focus Page Overrides
+   ========================================== */
+
+html.light .task-focus-container {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+html.light .task-focus-header {
+	background: rgba(255, 255, 255, 0.95) !important;
+	border-bottom: 1px solid #e4e4e7 !important;
+	backdrop-filter: blur(8px) !important;
+}
+
+html.light .task-focus-header .task-title {
+	color: #18181b !important;
+}
+
+html.light .task-focus-header .back-btn {
+	color: #52525b !important;
+}
+
+html.light .task-focus-header .back-btn:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Subtasks panel in task focus */
+html.light .subtasks-section {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	border-radius: 0.5rem !important;
+}
+
+html.light .subtasks-header {
+	border-bottom: 1px solid #f4f4f5 !important;
+}
+
+html.light .subtask-row {
+	background: #fafafa !important;
+	border: 1px solid #f4f4f5 !important;
+}
+
+html.light .subtask-row:hover {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .subtask-row .subtask-title {
+	color: #18181b !important;
+}
+
+html.light .subtask-row.completed .subtask-title {
+	color: #71717a !important;
+	text-decoration-color: #d4d4d8 !important;
+}
+
+/* Add subtask button */
+html.light .add-subtask-btn {
+	color: #52525b !important;
+	background: #ffffff !important;
+	border: 1px dashed #d4d4d8 !important;
+}
+
+html.light .add-subtask-btn:hover {
+	color: #18181b !important;
+	background: #fafafa !important;
+	border-color: #a1a1aa !important;
+}
+
+/* ==========================================
+   LIGHT MODE - TaskContextPanel (Subtask/Task Sidebar)
+   ========================================== */
+
+/* Collapsed Panel */
+html.light .collapsed-panel {
+	background: #ffffff !important;
+	border-right: 1px solid #e4e4e7 !important;
+}
+
+html.light .collapsed-panel:hover {
+	background: #fafafa !important;
+}
+
+html.light .collapsed-indicator {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+html.light .collapsed-label {
+	color: #71717a !important;
+}
+
+html.light .collapsed-badge {
+	color: #2563eb !important;
+	background: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Expanded Panel */
+html.light .context-panel {
+	background: #ffffff !important;
+	border-right: 1px solid #e4e4e7 !important;
+}
+
+html.light .panel-header {
+	border-bottom: 1px solid #f4f4f5 !important;
+}
+
+html.light .panel-title {
+	color: #18181b !important;
+}
+
+html.light .collapse-btn {
+	color: #71717a !important;
+}
+
+html.light .collapse-btn:hover {
+	background: #f4f4f5 !important;
+	color: #18181b !important;
+}
+
+/* Context Card */
+html.light .context-card {
+	background: #fafafa !important;
+}
+
+html.light .context-card.expanded {
+	background: #f4f4f5 !important;
+}
+
+html.light .context-card.minimal {
+	background: transparent !important;
+}
+
+html.light .context-header:hover {
+	background: rgba(0, 0, 0, 0.03) !important;
+}
+
+html.light .context-header-label {
+	color: #71717a !important;
+}
+
+html.light .expand-icon {
+	color: #a1a1aa !important;
+}
+
+/* Context Preview (Collapsed) */
+html.light .preview-text {
+	color: #52525b !important;
+}
+
+/* Context Expanded */
+html.light .context-expanded {
+	border-top: 1px solid #e4e4e7 !important;
+}
+
+html.light .block-text {
+	color: #27272a !important;
+}
+
+html.light .tips-list {
+	color: #52525b !important;
+}
+
+/* Conversations Section */
+html.light .section-title {
+	color: #71717a !important;
+}
+
+html.light .section-count {
+	color: #52525b !important;
+	background: #f4f4f5 !important;
+}
+
+html.light .read-only-badge {
+	color: #16a34a !important;
+	background: rgba(34, 197, 94, 0.1) !important;
+}
+
+html.light .new-chat-btn {
+	background: rgba(59, 130, 246, 0.05) !important;
+	border: 1px dashed rgba(59, 130, 246, 0.3) !important;
+}
+
+html.light .new-chat-btn:hover {
+	background: rgba(59, 130, 246, 0.1) !important;
+	border-style: solid !important;
+}
+
+/* Conversation Cards */
+html.light .conversation-card {
+	background: transparent !important;
+}
+
+html.light .conversation-card:hover {
+	background: #f4f4f5 !important;
+}
+
+html.light .conversation-card.active {
+	background: rgba(59, 130, 246, 0.08) !important;
+}
+
+html.light .card-icon {
+	background: rgba(59, 130, 246, 0.1) !important;
+	color: #2563eb !important;
+}
+
+html.light .card-title {
+	color: #18181b !important;
+}
+
+html.light .card-time {
+	color: #a1a1aa !important;
+}
+
+html.light .empty-state {
+	color: #a1a1aa !important;
+}
+
+/* Quick Start Section */
+html.light .quick-label {
+	color: #71717a !important;
+}
+
+html.light .action-chip {
+	color: #52525b !important;
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .action-chip:hover {
+	color: #18181b !important;
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+}
+
+/* Work Unit Mode Details */
+html.light .section-label {
+	color: #71717a !important;
+}
+
+html.light .detail-item {
+	background: #fafafa !important;
+}
+
+html.light .detail-label {
+	color: #71717a !important;
+}
+
+html.light .detail-value {
+	color: #18181b !important;
+}
+
+html.light .description-text {
+	color: #52525b !important;
+	background: #fafafa !important;
+}
+
+/* Plan Button */
+html.light .plan-btn {
+	color: #16a34a !important;
+	background: rgba(34, 197, 94, 0.08) !important;
+	border: 1px solid rgba(34, 197, 94, 0.3) !important;
+}
+
+html.light .plan-btn:hover {
+	background: rgba(34, 197, 94, 0.12) !important;
+	border-color: rgba(34, 197, 94, 0.5) !important;
+}
+
+/* Cancel Plan Button */
+html.light .cancel-plan-btn {
+	color: #dc2626 !important;
+	background: rgba(239, 68, 68, 0.08) !important;
+	border: 1px solid rgba(239, 68, 68, 0.3) !important;
+}
+
+html.light .cancel-plan-btn:hover {
+	background: rgba(239, 68, 68, 0.12) !important;
+	border-color: rgba(239, 68, 68, 0.5) !important;
+}
+
+/* Divider */
+html.light .divider {
+	background: #e4e4e7 !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Task Focus Page Header
+   ========================================== */
+
+html.light .task-focus-page {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+html.light .task-header {
+	background: rgba(255, 255, 255, 0.95) !important;
+	border-bottom: 1px solid #e4e4e7 !important;
+	backdrop-filter: blur(8px) !important;
+}
+
+html.light .task-header .back-button {
+	color: #52525b !important;
+}
+
+html.light .task-header .back-button:hover {
+	color: #18181b !important;
+	background: rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .task-header .task-title {
+	color: #18181b !important;
+}
+
+html.light .task-header .breadcrumb {
+	color: #71717a !important;
+}
+
+html.light .task-header .breadcrumb-link {
+	color: #52525b !important;
+}
+
+html.light .task-header .breadcrumb-link:hover {
+	color: #18181b !important;
+}
+
+html.light .task-header .breadcrumb-sep {
+	color: #d4d4d8 !important;
+}
+
+html.light .task-header .task-due {
+	color: #71717a !important;
+}
+
+html.light .task-header .deadline-hard {
+	color: #dc2626 !important;
+}
+
+html.light .task-header .priority-badge {
+	background: rgba(239, 68, 68, 0.1) !important;
+	color: #dc2626 !important;
+}
+
+html.light .task-header .planning-badge {
+	background: rgba(139, 92, 246, 0.1) !important;
+	color: #7c3aed !important;
+}
+
+html.light .task-header .complete-button {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #16a34a !important;
+}
+
+html.light .task-header .complete-button:hover {
+	background: rgba(34, 197, 94, 0.08) !important;
+	border-color: #22c55e !important;
+}
+
+html.light .task-header .back-to-dashboard {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .task-header .back-to-dashboard:hover {
+	background: #f4f4f5 !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+html.light .task-header .progress-info {
+	color: #52525b !important;
+}
+
+html.light .task-header .progress-bar {
+	background: #e4e4e7 !important;
+}
+
+html.light .task-header .panel-toggle {
+	color: #52525b !important;
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .task-header .panel-toggle:hover,
+html.light .task-header .panel-toggle.active {
+	background: #f4f4f5 !important;
+	color: #18181b !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Subtask Panel (Right Side)
+   ========================================== */
+
+html.light .subtask-panel {
+	background: #ffffff !important;
+	border-left: 1px solid #e4e4e7 !important;
+}
+
+html.light .subtask-panel-header {
+	border-bottom: 1px solid #f4f4f5 !important;
+}
+
+html.light .subtask-panel-header h3 {
+	color: #18181b !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Chat Area Wrapper
+   ========================================== */
+
+html.light .chat-area-wrapper {
+	background: transparent !important;
+}
+
+html.light .task-content {
+	background: transparent !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Subtask Completion Banner
+   ========================================== */
+
+html.light .completion-banner {
+	background: rgba(34, 197, 94, 0.08) !important;
+	border: 1px solid rgba(34, 197, 94, 0.2) !important;
+}
+
+html.light .completion-banner .banner-text {
+	color: #16a34a !important;
+}
+
+html.light .completion-banner .reopen-link {
+	color: #2563eb !important;
+}
+
+html.light .completion-banner .reopen-link:hover {
+	text-decoration: underline !important;
+}
+
+/* ==========================================
+   LIGHT MODE - SpaceSettingsPanel (Right Sidebar)
+   ========================================== */
+
+/* Panel Container */
+html.light .panel[aria-label="Space Settings"],
+html.light aside.panel {
+	background: #ffffff !important;
+	border-left: 1px solid #e4e4e7 !important;
+}
+
+/* Panel Header */
+html.light .panel .text-surface-100,
+html.light aside.panel h2 {
+	color: #18181b !important;
+}
+
+html.light .panel .text-surface-500,
+html.light aside.panel .text-surface-500 {
+	color: #71717a !important;
+}
+
+/* Close button */
+html.light .panel .text-surface-400,
+html.light aside.panel button[title="Close (Esc)"] {
+	color: #71717a !important;
+}
+
+html.light .panel .hover\:text-surface-200:hover,
+html.light aside.panel button:hover {
+	color: #18181b !important;
+	background: #f4f4f5 !important;
+}
+
+/* Settings Sections */
+html.light .settings-section {
+	background: #fafafa !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .section-header {
+	background: transparent !important;
+}
+
+html.light .section-title {
+	color: #18181b !important;
+}
+
+html.light .section-title svg {
+	color: #52525b !important;
+}
+
+html.light .section-badge {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+/* Field Labels and Values */
+html.light .field-label {
+	color: #52525b !important;
+}
+
+html.light .field-value {
+	color: #18181b !important;
+}
+
+html.light .field-display {
+	color: #18181b !important;
+}
+
+html.light .field-input {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .field-input:focus {
+	border-color: #3b82f6 !important;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Edit Buttons */
+html.light .edit-btn {
+	color: #2563eb !important;
+}
+
+html.light .edit-btn:hover {
+	background: rgba(37, 99, 235, 0.1) !important;
+}
+
+/* System Badge */
+html.light .system-badge {
+	background: #f4f4f5 !important;
+	color: #71717a !important;
+}
+
+/* Cancel/Save Buttons */
+html.light .btn-cancel {
+	color: #52525b !important;
+	background: transparent !important;
+}
+
+html.light .btn-cancel:hover {
+	background: #f4f4f5 !important;
+	color: #18181b !important;
+}
+
+/* Color Picker */
+html.light .color-option {
+	border-color: transparent !important;
+}
+
+html.light .color-option.selected {
+	border-color: #18181b !important;
+	box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Theme Picker */
+html.light .theme-picker {
+	background: transparent !important;
+}
+
+html.light .theme-option {
+	background: #f4f4f5 !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .theme-option:hover {
+	background: #e4e4e7 !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+html.light .theme-option.selected {
+	background: rgba(59, 130, 246, 0.1) !important;
+	border-color: #3b82f6 !important;
+	color: #2563eb !important;
+}
+
+html.light .theme-option svg {
+	color: inherit !important;
+}
+
+/* Context Section */
+html.light .context-edit textarea {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .context-edit textarea:focus {
+	border-color: #3b82f6 !important;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+html.light .context-preview {
+	color: #27272a !important;
+	background: #fafafa !important;
+	border: 1px solid #f4f4f5 !important;
+	padding: 0.5rem !important;
+	border-radius: 0.375rem !important;
+}
+
+html.light .context-empty {
+	color: #a1a1aa !important;
+}
+
+/* Document Section */
+html.light .doc-count {
+	background: rgba(59, 130, 246, 0.1) !important;
+	color: #2563eb !important;
+}
+
+html.light .doc-item {
+	background: #ffffff !important;
+	border: 1px solid #f4f4f5 !important;
+}
+
+html.light .doc-item:hover {
+	background: #fafafa !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light .doc-icon {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+html.light .doc-name {
+	color: #18181b !important;
+}
+
+html.light .doc-meta {
+	color: #a1a1aa !important;
+}
+
+html.light .doc-delete {
+	color: #a1a1aa !important;
+}
+
+html.light .doc-delete:hover {
+	background: rgba(239, 68, 68, 0.1) !important;
+	color: #dc2626 !important;
+}
+
+/* Delete Confirm */
+html.light .confirm-yes {
+	background: rgba(239, 68, 68, 0.1) !important;
+	color: #dc2626 !important;
+}
+
+html.light .confirm-yes:hover {
+	background: rgba(239, 68, 68, 0.2) !important;
+}
+
+html.light .confirm-no {
+	color: #52525b !important;
+}
+
+html.light .confirm-no:hover {
+	background: #f4f4f5 !important;
+}
+
+/* Upload Zone */
+html.light .upload-zone {
+	background: #fafafa !important;
+	border: 2px dashed #d4d4d8 !important;
+}
+
+html.light .upload-zone:hover {
+	background: #f4f4f5 !important;
+	border-color: #a1a1aa !important;
+}
+
+html.light .upload-zone.drag-over {
+	border-color: #3b82f6 !important;
+	background: rgba(59, 130, 246, 0.05) !important;
+}
+
+html.light .upload-zone svg {
+	color: #a1a1aa !important;
+}
+
+html.light .upload-zone p {
+	color: #52525b !important;
+}
+
+html.light .file-types {
+	color: #a1a1aa !important;
+}
+
+/* Danger Zone */
+html.light .danger-zone {
+	background: rgba(239, 68, 68, 0.03) !important;
+	border-color: rgba(239, 68, 68, 0.1) !important;
+}
+
+html.light .delete-warning {
+	color: #52525b !important;
+}
+
+html.light .delete-warning strong {
+	color: #dc2626 !important;
+}
+
+/* ==========================================
+   LIGHT MODE - TasksSection White Background Fix
+   ========================================== */
+
+/* Fix task-item backgrounds that use white overlay */
+html.light .task-item {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light .task-item:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+}
+
+html.light .task-wrapper.expanded .task-item {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+}
+
+/* Task title - ensure no white background */
+html.light .task-title {
+	color: #18181b !important;
+	background: transparent !important;
+}
+
+html.light .task-header {
+	background: transparent !important;
+}
+
+html.light .task-content {
+	background: transparent !important;
+}
+
+/* Task dot and indicator */
+html.light .task-indicator {
+	background: transparent !important;
+}
+
+html.light .task-dot {
+	background: var(--task-color, #3b82f6) !important;
+}
+
+/* Task meta */
+html.light .task-meta {
+	background: transparent !important;
+}
+
+html.light .task-status {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+html.light .task-status.planning {
+	background: rgba(139, 92, 246, 0.1) !important;
+	color: #7c3aed !important;
+}
+
+html.light .task-status.in-progress {
+	background: rgba(59, 130, 246, 0.1) !important;
+	color: #2563eb !important;
+}
+
+html.light .task-area {
+	color: #52525b !important;
+}
+
+html.light .task-time {
+	color: #a1a1aa !important;
+}
+
+/* Subtask badge */
+html.light .subtask-badge {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+/* Priority badge */
+html.light .priority-badge {
+	background: rgba(239, 68, 68, 0.1) !important;
+	color: #dc2626 !important;
+}
+
+/* Section title in Tasks */
+html.light .tasks-section .section-title {
+	color: #71717a !important;
+}
+
+/* Task count badge */
+html.light .task-count {
+	background: #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+/* Show more button */
+html.light .show-more-button {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .show-more-button:hover {
+	background: #fafafa !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+/* Expand chevron */
+html.light .expand-chevron {
+	color: #a1a1aa !important;
+}
+
+html.light .task-arrow {
+	color: #a1a1aa !important;
+}
+
+/* Action buttons */
+html.light .action-buttons {
+	background: rgba(255, 255, 255, 0.95) !important;
+}
+
+html.light .action-btn {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .action-btn:hover {
+	background: #f4f4f5 !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+html.light .action-btn.action-done:hover {
+	background: rgba(34, 197, 94, 0.1) !important;
+	border-color: #22c55e !important;
+	color: #16a34a !important;
+}
+
+html.light .action-btn.action-delete:hover {
+	background: rgba(239, 68, 68, 0.1) !important;
+	border-color: #ef4444 !important;
+	color: #dc2626 !important;
+}
+
+/* Checkbox */
+html.light .checkbox {
+	background: rgba(34, 197, 94, 0.1) !important;
+	border-color: rgba(34, 197, 94, 0.5) !important;
+}
+
+html.light .checkbox:hover {
+	background: rgba(34, 197, 94, 0.2) !important;
+	border-color: #22c55e !important;
+}
+
+/* Empty tasks */
+html.light .empty-tasks {
+	color: #a1a1aa !important;
+}
+
+html.light .empty-tasks .empty-icon {
+	color: #d4d4d8 !important;
+}
+
+html.light .empty-tasks .empty-text {
+	color: #a1a1aa !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Header Icons and Logo Fix
+   ========================================== */
+
+/* Header container */
+html.light header {
+	background: rgba(255, 255, 255, 0.95) !important;
+	border-bottom: 1px solid #e4e4e7 !important;
+	backdrop-filter: blur(12px) !important;
+}
+
+/* Icon buttons in header */
+html.light .btn-icon {
+	color: #52525b !important;
+}
+
+html.light .btn-icon:hover {
+	color: #18181b !important;
+	background: #f4f4f5 !important;
+}
+
+html.light .btn-icon svg {
+	stroke: currentColor !important;
+}
+
+/* Logo text gradient - make visible in light mode */
+html.light .text-gradient {
+	background: linear-gradient(135deg, #1a6dff 0%, #00b1af 100%) !important;
+	-webkit-background-clip: text !important;
+	-webkit-text-fill-color: transparent !important;
+	background-clip: text !important;
+}
+
+/* Space navigation items */
+html.light .space-nav-item {
+	color: #52525b !important;
+}
+
+html.light .space-nav-item:hover {
+	color: #18181b !important;
+	background: #f4f4f5 !important;
+}
+
+html.light .space-nav-item.active {
+	color: var(--space-color, #3b82f6) !important;
+	background: color-mix(in srgb, var(--space-color, #3b82f6) 10%, #ffffff) !important;
+}
+
+/* Space nav separator */
+html.light .space-nav-separator {
+	background: #e4e4e7 !important;
+}
+
+/* Add space button */
+html.light .space-nav-add {
+	color: #a1a1aa !important;
+	border-color: #d4d4d8 !important;
+}
+
+html.light .space-nav-add:hover {
+	color: #52525b !important;
+	border-color: #a1a1aa !important;
+	background: #f4f4f5 !important;
+}
+
+/* All spaces button */
+html.light .space-nav-all {
+	color: #a1a1aa !important;
+}
+
+html.light .space-nav-all:hover {
+	color: #52525b !important;
+	background: #f4f4f5 !important;
+}
+
+/* Edit space button */
+html.light .space-nav-edit {
+	color: #a1a1aa !important;
+}
+
+html.light .space-nav-edit:hover {
+	color: #18181b !important;
+	background: #e4e4e7 !important;
+}
+
+/* Ghost button (logout) */
+html.light .btn-ghost {
+	color: #52525b !important;
+}
+
+html.light .btn-ghost:hover {
+	color: #18181b !important;
+	background: #f4f4f5 !important;
+}
+
+/* Mobile spaces/arena links */
+html.light header a.flex {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+	border-color: #e4e4e7 !important;
+}
+
+html.light header a.flex:hover {
+	background: #e4e4e7 !important;
+	color: #18181b !important;
+	border-color: #d4d4d8 !important;
+}
+
+/* Ensure SVG icons in header are visible */
+html.light header svg {
+	stroke: currentColor !important;
+}
+
+/* Model badge in header */
+html.light .model-badge {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+/* ==========================================
+   LIGHT MODE - SubtaskAccordionList
+   ========================================== */
+
+/* Accordion container */
+html.light .accordion-list {
+	background: #fafafa !important;
+	border-top: 1px solid #e4e4e7 !important;
+}
+
+/* Progress Row */
+html.light .progress-row {
+	border-bottom: 1px solid #e4e4e7 !important;
+}
+
+html.light .progress-bar {
+	background: #e4e4e7 !important;
+}
+
+html.light .progress-fill {
+	background: #22c55e !important;
+}
+
+html.light .progress-text {
+	color: #71717a !important;
+}
+
+/* Accordion Items */
+html.light .accordion-item {
+	background: transparent !important;
+}
+
+html.light .accordion-item:hover {
+	background: #f4f4f5 !important;
+}
+
+html.light .item-icon svg {
+	color: #a1a1aa !important;
+}
+
+html.light .item-title {
+	color: #27272a !important;
+}
+
+html.light .item-arrow {
+	color: #a1a1aa !important;
+}
+
+/* Quick checkbox */
+html.light .checkbox-inner {
+	border-color: #d4d4d8 !important;
+}
+
+html.light .quick-checkbox:hover .checkbox-inner {
+	border-color: #22c55e !important;
+	background: rgba(34, 197, 94, 0.1) !important;
+}
+
+/* Hints */
+html.light .completed-hint,
+html.light .more-hint {
+	color: #a1a1aa !important;
+}
+
+/* View full link */
+html.light .view-full-link {
+	color: #71717a !important;
+}
+
+html.light .view-full-link:hover {
+	color: #18181b !important;
+}
+
+html.light .view-full-link svg {
+	color: inherit !important;
+}
+
+/* Accordion list border for visibility */
+html.light .accordion-list {
+	border: 1px solid #e4e4e7 !important;
+	border-top: none !important;
+	border-radius: 0 0 0.5rem 0.5rem !important;
+	margin-top: -1px !important;
+}
+
+/* ==========================================
+   LIGHT MODE - CreateAreaCard
+   ========================================== */
+
+html.light .create-card {
+	background: #fafafa !important;
+	border: 2px dashed #d4d4d8 !important;
+}
+
+html.light .create-card:hover {
+	background: #f4f4f5 !important;
+	border-color: #a1a1aa !important;
+	box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .create-card .card-icon {
+	background: rgba(59, 130, 246, 0.1) !important;
+}
+
+html.light .create-card:hover .card-icon {
+	background: rgba(59, 130, 246, 0.15) !important;
+}
+
+html.light .create-card .card-text {
+	color: #2563eb !important;
+}
+
+html.light .create-card .card-hint {
+	color: #71717a !important;
+}
+
+/* ==========================================
+   LIGHT MODE - Arena Page (Premium Treatment)
+   ========================================== */
+
+/* Main arena container */
+html.light .bg-surface-950 {
+	background: linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%) !important;
+}
+
+/* Hero section */
+html.light .text-surface-100 {
+	color: #18181b !important;
+}
+
+html.light .text-surface-200 {
+	color: #27272a !important;
+}
+
+html.light .text-surface-300 {
+	color: #3f3f46 !important;
+}
+
+html.light .text-surface-400 {
+	color: #52525b !important;
+}
+
+html.light .text-surface-500 {
+	color: #71717a !important;
+}
+
+/* Hero icon */
+html.light .bg-primary-500\/20 {
+	background: rgba(59, 130, 246, 0.12) !important;
+}
+
+/* Arena Tabs container */
+html.light [class*="bg-surface-800\\/50"][class*="rounded-xl"][class*="border"] {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Arena Tabs - individual tabs */
+html.light [class*="bg-surface-800\\/50"] button {
+	color: #52525b !important;
+}
+
+html.light [class*="bg-surface-800\\/50"] button:hover {
+	background: #f4f4f5 !important;
+	color: #18181b !important;
+}
+
+html.light [class*="bg-surface-800\\/50"] button[class*="bg-surface-700"] {
+	background: #18181b !important;
+	color: #ffffff !important;
+}
+
+/* Coming soon badge */
+html.light [class*="bg-primary-500\\/20"][class*="rounded-full"] {
+	background: rgba(59, 130, 246, 0.12) !important;
+	color: #2563eb !important;
+}
+
+/* Quick Start Section - Premium gradient */
+html.light .quick-start-section,
+html.light [class*="quick-start"] {
+	background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(0, 220, 213, 0.05) 100%) !important;
+	border: 1px solid rgba(59, 130, 246, 0.15) !important;
+}
+
+html.light .quick-start-section h2,
+html.light .quick-start-section .text-surface-100 {
+	color: #18181b !important;
+}
+
+html.light .quick-start-section p,
+html.light .quick-start-section .text-surface-400 {
+	color: #52525b !important;
+}
+
+html.light .quick-start-section .text-primary-400 {
+	color: #2563eb !important;
+}
+
+/* Quick Start dropdown button */
+html.light .quick-start-dropdown button,
+html.light [class*="quick-start"] button:not(.text-primary-400) {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #27272a !important;
+}
+
+html.light .quick-start-dropdown button:hover,
+html.light [class*="quick-start"] button:not(.text-primary-400):hover {
+	background: #f4f4f5 !important;
+	border-color: #d4d4d8 !important;
+}
+
+/* Quick Start dropdown panel */
+html.light .quick-start-dropdown > div[class*="absolute"],
+html.light [class*="bg-surface-800"][class*="rounded-xl"][class*="shadow-2xl"] {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
+}
+
+html.light .quick-start-dropdown [class*="border-surface-700"] {
+	border-color: #e4e4e7 !important;
+}
+
+/* Dropdown category tabs */
+html.light .quick-start-dropdown [class*="bg-surface-700"] {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+html.light .quick-start-dropdown [class*="bg-surface-700"]:hover {
+	background: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light .quick-start-dropdown [class*="bg-primary-500"] {
+	background: #2563eb !important;
+	color: #ffffff !important;
+}
+
+/* Template items in dropdown */
+html.light .quick-start-dropdown [class*="hover\\:bg-surface-700"] {
+	background: transparent !important;
+}
+
+html.light .quick-start-dropdown [class*="hover\\:bg-surface-700"]:hover {
+	background: #f4f4f5 !important;
+}
+
+/* Customize Your Battle Section */
+html.light .customize-battle-section,
+html.light [class*="bg-surface-800\\/30"][class*="rounded-2xl"] {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .customize-battle-section [class*="bg-surface-700"] {
+	background: #f4f4f5 !important;
+}
+
+html.light .customize-battle-section [class*="text-surface-400"] {
+	color: #71717a !important;
+}
+
+html.light .customize-battle-section [class*="text-surface-200"] {
+	color: #27272a !important;
+}
+
+html.light .customize-battle-section [class*="text-surface-500"] {
+	color: #71717a !important;
+}
+
+/* Category Chips - Premium styling */
+html.light .chip {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+html.light .chip:hover:not(:disabled) {
+	background: #f4f4f5 !important;
+	border-color: #d4d4d8 !important;
+	color: #18181b !important;
+}
+
+html.light .chip.active {
+	background: #18181b !important;
+	border-color: #18181b !important;
+	color: #ffffff !important;
+}
+
+/* Context Picker */
+html.light select,
+html.light [class*="select"] {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light select:focus,
+html.light [class*="select"]:focus {
+	border-color: #3b82f6 !important;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Model Selection Section */
+html.light [class*="ArenaModelSelection"] h2,
+html.light .text-lg.font-semibold.text-surface-100 {
+	color: #18181b !important;
+}
+
+/* Selected model cards */
+html.light [class*="bg-surface-800\\/70"] {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light [class*="bg-surface-800\\/70"]:hover {
+	border-color: #d4d4d8 !important;
+}
+
+/* Model provider badges */
+html.light [class*="getProviderColor"] {
+	background: #f4f4f5 !important;
+}
+
+/* Remove model button */
+html.light [class*="bg-surface-800\\/70"] button[class*="hover\\:bg-red"] {
+	color: #a1a1aa !important;
+}
+
+html.light [class*="bg-surface-800\\/70"] button[class*="hover\\:bg-red"]:hover {
+	background: rgba(239, 68, 68, 0.1) !important;
+	color: #dc2626 !important;
+}
+
+/* Add model button */
+html.light [class*="Add model"],
+html.light button[class*="border-dashed"] {
+	background: #fafafa !important;
+	border: 2px dashed #d4d4d8 !important;
+	color: #52525b !important;
+}
+
+html.light [class*="Add model"]:hover,
+html.light button[class*="border-dashed"]:hover {
+	background: #f4f4f5 !important;
+	border-color: #a1a1aa !important;
+	color: #18181b !important;
+}
+
+/* Surprise me & Select from all models buttons */
+html.light .flex.items-center.gap-4 button[class*="text-surface"] {
+	color: #52525b !important;
+}
+
+html.light .flex.items-center.gap-4 button[class*="text-surface"]:hover {
+	color: #18181b !important;
+}
+
+/* Clear all button */
+html.light button[class*="text-surface-500"][class*="hover\\:text-red"] {
+	color: #71717a !important;
+}
+
+html.light button[class*="text-surface-500"][class*="hover\\:text-red"]:hover {
+	color: #dc2626 !important;
+}
+
+/* Tip text */
+html.light .text-xs.text-surface-500 {
+	color: #71717a !important;
+}
+
+/* Arena Input Area */
+html.light [class*="ArenaInput"],
+html.light .arena-input-container {
+	background: #ffffff !important;
+	border-top: 1px solid #e4e4e7 !important;
+}
+
+html.light [class*="ArenaInput"] textarea,
+html.light .arena-input-container textarea {
+	background: #fafafa !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+html.light [class*="ArenaInput"] textarea:focus,
+html.light .arena-input-container textarea:focus {
+	background: #ffffff !important;
+	border-color: #3b82f6 !important;
+	box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+html.light [class*="ArenaInput"] textarea::placeholder {
+	color: #a1a1aa !important;
+}
+
+/* Input action buttons */
+html.light [class*="ArenaInput"] button[class*="rounded-full"],
+html.light .arena-input-container button[class*="rounded-full"] {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+html.light [class*="ArenaInput"] button[class*="rounded-full"]:hover,
+html.light .arena-input-container button[class*="rounded-full"]:hover {
+	background: #e4e4e7 !important;
+	color: #18181b !important;
+}
+
+/* Keyboard hint */
+html.light .arena-input-container kbd,
+html.light [class*="ArenaInput"] kbd {
+	background: #f4f4f5 !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #52525b !important;
+}
+
+/* Model count indicator */
+html.light [class*="models"] {
+	color: #71717a !important;
+}
+
+/* Active Battle State */
+html.light [class*="bg-surface-800\\/50"][class*="rounded-2xl"] {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+}
+
+html.light [class*="bg-surface-700"][class*="rounded-full"] {
+	background: #f4f4f5 !important;
+	color: #52525b !important;
+}
+
+html.light [class*="bg-amber-500\\/20"] {
+	background: rgba(245, 158, 11, 0.1) !important;
+}
+
+html.light [class*="text-amber-400"] {
+	color: #d97706 !important;
+}
+
+html.light [class*="bg-green-500\\/20"] {
+	background: rgba(34, 197, 94, 0.1) !important;
+}
+
+html.light [class*="text-green-400"] {
+	color: #16a34a !important;
+}
+
+/* Arena Response Cards */
+html.light .arena-response-card,
+html.light [class*="ArenaResponseCard"] {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* Placeholder states */
+html.light [class*="bg-surface-800"][class*="rounded-full"]:not([class*="bg-primary"]) {
+	background: #f4f4f5 !important;
+}
+
+/* Results/Rankings placeholders */
+html.light .text-xl.font-semibold.text-surface-200 {
+	color: #18181b !important;
+}
+
+html.light .text-surface-400.max-w-md {
+	color: #52525b !important;
+}
+
+/* =============================================================================
+   Command Palette - Light Mode
+   ============================================================================= */
+
+/* Backdrop */
+html.light .backdrop {
+	background: rgba(255, 255, 255, 0.7) !important;
+	backdrop-filter: blur(8px) !important;
+}
+
+/* Main palette container */
+html.light .palette {
+	background: #ffffff !important;
+	border: 1px solid #e4e4e7 !important;
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.03),
+		0 25px 50px -12px rgba(0, 0, 0, 0.15),
+		0 0 100px rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Search container */
+html.light .search-container {
+	border-bottom: 1px solid #e4e4e7 !important;
+}
+
+html.light .search-icon {
+	color: #a1a1aa !important;
+}
+
+html.light .search-input {
+	color: #18181b !important;
+}
+
+html.light .search-input::placeholder {
+	color: #a1a1aa !important;
+}
+
+html.light .search-hint span {
+	color: #71717a !important;
+}
+
+/* Category labels */
+html.light .category-label {
+	color: #71717a !important;
+}
+
+/* Command items */
+html.light .command-item {
+	background: transparent !important;
+}
+
+html.light .command-item:hover,
+html.light .command-item.selected {
+	background: #f4f4f5 !important;
+}
+
+html.light .command-item.selected {
+	background: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* Command icon */
+html.light .command-icon {
+	background: #f4f4f5 !important;
+	color: #71717a !important;
+}
+
+html.light .command-item.selected .command-icon,
+html.light .command-item:hover .command-icon {
+	background: rgba(59, 130, 246, 0.1) !important;
+	color: #2563eb !important;
+}
+
+/* Command content */
+html.light .command-label {
+	color: #27272a !important;
+}
+
+html.light .command-item.selected .command-label {
+	color: #18181b !important;
+}
+
+html.light .command-description {
+	color: #71717a !important;
+}
+
+/* Keyboard shortcuts */
+html.light kbd {
+	background: #f4f4f5 !important;
+	border: 1px solid #e4e4e7 !important;
+	color: #71717a !important;
+}
+
+html.light .command-shortcut {
+	background: #f4f4f5 !important;
+	border-color: #e4e4e7 !important;
+}
+
+/* No results state */
+html.light .no-results {
+	color: #71717a !important;
+}
+
+html.light .no-results-icon {
+	opacity: 0.4 !important;
+}
+
+/* Footer */
+html.light .footer {
+	border-top: 1px solid #e4e4e7 !important;
+	background: #fafafa !important;
+}
+
+html.light .footer-hint {
+	color: #71717a !important;
+}
+
+/* Results scrollbar */
+html.light .results::-webkit-scrollbar-thumb {
+	background: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .results::-webkit-scrollbar-thumb:hover {
+	background: rgba(0, 0, 0, 0.2) !important;
 }

@@ -58,7 +58,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <aside
-	class="second-opinion-panel w-[40vw] min-w-80 max-w-2xl h-full flex flex-col bg-surface-900/95 backdrop-blur-sm border-l border-surface-700 shadow-2xl"
+	class="second-opinion-panel w-full md:w-[40vw] md:min-w-80 max-w-2xl h-full flex flex-col bg-surface-900/95 backdrop-blur-sm border-l border-surface-700 shadow-2xl"
 	transition:fly={{ x: 600, duration: 300, opacity: 1 }}
 >
 	<!-- Header -->

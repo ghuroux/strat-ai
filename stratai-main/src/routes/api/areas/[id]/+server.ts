@@ -13,26 +13,28 @@ import type { RequestHandler } from './$types';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import type { UpdateAreaInput } from '$lib/types/areas';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/areas/[id]
  * Returns area with task and conversation counts
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
-		const area = await postgresAreaRepository.findById(params.id, DEFAULT_USER_ID);
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+		const area = await postgresAreaRepository.findById(params.id, userId);
 
 		if (!area) {
 			return json({ error: 'Area not found' }, { status: 404 });
 		}
 
 		// Get stats
-		const taskCount = await postgresAreaRepository.getTaskCount(params.id, DEFAULT_USER_ID);
+		const taskCount = await postgresAreaRepository.getTaskCount(params.id, userId);
 		const conversationCount = await postgresAreaRepository.getConversationCount(
 			params.id,
-			DEFAULT_USER_ID
+			userId
 		);
 
 		return json({
@@ -56,8 +58,13 @@ export const GET: RequestHandler = async ({ params }) => {
  * Body: { name?, context?, contextDocumentIds?, color?, icon?, orderIndex? }
  * Note: General areas cannot have their name changed
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 
 		// Validate name if provided
@@ -74,7 +81,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		if (body.icon !== undefined) updates.icon = body.icon;
 		if (body.orderIndex !== undefined) updates.orderIndex = body.orderIndex;
 
-		const area = await postgresAreaRepository.update(params.id, updates, DEFAULT_USER_ID);
+		const area = await postgresAreaRepository.update(params.id, updates, userId);
 
 		if (!area) {
 			return json({ error: 'Area not found' }, { status: 404 });
@@ -109,12 +116,18 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
  * - deleteContent=true: Delete all conversations and tasks in this area
  * - deleteContent=false (default): Move conversations to General, unlink tasks
  */
-export const DELETE: RequestHandler = async ({ params, url }) => {
+export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+
 		// Parse deleteContent option from query string
 		const deleteContent = url.searchParams.get('deleteContent') === 'true';
 
-		const deleted = await postgresAreaRepository.delete(params.id, DEFAULT_USER_ID, {
+		const deleted = await postgresAreaRepository.delete(params.id, userId, {
 			deleteContent
 		});
 

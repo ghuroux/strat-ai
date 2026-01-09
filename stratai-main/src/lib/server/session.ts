@@ -7,6 +7,7 @@ const DEFAULT_MAX_AGE = 86400; // 24 hours
 
 export interface SessionData {
 	userId: string;
+	organizationId: string;
 	createdAt: number;
 }
 
@@ -21,9 +22,10 @@ function getSessionMaxAge(): number {
 /**
  * Create a signed session token
  */
-export function createSession(userId: string): string {
+export function createSession(userId: string, organizationId: string): string {
 	const data: SessionData = {
 		userId,
+		organizationId,
 		createdAt: Date.now()
 	};
 

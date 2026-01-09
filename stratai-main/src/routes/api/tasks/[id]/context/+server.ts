@@ -12,9 +12,6 @@ import { postgresDocumentRepository } from '$lib/server/persistence/documents-po
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { TaskContext } from '$lib/types/tasks';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/tasks/[id]/context
  * Returns the full context payload for Plan Mode
@@ -22,21 +19,26 @@ const DEFAULT_USER_ID = 'admin';
  * - Linked documents with content
  * - Related tasks with context summaries
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id: taskId } = params;
 
 		// Verify task exists
-		const task = await postgresTaskRepository.findById(taskId, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.findById(taskId, userId);
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
 
 		// Fetch linked documents
-		const linkedDocs = await postgresDocumentRepository.getDocumentsForTask(taskId, DEFAULT_USER_ID);
+		const linkedDocs = await postgresDocumentRepository.getDocumentsForTask(taskId, userId);
 
 		// Fetch related tasks
-		const relatedTasksInfo = await postgresTaskRepository.getRelatedTasks(taskId, DEFAULT_USER_ID);
+		const relatedTasksInfo = await postgresTaskRepository.getRelatedTasks(taskId, userId);
 
 		// Build context payload
 		const context: TaskContext = {

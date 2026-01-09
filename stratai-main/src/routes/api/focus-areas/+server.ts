@@ -10,19 +10,21 @@ import type { RequestHandler } from './$types';
 import { postgresFocusAreaRepository } from '$lib/server/persistence/focus-areas-postgres';
 import type { CreateFocusAreaInput } from '$lib/types/focus-areas';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/focus-areas
  * Query params:
  * - spaceId: Filter by space (work, research, etc.)
  */
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const spaceId = url.searchParams.get('spaceId') ?? undefined;
 
-		const focusAreas = await postgresFocusAreaRepository.findAll(DEFAULT_USER_ID, spaceId);
+		const focusAreas = await postgresFocusAreaRepository.findAll(userId, spaceId);
 
 		return json({ focusAreas });
 	} catch (error) {
@@ -38,8 +40,13 @@ export const GET: RequestHandler = async ({ url }) => {
  * POST /api/focus-areas
  * Body: { spaceId, name, context?, contextDocumentIds?, color?, icon? }
  */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 
 		// Validate required fields
@@ -59,7 +66,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			icon: body.icon
 		};
 
-		const focusArea = await postgresFocusAreaRepository.create(input, DEFAULT_USER_ID);
+		const focusArea = await postgresFocusAreaRepository.create(input, userId);
 
 		return json({ focusArea }, { status: 201 });
 	} catch (error) {

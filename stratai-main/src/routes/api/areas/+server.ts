@@ -13,29 +13,31 @@ import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
 import type { CreateAreaInput } from '$lib/types/areas';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/areas
  * Query params:
  * - spaceId: Filter by space ID or slug (resolved to proper ID)
  */
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
 
 		// Resolve space identifier (slug or ID) to proper ID
 		let resolvedSpaceId: string | undefined;
 		if (spaceIdParam) {
-			const resolved = await resolveSpaceId(spaceIdParam, DEFAULT_USER_ID);
+			const resolved = await resolveSpaceId(spaceIdParam, userId);
 			if (!resolved) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}
 			resolvedSpaceId = resolved;
 		}
 
-		const areas = await postgresAreaRepository.findAll(DEFAULT_USER_ID, resolvedSpaceId);
+		const areas = await postgresAreaRepository.findAll(userId, resolvedSpaceId);
 
 		return json({ areas });
 	} catch (error) {
@@ -55,8 +57,13 @@ export const GET: RequestHandler = async ({ url }) => {
  * Body: { spaceId, name, context?, contextDocumentIds?, color?, icon? }
  * Note: spaceId can be a slug or proper ID - it will be resolved
  */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 
 		// Validate required fields
@@ -68,7 +75,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Resolve space identifier to proper ID
-		const resolvedSpaceId = await resolveSpaceId(body.spaceId, DEFAULT_USER_ID);
+		const resolvedSpaceId = await resolveSpaceId(body.spaceId, userId);
 		if (!resolvedSpaceId) {
 			return json({ error: `Space not found: ${body.spaceId}` }, { status: 404 });
 		}
@@ -82,7 +89,7 @@ export const POST: RequestHandler = async ({ request }) => {
 			icon: body.icon
 		};
 
-		const area = await postgresAreaRepository.create(input, DEFAULT_USER_ID);
+		const area = await postgresAreaRepository.create(input, userId);
 
 		return json({ area }, { status: 201 });
 	} catch (error) {

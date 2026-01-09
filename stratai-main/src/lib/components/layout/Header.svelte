@@ -8,6 +8,7 @@
 	import ModelSelector from '../ModelSelector.svelte';
 	import ModelBadge from '../ModelBadge.svelte';
 	import PlanningTasksIndicator from '../tasks/PlanningTasksIndicator.svelte';
+	import UserMenu from './UserMenu.svelte';
 	import { SpaceModal } from '../spaces';
 	import type { CreateSpaceInput, UpdateSpaceInput, Space } from '$lib/types/spaces';
 	import { MAX_CUSTOM_SPACES } from '$lib/types/spaces';
@@ -47,6 +48,9 @@
 	let isArena = $derived.by(() => {
 		return $page.url.pathname.startsWith('/arena');
 	});
+
+	// Get user data from page data (set by +layout.server.ts)
+	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
 
 	onMount(() => {
 		spacesStore.loadSpaces();
@@ -284,18 +288,15 @@
 			</svg>
 		</button>
 
-		<!-- Logout -->
-		<form action="/logout" method="GET">
-			<button
-				type="submit"
-				class="btn-ghost text-sm flex items-center gap-2"
-			>
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-				</svg>
-				<span class="hidden sm:inline">Logout</span>
-			</button>
-		</form>
+		<!-- User Menu -->
+		{#if userData}
+			<UserMenu displayName={userData.displayName} role={userData.role} />
+		{:else}
+			<!-- Fallback logout for edge cases -->
+			<form action="/logout" method="GET">
+				<button type="submit" class="btn-ghost text-sm">Logout</button>
+			</form>
+		{/if}
 	</div>
 </header>
 

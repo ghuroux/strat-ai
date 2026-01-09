@@ -9,9 +9,65 @@ import { postgresConversationRepository } from '$lib/server/persistence/postgres
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres';
 import { getToolCacheRepository, hashParams } from '$lib/server/persistence/tool-cache-postgres';
+import { postgresUsageRepository } from '$lib/server/persistence/usage-postgres';
 import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists';
+import { estimateCost } from '$lib/config/model-pricing';
 import type { SpaceType } from '$lib/types/chat';
 import { isSystemSpace } from '$lib/types/spaces';
+
+/**
+ * Context for tracking usage across streaming responses
+ */
+interface UsageContext {
+	organizationId: string;
+	userId: string;
+	model: string;
+	conversationId?: string;
+	requestType: 'chat' | 'arena' | 'second-opinion';
+}
+
+/**
+ * Save LLM usage to the database
+ * Called after streaming completes or for non-streaming responses
+ */
+async function saveUsage(
+	context: UsageContext,
+	usage: {
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+		cacheCreationTokens?: number;
+		cacheReadTokens?: number;
+	}
+): Promise<void> {
+	try {
+		const estimatedCostMillicents = estimateCost(
+			context.model,
+			usage.promptTokens,
+			usage.completionTokens,
+			usage.cacheReadTokens || 0
+		);
+
+		await postgresUsageRepository.create({
+			organizationId: context.organizationId,
+			userId: context.userId,
+			conversationId: context.conversationId || null,
+			model: context.model,
+			requestType: context.requestType,
+			promptTokens: usage.promptTokens,
+			completionTokens: usage.completionTokens,
+			totalTokens: usage.totalTokens,
+			cacheCreationTokens: usage.cacheCreationTokens || 0,
+			cacheReadTokens: usage.cacheReadTokens || 0,
+			estimatedCostMillicents
+		});
+
+		console.log(`[Usage] Saved: ${usage.totalTokens} tokens, ${context.model}, cost: ${estimatedCostMillicents} millicents`);
+	} catch (error) {
+		// Log but don't fail the request - usage tracking is non-critical
+		console.error('[Usage] Failed to save usage:', error);
+	}
+}
 
 /**
  * Check if model supports explicit cache_control (Anthropic Claude models)
@@ -493,6 +549,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		);
 	}
 
+	// Capture userId for use throughout the handler
+	const sessionUserId = locals.session.userId;
+
 	// Parse request body
 	let body: ChatCompletionRequest;
 	try {
@@ -569,7 +628,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let focusedTaskWithPlanningContext: FocusedTaskInfo | null = focusedTask;
 	if (focusedTask?.isSubtask && focusedTask?.sourceConversationId) {
 		try {
-			const userId = 'admin'; // POC hardcoded user
+			const userId = sessionUserId;
 			const planningConversation = await postgresConversationRepository.findById(focusedTask.sourceConversationId, userId);
 
 			if (planningConversation?.messages && planningConversation.messages.length > 0) {
@@ -614,7 +673,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let spaceContext: SpaceInfo | null = null;
 	if (space) {
 		try {
-			const userId = 'admin'; // POC hardcoded user
+			const userId = sessionUserId;
 			const spaceData = await postgresSpaceRepository.findBySlug(space, userId);
 
 			if (spaceData) {
@@ -663,8 +722,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	let focusAreaContext: FocusAreaInfo | null = null;
 	if (areaId) {
 		try {
-			// For POC, use hardcoded admin user (consistent with other API endpoints)
-			const userId = 'admin';
+			const userId = sessionUserId;
 			const focusArea = await postgresAreaRepository.findById(areaId, userId);
 
 			if (focusArea) {
@@ -717,8 +775,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// This provides documents, related tasks, and task description as context for planning
 	if (planModeContext?.taskId) {
 		try {
-			// For POC, use hardcoded admin user (consistent with other API endpoints)
-			const userId = 'admin';
+			const userId = sessionUserId;
 
 			// Fetch task for description, documents, and related tasks in parallel
 			const [task, linkedDocs, relatedTasksInfo] = await Promise.all([
@@ -803,7 +860,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const needsToolHandling = searchEnabled || (planModeContext && hasReferenceDocuments);
 
 		if (needsToolHandling) {
-			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext);
+			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId);
 		}
 
 		// Inject platform system prompt with space + focus area + custom space context (before cache breakpoints so it gets cached)
@@ -862,7 +919,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return await handleLiteLLMError(litellmResponse);
 		}
 
-		return streamResponse(litellmResponse, effectiveThinkingEnabled);
+		// Build usage context for tracking
+		const usageContext: UsageContext = {
+			organizationId: locals.session.organizationId,
+			userId: sessionUserId,
+			model: cleanBody.model,
+			requestType: 'chat'
+		};
+
+		// Extract cache headers for usage tracking
+		const cacheHeaders = {
+			cacheCreation: cacheCreation ? parseInt(cacheCreation, 10) : 0,
+			cacheRead: cacheRead ? parseInt(cacheRead, 10) : 0
+		};
+
+		return streamResponse(litellmResponse, effectiveThinkingEnabled, usageContext, cacheHeaders);
 
 	} catch (err) {
 		console.error('Chat endpoint error:', err);
@@ -892,8 +963,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string): Promise<Response> {
 	const encoder = new TextEncoder();
+
+	// Build usage context for tracking (if we have the required data)
+	const usageContext: UsageContext | undefined = userId && organizationId ? {
+		organizationId,
+		userId,
+		model: body.model,
+		requestType: 'chat'
+	} : undefined;
 
 	// Build map of available documents (from focus area and/or plan mode task context)
 	const availableDocuments = new Map<string, DocumentInfo>();
@@ -1067,7 +1146,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 								// Use task ID as cache scope (documents are typically read in plan mode)
 								const cacheScope = planModeContext?.taskId || body.planMode?.taskId || null;
 								const paramsHash = hashParams({ filename });
-								const userId = 'admin'; // TODO: Get from auth
+								const cacheUserId = userId || 'anonymous';
 								let cachedResult = null;
 
 								if (cacheScope) {
@@ -1077,7 +1156,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 											cacheScope,
 											'read_document',
 											paramsHash,
-											userId
+											cacheUserId
 										);
 										if (cachedResult) {
 											console.log(`Cache hit for document: ${filename}`);
@@ -1118,7 +1197,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 												resultContent,
 												null, // TODO: Generate summary for token efficiency
 												doc.charCount,
-												userId
+												cacheUserId
 											);
 											console.log(`Cached document: ${filename}`);
 										} catch (cacheError) {
@@ -1216,8 +1295,8 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 						});
 					} else {
 						console.log('Starting to stream final response...');
-						// Stream the final response
-						await streamToController(finalResponse, controller, encoder, thinkingEnabled);
+						// Stream the final response with usage tracking
+						await streamToController(finalResponse, controller, encoder, thinkingEnabled, usageContext);
 						console.log('Finished streaming final response');
 
 						// Send sources after content (deduplicated)
@@ -1247,6 +1326,33 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 							await new Promise(resolve => setTimeout(resolve, 20));
 						}
 					}
+				}
+
+				// Save usage from initial response (non-streaming part has usage data)
+				if (usageContext && responseData.usage) {
+					const usage = responseData.usage as {
+						prompt_tokens?: number;
+						completion_tokens?: number;
+						total_tokens?: number;
+						cache_creation_input_tokens?: number;
+						cache_read_input_tokens?: number;
+					};
+
+					// Cache metrics are in the usage object (not HTTP headers)
+					const cacheCreation = usage.cache_creation_input_tokens || 0;
+					const cacheRead = usage.cache_read_input_tokens || 0;
+
+					if (cacheCreation > 0 || cacheRead > 0) {
+						console.log(`[Cache] ${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
+					}
+
+					saveUsage(usageContext, {
+						promptTokens: usage.prompt_tokens || 0,
+						completionTokens: usage.completion_tokens || 0,
+						totalTokens: usage.total_tokens || 0,
+						cacheCreationTokens: cacheCreation,
+						cacheReadTokens: cacheRead
+					});
 				}
 
 				sendSSE(controller, encoder, '[DONE]');
@@ -1342,7 +1448,8 @@ async function streamToController(
 	response: Response,
 	controller: ReadableStreamDefaultController,
 	encoder: TextEncoder,
-	thinkingEnabled: boolean = false
+	thinkingEnabled: boolean = false,
+	usageContext?: UsageContext
 ) {
 	const reader = response.body?.getReader();
 	if (!reader) {
@@ -1355,6 +1462,13 @@ async function streamToController(
 	let chunkCount = 0;
 	let isThinking = false;
 	let hasReceivedContent = false;
+	let usageData: {
+		prompt_tokens?: number;
+		completion_tokens?: number;
+		total_tokens?: number;
+		cache_creation_input_tokens?: number;
+		cache_read_input_tokens?: number;
+	} | null = null;
 
 	while (true) {
 		const { done, value } = await reader.read();
@@ -1363,6 +1477,26 @@ async function streamToController(
 			// If we were in thinking mode at the end, close it
 			if (isThinking) {
 				sendSSE(controller, encoder, { type: 'thinking_end' });
+			}
+			// Save usage if we have context and data
+			if (usageContext && usageData) {
+				const cacheCreation = usageData.cache_creation_input_tokens || 0;
+				const cacheRead = usageData.cache_read_input_tokens || 0;
+
+				if (cacheCreation > 0 || cacheRead > 0) {
+					console.log(`[Cache] ${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
+				}
+
+				console.log(`[Usage Debug] streamToController saving for ${usageContext.model}:`, JSON.stringify(usageData));
+				saveUsage(usageContext, {
+					promptTokens: usageData.prompt_tokens || 0,
+					completionTokens: usageData.completion_tokens || 0,
+					totalTokens: usageData.total_tokens || 0,
+					cacheCreationTokens: cacheCreation,
+					cacheReadTokens: cacheRead
+				});
+			} else if (usageContext) {
+				console.log(`[Usage Debug] streamToController: no usage data for ${usageContext.model}`);
 			}
 			break;
 		}
@@ -1389,6 +1523,15 @@ async function streamToController(
 
 				try {
 					const chunk = JSON.parse(data);
+
+					// Capture usage from final chunk
+					if (chunk.usage) {
+						usageData = chunk.usage;
+					}
+					if (chunk.x_litellm_usage) {
+						usageData = chunk.x_litellm_usage;
+					}
+
 					const delta = chunk.choices?.[0]?.delta;
 
 					// Log chunks to debug thinking content format
@@ -1490,10 +1633,16 @@ async function handleLiteLLMError(response: Response): Promise<Response> {
 }
 
 /**
- * Stream response with extended thinking support
+ * Stream response with extended thinking support and usage tracking
  * Parses the stream to extract thinking content and regular content separately
+ * Tracks token usage and saves to database on completion
  */
-function streamResponse(litellmResponse: Response, thinkingEnabled: boolean = false): Response {
+function streamResponse(
+	litellmResponse: Response,
+	thinkingEnabled: boolean = false,
+	usageContext?: UsageContext,
+	cacheHeaders?: { cacheCreation: number; cacheRead: number }
+): Response {
 	const reader = litellmResponse.body?.getReader();
 	if (!reader) {
 		return new Response(
@@ -1514,10 +1663,45 @@ function streamResponse(litellmResponse: Response, thinkingEnabled: boolean = fa
 			let isThinking = false; // Don't start in thinking mode - wait for actual thinking content
 			let hasReceivedContent = false; // Track if we've received any content yet
 
+			// Track usage from stream chunks (including Anthropic cache fields)
+			let usageData: {
+				prompt_tokens?: number;
+				completion_tokens?: number;
+				total_tokens?: number;
+				cache_creation_input_tokens?: number;
+				cache_read_input_tokens?: number;
+			} | null = null;
+
 			try {
 				while (true) {
 					const { done, value } = await reader.read();
 					if (done) {
+						// Debug: log full usage data structure for debugging cache issues
+						if (usageData) {
+							console.log(`[Usage Debug] Stream done for ${usageContext?.model || 'unknown'}:`, JSON.stringify(usageData));
+						} else {
+							console.log(`[Usage Debug] Stream done for ${usageContext?.model || 'unknown'}: NO usage data captured`);
+						}
+
+						// Save usage if we have context and data
+						// Prefer cache metrics from usage object (Anthropic), fallback to HTTP headers
+						if (usageContext && usageData) {
+							const cacheCreation = usageData.cache_creation_input_tokens || cacheHeaders?.cacheCreation || 0;
+							const cacheRead = usageData.cache_read_input_tokens || cacheHeaders?.cacheRead || 0;
+
+							if (cacheCreation > 0 || cacheRead > 0) {
+								console.log(`[Cache] ${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
+							}
+
+							saveUsage(usageContext, {
+								promptTokens: usageData.prompt_tokens || 0,
+								completionTokens: usageData.completion_tokens || 0,
+								totalTokens: usageData.total_tokens || 0,
+								cacheCreationTokens: cacheCreation,
+								cacheReadTokens: cacheRead
+							});
+						}
+
 						// Send done signal
 						controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
 						controller.close();
@@ -1539,6 +1723,23 @@ function streamResponse(litellmResponse: Response, thinkingEnabled: boolean = fa
 
 							try {
 								const chunk = JSON.parse(data);
+
+								// Debug: log final chunks to understand format differences between providers
+								const finishReason = chunk.choices?.[0]?.finish_reason;
+								if (finishReason || chunk.usage) {
+									console.log('[Usage Debug] Final chunk:', JSON.stringify(chunk).slice(0, 800));
+								}
+
+								// Capture usage from final chunk (LiteLLM includes this with stream_options.include_usage)
+								if (chunk.usage) {
+									usageData = chunk.usage;
+								}
+
+								// Also check for x_litellm_usage (alternate format)
+								if (chunk.x_litellm_usage) {
+									usageData = chunk.x_litellm_usage;
+								}
+
 								const delta = chunk.choices?.[0]?.delta;
 
 								// Log first few chunks to debug thinking content

@@ -11,24 +11,26 @@ import type { RequestHandler } from './$types';
 import { postgresFocusAreaRepository } from '$lib/server/persistence/focus-areas-postgres';
 import type { UpdateFocusAreaInput } from '$lib/types/focus-areas';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/focus-areas/[id]
  * Returns focus area with task and conversation counts
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
-		const focusArea = await postgresFocusAreaRepository.findById(params.id, DEFAULT_USER_ID);
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+		const focusArea = await postgresFocusAreaRepository.findById(params.id, userId);
 
 		if (!focusArea) {
 			return json({ error: 'Focus area not found' }, { status: 404 });
 		}
 
 		// Get stats
-		const taskCount = await postgresFocusAreaRepository.getTaskCount(params.id, DEFAULT_USER_ID);
-		const conversationCount = await postgresFocusAreaRepository.getConversationCount(params.id, DEFAULT_USER_ID);
+		const taskCount = await postgresFocusAreaRepository.getTaskCount(params.id, userId);
+		const conversationCount = await postgresFocusAreaRepository.getConversationCount(params.id, userId);
 
 		return json({
 			focusArea: {
@@ -50,8 +52,13 @@ export const GET: RequestHandler = async ({ params }) => {
  * PATCH /api/focus-areas/[id]
  * Body: { name?, context?, contextDocumentIds?, color?, icon?, orderIndex? }
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 
 		// Validate name if provided
@@ -68,7 +75,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		if (body.icon !== undefined) updates.icon = body.icon;
 		if (body.orderIndex !== undefined) updates.orderIndex = body.orderIndex;
 
-		const focusArea = await postgresFocusAreaRepository.update(params.id, updates, DEFAULT_USER_ID);
+		const focusArea = await postgresFocusAreaRepository.update(params.id, updates, userId);
 
 		if (!focusArea) {
 			return json({ error: 'Focus area not found' }, { status: 404 });
@@ -94,9 +101,14 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
  * DELETE /api/focus-areas/[id]
  * Soft deletes the focus area. Tasks will have their focus_area_id set to NULL.
  */
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
-		const deleted = await postgresFocusAreaRepository.delete(params.id, DEFAULT_USER_ID);
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+		const deleted = await postgresFocusAreaRepository.delete(params.id, userId);
 
 		if (!deleted) {
 			return json({ error: 'Focus area not found' }, { status: 404 });

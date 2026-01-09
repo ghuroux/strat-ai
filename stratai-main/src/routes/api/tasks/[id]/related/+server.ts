@@ -11,24 +11,26 @@ import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { TaskRelationshipType } from '$lib/types/tasks';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/tasks/[id]/related
  * List all tasks related to this task (both outgoing and incoming relationships)
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id: taskId } = params;
 
 		// Verify task exists
-		const task = await postgresTaskRepository.findById(taskId, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.findById(taskId, userId);
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
 
-		const relatedTasks = await postgresTaskRepository.getRelatedTasks(taskId, DEFAULT_USER_ID);
+		const relatedTasks = await postgresTaskRepository.getRelatedTasks(taskId, userId);
 
 		// Return with task summaries
 		const summaries = relatedTasks.map((rt) => ({
@@ -60,8 +62,13 @@ export const GET: RequestHandler = async ({ params }) => {
  * Link a task as related to this task
  * Body: { targetTaskId, relationshipType? }
  */
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id: sourceTaskId } = params;
 		const body = await request.json();
 
@@ -89,7 +96,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			sourceTaskId,
 			targetTaskId,
 			relationshipType ?? 'related',
-			DEFAULT_USER_ID
+			userId
 		);
 
 		return json({ success: true }, { status: 201 });
@@ -115,8 +122,13 @@ export const POST: RequestHandler = async ({ params, request }) => {
  * DELETE /api/tasks/[id]/related?targetTaskId=
  * Unlink a related task
  */
-export const DELETE: RequestHandler = async ({ params, url }) => {
+export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id: sourceTaskId } = params;
 		const targetTaskId = url.searchParams.get('targetTaskId');
 
@@ -124,7 +136,7 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			return json({ error: 'targetTaskId query parameter is required' }, { status: 400 });
 		}
 
-		await postgresTaskRepository.unlinkRelatedTask(sourceTaskId, targetTaskId, DEFAULT_USER_ID);
+		await postgresTaskRepository.unlinkRelatedTask(sourceTaskId, targetTaskId, userId);
 
 		return json({ success: true });
 	} catch (error) {

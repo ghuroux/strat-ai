@@ -11,9 +11,6 @@ import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { PlanningData, PlanModePhase } from '$lib/types/tasks';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * PATCH /api/tasks/[id]/planning
  * Update planning data for a task
@@ -21,8 +18,13 @@ const DEFAULT_USER_ID = 'admin';
  * - Pass PlanningData to update the planning state
  * - Pass null to clear planning data (when completing or canceling plan mode)
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 
 		// Debug logging
@@ -75,7 +77,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		}
 
 		// Verify task exists
-		const existingTask = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const existingTask = await postgresTaskRepository.findById(params.id, userId);
 		if (!existingTask) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
@@ -89,7 +91,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		const task = await postgresTaskRepository.updatePlanningData(
 			params.id,
 			planningData,
-			DEFAULT_USER_ID
+			userId
 		);
 
 		if (!task) {
@@ -113,9 +115,14 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
  * GET /api/tasks/[id]/planning
  * Get current planning data for a task (convenience endpoint)
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
-		const task = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+		const task = await postgresTaskRepository.findById(params.id, userId);
 
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });

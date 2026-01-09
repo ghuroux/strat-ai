@@ -34,3 +34,11 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 export function generateToken(): string {
 	return randomBytes(32).toString('hex');
 }
+
+/**
+ * Generate a temporary password for new users
+ * Returns a URL-safe base64 string (16 characters)
+ */
+export function generateTempPassword(): string {
+	return randomBytes(12).toString('base64url');
+}

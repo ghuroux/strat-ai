@@ -226,7 +226,7 @@
 
 	<!-- Drawer -->
 	<div
-		class="fixed top-0 left-0 h-full w-80 bg-surface-900 border-r border-surface-700 z-50 flex flex-col shadow-2xl"
+		class="fixed top-0 left-0 h-full w-full sm:w-80 bg-surface-900 border-r border-surface-700 z-50 flex flex-col shadow-2xl"
 		transition:fly={{ x: -320, duration: 200 }}
 		role="dialog"
 		aria-modal="true"

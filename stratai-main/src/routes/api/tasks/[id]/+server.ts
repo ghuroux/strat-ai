@@ -11,16 +11,18 @@ import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { UpdateTaskInput } from '$lib/types/tasks';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/tasks/[id]
  * Get a single task by ID
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
-		const task = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+		const task = await postgresTaskRepository.findById(params.id, userId);
 
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
@@ -41,13 +43,18 @@ export const GET: RequestHandler = async ({ params }) => {
  * Update task fields
  * Body: { title?, status?, priority?, areaId?, dueDate?, dueDateType?, completionNotes? }
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 
 		// Validate: subtasks cannot have 'planning' status
 		if (body.status === 'planning') {
-			const existingTask = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+			const existingTask = await postgresTaskRepository.findById(params.id, userId);
 			if (existingTask?.parentTaskId) {
 				return json({ error: 'Subtasks cannot enter planning mode' }, { status: 400 });
 			}
@@ -79,7 +86,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 			updates.approachChosenAt = body.approachChosenAt ? new Date(body.approachChosenAt) : null;
 		}
 
-		const task = await postgresTaskRepository.update(params.id, updates, DEFAULT_USER_ID);
+		const task = await postgresTaskRepository.update(params.id, updates, userId);
 
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
@@ -103,19 +110,24 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
  *
  * Subtasks are ALWAYS deleted (cascade) - orphaned subtasks make no sense.
  */
-export const DELETE: RequestHandler = async ({ params, url }) => {
+export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const deleteConversations = url.searchParams.get('deleteConversations') === 'true';
 
 		// Check if task exists first
-		const existing = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const existing = await postgresTaskRepository.findById(params.id, userId);
 
 		if (!existing) {
 			return json({ error: 'Task not found' }, { status: 404 });
 		}
 
 		// Always cascade delete subtasks (orphaned subtasks have no meaning)
-		const deletedSubtaskCount = await postgresTaskRepository.deleteSubtasks(params.id, DEFAULT_USER_ID);
+		const deletedSubtaskCount = await postgresTaskRepository.deleteSubtasks(params.id, userId);
 
 		// Optionally delete linked conversations
 		let deletedConversationCount = 0;
@@ -123,13 +135,13 @@ export const DELETE: RequestHandler = async ({ params, url }) => {
 			// Import conversation repository dynamically to avoid circular deps
 			const { postgresConversationRepository } = await import('$lib/server/persistence/postgres');
 			for (const convId of existing.linkedConversationIds) {
-				await postgresConversationRepository.delete(convId, DEFAULT_USER_ID);
+				await postgresConversationRepository.delete(convId, userId);
 				deletedConversationCount++;
 			}
 		}
 
 		// Delete the task itself
-		await postgresTaskRepository.delete(params.id, DEFAULT_USER_ID);
+		await postgresTaskRepository.delete(params.id, userId);
 
 		return json({
 			success: true,

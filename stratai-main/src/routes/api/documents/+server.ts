@@ -11,22 +11,24 @@ import { postgresDocumentRepository } from '$lib/server/persistence/documents-po
 import { parseFile, validateFile } from '$lib/server/file-parser';
 import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/documents
  * Query params:
  * - spaceId: Filter by space ID or slug (resolved to proper ID)
  */
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
 
 		// Resolve space identifier (slug or ID) to proper ID
 		let resolvedSpaceId: string | undefined;
 		if (spaceIdParam) {
-			const resolved = await resolveSpaceId(spaceIdParam, DEFAULT_USER_ID);
+			const resolved = await resolveSpaceId(spaceIdParam, userId);
 			if (!resolved) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}
@@ -34,7 +36,7 @@ export const GET: RequestHandler = async ({ url }) => {
 		}
 
 		const documents = await postgresDocumentRepository.findAll(
-			DEFAULT_USER_ID,
+			userId,
 			resolvedSpaceId
 		);
 
@@ -76,8 +78,13 @@ export const GET: RequestHandler = async ({ url }) => {
  * - spaceId: (optional) Space ID or slug to associate with the document
  * - title: (optional) Custom title for the document
  */
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const formData = await request.formData();
 		const file = formData.get('file');
 		const spaceIdParam = formData.get('spaceId') as string | null;
@@ -90,7 +97,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		// Resolve space identifier (slug or ID) to proper ID
 		let resolvedSpaceId: string | undefined;
 		if (spaceIdParam) {
-			const resolved = await resolveSpaceId(spaceIdParam, DEFAULT_USER_ID);
+			const resolved = await resolveSpaceId(spaceIdParam, userId);
 			if (!resolved) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}
@@ -131,7 +138,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				spaceId: resolvedSpaceId,
 				title: title ?? undefined
 			},
-			DEFAULT_USER_ID
+			userId
 		);
 
 		return json(

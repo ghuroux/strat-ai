@@ -11,16 +11,17 @@ import type { RequestHandler } from './$types';
 import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres';
 import type { UpdateSpaceInput } from '$lib/types/spaces';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/spaces/[id]
  * Returns the space
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+	if (!locals.session) {
+		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+	}
+
 	try {
-		const space = await postgresSpaceRepository.findById(params.id, DEFAULT_USER_ID);
+		const space = await postgresSpaceRepository.findById(params.id, locals.session.userId);
 
 		if (!space) {
 			return json({ error: 'Space not found' }, { status: 404 });
@@ -45,7 +46,11 @@ export const GET: RequestHandler = async ({ params }) => {
  *
  * Note: System spaces only allow context and contextDocumentIds updates
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+	if (!locals.session) {
+		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+	}
+
 	try {
 		const body = await request.json();
 
@@ -63,7 +68,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 		if (body.icon !== undefined) updates.icon = body.icon;
 		if (body.orderIndex !== undefined) updates.orderIndex = body.orderIndex;
 
-		const space = await postgresSpaceRepository.update(params.id, updates, DEFAULT_USER_ID);
+		const space = await postgresSpaceRepository.update(params.id, updates, locals.session.userId);
 
 		if (!space) {
 			return json({ error: 'Space not found' }, { status: 404 });
@@ -100,9 +105,13 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
  * DELETE /api/spaces/[id]
  * Soft deletes a custom space. System spaces cannot be deleted.
  */
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
+	if (!locals.session) {
+		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+	}
+
 	try {
-		const deleted = await postgresSpaceRepository.delete(params.id, DEFAULT_USER_ID);
+		const deleted = await postgresSpaceRepository.delete(params.id, locals.session.userId);
 
 		if (!deleted) {
 			return json({ error: 'Space not found' }, { status: 404 });

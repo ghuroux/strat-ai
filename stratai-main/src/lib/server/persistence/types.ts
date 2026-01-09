@@ -274,6 +274,157 @@ export interface SpaceRepository {
 }
 
 // =====================================================
+// Organization Types (Multi-tenant Foundation)
+// =====================================================
+
+/**
+ * Organization entity - multi-tenant root
+ */
+export interface Organization {
+	id: string;
+	name: string;
+	slug: string;
+	settings: Record<string, unknown>;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+/**
+ * Repository interface for Organization entities
+ */
+export interface OrganizationRepository {
+	findAll(): Promise<Organization[]>;
+	findById(id: string): Promise<Organization | null>;
+	findBySlug(slug: string): Promise<Organization | null>;
+	create(input: {
+		name: string;
+		slug: string;
+		settings?: Record<string, unknown>;
+	}): Promise<Organization>;
+	update(
+		id: string,
+		updates: {
+			name?: string;
+			slug?: string;
+			settings?: Record<string, unknown>;
+		}
+	): Promise<Organization | null>;
+	delete(id: string): Promise<boolean>;
+}
+
+// =====================================================
+// User Types (Identity Management)
+// =====================================================
+
+/**
+ * User entity - user accounts within organizations
+ */
+export interface User {
+	id: string;
+	organizationId: string;
+	email: string;
+	username: string;
+	displayName: string | null;
+	status: 'active' | 'inactive' | 'suspended';
+	lastLoginAt: Date | null;
+	settings: Record<string, unknown>;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+/**
+ * Repository interface for User entities
+ */
+export interface UserRepository {
+	findByOrgId(organizationId: string): Promise<User[]>;
+	findById(id: string): Promise<User | null>;
+	findByEmail(organizationId: string, email: string): Promise<User | null>;
+	findByUsername(organizationId: string, username: string): Promise<User | null>;
+	create(input: {
+		organizationId: string;
+		email: string;
+		username: string;
+		displayName?: string;
+		passwordHash?: string;
+		status?: 'active' | 'inactive' | 'suspended';
+		settings?: Record<string, unknown>;
+	}): Promise<User>;
+	update(
+		id: string,
+		updates: {
+			email?: string;
+			username?: string;
+			displayName?: string | null;
+			passwordHash?: string;
+			status?: 'active' | 'inactive' | 'suspended';
+			settings?: Record<string, unknown>;
+		}
+	): Promise<User | null>;
+	updateLastLogin(id: string): Promise<void>;
+	delete(id: string): Promise<boolean>;
+}
+
+// =====================================================
+// Organization Membership Types
+// =====================================================
+
+/**
+ * OrgMembership entity - user roles within organizations
+ */
+export interface OrgMembership {
+	id: string;
+	organizationId: string;
+	userId: string;
+	role: 'owner' | 'admin' | 'member';
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+/**
+ * Repository interface for Organization Membership entities
+ */
+export interface OrgMembershipRepository {
+	findByUserId(userId: string): Promise<OrgMembership[]>;
+	findByOrgId(organizationId: string): Promise<OrgMembership[]>;
+	findByUserAndOrg(userId: string, organizationId: string): Promise<OrgMembership | null>;
+	findById(id: string): Promise<OrgMembership | null>;
+	create(input: {
+		organizationId: string;
+		userId: string;
+		role?: 'owner' | 'admin' | 'member';
+	}): Promise<OrgMembership>;
+	update(id: string, updates: { role?: 'owner' | 'admin' | 'member' }): Promise<OrgMembership | null>;
+	delete(id: string): Promise<boolean>;
+	hasRole(userId: string, organizationId: string, minRole: 'owner' | 'admin' | 'member'): Promise<boolean>;
+	getOwners(organizationId: string): Promise<OrgMembership[]>;
+}
+
+// =====================================================
+// User ID Mapping Types (Backward Compatibility)
+// =====================================================
+
+/**
+ * UserIdMapping entity - maps legacy TEXT user_ids to UUIDs
+ */
+export interface UserIdMapping {
+	legacyId: string;
+	userId: string;
+	createdAt: Date;
+}
+
+/**
+ * Repository interface for User ID Mapping entities
+ */
+export interface UserIdMappingRepository {
+	findByLegacyId(legacyId: string): Promise<UserIdMapping | null>;
+	findByUserId(userId: string): Promise<UserIdMapping | null>;
+	findAll(): Promise<UserIdMapping[]>;
+	create(legacyId: string, userId: string): Promise<UserIdMapping>;
+	delete(legacyId: string): Promise<boolean>;
+	resolveUserId(id: string): Promise<string | null>;
+}
+
+// =====================================================
 // Tool Cache Types
 // =====================================================
 

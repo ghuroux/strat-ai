@@ -5,6 +5,9 @@
 > **Created:** January 2026
 > **Status:** Strategic Planning
 > **Based on:** Comprehensive research of 2025-2026 LLM memory/context innovations
+>
+> **Related Documents:**
+> - [`context-loading-architecture.md`](./context-loading-architecture.md) — Technical architecture for HOW to load context (hybrid upfront + just-in-time via tool calling)
 
 ---
 

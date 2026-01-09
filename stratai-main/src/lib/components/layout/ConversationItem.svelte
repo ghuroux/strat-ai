@@ -88,9 +88,13 @@
 			const rect = menuButtonRef.getBoundingClientRect();
 			// Position menu to start above the button, so it appears adjacent
 			const menuHeight = 160; // Approximate height of dropdown
+			const menuWidth = 140; // Width of dropdown menu
+			const viewport = window.innerWidth;
+			// Check if menu would go off-screen to the right
+			const shouldPlaceLeft = rect.right + menuWidth + 8 > viewport;
 			menuPosition = {
 				top: Math.max(8, rect.top - menuHeight + rect.height),
-				left: rect.right + 8
+				left: shouldPlaceLeft ? Math.max(8, rect.left - menuWidth) : rect.right + 8
 			};
 		}
 

@@ -1225,6 +1225,38 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 - [ ] **Impact Analysis**: Changing global system prompt affects ALL future messages in ALL conversations - users may not expect this
 - [ ] **UX Clarity**: Settings panel doesn't indicate scope - users may think it's per-conversation
 
+### UI Cleanup & Polish
+**Status**: Audit Complete - Ready for Implementation
+
+> **Reference**: See `docs/UI_AUDIT.md` for comprehensive audit findings with file:line references and fix code.
+
+**Mobile Responsiveness** (15 critical + 20 major issues):
+- [ ] Second Opinion Panel responsive width (`SecondOpinionPanel.svelte:61`)
+- [ ] Message action buttons touch-accessible (`ChatMessage.svelte:407`)
+- [ ] Safe-area padding for iOS (`ChatInput.svelte:297`, `Toast.svelte:13`)
+- [ ] Conversation drawer responsive width (`ConversationDrawer.svelte:228`)
+- [ ] Dropdown menu positioning fix (`ConversationItem.svelte:86`)
+- [ ] Touch targets minimum 44x44px (multiple files)
+
+**Light Mode Compatibility** (90+ components):
+- [ ] Root layout background fix (`+layout.svelte:11`)
+- [ ] Theme hydration script (`app.html`)
+- [ ] Tailwind `darkMode: 'class'` config (`tailwind.config.js`)
+- [ ] Focus ring offset light mode (`app.css`)
+- [ ] Systematic `dark:` prefix additions (90+ components)
+
+**UI Consistency**:
+- [ ] Button style standardization (13 variants → 4)
+- [ ] Padding scale enforcement (p-2, p-3, p-4)
+- [ ] Border radius standardization
+- [ ] Transition duration standardization
+
+**Accessibility**:
+- [ ] Address 42 svelte-ignore a11y suppressions
+- [ ] Add aria-labels to 30+ icon buttons
+- [ ] Global focus indicators
+- [ ] Color contrast fixes
+
 ---
 
 ## Priority Matrix

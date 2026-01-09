@@ -10,29 +10,32 @@ import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { CreateSubtaskInput, SubtaskType } from '$lib/types/tasks';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/tasks/[id]/subtasks
  * List all subtasks for a parent task
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
+
 		// Verify parent task exists
-		const parent = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const parent = await postgresTaskRepository.findById(params.id, userId);
 		if (!parent) {
 			return json({ error: 'Parent task not found' }, { status: 404 });
 		}
 
 		// Check if parent can have subtasks (not a subtask itself)
-		const canHaveSubtasks = await postgresTaskRepository.canHaveSubtasks(params.id, DEFAULT_USER_ID);
+		const canHaveSubtasks = await postgresTaskRepository.canHaveSubtasks(params.id, userId);
 		if (!canHaveSubtasks) {
 			return json({ error: 'This task cannot have subtasks (it is already a subtask)' }, { status: 400 });
 		}
 
-		const subtasks = await postgresTaskRepository.getSubtasks(params.id, DEFAULT_USER_ID);
-		const count = await postgresTaskRepository.getSubtaskCount(params.id, DEFAULT_USER_ID);
+		const subtasks = await postgresTaskRepository.getSubtasks(params.id, userId);
+		const count = await postgresTaskRepository.getSubtaskCount(params.id, userId);
 
 		return json({ subtasks, count });
 	} catch (error) {
@@ -49,8 +52,13 @@ export const GET: RequestHandler = async ({ params }) => {
  * Create a new subtask
  * Body: { title: string, subtaskType?: 'conversation' | 'action', priority?: 'normal' | 'high', sourceConversationId?: string, contextSummary?: string }
  */
-export const POST: RequestHandler = async ({ params, request }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const body = await request.json();
 
 		// Validate required fields
@@ -74,7 +82,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		}
 
 		// Verify parent task exists
-		const parent = await postgresTaskRepository.findById(params.id, DEFAULT_USER_ID);
+		const parent = await postgresTaskRepository.findById(params.id, userId);
 		if (!parent) {
 			return json({ error: 'Parent task not found' }, { status: 404 });
 		}
@@ -88,7 +96,7 @@ export const POST: RequestHandler = async ({ params, request }) => {
 			contextSummary: body.contextSummary // Rich context generated during Plan Mode
 		};
 
-		const subtask = await postgresTaskRepository.createSubtask(input, DEFAULT_USER_ID);
+		const subtask = await postgresTaskRepository.createSubtask(input, userId);
 
 		return json({ subtask }, { status: 201 });
 	} catch (error) {

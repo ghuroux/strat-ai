@@ -10,21 +10,23 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 
-// Default user ID for POC (will be replaced with auth in Phase 0.4)
-const DEFAULT_USER_ID = 'admin';
-
 /**
  * GET /api/documents/[id]
  * Returns the full document including content
  * Query params:
  * - includeContent: Include full content (default: true)
  */
-export const GET: RequestHandler = async ({ params, url }) => {
+export const GET: RequestHandler = async ({ params, url, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id } = params;
 		const includeContent = url.searchParams.get('includeContent') !== 'false';
 
-		const document = await postgresDocumentRepository.findById(id, DEFAULT_USER_ID);
+		const document = await postgresDocumentRepository.findById(id, userId);
 
 		if (!document) {
 			return json({ error: 'Document not found' }, { status: 404 });
@@ -54,13 +56,18 @@ export const GET: RequestHandler = async ({ params, url }) => {
  * Update document metadata
  * Body: { title?, summary?, space? }
  */
-export const PATCH: RequestHandler = async ({ params, request }) => {
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id } = params;
 		const body = await request.json();
 
 		// Verify document exists
-		const existing = await postgresDocumentRepository.findById(id, DEFAULT_USER_ID);
+		const existing = await postgresDocumentRepository.findById(id, userId);
 		if (!existing) {
 			return json({ error: 'Document not found' }, { status: 404 });
 		}
@@ -73,7 +80,7 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
 				summary: body.summary,
 				spaceId: body.spaceId as string | undefined
 			},
-			DEFAULT_USER_ID
+			userId
 		);
 
 		if (!updated) {
@@ -99,17 +106,22 @@ export const PATCH: RequestHandler = async ({ params, request }) => {
  * DELETE /api/documents/[id]
  * Soft delete a document
  */
-export const DELETE: RequestHandler = async ({ params }) => {
+export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
+		if (!locals.session) {
+			return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+		}
+
+		const userId = locals.session.userId;
 		const { id } = params;
 
 		// Verify document exists
-		const existing = await postgresDocumentRepository.findById(id, DEFAULT_USER_ID);
+		const existing = await postgresDocumentRepository.findById(id, userId);
 		if (!existing) {
 			return json({ error: 'Document not found' }, { status: 404 });
 		}
 
-		await postgresDocumentRepository.delete(id, DEFAULT_USER_ID);
+		await postgresDocumentRepository.delete(id, userId);
 
 		return json({ success: true });
 	} catch (error) {
