@@ -17,6 +17,27 @@
 	--transition-fast: 150ms;
 	--transition-normal: 300ms;
 	--transition-slow: 500ms;
+
+	/* Color CSS variables for components using var(--color-*) */
+	/* Dark mode (default) */
+	--color-surface-50: #fafafa;
+	--color-surface-100: #f4f4f5;
+	--color-surface-200: #e4e4e7;
+	--color-surface-300: #d4d4d8;
+	--color-surface-400: #a1a1aa;
+	--color-surface-500: #71717a;
+	--color-surface-600: #52525b;
+	--color-surface-700: #3f3f46;
+	--color-surface-800: #27272a;
+	--color-surface-900: #18181b;
+	--color-surface-950: #0f0f11;
+
+	--color-primary-300: #7db3ff;
+	--color-primary-400: #4691ff;
+	--color-primary-500: #1a6dff;
+	--color-primary-600: #0052e0;
+
+	--color-warning-400: #fbbf24;
 }
 
 @layer base {
@@ -42,6 +63,19 @@
 		--text-secondary: #52525b;
 		--text-muted: #71717a;
 		color-scheme: light;
+
+		/* Invert surface colors for light mode */
+		--color-surface-50: #0f0f11;
+		--color-surface-100: #18181b;
+		--color-surface-200: #27272a;
+		--color-surface-300: #3f3f46;
+		--color-surface-400: #52525b;
+		--color-surface-500: #71717a;
+		--color-surface-600: #a1a1aa;
+		--color-surface-700: #d4d4d8;
+		--color-surface-800: #e4e4e7;
+		--color-surface-900: #f4f4f5;
+		--color-surface-950: #fafafa;
 	}
 
 	/* Light theme overrides for Tailwind surface colors */
@@ -4674,4 +4708,198 @@ html.light .results::-webkit-scrollbar-thumb {
 
 html.light .results::-webkit-scrollbar-thumb:hover {
 	background: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ============================================================================
+   Easter Egg Animations
+   ============================================================================ */
+
+/* Konami Code Animation */
+@keyframes konami-rainbow {
+	0% { filter: hue-rotate(0deg); }
+	100% { filter: hue-rotate(360deg); }
+}
+
+@keyframes konami-shake {
+	0%, 100% { transform: translateX(0); }
+	10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+	20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+body.konami-activated {
+	animation: konami-rainbow 1.5s ease-in-out, konami-shake 0.5s ease-in-out;
+}
+
+/* Barrel Roll Animation */
+@keyframes barrel-roll {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}
+
+.barrel-roll {
+	animation: barrel-roll 1s ease-in-out;
+}
+
+/* Logo Bounce Animation */
+@keyframes logo-bounce {
+	0%, 100% { transform: scale(1); }
+	25% { transform: scale(1.2) rotate(-5deg); }
+	50% { transform: scale(0.9) rotate(5deg); }
+	75% { transform: scale(1.1) rotate(-3deg); }
+}
+
+.logo-easter-egg {
+	animation: logo-bounce 0.6s ease-in-out;
+}
+
+/* Confetti-like particle effect for discoveries */
+@keyframes confetti-fall {
+	0% { transform: translateY(-100%) rotate(0deg); opacity: 1; }
+	100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+/* Subtle glow effect for easter egg discoveries */
+@keyframes discovery-glow {
+	0%, 100% { box-shadow: 0 0 5px rgba(26, 109, 255, 0.3); }
+	50% { box-shadow: 0 0 20px rgba(26, 109, 255, 0.6), 0 0 30px rgba(0, 220, 213, 0.4); }
+}
+
+/* Discovery Toast - Special styling for easter egg finds */
+.discovery-toast {
+	animation: discovery-shimmer 2s ease-in-out infinite;
+	box-shadow: 0 0 20px rgba(168, 85, 247, 0.4), 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes discovery-shimmer {
+	0%, 100% {
+		box-shadow: 0 0 20px rgba(168, 85, 247, 0.4), 0 4px 20px rgba(0, 0, 0, 0.3);
+	}
+	50% {
+		box-shadow: 0 0 30px rgba(236, 72, 153, 0.5), 0 0 40px rgba(245, 158, 11, 0.3), 0 4px 20px rgba(0, 0, 0, 0.3);
+	}
+}
+
+.discovery-icon {
+	animation: discovery-sparkle 1s ease-in-out infinite;
+}
+
+@keyframes discovery-sparkle {
+	0%, 100% { transform: scale(1) rotate(0deg); }
+	50% { transform: scale(1.2) rotate(15deg); }
+}
+
+/* Hacker Theme - Matrix style */
+.theme-hacker {
+	--bg-body: #0a0a0a !important;
+	--color-surface-950: #0a0a0a !important;
+	--color-surface-900: #0d1a0d !important;
+	--color-surface-800: #0f2a0f !important;
+	--color-surface-700: #1a3a1a !important;
+	--color-primary-500: #00ff00 !important;
+	--color-primary-400: #33ff33 !important;
+	--gradient-primary: linear-gradient(135deg, #00ff00 0%, #00aa00 100%) !important;
+}
+
+.theme-hacker * {
+	color: #00ff00 !important;
+	border-color: #00aa00 !important;
+}
+
+.theme-hacker input,
+.theme-hacker textarea,
+.theme-hacker button {
+	background: #0d1a0d !important;
+	color: #00ff00 !important;
+}
+
+.theme-hacker .text-gradient {
+	background: linear-gradient(135deg, #00ff00, #00ffaa) !important;
+	-webkit-background-clip: text !important;
+	-webkit-text-fill-color: transparent !important;
+	background-clip: text !important;
+}
+
+/* Matrix rain effect for hacker theme */
+@keyframes matrix-rain {
+	0% { text-shadow: 0 0 5px #00ff00; }
+	50% { text-shadow: 0 0 20px #00ff00, 0 0 30px #00aa00; }
+	100% { text-shadow: 0 0 5px #00ff00; }
+}
+
+.theme-hacker h1,
+.theme-hacker h2,
+.theme-hacker .font-bold {
+	animation: matrix-rain 2s ease-in-out infinite;
+}
+
+/* Ship It! Rocket Animation */
+.ship-it-container {
+	position: fixed;
+	bottom: 100px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 9999;
+	pointer-events: none;
+}
+
+.ship-it-rocket {
+	font-size: 3rem;
+	animation: rocket-launch 1.5s ease-in forwards;
+}
+
+@keyframes rocket-launch {
+	0% {
+		transform: translateY(0) rotate(0deg);
+		opacity: 1;
+	}
+	20% {
+		transform: translateY(10px) rotate(-5deg);
+	}
+	40% {
+		transform: translateY(-50px) rotate(5deg);
+	}
+	100% {
+		transform: translateY(-100vh) rotate(0deg);
+		opacity: 0;
+	}
+}
+
+/* Rocket exhaust particles */
+.ship-it-particle {
+	position: absolute;
+	bottom: -10px;
+	left: 50%;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	animation: exhaust-particle 0.8s ease-out forwards;
+}
+
+.ship-it-particle:nth-child(1) { background: #ff6b35; animation-delay: 0s; }
+.ship-it-particle:nth-child(2) { background: #ffb347; animation-delay: 0.1s; transform: translateX(-10px); }
+.ship-it-particle:nth-child(3) { background: #ff6b35; animation-delay: 0.15s; transform: translateX(10px); }
+.ship-it-particle:nth-child(4) { background: #ffd700; animation-delay: 0.2s; }
+.ship-it-particle:nth-child(5) { background: #ffb347; animation-delay: 0.25s; transform: translateX(-15px); }
+.ship-it-particle:nth-child(6) { background: #ff6b35; animation-delay: 0.3s; transform: translateX(15px); }
+
+@keyframes exhaust-particle {
+	0% {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	100% {
+		opacity: 0;
+		transform: translateY(80px) scale(0.3);
+	}
+}
+
+/* Screen shake for rocket launch */
+@keyframes rocket-shake {
+	0%, 100% { transform: translateX(0); }
+	10%, 30%, 50%, 70% { transform: translateX(-2px); }
+	20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+.ship-it-shake {
+	animation: rocket-shake 0.4s ease-in-out;
 }

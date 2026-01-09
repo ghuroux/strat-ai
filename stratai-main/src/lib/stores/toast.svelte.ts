@@ -1,6 +1,6 @@
 export interface Toast {
 	id: string;
-	type: 'success' | 'error' | 'info' | 'warning';
+	type: 'success' | 'error' | 'info' | 'warning' | 'discovery';
 	message: string;
 	duration?: number;
 }
@@ -47,6 +47,13 @@ class ToastStore {
 
 	warning(message: string, duration?: number): string {
 		return this.add({ type: 'warning', message, duration });
+	}
+
+	/**
+	 * Special toast for easter egg discoveries - has unique styling
+	 */
+	discovery(message: string, duration?: number): string {
+		return this.add({ type: 'discovery', message, duration: duration ?? 5000 });
 	}
 }
 

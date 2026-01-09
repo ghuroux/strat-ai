@@ -1,31 +1,28 @@
 /**
- * Admin Panel - User Management & Usage Dashboard
+ * Admin Members Page Server
  *
- * Protected route for owner/admin roles to manage organization users
- * and view usage statistics.
+ * Handles user management: listing, creating, updating, and password resets.
  */
 
 import type { PageServerLoad, Actions } from './$types';
-import { fail, redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import {
 	postgresUserRepository,
 	postgresOrgMembershipRepository
 } from '$lib/server/persistence';
-import { postgresUsageRepository } from '$lib/server/persistence/usage-postgres';
+import { postgresGroupsRepository } from '$lib/server/persistence/groups-postgres';
 import { hashPassword, generateTempPassword } from '$lib/server/auth';
-import { formatCost } from '$lib/config/model-pricing';
+import { sql } from '$lib/server/persistence/db';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
-	// Route protection handled by hooks.server.ts, but double-check
-	if (!locals.session) {
-		throw redirect(303, '/login');
-	}
+interface GroupMemberRow {
+	userId: string;
+	groupId: string;
+	groupName: string;
+	role: 'lead' | 'member';
+}
 
-	const orgId = locals.session.organizationId;
-
-	// Get period from query params (default 30 days)
-	const periodParam = url.searchParams.get('period');
-	const daysBack = periodParam === '7' ? 7 : periodParam === '90' ? 90 : 30;
+export const load: PageServerLoad = async ({ locals }) => {
+	const orgId = locals.session!.organizationId;
 
 	// Get all users in organization
 	const users = await postgresUserRepository.findByOrgId(orgId);
@@ -34,7 +31,32 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const memberships = await postgresOrgMembershipRepository.findByOrgId(orgId);
 	const membershipMap = new Map(memberships.map((m) => [m.userId, { role: m.role, id: m.id }]));
 
-	// Combine user + role data
+	// Get all groups in the organization
+	const groups = await postgresGroupsRepository.findByOrgId(orgId);
+
+	// Get all group memberships for all users in the org
+	const groupMemberships = await sql<GroupMemberRow[]>`
+		SELECT gm.user_id, gm.group_id, g.name as group_name, gm.role
+		FROM group_memberships gm
+		JOIN groups g ON gm.group_id = g.id
+		WHERE g.organization_id = ${orgId}
+		ORDER BY g.name ASC
+	`;
+
+	// Build a map of userId -> groups[]
+	const userGroupsMap = new Map<string, Array<{ id: string; name: string; role: 'lead' | 'member' }>>();
+	for (const gm of groupMemberships) {
+		if (!userGroupsMap.has(gm.userId)) {
+			userGroupsMap.set(gm.userId, []);
+		}
+		userGroupsMap.get(gm.userId)!.push({
+			id: gm.groupId,
+			name: gm.groupName,
+			role: gm.role
+		});
+	}
+
+	// Combine user + role + groups data
 	const usersWithRoles = users.map((u) => {
 		const membership = membershipMap.get(u.id);
 		return {
@@ -45,38 +67,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			status: u.status,
 			role: membership?.role || 'member',
 			membershipId: membership?.id || null,
+			groups: userGroupsMap.get(u.id) || [],
 			lastLoginAt: u.lastLoginAt?.toISOString() || null,
 			createdAt: u.createdAt.toISOString()
 		};
 	});
 
-	// Get usage statistics
-	const [usageStats, modelBreakdown, userBreakdown, dailyUsage] = await Promise.all([
-		postgresUsageRepository.getStats(orgId, daysBack),
-		postgresUsageRepository.getAggregateByModel(orgId, daysBack),
-		postgresUsageRepository.getAggregateByUser(orgId, daysBack),
-		postgresUsageRepository.getDailyTotals(orgId, daysBack)
-	]);
-
 	return {
 		users: usersWithRoles,
-		currentUserId: locals.session.userId,
-		usage: {
-			stats: {
-				...usageStats,
-				formattedCost: formatCost(usageStats.estimatedCostMillicents)
-			},
-			modelBreakdown: modelBreakdown.map(m => ({
-				...m,
-				formattedCost: formatCost(m.estimatedCostMillicents)
-			})),
-			userBreakdown: userBreakdown.map(u => ({
-				...u,
-				formattedCost: formatCost(u.estimatedCostMillicents)
-			})),
-			dailyUsage,
-			period: daysBack
-		}
+		groups: groups.map(g => ({ id: g.id, name: g.name })),
+		currentUserId: locals.session!.userId
 	};
 };
 
@@ -165,8 +165,6 @@ export const actions: Actions = {
 		if (!userId) {
 			return fail(400, { error: 'User ID is required' });
 		}
-
-		const orgId = locals.session.organizationId;
 
 		try {
 			// Update user details

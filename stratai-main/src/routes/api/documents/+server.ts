@@ -10,6 +10,7 @@ import type { RequestHandler } from './$types';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { parseFile, validateFile } from '$lib/server/file-parser';
 import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
+import { generateSummaryBackground } from '$lib/server/summarization';
 
 /**
  * GET /api/documents
@@ -140,6 +141,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			},
 			userId
 		);
+
+		// Trigger background summarization for substantial documents
+		// Fire-and-forget: don't await, don't block the response
+		if (document.charCount > 500 && parsed.content.data) {
+			generateSummaryBackground(
+				document.id,
+				parsed.content.data,
+				document.filename,
+				userId,
+				locals.session.organizationId
+			).catch((err) => console.error('[Summarization] Background generation failed:', err));
+		}
 
 		return json(
 			{

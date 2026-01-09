@@ -5,6 +5,8 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
+	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
+	import { toastStore } from '$lib/stores/toast.svelte';
 	import ModelSelector from '../ModelSelector.svelte';
 	import ModelBadge from '../ModelBadge.svelte';
 	import PlanningTasksIndicator from '../tasks/PlanningTasksIndicator.svelte';
@@ -105,6 +107,32 @@
 			}
 		}
 	}
+
+	// Easter egg: Logo multi-click
+	let logoElement: HTMLAnchorElement | undefined = $state();
+
+	function handleLogoClick(e: MouseEvent) {
+		const triggered = easterEggsStore.trackLogoClick();
+		if (triggered) {
+			e.preventDefault();
+			const isFirstTime = easterEggsStore.discover('logo-click');
+
+			// Trigger animation
+			if (logoElement) {
+				logoElement.classList.add('logo-easter-egg');
+				setTimeout(() => {
+					logoElement?.classList.remove('logo-easter-egg');
+				}, 600);
+			}
+
+			// Show toast
+			if (isFirstTime) {
+				toastStore.discovery('You found the secret logo dance! Built with love by the StratAI team.', 5000);
+			} else {
+				toastStore.info('The logo appreciates your enthusiasm!', 3000);
+			}
+		}
+	}
 </script>
 
 <header class="h-16 px-4 flex items-center border-b border-surface-800 bg-surface-900/80 backdrop-blur-xl overflow-visible relative z-40">
@@ -140,8 +168,13 @@
 			{/if}
 		</button>
 
-		<!-- Logo -->
-		<a href="/" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
+		<!-- Logo (with easter egg on 7 rapid clicks) -->
+		<a
+			bind:this={logoElement}
+			href="/"
+			class="flex items-center gap-2 hover:opacity-90 transition-opacity"
+			onclick={handleLogoClick}
+		>
 			<div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--gradient-primary);">
 				<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path

@@ -26,6 +26,8 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/ENTITY_MODEL.md` - **Authoritative data architecture** (implementation source of truth)
 - `stratai-main/docs/CONTEXT_STRATEGY.md` - **Context/memory architecture** (WHAT to store - moat-level work)
 - `stratai-main/docs/context-loading-architecture.md` - **Just-in-time context loading** (HOW to load via tool calling)
+- `stratai-main/docs/COST_OPTIMIZATION_STRATEGY.md` - **LLM cost optimization** (50-85% savings roadmap)
+- `stratai-main/docs/auto-model-routing-research.md` - **Model routing research** (smart routing strategies)
 - `stratai-main/docs/UI_AUDIT.md` - **UI cleanup audit** (mobile, light mode, consistency)
 - `stratai-main/PRICING_STRATEGY.md` - **Pricing strategy V1 (launch) + V2 (evolution)**
 - `stratai-main/PRODUCT_VISION.md` - Product vision and roadmap
@@ -132,7 +134,64 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-09 (Usage Tracking & Auto Model Routing Research)
+### Latest: 2026-01-09 (Cost Optimization Strategy)
+
+**Completed:**
+
+*Comprehensive Cost Optimization Research:*
+- Launched 6 parallel research agents covering:
+  - Prompt compression (LLMLingua-2, Chain-of-Draft)
+  - Advanced caching (semantic caching, prefix caching, KV cache)
+  - Multi-model strategies (cascading, speculative decoding, distillation)
+  - Provider economics (batch APIs, committed use, pricing trends)
+  - Output optimization (token-efficient tools, max tokens, structured outputs)
+  - Emerging techniques (vLLM, SGLang, dynamic token pruning)
+
+*Codebase Analysis for Optimization Opportunities:*
+- Analyzed LLM integration points in `chat/+server.ts`
+- Reviewed system prompt structure in `system-prompts.ts`
+- Examined existing caching in `tool-cache-postgres.ts`
+- Identified model pricing configuration in `model-pricing.ts`
+
+*COST_OPTIMIZATION_STRATEGY.md - Comprehensive Document:*
+
+**Key Findings:**
+- Anthropic prompt caching: 90% savings on cache reads
+- Model routing/cascading: 40-85% cost reduction (RouteLLM)
+- Batch APIs: 50% automatic discount (OpenAI, Anthropic)
+- Semantic caching: 40%+ savings on repeated queries
+- Token-efficient tools header: 14-70% output reduction
+
+**StratAI-Specific Opportunities Identified:**
+1. System prompt caching structure (25-30% savings)
+2. Enable GPT/Gemini cache optimization (10-15% savings)
+3. Model cascading via LiteLLM (40-60% savings)
+4. Task-level document caching vs conversation-level (15-25% savings)
+5. Token-efficient tools header for Claude (14-70% output savings)
+6. Batch API for non-interactive work (50% savings)
+
+**Implementation Roadmap:**
+- Phase 1 (Week 1-2): Quick wins - token-efficient tools, prompt restructuring
+- Phase 2 (Week 3-4): Model routing - query classifier, cascade fallback
+- Phase 3 (Week 5-8): Batch & semantic caching infrastructure
+
+**Target Outcomes:**
+- Cost per conversation: ~$0.15-0.50 → ~$0.03-0.10 (50-85% reduction)
+- Cache hit rate: ~10% → 60-80%
+- Cheap model usage: 0% → 40-60%
+
+**Files Created:**
+- `stratai-main/docs/COST_OPTIMIZATION_STRATEGY.md` - Full strategy document
+
+**Files Modified:**
+- `CLAUDE.md` - Added strategic document reference, session log
+
+**Next Steps:**
+- Phase 1 implementation: Token-efficient tools header, prompt restructuring
+- Set up cost monitoring dashboard
+- Implement simple model routing heuristics
+
+### Previous: 2026-01-09 (Usage Tracking & Auto Model Routing Research)
 
 **Completed:**
 

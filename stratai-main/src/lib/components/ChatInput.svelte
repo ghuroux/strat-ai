@@ -3,6 +3,7 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
+	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
 	import SearchToggle from './chat/SearchToggle.svelte';
 	import ThinkingToggle from './chat/ThinkingToggle.svelte';
 	import SummarizeButton from './chat/SummarizeButton.svelte';
@@ -139,12 +140,96 @@
 
 	function handleSubmit() {
 		if (!canSend) return;
+
+		// Easter eggs: Check for special phrases
+		const lowerInput = input.trim().toLowerCase();
+		if (lowerInput === 'do a barrel roll' || lowerInput === 'do a barrelroll') {
+			triggerBarrelRoll();
+		} else if (lowerInput === 'ship it' || lowerInput === 'ship it!') {
+			triggerShipIt();
+		}
+
 		onsend?.(input.trim(), pendingAttachments.length > 0 ? [...pendingAttachments] : undefined);
 		input = '';
 		pendingAttachments = [];
 		// Reset textarea height to single row
 		if (textarea) {
 			textarea.style.height = '';
+		}
+	}
+
+	/**
+	 * Easter egg: Trigger a barrel roll animation on the chat container
+	 */
+	function triggerBarrelRoll() {
+		const isFirstTime = easterEggsStore.discover('barrel-roll');
+
+		// Find the main content area and apply barrel roll
+		const mainContent = document.querySelector('.chat-messages-container') ||
+		                    document.querySelector('main') ||
+		                    document.body;
+
+		if (mainContent) {
+			mainContent.classList.add('barrel-roll');
+			setTimeout(() => {
+				mainContent.classList.remove('barrel-roll');
+			}, 1000);
+		}
+
+		// Show toast after animation
+		setTimeout(() => {
+			if (isFirstTime) {
+				toastStore.discovery('Wheeee! You found the barrel roll!', 3000);
+			} else {
+				toastStore.info('Here we go again!', 2000);
+			}
+		}, 500);
+	}
+
+	/**
+	 * Easter egg: Launch a rocket animation when user types "ship it"
+	 */
+	function triggerShipIt() {
+		const isFirstTime = easterEggsStore.discover('ship-it');
+
+		// Create rocket container
+		const container = document.createElement('div');
+		container.className = 'ship-it-container';
+		container.innerHTML = `
+			<div class="ship-it-rocket">🚀</div>
+			<div class="ship-it-particle"></div>
+			<div class="ship-it-particle"></div>
+			<div class="ship-it-particle"></div>
+			<div class="ship-it-particle"></div>
+			<div class="ship-it-particle"></div>
+			<div class="ship-it-particle"></div>
+		`;
+		document.body.appendChild(container);
+
+		// Add screen shake
+		document.body.classList.add('ship-it-shake');
+		setTimeout(() => {
+			document.body.classList.remove('ship-it-shake');
+		}, 400);
+
+		// Remove container after animation
+		setTimeout(() => {
+			container.remove();
+		}, 1600);
+
+		// Show toast
+		if (isFirstTime) {
+			toastStore.discovery('SHIP IT! 🚀 You found the rocket launch!', 4000);
+		} else {
+			const messages = [
+				'To infinity and beyond!',
+				'Houston, we have liftoff!',
+				'Deploying to production!',
+				'🚀 Shipped!',
+				'Full send!'
+			];
+			const message = messages[Math.floor(Math.random() * messages.length)];
+			toastStore.success(message, 3000);
 		}
 	}
 

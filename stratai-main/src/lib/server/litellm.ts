@@ -347,6 +347,72 @@ export async function createChatCompletionWithTools(request: ChatCompletionReque
 	return response;
 }
 
+// ============================================================================
+// Document Summarization
+// ============================================================================
+
+const SUMMARY_MODEL = 'claude-haiku-4-5';
+const SUMMARY_MAX_TOKENS = 250; // Target ~200 tokens output
+
+const SUMMARY_SYSTEM_PROMPT = `You are a document summarizer. Create a concise summary that captures:
+1. Document type (report, email, code, notes, specification, etc.)
+2. Main topic or purpose
+3. Key entities (people, companies, projects, dates, technologies)
+4. 2-3 most important points or takeaways
+
+Keep the summary under 200 tokens. Use bullet points for clarity. Be specific and factual.`;
+
+/**
+ * Generate a summary for a document using a fast, cheap model (Haiku)
+ * Used for cost-efficient document context in conversations
+ *
+ * @param content - The full document content to summarize
+ * @param filename - The document filename for context
+ * @returns Summary text and token usage for cost tracking
+ */
+export async function generateDocumentSummary(
+	content: string,
+	filename: string
+): Promise<{ summary: string; inputTokens: number; outputTokens: number }> {
+	// Truncate very long documents to avoid excessive costs
+	// ~100k chars = ~25k tokens, which is reasonable for Haiku's 200k context
+	const maxContentLength = 100000;
+	const truncatedContent = content.length > maxContentLength
+		? content.slice(0, maxContentLength) + '\n\n[Content truncated for summarization]'
+		: content;
+
+	const response = await fetch(`${getBaseUrl()}/v1/chat/completions`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${getApiKey()}`
+		},
+		body: JSON.stringify({
+			model: SUMMARY_MODEL,
+			messages: [
+				{ role: 'system', content: SUMMARY_SYSTEM_PROMPT },
+				{ role: 'user', content: `Summarize this document (${filename}):\n\n${truncatedContent}` }
+			],
+			max_tokens: SUMMARY_MAX_TOKENS,
+			temperature: 0.3, // Lower temperature for consistent summaries
+			stream: false
+		})
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Document summarization failed: ${response.status} - ${errorText}`);
+	}
+
+	const data = await response.json();
+
+	return {
+		summary: data.choices?.[0]?.message?.content || '',
+		inputTokens: data.usage?.prompt_tokens || 0,
+		outputTokens: data.usage?.completion_tokens || 0
+	};
+}
+
 /**
  * Map LiteLLM errors to user-friendly messages
  */

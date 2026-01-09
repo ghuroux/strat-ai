@@ -9,7 +9,7 @@
  */
 
 import type { SpaceType } from '$lib/types/chat';
-import { buildContextPrompt, type TaskContextInfo } from '$lib/utils/context-builder';
+import type { TaskContextInfo } from '$lib/utils/context-builder';
 
 /**
  * Claude 4.x optimized prompt (Opus 4.5, Sonnet 4.5, Haiku 4.5)
@@ -329,6 +329,7 @@ export interface SpaceInfo {
 		filename: string;
 		content: string;
 		charCount: number;
+		summary?: string; // ~200 token summary for cost-efficient context
 	}>;
 }
 
@@ -344,7 +345,7 @@ export function getSpacePromptAddition(space: SpaceType | null | undefined): str
 
 /**
  * Generate a prompt for a space with user-provided context
- * Includes both text context and reference documents
+ * Uses document summaries for cost efficiency; full content available via read_document tool
  */
 export function getCustomSpacePrompt(space: SpaceInfo): string {
 	// Check if there's any context to add
@@ -365,19 +366,21 @@ You are working within the "${space.name}" space.`;
 ${space.context}`;
 	}
 
-	// Include reference documents if any
+	// Include reference document summaries if any
+	// Full content available via read_document tool for detailed analysis
 	if (space.contextDocuments && space.contextDocuments.length > 0) {
 		prompt += `
 
 ### Reference Documents
-The following documents provide context for this space:`;
+The following document summaries provide context for this space:`;
 
 		for (const doc of space.contextDocuments) {
+			const sizeKb = Math.round(doc.charCount / 1000);
 			prompt += `
 
-<document filename="${doc.filename}">
-${doc.content}
-</document>`;
+<document_summary filename="${doc.filename}" size="${sizeKb}k chars">
+${doc.summary || '[Summary pending - use read_document tool to access content]'}
+</document_summary>`;
 		}
 	}
 
@@ -385,7 +388,7 @@ ${doc.content}
 
 **Guidelines:**
 - Apply this space context to all responses
-- Reference relevant context when helpful${space.contextDocuments?.length ? '\n- Use the reference documents to inform your responses when relevant' : ''}
+- Reference relevant context when helpful${space.contextDocuments?.length ? '\n- Use **read_document** tool to access full document content when you need specific details or quotes' : ''}
 - Stay focused on topics relevant to this space
 </space_context>`;
 
@@ -434,12 +437,14 @@ export function getFullSystemPromptWithSpace(model: string, space: SpaceInfo): s
 
 /**
  * Document content for context injection
+ * Includes optional summary for cost-efficient context (summaries in prompt, full content via tool)
  */
 export interface ContextDocument {
 	id: string;
 	filename: string;
 	content: string;
 	charCount: number;
+	summary?: string; // ~200 token summary for context; use read_document tool for full content
 }
 
 /**
@@ -472,6 +477,7 @@ export interface FocusedTaskInfo {
 /**
  * Generate prompt addition for focus area context
  * Focus areas provide specialized context within a space
+ * Uses document summaries for cost efficiency; full content available via read_document tool
  */
 export function getFocusAreaPrompt(focusArea: FocusAreaInfo): string {
 	let prompt = `
@@ -486,19 +492,21 @@ You are assisting within a specialized context called "${focusArea.name}".`;
 ${focusArea.context}`;
 	}
 
-	// Include reference documents if any
+	// Include reference document summaries if any
+	// Full content available via read_document tool for detailed analysis
 	if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
 		prompt += `
 
 ### Reference Documents
-The following documents provide additional context for this focus area:`;
+The following document summaries provide context for this focus area:`;
 
 		for (const doc of focusArea.contextDocuments) {
+			const sizeKb = Math.round(doc.charCount / 1000);
 			prompt += `
 
-<document filename="${doc.filename}">
-${doc.content}
-</document>`;
+<document_summary filename="${doc.filename}" size="${sizeKb}k chars">
+${doc.summary || '[Summary pending - use read_document tool to access content]'}
+</document_summary>`;
 		}
 	}
 
@@ -506,7 +514,7 @@ ${doc.content}
 
 **Your role:**
 - Apply this specialized context to all responses
-- Reference relevant background information when helpful${focusArea.contextDocuments?.length ? '\n- Use the reference documents to inform your responses when relevant' : ''}
+- Reference relevant background information when helpful${focusArea.contextDocuments?.length ? '\n- Use **read_document** tool to access full document content when you need specific details or quotes' : ''}
 - Stay focused on topics relevant to this context
 - If the user asks about unrelated topics, you can still help but acknowledge it's outside this focus area
 </focus_area_context>`;
@@ -992,37 +1000,6 @@ ${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea
 	// Structure: Platform → Plan Mode Instructions → Minimal Context Note
 	// Plan Mode rules come BEFORE any heavy context to prevent being ignored
 	return `${platformPrompt}\n${planModePrompt}${contextNote}`;
-}
-
-/**
- * Generate the context prompt from task context
- * This formats linked documents and related tasks for injection
- */
-export function getTaskContextPrompt(context: TaskContextInfo | null | undefined): string {
-	if (!context) return '';
-
-	const hasDocuments = context.documents && context.documents.length > 0;
-	const hasRelatedTasks = context.relatedTasks && context.relatedTasks.length > 0;
-
-	if (!hasDocuments && !hasRelatedTasks) {
-		return '';
-	}
-
-	const contextContent = buildContextPrompt(context);
-
-	return `
-<task_context>
-## Available Context
-
-The user has provided the following context for this task. Use this information to inform your responses and make your assistance more relevant.
-
-${contextContent}
-
-**Instructions:**
-- Reference specific documents when relevant to the discussion
-- Consider related task context when suggesting approaches
-- If context seems incomplete, you may ask the user for clarification
-</task_context>`;
 }
 
 /**

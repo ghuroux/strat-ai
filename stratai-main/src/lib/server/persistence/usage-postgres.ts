@@ -16,7 +16,7 @@ export interface LLMUsageRecord {
 	userId: string;
 	conversationId: string | null;
 	model: string;
-	requestType: 'chat' | 'arena' | 'second-opinion';
+	requestType: 'chat' | 'arena' | 'second-opinion' | 'summarization';
 	promptTokens: number;
 	completionTokens: number;
 	totalTokens: number;
@@ -67,6 +67,22 @@ export interface UserUsageAggregate {
 	username: string;
 	totalRequests: number;
 	totalTokens: number;
+	promptTokens: number;
+	completionTokens: number;
+	cacheReadTokens: number;
+	estimatedCostMillicents: number;
+}
+
+/**
+ * Model breakdown for a specific user
+ */
+export interface UserModelBreakdown {
+	model: string;
+	totalRequests: number;
+	totalTokens: number;
+	promptTokens: number;
+	completionTokens: number;
+	cacheReadTokens: number;
 	estimatedCostMillicents: number;
 }
 
@@ -105,7 +121,7 @@ function rowToUsage(row: UsageRow): LLMUsageRecord {
 		userId: row.userId,
 		conversationId: row.conversationId,
 		model: row.model,
-		requestType: row.requestType as 'chat' | 'arena' | 'second-opinion',
+		requestType: row.requestType as 'chat' | 'arena' | 'second-opinion' | 'summarization',
 		promptTokens: row.promptTokens,
 		completionTokens: row.completionTokens,
 		totalTokens: row.totalTokens,
@@ -122,7 +138,7 @@ export interface UsageRepository {
 		userId: string;
 		conversationId?: string | null;
 		model: string;
-		requestType?: 'chat' | 'arena' | 'second-opinion';
+		requestType?: 'chat' | 'arena' | 'second-opinion' | 'summarization';
 		promptTokens: number;
 		completionTokens: number;
 		totalTokens: number;
@@ -134,6 +150,7 @@ export interface UsageRepository {
 	getStats(organizationId: string, daysBack?: number): Promise<UsageStats>;
 	getAggregateByModel(organizationId: string, daysBack?: number): Promise<ModelUsageAggregate[]>;
 	getAggregateByUser(organizationId: string, daysBack?: number): Promise<UserUsageAggregate[]>;
+	getModelBreakdownByUser(organizationId: string, userId: string, daysBack?: number): Promise<UserModelBreakdown[]>;
 	getDailyTotals(organizationId: string, daysBack?: number): Promise<DailyUsage[]>;
 }
 
@@ -253,6 +270,9 @@ export const postgresUsageRepository: UsageRepository = {
 			username: string;
 			totalRequests: string;
 			totalTokens: string;
+			promptTokens: string;
+			completionTokens: string;
+			cacheReadTokens: string;
 			estimatedCostMillicents: string;
 		}>>`
 			SELECT
@@ -261,6 +281,9 @@ export const postgresUsageRepository: UsageRepository = {
 				users.username,
 				COUNT(*)::text AS "totalRequests",
 				COALESCE(SUM(u.total_tokens), 0)::text AS "totalTokens",
+				COALESCE(SUM(u.prompt_tokens), 0)::text AS "promptTokens",
+				COALESCE(SUM(u.completion_tokens), 0)::text AS "completionTokens",
+				COALESCE(SUM(u.cache_read_tokens), 0)::text AS "cacheReadTokens",
 				COALESCE(SUM(u.estimated_cost_millicents), 0)::text AS "estimatedCostMillicents"
 			FROM llm_usage u
 			JOIN users ON users.id = u.user_id
@@ -276,6 +299,49 @@ export const postgresUsageRepository: UsageRepository = {
 			username: row.username,
 			totalRequests: parseInt(row.totalRequests, 10),
 			totalTokens: parseInt(row.totalTokens, 10),
+			promptTokens: parseInt(row.promptTokens, 10),
+			completionTokens: parseInt(row.completionTokens, 10),
+			cacheReadTokens: parseInt(row.cacheReadTokens, 10),
+			estimatedCostMillicents: parseInt(row.estimatedCostMillicents, 10)
+		}));
+	},
+
+	/**
+	 * Get model breakdown for a specific user
+	 */
+	async getModelBreakdownByUser(organizationId: string, userId: string, daysBack: number = 30): Promise<UserModelBreakdown[]> {
+		const rows = await sql<Array<{
+			model: string;
+			totalRequests: string;
+			totalTokens: string;
+			promptTokens: string;
+			completionTokens: string;
+			cacheReadTokens: string;
+			estimatedCostMillicents: string;
+		}>>`
+			SELECT
+				model,
+				COUNT(*)::text AS "totalRequests",
+				COALESCE(SUM(total_tokens), 0)::text AS "totalTokens",
+				COALESCE(SUM(prompt_tokens), 0)::text AS "promptTokens",
+				COALESCE(SUM(completion_tokens), 0)::text AS "completionTokens",
+				COALESCE(SUM(cache_read_tokens), 0)::text AS "cacheReadTokens",
+				COALESCE(SUM(estimated_cost_millicents), 0)::text AS "estimatedCostMillicents"
+			FROM llm_usage
+			WHERE organization_id = ${organizationId}
+			  AND user_id = ${userId}
+			  AND created_at >= NOW() - INTERVAL '1 day' * ${daysBack}
+			GROUP BY model
+			ORDER BY SUM(total_tokens) DESC
+		`;
+
+		return rows.map(row => ({
+			model: row.model,
+			totalRequests: parseInt(row.totalRequests, 10),
+			totalTokens: parseInt(row.totalTokens, 10),
+			promptTokens: parseInt(row.promptTokens, 10),
+			completionTokens: parseInt(row.completionTokens, 10),
+			cacheReadTokens: parseInt(row.cacheReadTokens, 10),
 			estimatedCostMillicents: parseInt(row.estimatedCostMillicents, 10)
 		}));
 	},

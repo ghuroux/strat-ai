@@ -14,6 +14,7 @@ import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists
 import { estimateCost } from '$lib/config/model-pricing';
 import type { SpaceType } from '$lib/types/chat';
 import { isSystemSpace } from '$lib/types/spaces';
+import { generateSummaryOnDemand, needsSummarization } from '$lib/server/summarization';
 
 /**
  * Context for tracking usage across streaming responses
@@ -398,10 +399,10 @@ const webSearchToolOpenAI = {
 };
 
 // Document reading tool - Anthropic format
-// Used in Plan Mode to let AI access reference documents on-demand
+// Enables AI to access full document content on-demand (prompts contain summaries)
 const readDocumentToolAnthropic: ToolDefinition = {
 	name: 'read_document',
-	description: 'Read a reference document to get context for planning. IMPORTANT: On the FIRST exchange when documents are available, read them to understand what the user has already gathered. This shows you\'ve done your homework. Use the document content to ask informed, specific questions rather than generic ones.',
+	description: 'Read a reference document to access its full content. Use this when you need specific details, quotes, or comprehensive information beyond what the document summary provides. Available documents are listed in the system context.',
 	input_schema: {
 		type: 'object',
 		properties: {
@@ -419,7 +420,7 @@ const readDocumentToolOpenAI = {
 	type: 'function' as const,
 	function: {
 		name: 'read_document',
-		description: 'Read a reference document to get context for planning. IMPORTANT: On the FIRST exchange when documents are available, read them to understand what the user has already gathered. This shows you\'ve done your homework. Use the document content to ask informed, specific questions rather than generic ones.',
+		description: 'Read a reference document to access its full content. Use this when you need specific details, quotes, or comprehensive information beyond what the document summary provides. Available documents are listed in the system context.',
 		parameters: {
 			type: 'object',
 			properties: {
@@ -697,12 +698,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					// Filter out nulls and map to context format
 					const validDocs = documents.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
 					if (validDocs.length > 0) {
-						spaceContext.contextDocuments = validDocs.map((doc) => ({
-							id: doc.id,
-							filename: doc.filename,
-							content: doc.content,
-							charCount: doc.charCount
-						}));
+						// Generate summaries on-demand for documents missing them
+						spaceContext.contextDocuments = await Promise.all(
+							validDocs.map(async (doc) => {
+								let summary = doc.summary;
+								// Generate summary on-demand if missing and document is substantial
+								if (needsSummarization(doc.charCount, summary)) {
+									summary = await generateSummaryOnDemand(
+										doc.id,
+										doc.content,
+										doc.filename,
+										userId,
+										locals.session!.organizationId
+									);
+								}
+								return {
+									id: doc.id,
+									filename: doc.filename,
+									content: doc.content,
+									charCount: doc.charCount,
+									summary: summary ?? undefined
+								};
+							})
+						);
 						console.log(`Space "${spaceData.name}" loaded with ${validDocs.length} document(s)`);
 					}
 				}
@@ -753,12 +771,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					// Filter out nulls and map to context format
 					const validDocs = documents.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
 					if (validDocs.length > 0) {
-						focusAreaContext.contextDocuments = validDocs.map((doc) => ({
-							id: doc.id,
-							filename: doc.filename,
-							content: doc.content,
-							charCount: doc.charCount
-						}));
+						// Generate summaries on-demand for documents missing them
+						focusAreaContext.contextDocuments = await Promise.all(
+							validDocs.map(async (doc) => {
+								let summary = doc.summary;
+								// Generate summary on-demand if missing and document is substantial
+								if (needsSummarization(doc.charCount, summary)) {
+									summary = await generateSummaryOnDemand(
+										doc.id,
+										doc.content,
+										doc.filename,
+										userId,
+										locals.session!.organizationId
+									);
+								}
+								return {
+									id: doc.id,
+									filename: doc.filename,
+									content: doc.content,
+									charCount: doc.charCount,
+									summary: summary ?? undefined
+								};
+							})
+						);
 						console.log(`Focus area "${focusArea.name}" loaded with ${validDocs.length} document(s)`);
 					}
 				}
@@ -853,11 +888,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Determine if we need tool handling:
 		// 1. Web search is enabled
-		// 2. Plan Mode with reference documents (enables on-demand document reading)
+		// 2. Reference documents exist (enables on-demand document reading via read_document tool)
+		//    - This is critical for cost optimization: prompts contain summaries, tool provides full content
 		const hasReferenceDocuments =
 			(focusAreaContext?.contextDocuments?.length ?? 0) > 0 ||
-			(planModeContext?.context?.documents?.length ?? 0) > 0;
-		const needsToolHandling = searchEnabled || (planModeContext && hasReferenceDocuments);
+			(planModeContext?.context?.documents?.length ?? 0) > 0 ||
+			(spaceContext?.contextDocuments?.length ?? 0) > 0;
+		const needsToolHandling = searchEnabled || hasReferenceDocuments;
 
 		if (needsToolHandling) {
 			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId);
@@ -974,8 +1011,18 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 		requestType: 'chat'
 	} : undefined;
 
-	// Build map of available documents (from focus area and/or plan mode task context)
+	// Build map of available documents (from space, focus area, and/or plan mode task context)
+	// This enables the read_document tool to access full content when AI needs details beyond summaries
 	const availableDocuments = new Map<string, DocumentInfo>();
+	if (spaceInfo?.contextDocuments) {
+		for (const doc of spaceInfo.contextDocuments) {
+			availableDocuments.set(doc.filename, {
+				filename: doc.filename,
+				content: doc.content,
+				charCount: doc.charCount
+			});
+		}
+	}
 	if (focusArea?.contextDocuments) {
 		for (const doc of focusArea.contextDocuments) {
 			availableDocuments.set(doc.filename, {

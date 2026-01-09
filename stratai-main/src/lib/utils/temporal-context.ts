@@ -92,16 +92,92 @@ function saveVisitRecord(record: VisitRecord): void {
 }
 
 /**
+ * Get current hour for special time-based greetings
+ */
+function getCurrentHour(): number {
+	return new Date().getHours();
+}
+
+/**
+ * Get current day of week (0 = Sunday, 5 = Friday)
+ */
+function getDayOfWeek(): number {
+	return new Date().getDay();
+}
+
+/**
+ * Special greetings for unusual hours (easter egg style)
+ */
+function getSpecialTimeGreeting(): string | null {
+	const hour = getCurrentHour();
+	const day = getDayOfWeek();
+
+	// Late night workers (10pm - 3am) - random fun message
+	if (hour >= 22 || hour < 3) {
+		const lateNightGreetings = [
+			'Burning the midnight oil?',
+			'The night owl arrives',
+			'Late night genius mode activated',
+			'Coffee status: probably needed',
+			'When everyone sleeps, we ship',
+			'Nocturnal productivity mode'
+		];
+		return lateNightGreetings[Math.floor(Math.random() * lateNightGreetings.length)];
+	}
+
+	// Very early birds (3am - 5am)
+	if (hour >= 3 && hour < 5) {
+		const earlyBirdGreetings = [
+			'Up before the sun!',
+			'Early bird gets the code',
+			'The world is still asleep...',
+			'Maximum focus hours activated'
+		];
+		return earlyBirdGreetings[Math.floor(Math.random() * earlyBirdGreetings.length)];
+	}
+
+	// Friday afternoon/evening
+	if (day === 5 && hour >= 15) {
+		const fridayGreetings = [
+			'Happy Friday!',
+			'Weekend is loading...',
+			'Friday mode: engaged',
+			'Almost there...'
+		];
+		return fridayGreetings[Math.floor(Math.random() * fridayGreetings.length)];
+	}
+
+	// Sunday evening (pre-Monday blues)
+	if (day === 0 && hour >= 18) {
+		const sundayGreetings = [
+			'Sunday evening planning?',
+			'Getting ahead of the week',
+			'Preparation is key'
+		];
+		return sundayGreetings[Math.floor(Math.random() * sundayGreetings.length)];
+	}
+
+	return null;
+}
+
+/**
  * Generate greeting based on temporal context
  */
 function generateGreeting(ctx: Omit<TemporalContext, 'greeting'>): string {
 	// Priority order:
 	// 1. Returning after 3+ days
-	// 2. New week (Monday)
-	// 3. Time of day
+	// 2. Special time-based greeting (late night, early morning, etc.)
+	// 3. New week (Monday)
+	// 4. Time of day
 
 	if (ctx.isReturningAfterAbsence) {
 		return 'Welcome back';
+	}
+
+	// Check for special time-based greeting (easter egg style)
+	const specialGreeting = getSpecialTimeGreeting();
+	if (specialGreeting) {
+		return specialGreeting;
 	}
 
 	if (ctx.isNewWeek) {

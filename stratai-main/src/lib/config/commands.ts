@@ -21,20 +21,29 @@ import {
 	MessageSquare,
 	Sparkles,
 	Search,
-	ArrowRight
+	ArrowRight,
+	BarChart3,
+	UserPlus,
+	Shield,
+	Users,
+	Layers,
+	Terminal
 } from 'lucide-svelte';
+import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
+import { toastStore } from '$lib/stores/toast.svelte';
 import { spacesStore } from '$lib/stores/spaces.svelte';
 import { areaStore } from '$lib/stores/areas.svelte';
 import { taskStore } from '$lib/stores/tasks.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { chatStore } from '$lib/stores/chat.svelte';
+import { userStore } from '$lib/stores/user.svelte';
 import type { Conversation } from '$lib/types/chat';
 
 // =============================================================================
 // Types
 // =============================================================================
 
-export type CommandCategory = 'navigation' | 'action' | 'settings' | 'conversations';
+export type CommandCategory = 'navigation' | 'action' | 'admin' | 'settings' | 'conversations';
 
 export interface Command {
 	id: string;
@@ -55,8 +64,9 @@ export interface Command {
 export const categoryConfig: Record<CommandCategory, { label: string; order: number }> = {
 	navigation: { label: 'Navigation', order: 1 },
 	action: { label: 'Actions', order: 2 },
-	settings: { label: 'Settings', order: 3 },
-	conversations: { label: 'Conversations', order: 4 }
+	admin: { label: 'Admin', order: 3 },
+	settings: { label: 'Settings', order: 4 },
+	conversations: { label: 'Conversations', order: 5 }
 };
 
 // =============================================================================
@@ -164,6 +174,97 @@ export function getStaticCommands(): Command[] {
 			keywords: ['theme', 'light', 'mode', 'day', 'bright'],
 			action: () => settingsStore.setTheme('light'),
 			enabled: () => settingsStore.theme !== 'light'
+		},
+
+		// =========================================================================
+		// Easter Egg Commands (Hidden but searchable)
+		// =========================================================================
+		{
+			id: 'easter-theme-hacker',
+			label: 'Hacker Mode',
+			description: 'Enter the Matrix...',
+			category: 'settings',
+			icon: Terminal,
+			keywords: ['theme:hacker', 'hacker', 'matrix', 'green', 'neo', 'morpheus', '1337'],
+			action: () => {
+				const body = document.body;
+				const isActive = body.classList.contains('theme-hacker');
+
+				if (isActive) {
+					// Disable hacker mode
+					body.classList.remove('theme-hacker');
+					toastStore.info('Exiting the Matrix...', 3000);
+				} else {
+					// Enable hacker mode - also force dark theme for best effect
+					settingsStore.setTheme('dark');
+					body.classList.add('theme-hacker');
+					const isFirstTime = easterEggsStore.discover('hacker-theme');
+					if (isFirstTime) {
+						toastStore.discovery('Welcome to the Matrix. You found a secret theme!', 5000);
+					} else {
+						toastStore.success('Hacker mode activated. Type again to exit.', 3000);
+					}
+				}
+			}
+		}
+	];
+}
+
+// =============================================================================
+// Admin Commands (only shown to admins/owners)
+// =============================================================================
+
+export function getAdminCommands(): Command[] {
+	// Only show admin commands if user has admin privileges
+	if (!userStore.isAdmin) {
+		return [];
+	}
+
+	return [
+		{
+			id: 'admin-usage',
+			label: 'View Usage',
+			description: 'Monitor organization LLM usage and costs',
+			category: 'admin' as CommandCategory,
+			icon: BarChart3,
+			keywords: ['admin', 'usage', 'analytics', 'costs', 'tokens', 'metrics'],
+			action: () => goto('/admin/usage')
+		},
+		{
+			id: 'admin-members',
+			label: 'Manage Members',
+			description: 'Add, remove, and manage organization members',
+			category: 'admin' as CommandCategory,
+			icon: Users,
+			keywords: ['admin', 'members', 'users', 'team', 'people', 'invite'],
+			action: () => goto('/admin/members')
+		},
+		{
+			id: 'admin-groups',
+			label: 'Manage Groups',
+			description: 'Create and manage user groups',
+			category: 'admin' as CommandCategory,
+			icon: Users,
+			keywords: ['admin', 'groups', 'teams', 'departments'],
+			action: () => goto('/admin/groups')
+		},
+		{
+			id: 'admin-model-access',
+			label: 'Model Access',
+			description: 'Configure model tiers and access controls',
+			category: 'admin' as CommandCategory,
+			icon: Layers,
+			keywords: ['admin', 'models', 'tiers', 'access', 'permissions'],
+			action: () => goto('/admin/model-access')
+		},
+		{
+			id: 'admin-settings',
+			label: 'Organization Settings',
+			description: 'Configure organization-wide settings',
+			category: 'admin' as CommandCategory,
+			icon: Settings,
+			keywords: ['admin', 'settings', 'organization', 'config', 'preferences'],
+			action: () => goto('/admin/settings')
 		}
 	];
 }
@@ -258,11 +359,12 @@ export function getTaskCommands(): Command[] {
 // =============================================================================
 
 /**
- * Get all available commands (static + dynamic)
+ * Get all available commands (static + dynamic + admin)
  */
 export function getAllCommands(): Command[] {
 	const commands = [
 		...getStaticCommands(),
+		...getAdminCommands(),
 		...getSpaceCommands(),
 		...getAreaCommands(),
 		...getTaskCommands()
@@ -328,7 +430,7 @@ export function groupByCategory(commands: Command[]): Map<CommandCategory, Comma
 	const groups = new Map<CommandCategory, Command[]>();
 
 	// Initialize groups in order
-	const orderedCategories: CommandCategory[] = ['navigation', 'action', 'settings', 'conversations'];
+	const orderedCategories: CommandCategory[] = ['navigation', 'action', 'admin', 'settings', 'conversations'];
 	for (const cat of orderedCategories) {
 		groups.set(cat, []);
 	}
