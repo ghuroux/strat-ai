@@ -132,7 +132,47 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-09 (Command Palette & Enterprise Foundation)
+### Latest: 2026-01-09 (Usage Tracking & Auto Model Routing Research)
+
+**Completed:**
+
+*Usage Tracking Cache Fix:*
+- Fixed cache metrics not being saved to database
+- Root cause: Code extracted cache from HTTP headers, but Anthropic returns in usage object
+- Fixed `handleChatWithTools` at lines 1331-1345 to extract from `responseData.usage`
+- Added logging: `[Cache] model: created=X, read=Y tokens`
+
+*Auto Model Routing Research:*
+- Comprehensive research on LLM model routing approaches (Jan 2026)
+- Analyzed industry players: OpenRouter Auto, Martian, Not Diamond, RouteLLM
+- Documented approaches: Rule-based, Embedding-based, Classifier, Meta-model, Cascading
+- Research finding: 2-5x cost savings possible without quality degradation
+- Created strategic document: `stratai-main/docs/auto-model-routing-research.md`
+
+*Recommended Hybrid Approach:*
+- Tier 1: Explicit context rules (Space/Area type → model preference)
+- Tier 2: Fast signal detection (code patterns, keywords, query length)
+- Tier 3: Embedding-based classification (~50ms, for ambiguous queries)
+- Tier 4: User preference learning (personalization over time)
+
+**Files Created:**
+- `stratai-main/docs/auto-model-routing-research.md` - Complete research & strategy document
+
+**Files Modified:**
+- `src/routes/api/chat/+server.ts` - Fixed cache metrics extraction in handleChatWithTools
+
+**Key Research Sources:**
+- RouteLLM (LMSYS, ICLR 2025) - 85% cost reduction at 95% quality
+- OpenRouter Auto Router - Meta-model analysis
+- Martian - Model behavior prediction, 98% cost savings claim
+- Red Hat Semantic Router - Embedding-based approach
+
+**Next Steps:**
+- Finalize Auto routing approach (leaning embedding-based with explicit rules for Spaces)
+- Phase 1 implementation: Model capabilities matrix, basic context rules
+- Test cache metrics capture with new fix
+
+### Previous: 2026-01-09 (Command Palette & Enterprise Foundation)
 
 **Completed:**
 
