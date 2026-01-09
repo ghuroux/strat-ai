@@ -134,7 +134,114 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-09 (Cost Optimization Strategy)
+### Latest: 2026-01-09 (Admin Portal & Easter Eggs Phase 2)
+
+**Completed:**
+
+*Admin Portal - Complete Infrastructure:*
+- `AdminLayout.svelte`, `AdminHeader.svelte`, `AdminSidebar.svelte` - Shared admin components
+- Refactored from single-page to multi-route layout with sidebar navigation
+- Six admin pages: Overview, Members, Groups, Model Access, Budgets, Settings
+- Admin layout with persistent sidebar and breadcrumbs
+
+*Groups Management:*
+- Full CRUD for groups with `CreateGroupModal.svelte` and `DeleteGroupModal.svelte`
+- Group detail page (`/admin/groups/[id]`) with member management
+- Add/remove members, promote to lead role
+- `groups-postgres.ts` persistence layer with comprehensive queries
+- Migration `019-groups.sql` for groups and group_members tables
+
+*Members Page Enhancements:*
+- Search bar with real-time filtering by name/username/email
+- Role filter buttons (All, Owners, Admins, Members)
+- Groups column showing memberships with lead badge indicators
+- Light mode support matching admin design system
+
+*Model Access & Budgets:*
+- Model tier management (Basic, Standard, Premium) at `/admin/model-access`
+- User tier assignments with upgrade/downgrade functionality
+- Budget tracking by tier with usage visualization at `/admin/budgets`
+- Migrations `020-org-budget-tiers.sql` and `021-model-tier-assignments.sql`
+
+*Easter Eggs Phase 2:*
+- Discovery toast type with shimmer animation for first-time finds
+- Hacker Mode command (matrix-style green theme via Cmd+K)
+- Time-based greetings for unusual hours and special days
+- Keyboard shortcuts modal (? key) with easter egg hints
+- Rage click detector with calming messages
+- Ship It! rocket animation on "ship it" in chat
+- `easter-eggs.svelte.ts` store for tracking discoveries
+- `EASTER_EGGS.md` documentation
+
+*Additional Infrastructure:*
+- `user.svelte.ts` store for current user state
+- `summarization.ts` service for conversation summaries
+- `KeyboardShortcutsModal.svelte` for keyboard shortcuts reference
+- Light mode styling throughout admin pages in `app.css`
+- `admin-portal-design.md` architecture documentation
+
+**Files Created:**
+- `src/lib/components/admin/AdminLayout.svelte`
+- `src/lib/components/admin/AdminHeader.svelte`
+- `src/lib/components/admin/AdminSidebar.svelte`
+- `src/lib/components/admin/index.ts`
+- `src/routes/admin/+layout.svelte`
+- `src/routes/admin/+layout.server.ts`
+- `src/routes/admin/overview/+page.svelte`, `+page.server.ts`
+- `src/routes/admin/members/+page.svelte`, `+page.server.ts`
+- `src/routes/admin/groups/+page.svelte`, `+page.server.ts`
+- `src/routes/admin/groups/[id]/+page.svelte`, `+page.server.ts`
+- `src/routes/admin/groups/CreateGroupModal.svelte`
+- `src/routes/admin/groups/DeleteGroupModal.svelte`
+- `src/routes/admin/model-access/+page.svelte`, `+page.server.ts`
+- `src/routes/admin/budgets/+page.svelte`, `+page.server.ts`
+- `src/routes/admin/settings/+page.svelte`, `+page.server.ts`
+- `src/routes/admin/usage/+page.svelte`, `+page.server.ts`
+- `src/routes/api/admin/groups/+server.ts`
+- `src/routes/api/admin/groups/[id]/+server.ts`
+- `src/routes/api/admin/groups/[id]/members/+server.ts`
+- `src/routes/api/admin/groups/[id]/members/[userId]/+server.ts`
+- `src/routes/api/admin/budgets/+server.ts`
+- `src/routes/api/admin/model-access/+server.ts`
+- `src/routes/api/admin/settings/+server.ts`
+- `src/routes/api/admin/usage/user/[userId]/+server.ts`
+- `src/lib/server/persistence/groups-postgres.ts`
+- `src/lib/server/persistence/migrations/018-system-prompts.sql`
+- `src/lib/server/persistence/migrations/019-groups.sql`
+- `src/lib/server/persistence/migrations/020-org-budget-tiers.sql`
+- `src/lib/server/persistence/migrations/021-model-tier-assignments.sql`
+- `src/lib/server/summarization.ts`
+- `src/lib/stores/easter-eggs.svelte.ts`
+- `src/lib/stores/user.svelte.ts`
+- `src/lib/components/KeyboardShortcutsModal.svelte`
+- `docs/EASTER_EGGS.md`
+- `docs/admin-portal-design.md`
+
+**Files Modified:**
+- `src/routes/admin/+page.svelte` - Redirects to overview
+- `src/routes/+layout.svelte` - Easter eggs integration, keyboard shortcuts
+- `src/app.css` - Light mode admin styles, discovery toast animation
+- `src/lib/components/ChatInput.svelte` - Ship It! easter egg
+- `src/lib/components/Toast.svelte` - Discovery toast type
+- `src/lib/components/layout/Header.svelte` - Easter egg triggers
+- `src/lib/components/layout/UserMenu.svelte` - Admin navigation
+- `src/lib/config/commands.ts` - Hacker Mode command
+- `src/lib/config/system-prompts.ts` - Structured for caching
+- `src/lib/server/litellm.ts` - Model listing improvements
+- `src/lib/server/persistence/usage-postgres.ts` - User usage queries
+- `src/lib/utils/temporal-context.ts` - Time-based easter eggs
+- `src/routes/api/chat/+server.ts` - Summarization integration
+- `src/routes/api/documents/+server.ts` - Error handling
+
+**Commits Made:**
+- `c776d83` - feat: Add Easter Eggs Phase 2 and Admin Portal restructure
+
+**Next Steps:**
+- Run database migrations (018-021)
+- Test admin portal functionality across all pages
+- Continue with enterprise auth integration
+
+### Previous: 2026-01-09 (Cost Optimization Strategy)
 
 **Completed:**
 
