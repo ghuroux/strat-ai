@@ -29,7 +29,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/context-loading-architecture.md` - **Just-in-time context loading** (HOW to load via tool calling)
 - `stratai-main/docs/COST_OPTIMIZATION_STRATEGY.md` - **LLM cost optimization** (50-85% savings roadmap)
 - `stratai-main/docs/auto-model-routing-research.md` - **Model routing research** (smart routing strategies)
-- `stratai-main/docs/UI_AUDIT.md` - **UI cleanup audit** (mobile, light mode, consistency)
+- `stratai-main/docs/AUTO_MODEL_ROUTING.md` - **AUTO routing implementation** (complexity analysis, tiers)
 - `stratai-main/PRICING_STRATEGY.md` - **Pricing strategy V1 (launch) + V2 (evolution)**
 - `stratai-main/PRODUCT_VISION.md` - Product vision and roadmap
 - `stratai-main/BACKLOG.md` - Feature backlog and priorities
@@ -141,7 +141,84 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-11 (Document System Architecture)
+### Latest: 2026-01-11 (Document System Implementation & AUTO Model Routing)
+
+**Completed:**
+
+*AI-Native Document System - Full Implementation:*
+- Complete Pages system with TipTap rich text editor
+- Document types: general, meeting notes, decision records, proposals, briefs
+- Editor toolbar with formatting, lists, code blocks, links
+- Page list and card UI with search and filtering
+- Visibility controls (private/shared)
+- Export menu functionality
+- Guided creation banner
+
+*Discussion Panel Integration (Phase 7):*
+- `EditorChatPanel.svelte` - Collapsible chat panel (350px) for page discussions
+- Added `systemPrompt` field to `ChatCompletionRequest` interface
+- Modified `/api/chat/+server.ts` to extract and inject custom system prompts
+- AI now receives full page context (title, type, content)
+- Markdown rendering in chat panel responses
+- Quick prompts: "Check spelling", "Make formal", "Summarize"
+
+*Apply Button Fix (Cross-Formatting Text):*
+- Fixed regex for suggested changes extraction: `.+?` to `[^\n]+`
+- Solved truncation issue (e.g., "200% growth" extracted as "2")
+- Added `stripQuotes()` helper for clean text extraction
+- New cross-node text replacement algorithm in `PageEditor.svelte`
+- Maps concatenated text positions to document positions
+- Apply button now works for text spanning bold/italic/formatting
+
+*AUTO Model Routing System:*
+- `src/lib/services/model-router/` - Complete routing infrastructure
+- Query complexity analysis (code patterns, reasoning indicators, length)
+- Context-aware routing (space type, area, plan mode, thinking enabled)
+- Provider support: Anthropic, OpenAI, Google
+- Tier-based model selection: simple/standard/complex/specialist
+- Routing decisions logged to database for analytics
+- Admin dashboard at `/admin/routing` for statistics
+
+*Layered System Prompt Caching:*
+- `createLayeredSystemMessage()` for multi-block caching
+- Platform prompt cached globally (shared across users)
+- Context cached per-area (shared across conversations)
+- Improved cache hit rates vs single-block approach
+
+*Settings Pages Infrastructure:*
+- Settings layout with sidebar navigation at `/settings`
+- Profile, appearance, AI preferences, shortcuts sections
+- User preferences API endpoints
+
+**Files Created:**
+- `src/lib/components/pages/*.svelte` - 12 page editor components
+- `src/lib/services/model-router/**` - Router with analyzers, config, types
+- `src/lib/components/settings/*.svelte` - 9 settings components
+- `src/routes/api/pages/**` - Complete Pages API (CRUD, discussion, export)
+- `src/routes/admin/routing/` - Routing admin dashboard
+- `src/lib/server/persistence/pages-postgres.ts` - Pages persistence
+- `src/lib/server/persistence/routing-decisions-postgres.ts` - Routing logs
+- `src/lib/stores/pages.svelte.ts` - Pages store
+- `src/lib/types/page.ts` - Page types and utilities
+- Migrations: 022-user-preferences.sql, 023-pages-system.sql, 023-routing-decisions.sql
+
+**Files Modified:**
+- `src/lib/types/api.ts` - Added systemPrompt, provider, conversationTurn fields
+- `src/routes/api/chat/+server.ts` - AUTO routing, layered caching, custom prompts
+- `src/lib/config/system-prompts.ts` - Layered prompt structure
+- `src/lib/server/litellm.ts` - Model listing improvements
+- Various UI components - Light mode support, bug fixes
+
+**Commits Made:**
+- `4145386` - feat: Add AI-native Document System with AUTO model routing
+
+**Next Steps:**
+- Run database migrations (022, 023)
+- Test AUTO routing in production
+- Test page discussions with Apply button
+- Continue with guided creation flow (Phase 8)
+
+### Previous: 2026-01-11 (Document System Architecture)
 
 **Completed:**
 
@@ -162,37 +239,8 @@ Don't revisit without good reason:
 - **Test Cases** - Unit, integration, and E2E test specifications
 - **Acceptance Criteria** - 150+ testable criteria across all phases
 
-*Key Architectural Decisions:*
-- **TipTap (ProseMirror)** - Rich text editor, Y.js compatible for future collab
-- **AI-native, not bolted on** - AI suggestions, guided creation, inline completions
-- **Document types** - general, meeting_notes, decision_record, proposal, project_brief, weekly_update, technical_spec
-- **Visibility model** - private (creator only) vs shared (area members)
-- **Source linking** - Documents link to source conversations for provenance
-
-*Phase Breakdown (9 phases, ~9 context windows):*
-1. Foundation - DB schema, types, API, store
-2. TipTap Editor - Editor setup, toolbar, styling
-3. Document Pages - Routes, list, navigation
-4. Templates - Document types, template selector
-5. Chat → Document - Create from chat flow
-6. AI Inline Suggestion - Proactive document suggestions
-7. Editor Chat Panel - Bidirectional editing
-8. Guided Creation - Intent detection, Q&A flow
-9. Export & Polish - MD/DOCX export, final polish
-
 **Files Created:**
 - `stratai-main/docs/DOCUMENT_SYSTEM.md` - Complete implementation specification
-
-**Files Modified:**
-- `CLAUDE.md` - Added document system to strategic documents, session log
-
-**Key Strategic Insight:**
-This feature positions StratAI as "where your team's knowledge lives - and your AI actually uses it" rather than just "chat with AI." Solves the "where do I file this" problem that plagues Confluence/SharePoint. AI is native to the experience, not bolted on.
-
-**Next Steps:**
-- Begin Phase 1: Foundation (database, types, API)
-- Consider Phase 2 in parallel if resources allow
-- Each phase designed for single context window completion
 
 ### Previous: 2026-01-09 (Admin Portal & Easter Eggs Phase 2)
 
