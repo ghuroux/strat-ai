@@ -141,7 +141,53 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-11 (Document System Implementation & AUTO Model Routing)
+### Latest: 2026-01-11 (Phase 5 Research & Area Sharing Analysis)
+
+**Completed:**
+
+*AUTO Model Routing - Phase 5 Research:*
+- Researched embedding-based recommendation engine for Phase 5 (Embedding Intelligence)
+- Decision: DEFER Phase 5 with metrics gate until data-driven justification exists
+- Documented Phase 5 acceptance criteria in `auto-model-routing-research.md`:
+  - User override rate >10% sustained for 2 weeks
+  - Low confidence queries >30% at <0.70 confidence
+- Updated `AUTO_MODEL_ROUTING.md` with comprehensive implementation details
+
+*Area Sharing Gap Analysis:*
+- Analyzed ENTITY_MODEL.md against current implementation for area sharing
+- Comprehensive gap analysis completed:
+
+**Implemented:**
+- Organizations table and persistence (`organizations-postgres.ts`)
+- Users table with org_id (`users-postgres.ts`)
+- Groups table and persistence (`groups-postgres.ts`)
+- Group memberships with roles (lead/member)
+
+**NOT Implemented (gaps identified):**
+- `space_memberships` table - user/group access to Spaces
+- `space_group_access` table - group-level Space permissions
+- `area_memberships` table - user/group access to Areas
+- `is_restricted` flag on focus_areas - private Areas in org Spaces
+- Current `focus_areas` schema is user-scoped only, no sharing capability
+- Access resolution algorithm (CanAccessArea) not built
+
+*Implementation Order Defined:*
+1. Migration: Add `is_restricted` to focus_areas, create `area_memberships` table
+2. Repository: `area-memberships-postgres.ts` with CRUD operations
+3. Service: Access resolution implementing CanAccessArea algorithm from ENTITY_MODEL.md
+4. API: Endpoints for area sharing (invite user/group, manage permissions)
+5. UI: Share modal, member management in Area settings
+
+**Analysis Documented:**
+- Gap between designed schema (ENTITY_MODEL.md) and current implementation
+- Priority: Area sharing before Space sharing (Areas as collaboration unit per Decision Log)
+
+**Next Steps:**
+- Begin area sharing implementation (Phase 1: migration + repository)
+- Run database migrations (022, 023) for Pages system
+- Monitor AUTO routing metrics for Phase 5 gate conditions
+
+### Previous: 2026-01-11 (Document System Implementation & AUTO Model Routing)
 
 **Completed:**
 
