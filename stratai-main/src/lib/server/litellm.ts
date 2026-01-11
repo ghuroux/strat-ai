@@ -43,6 +43,18 @@ export function isOpenAIReasoningModel(model: string): boolean {
 }
 
 /**
+ * Check if a model is an Anthropic Claude model
+ */
+export function isClaudeModel(model: string): boolean {
+	const capabilities = getModelCapabilities(model);
+	if (capabilities) {
+		return capabilities.provider === 'anthropic';
+	}
+	// Fallback pattern matching
+	return model.toLowerCase().includes('claude');
+}
+
+/**
  * Check if a model is an Anthropic Claude model that uses thinking blocks
  */
 export function isClaudeThinkingModel(model: string): boolean {
@@ -338,6 +350,22 @@ export async function createChatCompletionWithTools(request: ChatCompletionReque
 		}
 	}
 
+	// Add token-efficient tools header for Claude models
+	// This reduces output tokens by 14-70% for tool use responses
+	// See: https://docs.anthropic.com/en/docs/build-with-claude/tool-use#token-efficient-tool-use-beta
+	if (isClaudeModel(request.model) && request.tools && request.tools.length > 0) {
+		const tokenEfficientBeta = 'token-efficient-tools-2025-02-19';
+		const existingHeaders = body.extra_headers as Record<string, string> | undefined;
+		const existingBeta = existingHeaders?.['anthropic-beta'];
+
+		body.extra_headers = {
+			...existingHeaders,
+			'anthropic-beta': existingBeta
+				? `${existingBeta},${tokenEfficientBeta}`
+				: tokenEfficientBeta
+		};
+	}
+
 	const response = await fetch(`${getBaseUrl()}/v1/chat/completions`, {
 		method: 'POST',
 		headers,
@@ -352,7 +380,7 @@ export async function createChatCompletionWithTools(request: ChatCompletionReque
 // ============================================================================
 
 const SUMMARY_MODEL = 'claude-haiku-4-5';
-const SUMMARY_MAX_TOKENS = 250; // Target ~200 tokens output
+const SUMMARY_MAX_TOKENS = 350; // Buffer for complete sentences (target ~250 tokens)
 
 const SUMMARY_SYSTEM_PROMPT = `You are a document summarizer. Create a concise summary that captures:
 1. Document type (report, email, code, notes, specification, etc.)
@@ -360,7 +388,7 @@ const SUMMARY_SYSTEM_PROMPT = `You are a document summarizer. Create a concise s
 3. Key entities (people, companies, projects, dates, technologies)
 4. 2-3 most important points or takeaways
 
-Keep the summary under 200 tokens. Use bullet points for clarity. Be specific and factual.`;
+IMPORTANT: Keep the summary under 250 tokens. Always complete your final sentence - never stop mid-sentence. If running low on space, finish your current point and stop. Use bullet points for clarity. Be specific and factual.`;
 
 /**
  * Generate a summary for a document using a fast, cheap model (Haiku)
@@ -405,9 +433,16 @@ export async function generateDocumentSummary(
 	}
 
 	const data = await response.json();
+	const summary = data.choices?.[0]?.message?.content || '';
+	const finishReason = data.choices?.[0]?.finish_reason;
+
+	// Log warning if output was truncated due to token limit
+	if (finishReason === 'length') {
+		console.warn(`[Summarization] Warning: Summary for "${filename}" was truncated (hit max_tokens). Consider increasing SUMMARY_MAX_TOKENS.`);
+	}
 
 	return {
-		summary: data.choices?.[0]?.message?.content || '',
+		summary,
 		inputTokens: data.usage?.prompt_tokens || 0,
 		outputTokens: data.usage?.completion_tokens || 0
 	};

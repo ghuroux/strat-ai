@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import UserMenu from '../layout/UserMenu.svelte';
+	import { userStore } from '$lib/stores/user.svelte';
 
 	interface Props {
 		organizationName?: string;
@@ -11,6 +12,9 @@
 
 	// Get user data from page data (set by +layout.server.ts)
 	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
+
+	// Get the user's preferred home URL
+	let homeUrl = $derived(userStore.homeUrl);
 </script>
 
 <header class="admin-header">
@@ -29,7 +33,7 @@
 		</button>
 
 		<!-- Back to app -->
-		<a href="/" class="back-link">
+		<a href={homeUrl} class="back-link">
 			<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
 			</svg>

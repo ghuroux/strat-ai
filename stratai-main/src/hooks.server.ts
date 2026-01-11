@@ -26,6 +26,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				userId: session.userId,
 				organizationId: session.organizationId,
 				displayName: user?.displayName || user?.username || null,
+				email: user?.email || null,
 				role: membership?.role || 'member',
 				createdAt: session.createdAt
 			};

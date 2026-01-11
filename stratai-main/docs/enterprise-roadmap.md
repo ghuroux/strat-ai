@@ -1,6 +1,6 @@
 # StratAI Enterprise Roadmap
 
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Date:** January 2026
 **Status:** Planning
 **Timeline:** Internal pilot NOW → External launch within 1 month
@@ -375,131 +375,139 @@ The existing model selector needs to:
 
 ## Authentication Strategy
 
-### The Decision: Auth0 vs Roll Your Own
+### The Decision: WorkOS (January 2026)
 
 Given your constraints:
 - **Internal pilot:** NOW (50 users)
 - **External launch:** 1 month
 - **Enterprise features:** Eventually needed
+- **B2B focus:** SSO/SAML will be required for enterprise customers
 
-#### Option A: Auth0
+#### Why WorkOS over Auth0
 
-| Aspect | Analysis |
-|--------|----------|
-| **Time to implement** | 2-3 days for basic, 1 week for full integration |
-| **Cost** | Free up to 7,500 MAU, then ~$23/month per 1000 MAU |
-| **SSO/SAML** | Built-in, enterprise plan required (~$130/mo) |
-| **MFA** | Built-in |
-| **Password policies** | Built-in |
-| **Social login** | Built-in |
-| **Customization** | Limited, requires Universal Login customization |
-| **Lock-in** | Moderate - can export users, but migration is work |
-| **Security** | Enterprise-grade, SOC2 compliant |
+| Aspect | WorkOS | Auth0 |
+|--------|--------|-------|
+| **Free tier** | **1,000,000 MAU** | 7,500 MAU (B2C) / 500 MAU (B2B) |
+| **MFA** | Included free | Paid add-on |
+| **RBAC** | Included free | Paid add-on |
+| **SSO/SAML** | $125/connection (volume discounts) | Enterprise contract required |
+| **SvelteKit SDK** | Official `@workos/authkit-sveltekit` | Community adapter |
+| **B2B focus** | Purpose-built for B2B | General purpose |
+| **Enterprise scaling** | Predictable per-connection pricing | "Growth penalty" at 6+ SSO connections |
 
-#### Option B: Roll Your Own (with Lucia Auth or similar)
+#### WorkOS Cost Structure
 
-| Aspect | Analysis |
-|--------|----------|
-| **Time to implement** | 2-3 weeks for secure implementation |
-| **Cost** | $0 (just development time) |
-| **SSO/SAML** | Additional 2-4 weeks to implement |
-| **MFA** | Additional 1-2 weeks to implement |
-| **Password policies** | Need to implement |
-| **Social login** | Need to implement each provider |
-| **Customization** | Full control |
-| **Lock-in** | None |
-| **Security** | Your responsibility |
+**Free (up to 1M MAU):**
+- Email + Password, Social Auth (Google, Microsoft, Apple, GitHub)
+- Magic Auth (passwordless), MFA (TOTP, SMS), Passkeys
+- RBAC, Organization policies, JIT provisioning
 
-#### Recommendation: Auth0 for Now, Migration Path Later
+**Paid Features:**
+| Feature | Cost |
+|---------|------|
+| SSO Connection | $125/mo/connection (volume discounts to $50) |
+| Directory Sync (SCIM) | $125/mo/connection |
+| Custom Domain | $99/mo (auth.stratai.com instead of workos.com) |
+| Audit Logs | $5/org/mo base |
+
+**Cost projection at 50 enterprise SSO customers:** ~$4,000/mo
+(vs Auth0's forced enterprise contract at $10K+/mo)
+
+#### Recommendation: WorkOS
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    AUTH STRATEGY TIMELINE                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  NOW ──────────► MONTH 1 ──────────► MONTH 3+ ───────────►     │
+│  NOW ──────────► MONTH 1 ──────────► ENTERPRISE ───────────►   │
 │                                                                 │
 │  ┌──────────┐   ┌──────────┐   ┌──────────────────────────┐   │
-│  │  Auth0   │   │  Auth0   │   │  Evaluate:               │   │
-│  │  Basic   │   │  + SSO   │   │  - Stay Auth0 Enterprise │   │
-│  │  (Free)  │   │  (Paid)  │   │  - Migrate to own auth   │   │
-│  └──────────┘   └──────────┘   │  - Migrate to Clerk      │   │
-│                                 └──────────────────────────┘   │
+│  │  WorkOS  │   │  WorkOS  │   │  WorkOS                  │   │
+│  │  Free    │   │ +Custom  │   │  + SSO per customer      │   │
+│  │  (1M MAU)│   │  Domain  │   │  ($125/connection)       │   │
+│  │   $0     │   │  ($99/mo)│   │                          │   │
+│  └──────────┘   └──────────┘   └──────────────────────────┘   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Why Auth0 now:**
-1. **Speed:** You can't afford 3 weeks on auth with a 1-month deadline
-2. **Security:** Auth is the one thing you don't want to get wrong
-3. **SSO-ready:** Enterprise customers will ask for it
-4. **Free tier:** 7,500 MAU covers your pilot + early external
+**Why WorkOS:**
+1. **Massive free tier:** 1M MAU = free until you're a significant company
+2. **Enterprise-first:** Built for B2B with predictable SSO pricing
+3. **Native SvelteKit SDK:** Official support, not a workaround
+4. **MFA/RBAC included:** Features Auth0 charges for
+5. **No "growth penalty":** Auth0 forces enterprise contracts at 6 SSO connections
 
-**Migration safety:**
-- Auth0 stores minimal data (email, name, metadata)
-- Core user data (orgs, permissions, usage) lives in YOUR database
-- Migration means: export users, they reset passwords, done
+**Realistic costs:**
+- Development/beta: $0
+- Production with custom domain: $99/mo
+- Each enterprise SSO customer: $125/mo (with volume discounts)
 
-### Auth0 Integration Architecture
+### WorkOS Integration Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     AUTH FLOW                                   │
+│                     AUTH FLOW (WorkOS AuthKit)                  │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  User                 StratAI                Auth0              │
+│  User                 StratAI                WorkOS             │
 │    │                    │                      │                │
 │    │──── Login ────────►│                      │                │
 │    │                    │──── Redirect ───────►│                │
 │    │                    │                      │                │
 │    │◄───────────────────┼──── Auth Page ───────│                │
+│    │                    │   (auth.stratai.com) │                │
 │    │                    │                      │                │
 │    │──── Credentials ───┼─────────────────────►│                │
 │    │                    │                      │                │
-│    │                    │◄─── JWT + Callback ──│                │
+│    │                    │◄─── Callback ────────│                │
 │    │                    │                      │                │
 │    │                    │── Lookup/Create ──┐  │                │
 │    │                    │   User in DB      │  │                │
 │    │                    │◄──────────────────┘  │                │
 │    │                    │                      │                │
 │    │◄─── Session ───────│                      │                │
+│    │    (encrypted      │                      │                │
+│    │     cookie)        │                      │                │
 │    │                    │                      │                │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### SvelteKit Auth0 Implementation
+### SvelteKit WorkOS Implementation
 
 ```typescript
-// src/lib/server/auth.ts
-import { Auth0Client } from '@auth0/auth0-spa-js';
+// hooks.server.ts
+import { configureAuthKit, authKitHandle } from '@workos/authkit-sveltekit';
 
-const auth0Config = {
-  domain: process.env.AUTH0_DOMAIN,
-  clientId: process.env.AUTH0_CLIENT_ID,
-  clientSecret: process.env.AUTH0_CLIENT_SECRET,
-  redirectUri: process.env.AUTH0_CALLBACK_URL
-};
+configureAuthKit({
+  clientId: env.WORKOS_CLIENT_ID,
+  apiKey: env.WORKOS_API_KEY,
+  redirectUri: env.WORKOS_REDIRECT_URI,
+  cookiePassword: env.WORKOS_COOKIE_PASSWORD  // openssl rand -base64 24
+});
 
-// On successful Auth0 callback:
-async function handleAuthCallback(auth0User: Auth0User) {
-  // 1. Check if user exists in our DB
-  let user = await db.users.findByEmail(auth0User.email);
+export const handle = authKitHandle;
+```
 
-  if (!user) {
-    // 2. Create user in our system
-    user = await db.users.create({
-      email: auth0User.email,
-      name: auth0User.name,
-      auth0Id: auth0User.sub,
-      // No org yet - will be assigned or invited
+```typescript
+// src/routes/protected/+page.server.ts
+export const load = async ({ locals }) => {
+  // User is guaranteed to exist if using withAuth()
+  const { user, organizationId, role, permissions } = await locals.authKit.withAuth();
+
+  // Sync with StratAI database
+  let dbUser = await db.users.findByEmail(user.email);
+  if (!dbUser) {
+    dbUser = await db.users.create({
+      email: user.email,
+      name: user.firstName + ' ' + user.lastName,
+      workosId: user.id
     });
   }
 
-  // 3. Create session
-  const session = await createSession(user.id);
-
-  return { user, session };
-}
+  return { user: dbUser };
+};
 ```
 
 ### User Onboarding Flow
@@ -511,23 +519,23 @@ async function handleAuthCallback(auth0User: Auth0User) {
 │                                                                 │
 │  SCENARIO A: Invited User                                       │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐           │
-│  │ Invite  │─►│ Sign Up │─►│ Auth0   │─►│ Auto-   │           │
+│  │ Invite  │─►│ Sign Up │─►│ WorkOS  │─►│ Auto-   │           │
 │  │ Email   │  │ Click   │  │ Create  │  │ Join Org│           │
 │  └─────────┘  └─────────┘  └─────────┘  └─────────┘           │
 │                                                                 │
 │  SCENARIO B: Self-Signup (if allowed)                          │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐           │
-│  │ Sign Up │─►│ Auth0   │─►│ Create  │─►│ Assign  │           │
+│  │ Sign Up │─►│ WorkOS  │─►│ Create  │─►│ Assign  │           │
 │  │ Page    │  │ Create  │  │ User    │  │ Default │           │
 │  └─────────┘  └─────────┘  └─────────┘  │ Org/Tier│           │
 │                                          └─────────┘           │
 │                                                                 │
-│  SCENARIO C: Internal Pilot                                     │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐                        │
-│  │ Admin   │─►│ Bulk    │─►│ Users   │                        │
-│  │ Creates │  │ Invite  │  │ Join    │                        │
-│  │ Org     │  │ 50 Users│  │ via Link│                        │
-│  └─────────┘  └─────────┘  └─────────┘                        │
+│  SCENARIO C: Enterprise SSO                                     │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐           │
+│  │ User    │─►│ WorkOS  │─►│ Customer│─►│ JIT     │           │
+│  │ Email   │  │ Detects │  │ IdP     │  │ Provision│          │
+│  │ Domain  │  │ SSO     │  │ (Okta)  │  │ User    │           │
+│  └─────────┘  └─────────┘  └─────────┘  └─────────┘           │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -540,24 +548,24 @@ async function handleAuthCallback(auth0User: Auth0User) {
 
 | Customer Type | SSO Requirement | Why |
 |---------------|-----------------|-----|
-| Startups (<50 people) | Nice to have | They use Google Workspace SSO via Auth0 social |
+| Startups (<50 people) | Nice to have | They use Google Workspace SSO via social login |
 | SMB (50-500 people) | Often required | IT wants centralized access control |
 | Enterprise (500+) | Always required | Security policy, compliance, insurance |
 
-### SSO Options
+### SSO Options with WorkOS
 
-#### Option 1: Auth0 Enterprise SSO (~$130/month base)
+#### WorkOS SSO ($125/connection with volume discounts)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    AUTH0 ENTERPRISE SSO                         │
+│                    WORKOS ENTERPRISE SSO                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  Customer's IdP              Auth0              StratAI         │
+│  Customer's IdP              WorkOS             StratAI         │
 │  (Okta, Azure AD)                                               │
 │       │                        │                   │            │
 │       │◄── SAML/OIDC Config ───│                   │            │
-│       │                        │                   │            │
+│       │   (Admin Portal)       │                   │            │
 │       │                        │                   │            │
 │  User │──── Login ─────────────┼──────────────────►│            │
 │       │                        │◄── Redirect ──────│            │
@@ -565,20 +573,25 @@ async function handleAuthCallback(auth0User: Auth0User) {
 │       │                        │                   │            │
 │       │──── Auth ─────────────►│                   │            │
 │       │◄── Assertion ──────────│                   │            │
-│       │                        │──── JWT ─────────►│            │
+│       │                        │──── Session ─────►│            │
 │       │                        │                   │            │
 │                                                                 │
-│  Setup Time: ~2 hours per customer                              │
-│  Your Work: Configure connection in Auth0 dashboard             │
-│  Customer Work: Add StratAI as SAML app in their IdP           │
+│  Setup Time: ~30 min per customer (self-serve Admin Portal)     │
+│  Your Work: None after initial integration                      │
+│  Customer Work: Configure via Admin Portal                      │
+│                                                                 │
+│  PRICING:                                                       │
+│  ├── $125/connection/month (1-9 connections)                    │
+│  ├── $100/connection/month (10-24 connections)                  │
+│  └── $50/connection/month (25+ connections)                     │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### Option 2: Build SAML Support (~3-4 weeks)
+#### Build SAML Support (~3-4 weeks)
 
 Not recommended given timeline. Only consider if:
-- Auth0 costs become prohibitive (100+ enterprise customers)
+- WorkOS costs become prohibitive (100+ enterprise customers)
 - You need full control over the SSO experience
 - You have dedicated security engineering capacity
 
@@ -591,22 +604,22 @@ Not recommended given timeline. Only consider if:
 │                                                                 │
 │  PHASE 1: Internal Pilot (NOW)                                  │
 │  └── No SSO needed                                              │
-│  └── Use Auth0 free tier with email/password                    │
+│  └── Use WorkOS free tier with email/password                   │
 │  └── Optional: Google Workspace social login                    │
 │                                                                 │
 │  PHASE 2: External Beta (+1 month)                              │
 │  └── Most early customers won't require SSO                     │
-│  └── If asked: "SSO coming in 60 days"                         │
+│  └── If asked: "SSO available at $125/connection"              │
 │  └── Focus on core product value                                │
 │                                                                 │
 │  PHASE 3: Enterprise Ready (+3 months)                          │
-│  └── Upgrade to Auth0 Enterprise                                │
+│  └── Add custom domain ($99/mo for auth.stratai.com)           │
 │  └── Offer SSO as enterprise feature                            │
 │  └── Premium pricing includes SSO setup                         │
 │                                                                 │
 │  PHASE 4: Scale (+6 months)                                     │
-│  └── Evaluate: Auth0 cost vs build own                          │
-│  └── If >100 SSO customers, consider migration                  │
+│  └── Volume discounts kick in (10+ connections)                 │
+│  └── At 25+ connections: $50/connection/month                   │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -621,7 +634,7 @@ Many B2B SaaS companies use SSO as an enterprise upsell:
 | Business | + Google/Microsoft SSO | $1.5X/user |
 | Enterprise | + SAML/OIDC SSO | $2X/user |
 
-This is a valid strategy - SSO costs you money (Auth0 fees, support time), so charging for it is reasonable.
+This is a valid strategy - SSO costs you money (WorkOS fees, support time), so charging for it is reasonable.
 
 ---
 
@@ -1346,15 +1359,15 @@ export class LiteLLMClient {
 -- AUTHENTICATION & IDENTITY
 -- ============================================================
 
--- Users (StratAI's user table, not Auth0's)
+-- Users (StratAI's user table, synced from WorkOS)
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
     name TEXT,
     avatar_url TEXT,
 
-    -- Auth0 reference
-    auth0_id TEXT UNIQUE,
+    -- WorkOS reference
+    workos_id TEXT UNIQUE,
 
     -- Platform role
     platform_role TEXT DEFAULT 'user' CHECK (platform_role IN ('super_admin', 'user')),
@@ -1736,14 +1749,15 @@ ALTER TABLE spaces ALTER COLUMN organization_id SET NOT NULL;
 │  Duration: 2 days                                               │
 │                                                                 │
 │  Tasks:                                                         │
-│  ├── Set up Auth0 account and configure app                    │
+│  ├── Set up WorkOS account and configure app                   │
+│  ├── Install @workos/authkit-sveltekit package                 │
 │  ├── Create database migration scripts                          │
 │  ├── Set up internal organization in database                   │
 │  ├── Configure LiteLLM master key                               │
 │  └── Document environment variables needed                      │
 │                                                                 │
 │  Deliverables:                                                  │
-│  ├── Auth0 configured with StratAI app                         │
+│  ├── WorkOS configured with StratAI app                        │
 │  ├── Migration scripts ready                                    │
 │  └── .env.example updated                                       │
 │                                                                 │
@@ -1759,22 +1773,21 @@ ALTER TABLE spaces ALTER COLUMN organization_id SET NOT NULL;
 │  Duration: 3 days                                               │
 │                                                                 │
 │  Tasks:                                                         │
-│  ├── Implement Auth0 SvelteKit integration                     │
+│  ├── Implement WorkOS AuthKit SvelteKit integration            │
 │  ├── Create login/logout flows                                  │
-│  ├── Create user sync (Auth0 → StratAI DB)                     │
-│  ├── Implement session management                               │
+│  ├── Create user sync (WorkOS → StratAI DB)                    │
+│  ├── Implement session management (encrypted cookies)           │
 │  ├── Protect all routes                                         │
 │  └── Create user settings page                                  │
 │                                                                 │
 │  Files:                                                         │
-│  ├── src/lib/server/auth/auth0.ts                              │
-│  ├── src/hooks.server.ts (auth middleware)                     │
+│  ├── src/hooks.server.ts (authKitHandle middleware)            │
 │  ├── src/routes/auth/login/+page.svelte                        │
 │  ├── src/routes/auth/callback/+server.ts                       │
 │  └── src/routes/auth/logout/+server.ts                         │
 │                                                                 │
 │  Deliverables:                                                  │
-│  ├── Users can log in via Auth0                                │
+│  ├── Users can log in via WorkOS AuthKit                       │
 │  ├── Sessions persist across page loads                        │
 │  └── Unauthenticated users redirected to login                 │
 │                                                                 │
@@ -1950,7 +1963,7 @@ External beta: End of Week 4 / Start of Week 5
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Auth0 integration issues | Blocks all progress | Start with Auth0, have backup plan |
+| WorkOS integration issues | Blocks all progress | Official SvelteKit SDK reduces risk |
 | LiteLLM sync complexity | Broken budgets/keys | Build robust sync with retries |
 | Data migration errors | Lost user data | Backup before migration, test thoroughly |
 | Timeline slip | Delayed external launch | Cut scope, not quality |
@@ -1959,7 +1972,7 @@ External beta: End of Week 4 / Start of Week 5
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| SSO requests from early customers | Pressure to add quickly | Set expectations, offer later |
+| SSO requests from early customers | Pressure to add quickly | WorkOS SSO available immediately at $125/connection |
 | Usage tracking gaps | Inaccurate billing data | Log everything, reconcile regularly |
 | Performance with 50 users | Slow experience | Monitor from day 1, optimize |
 
@@ -1967,7 +1980,7 @@ External beta: End of Week 4 / Start of Week 5
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Auth0 cost increase | Higher OpEx | Monitor MAU, migrate if needed |
+| WorkOS pricing changes | Higher OpEx | 1M MAU free tier provides long runway |
 | LiteLLM breaking changes | Integration breaks | Pin versions, test upgrades |
 
 ---
@@ -1976,11 +1989,11 @@ External beta: End of Week 4 / Start of Week 5
 
 | Decision | Options Considered | Choice | Rationale |
 |----------|-------------------|--------|-----------|
-| Auth provider | Auth0, Clerk, Roll own | Auth0 | Speed to market, SSO-ready, free tier |
+| Auth provider | Auth0, WorkOS, Clerk, Roll own | WorkOS | 1M MAU free tier, native SvelteKit SDK, predictable SSO pricing ($125/connection), B2B focus |
 | Module definition | Features, Model tiers, Use-cases | Model tiers | Clearest billing, simplest implementation |
 | Admin architecture | Separate app, Same app routes | Same app + RBAC | Faster, evolves naturally |
 | LiteLLM sync | Shared DB, API sync, Event-driven | API sync | Clean separation, resilient |
-| SSO timing | Now, Phase 2, Phase 3 | Phase 3 | Not needed for pilot, adds time |
+| SSO timing | Now, Phase 2, Phase 3 | Available immediately | WorkOS SSO at $125/connection, no forced enterprise contract |
 | Data isolation | App-level, RLS, Separate DBs | RLS | Best balance of isolation and simplicity |
 
 ---
@@ -1988,11 +2001,11 @@ External beta: End of Week 4 / Start of Week 5
 ## Appendix A: Environment Variables
 
 ```bash
-# Auth0
-AUTH0_DOMAIN=your-tenant.auth0.com
-AUTH0_CLIENT_ID=your-client-id
-AUTH0_CLIENT_SECRET=your-client-secret
-AUTH0_CALLBACK_URL=http://localhost:5173/auth/callback
+# WorkOS AuthKit
+WORKOS_CLIENT_ID=client_xxx                    # From WorkOS Dashboard
+WORKOS_API_KEY=sk_xxx                          # From WorkOS Dashboard
+WORKOS_REDIRECT_URI=http://localhost:5173/auth/callback
+WORKOS_COOKIE_PASSWORD=xxx                     # Generate: openssl rand -base64 24
 
 # LiteLLM
 LITELLM_URL=http://localhost:4000
@@ -2062,3 +2075,4 @@ PATCH  /api/budgets/:id                   → Update budget
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
 | 2026-01-08 | 1.0 | Claude Code | Initial document |
+| 2026-01-11 | 1.1 | Claude Code | Replaced Auth0 with WorkOS as auth provider (1M MAU free tier, native SvelteKit SDK, predictable SSO pricing) |

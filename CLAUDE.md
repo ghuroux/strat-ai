@@ -24,6 +24,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 
 **Strategic Documents:**
 - `stratai-main/ENTITY_MODEL.md` - **Authoritative data architecture** (implementation source of truth)
+- `stratai-main/docs/DOCUMENT_SYSTEM.md` - **AI-native document system** (V1 feature - Confluence replacement)
 - `stratai-main/docs/CONTEXT_STRATEGY.md` - **Context/memory architecture** (WHAT to store - moat-level work)
 - `stratai-main/docs/context-loading-architecture.md` - **Just-in-time context loading** (HOW to load via tool calling)
 - `stratai-main/docs/COST_OPTIMIZATION_STRATEGY.md` - **LLM cost optimization** (50-85% savings roadmap)
@@ -101,6 +102,12 @@ Don't revisit without good reason:
 | Areas as collaboration unit | Granular sharing without exposing entire Spaces |
 | Separate subscription from governance | Tiers for billing, guardrails for access control (orthogonal) |
 | `space_id` in usage_records | Enable V2 project-based cost attribution |
+| WorkOS for auth | 1M MAU free tier, native SvelteKit SDK, predictable SSO pricing ($125/connection), B2B focus |
+| TipTap for document editor | ProseMirror-based, extensible, Y.js compatible for future real-time collab |
+| Documents in Areas (not Spaces) | Natural filing - work context determines location, reduces "where do I put this" |
+| AI-native docs, not bolted on | Inline suggestions, guided creation, chat panel - AI woven into experience |
+| Document visibility: private/shared | Simple binary for V1; per-user/group sharing is V2 complexity |
+| Document ↔ Chat bidirectional | Docs created from chat, chat discusses docs - peers not hierarchy |
 
 ---
 
@@ -134,7 +141,60 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-09 (Admin Portal & Easter Eggs Phase 2)
+### Latest: 2026-01-11 (Document System Architecture)
+
+**Completed:**
+
+*AI-Native Document System - Complete Specification:*
+- Comprehensive design discussion exploring Confluence replacement opportunity
+- Three entry points defined: From Chat, Guided Creation, Direct Create
+- Bidirectional document ↔ chat flow architecture
+- TipTap editor with Word-doc quality feel
+- Collapsible chat panel for document discussions
+
+*DOCUMENT_SYSTEM.md - Full Implementation Spec (~3200 lines):*
+- **Architecture Overview** - System diagram, core principles, file structure
+- **Database Schema** - documents, document_versions, document_conversations tables
+- **API Specification** - Full CRUD, export endpoints, document chat
+- **Component Specifications** - 10 components with props and structure
+- **UX Specifications** - Design system, color tokens, typography, layouts
+- **9 Implementation Phases** - Each with detailed agent instructions
+- **Test Cases** - Unit, integration, and E2E test specifications
+- **Acceptance Criteria** - 150+ testable criteria across all phases
+
+*Key Architectural Decisions:*
+- **TipTap (ProseMirror)** - Rich text editor, Y.js compatible for future collab
+- **AI-native, not bolted on** - AI suggestions, guided creation, inline completions
+- **Document types** - general, meeting_notes, decision_record, proposal, project_brief, weekly_update, technical_spec
+- **Visibility model** - private (creator only) vs shared (area members)
+- **Source linking** - Documents link to source conversations for provenance
+
+*Phase Breakdown (9 phases, ~9 context windows):*
+1. Foundation - DB schema, types, API, store
+2. TipTap Editor - Editor setup, toolbar, styling
+3. Document Pages - Routes, list, navigation
+4. Templates - Document types, template selector
+5. Chat → Document - Create from chat flow
+6. AI Inline Suggestion - Proactive document suggestions
+7. Editor Chat Panel - Bidirectional editing
+8. Guided Creation - Intent detection, Q&A flow
+9. Export & Polish - MD/DOCX export, final polish
+
+**Files Created:**
+- `stratai-main/docs/DOCUMENT_SYSTEM.md` - Complete implementation specification
+
+**Files Modified:**
+- `CLAUDE.md` - Added document system to strategic documents, session log
+
+**Key Strategic Insight:**
+This feature positions StratAI as "where your team's knowledge lives - and your AI actually uses it" rather than just "chat with AI." Solves the "where do I file this" problem that plagues Confluence/SharePoint. AI is native to the experience, not bolted on.
+
+**Next Steps:**
+- Begin Phase 1: Foundation (database, types, API)
+- Consider Phase 2 in parallel if resources allow
+- Each phase designed for single context window completion
+
+### Previous: 2026-01-09 (Admin Portal & Easter Eggs Phase 2)
 
 **Completed:**
 

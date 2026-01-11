@@ -271,13 +271,6 @@
 		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 	}
 
-	.search-icon {
-		width: 1.25rem;
-		height: 1.25rem;
-		color: rgba(255, 255, 255, 0.4);
-		flex-shrink: 0;
-	}
-
 	.search-input {
 		flex: 1;
 		background: transparent;
@@ -435,12 +428,6 @@
 		padding: 3rem 1rem;
 		color: rgba(255, 255, 255, 0.4);
 		font-size: 0.875rem;
-	}
-
-	.no-results-icon {
-		width: 2rem;
-		height: 2rem;
-		opacity: 0.5;
 	}
 
 	/* Footer */

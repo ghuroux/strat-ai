@@ -27,7 +27,9 @@ import {
 	Shield,
 	Users,
 	Layers,
-	Terminal
+	Terminal,
+	FileText,
+	FilePlus
 } from 'lucide-svelte';
 import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
 import { toastStore } from '$lib/stores/toast.svelte';
@@ -37,6 +39,7 @@ import { taskStore } from '$lib/stores/tasks.svelte';
 import { settingsStore } from '$lib/stores/settings.svelte';
 import { chatStore } from '$lib/stores/chat.svelte';
 import { userStore } from '$lib/stores/user.svelte';
+import { pageStore } from '$lib/stores/pages.svelte';
 import type { Conversation } from '$lib/types/chat';
 
 // =============================================================================
@@ -355,6 +358,75 @@ export function getTaskCommands(): Command[] {
 }
 
 // =============================================================================
+// Dynamic Commands - Pages (P9-CP-*)
+// =============================================================================
+
+/**
+ * Get page commands for command palette
+ * P9-CP-01: "New Page" command
+ * P9-CP-02: "Search Pages" (navigation to pages list)
+ * P9-CP-03: Commands appear in palette
+ * P9-CP-04: Proper shortcuts
+ */
+export function getPageCommands(): Command[] {
+	const commands: Command[] = [];
+	const spaces = Array.from(spacesStore.spaces.values());
+
+	// Add "New Page" commands for each area
+	for (const space of spaces) {
+		const areas = areaStore.getAreasForSpace(space.id);
+		if (!areas || areas.length === 0) continue;
+
+		for (const area of areas) {
+			commands.push({
+				id: `action-new-page-${area.id}`,
+				label: `New Page in ${area.name}`,
+				description: `Create a new page in ${space.name} → ${area.name}`,
+				category: 'action' as CommandCategory,
+				icon: FilePlus,
+				keywords: ['new', 'page', 'create', 'document', area.name.toLowerCase(), space.name.toLowerCase()],
+				action: () => goto(`/spaces/${space.slug}/${area.slug}/pages/new`)
+			});
+		}
+
+		// Add "View Pages" command for each area
+		for (const area of areas) {
+			commands.push({
+				id: `nav-pages-${area.id}`,
+				label: `View ${area.name} Pages`,
+				description: `Browse pages in ${space.name} → ${area.name}`,
+				category: 'navigation' as CommandCategory,
+				icon: FileText,
+				keywords: ['pages', 'documents', 'view', 'list', area.name.toLowerCase(), space.name.toLowerCase()],
+				action: () => goto(`/spaces/${space.slug}/${area.slug}/pages`)
+			});
+		}
+	}
+
+	// Add recent pages as quick access (limit to 10 most recent)
+	const recentPages = pageStore.pageList.slice(0, 10);
+	for (const page of recentPages) {
+		// Find the area and space for this page
+		const area = page.areaId ? areaStore.getAreaById(page.areaId) : null;
+		const space = area?.spaceId ? spacesStore.getSpaceById(area.spaceId) : null;
+
+		if (area && space) {
+			commands.push({
+				id: `nav-page-${page.id}`,
+				label: page.title || 'Untitled Page',
+				description: `${space.name} → ${area.name}`,
+				category: 'navigation' as CommandCategory,
+				icon: FileText,
+				keywords: ['page', 'document', (page.title || '').toLowerCase(), area.name.toLowerCase()],
+				action: () => goto(`/spaces/${space.slug}/${area.slug}/pages/${page.id}`)
+			});
+		}
+	}
+
+	return commands;
+}
+
+// =============================================================================
 // Command Aggregation
 // =============================================================================
 
@@ -367,7 +439,8 @@ export function getAllCommands(): Command[] {
 		...getAdminCommands(),
 		...getSpaceCommands(),
 		...getAreaCommands(),
-		...getTaskCommands()
+		...getTaskCommands(),
+		...getPageCommands()
 	];
 
 	// Filter out disabled commands

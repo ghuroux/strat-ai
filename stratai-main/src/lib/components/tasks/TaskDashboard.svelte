@@ -21,8 +21,9 @@
 	import CompleteTaskModal from './CompleteTaskModal.svelte';
 	import StatsRow from './StatsRow.svelte';
 	import FocusSuggestion from './FocusSuggestion.svelte';
-	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
+	import TaskPanel from '$lib/components/spaces/TaskPanel.svelte';
 	import RecentlyCompletedSection from './RecentlyCompletedSection.svelte';
+	import UserMenu from '$lib/components/layout/UserMenu.svelte';
 	import type { CreateTaskInput } from '$lib/types/tasks';
 
 	interface Props {
@@ -31,9 +32,13 @@
 		spaceColor: string;
 		spaceName: string;
 		areas: Area[];
+		user?: {
+			displayName: string | null;
+			role: 'owner' | 'admin' | 'member';
+		} | null;
 	}
 
-	let { spaceId, spaceSlug, spaceColor, spaceName, areas }: Props = $props();
+	let { spaceId, spaceSlug, spaceColor, spaceName, areas, user }: Props = $props();
 
 	// Get all tasks for this space (parent tasks only, not subtasks)
 	let allTasks = $derived.by(() => {
@@ -147,8 +152,8 @@
 	let taskToComplete = $state<Task | null>(null);
 	let incompleteSubtasks = $state<Task[]>([]);
 
-	// Edit task modal state
-	let showEditModal = $state(false);
+	// Task panel state (for both create and edit)
+	let showTaskPanel = $state(false);
 	let taskToEdit = $state<Task | null>(null);
 
 	// Delete confirmation state
@@ -249,40 +254,35 @@
 		goto(`/spaces/${spaceSlug}`);
 	}
 
+	// Open task panel for creating new task
+	function handleOpenTaskPanel() {
+		taskToEdit = null;
+		showTaskPanel = true;
+	}
+
 	// Handle edit task
 	function handleEditTask(task: Task) {
 		taskToEdit = task;
-		showEditModal = true;
+		showTaskPanel = true;
 	}
 
-	// Handle edit modal close
-	function closeEditModal() {
-		showEditModal = false;
+	// Handle task panel close
+	function closeTaskPanel() {
+		showTaskPanel = false;
 		taskToEdit = null;
 	}
 
-	// Handle task update from modal
-	async function handleTaskUpdate(input: CreateTaskInput): Promise<Task | null> {
-		if (!taskToEdit) return null;
-
+	// Handle create/update task from panel
+	async function handleCreateTask(input: CreateTaskInput): Promise<Task | null> {
 		try {
-			const updated = await taskStore.updateTask(taskToEdit.id, {
-				title: input.title,
-				description: input.description,
-				dueDate: input.dueDate,
-				dueDateType: input.dueDateType,
-				priority: input.priority,
-				areaId: input.areaId
-			});
-
-			if (updated) {
-				toastStore.success('Task updated');
-				closeEditModal();
+			const created = await taskStore.createTask(input);
+			if (created) {
+				toastStore.success(`Task "${input.title}" created`);
 			}
-			return updated;
+			return created;
 		} catch (error) {
-			console.error('Failed to update task:', error);
-			toastStore.error('Failed to update task');
+			console.error('Failed to create task:', error);
+			toastStore.error('Failed to create task');
 			return null;
 		}
 	}
@@ -347,7 +347,15 @@
 		</div>
 
 		<div class="header-right">
-			<!-- Add task button placeholder -->
+			<button type="button" class="add-task-btn" onclick={handleOpenTaskPanel}>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+				</svg>
+				<span>Add Task</span>
+			</button>
+			{#if user}
+				<UserMenu displayName={user.displayName} role={user.role} />
+			{/if}
 		</div>
 	</header>
 
@@ -491,15 +499,15 @@
 	/>
 {/if}
 
-<!-- Edit Task Modal -->
-<TaskModal
-	open={showEditModal}
+<!-- Task Panel (Create/Edit) -->
+<TaskPanel
+	isOpen={showTaskPanel}
 	{spaceId}
 	{areas}
 	{spaceColor}
 	task={taskToEdit}
-	onClose={closeEditModal}
-	onCreate={handleTaskUpdate}
+	onClose={closeTaskPanel}
+	onCreate={handleCreateTask}
 />
 
 <!-- Delete Confirmation Modal -->
@@ -612,7 +620,36 @@
 	}
 
 	.header-right {
-		width: 100px; /* Balance the header */
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.75rem;
+		min-width: 100px; /* Ensure space for balance */
+	}
+
+	.add-task-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.25rem 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--space-color, #3b82f6);
+		background: color-mix(in srgb, var(--space-color, #3b82f6) 10%, transparent);
+		border: 1px solid color-mix(in srgb, var(--space-color, #3b82f6) 20%, transparent);
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.add-task-btn:hover {
+		background: color-mix(in srgb, var(--space-color, #3b82f6) 20%, transparent);
+		border-color: color-mix(in srgb, var(--space-color, #3b82f6) 40%, transparent);
+	}
+
+	.add-task-btn svg {
+		width: 0.75rem;
+		height: 0.75rem;
 	}
 
 	/* Scrollable area - full width for scroll to work anywhere */

@@ -2,7 +2,8 @@ import type { RequestHandler } from './$types';
 import { createChatCompletion, createChatCompletionWithTools, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
 import { searchWeb, formatSearchResultsForLLM, isBraveSearchConfigured } from '$lib/server/brave-search';
 import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig, ChatMessage, MessageContentBlock } from '$lib/types/api';
-import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, getFullSystemPromptForPlanModeWithContext, getFullSystemPromptWithFocusArea, getFullSystemPromptWithSpace, getFocusAreaPrompt, type FocusedTaskInfo, type PlanModePhase, type TaskContextInfo, type FocusAreaInfo, type SpaceInfo, type PlanModeTaskContext } from '$lib/config/system-prompts';
+import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, getFullSystemPromptForPlanModeWithContext, getFullSystemPromptWithFocusArea, getFullSystemPromptWithSpace, getFocusAreaPrompt, getSystemPromptLayers, supportsLayeredCaching, type FocusedTaskInfo, type PlanModePhase, type TaskContextInfo, type FocusAreaInfo, type SpaceInfo, type PlanModeTaskContext, type PromptLayer } from '$lib/config/system-prompts';
+import { routeQuery, isAutoMode, getDefaultContext, type RoutingContext, type RoutingDecision } from '$lib/services/model-router';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import { postgresConversationRepository } from '$lib/server/persistence/postgres';
@@ -10,6 +11,7 @@ import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres';
 import { getToolCacheRepository, hashParams } from '$lib/server/persistence/tool-cache-postgres';
 import { postgresUsageRepository } from '$lib/server/persistence/usage-postgres';
+import { postgresRoutingDecisionsRepository } from '$lib/server/persistence/routing-decisions-postgres';
 import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists';
 import { estimateCost } from '$lib/config/model-pricing';
 import type { SpaceType } from '$lib/types/chat';
@@ -106,17 +108,34 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
 		}
 	}
 
-	// Identify which indices should get cache_control (max 4)
+	// Check if system message already has cache_control (from layered caching)
+	// If so, count existing breakpoints and allocate remaining to history
+	const systemIndex = messages.findIndex(m => m.role === 'system');
+	let existingCacheBreakpoints = 0;
+	let systemAlreadyCached = false;
+
+	if (systemIndex >= 0) {
+		const systemMsg = messages[systemIndex];
+		if (Array.isArray(systemMsg.content)) {
+			// Count cache_control blocks in system message
+			for (const block of systemMsg.content) {
+				if ('cache_control' in block && block.cache_control) {
+					existingCacheBreakpoints++;
+					systemAlreadyCached = true;
+				}
+			}
+		}
+	}
+
+	// Identify which indices should get cache_control (max 4 total)
 	const cacheIndices = new Set<number>();
 
-	// 1. Always cache system message if present
-	const systemIndex = messages.findIndex(m => m.role === 'system');
-	if (systemIndex >= 0) {
+	// Only add system message if it's not already cached
+	if (systemIndex >= 0 && !systemAlreadyCached) {
 		cacheIndices.add(systemIndex);
 	}
 
-	// 2. Find historical messages to cache (working backwards from current message)
-	// We want to cache the most recent historical context
+	// Find historical messages to cache (working backwards from current message)
 	const historicalMessages: number[] = [];
 	for (let i = lastUserIndex - 1; i >= 0; i--) {
 		if (messages[i].role !== 'system' && messages[i].role !== 'tool') {
@@ -124,10 +143,18 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
 		}
 	}
 
-	// Add up to 3 more cache points (to stay within limit of 4)
-	const remainingSlots = 4 - cacheIndices.size;
+	// Calculate remaining slots: 4 total - existing breakpoints - new system cache
+	const usedSlots = existingCacheBreakpoints + cacheIndices.size;
+	const remainingSlots = 4 - usedSlots;
+
+	// Add historical messages to cache (up to remaining slots)
 	for (let i = 0; i < Math.min(remainingSlots, historicalMessages.length); i++) {
 		cacheIndices.add(historicalMessages[i]);
+	}
+
+	// Log cache allocation for debugging
+	if (existingCacheBreakpoints > 0) {
+		console.log(`[Cache] Breakpoints: ${existingCacheBreakpoints} (system layered) + ${cacheIndices.size} (history) = ${existingCacheBreakpoints + cacheIndices.size}/4`);
 	}
 
 	return messages.map((msg, index) => {
@@ -153,7 +180,8 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
 			};
 		}
 
-		// If already array, add cache_control to last block
+		// If already array and NOT system (system already has cache_control from layered caching),
+		// add cache_control to last block
 		if (Array.isArray(msg.content) && msg.content.length > 0) {
 			const blocks = [...msg.content] as MessageContentBlock[];
 			const lastBlock = blocks[blocks.length - 1];
@@ -221,6 +249,48 @@ function injectSystemPrompt(messages: ChatMessage[], prompt: string): ChatMessag
 			...messages
 		];
 	}
+}
+
+/**
+ * Create a system message with layered content blocks for optimal caching
+ * Each layer gets its own cache_control, allowing:
+ * - Platform prompt to be cached globally (shared across ALL users on same model)
+ * - Context to be cached per-area (shared across conversations in same area)
+ *
+ * This significantly improves cache hit rates compared to single-block caching.
+ */
+function createLayeredSystemMessage(
+	layers: PromptLayer[],
+	existingSystemContent?: string
+): ChatMessage {
+	const contentBlocks: MessageContentBlock[] = [];
+
+	for (const layer of layers) {
+		const block: MessageContentBlock = {
+			type: 'text' as const,
+			text: layer.content
+		};
+
+		// Add cache_control for layers that should be cached
+		if (layer.shouldCache) {
+			block.cache_control = { type: 'ephemeral' as const };
+		}
+
+		contentBlocks.push(block);
+	}
+
+	// Add existing user-provided system content if any (without cache_control)
+	if (existingSystemContent) {
+		contentBlocks.push({
+			type: 'text' as const,
+			text: `\n\n---\n\nUser Instructions:\n${existingSystemContent}`
+		});
+	}
+
+	return {
+		role: 'system' as const,
+		content: contentBlocks
+	};
 }
 
 /**
@@ -306,7 +376,51 @@ function injectPlatformPrompt(
 		return injectSystemPrompt(messages, fullPrompt);
 	}
 
-	// Build base prompt: Platform → Space → Focus Area
+	// Check if we can use layered caching (Claude models without assists)
+	// Layered caching splits the system prompt into separate content blocks,
+	// each with its own cache_control. This allows:
+	// - Platform prompt to be cached globally (shared across ALL users on same model)
+	// - Context to be cached per-area (shared across conversations in same area)
+	const canUseLayeredCaching = supportsLayeredCaching(model) && !assistContext?.assistId;
+
+	if (canUseLayeredCaching) {
+		// Use layered caching for better cache hit rates
+		const layers = getSystemPromptLayers(model, {
+			space,
+			spaceInfo,
+			focusArea,
+			focusedTask: focusedTask && !assistContext?.assistFocusedTask ? focusedTask : null
+		});
+
+		// Check for existing user-provided system message
+		const systemIndex = messages.findIndex(m => m.role === 'system');
+		let existingContent: string | undefined;
+		if (systemIndex >= 0) {
+			const existingSystem = messages[systemIndex];
+			existingContent = typeof existingSystem.content === 'string'
+				? existingSystem.content
+				: Array.isArray(existingSystem.content)
+					? existingSystem.content.map(c => 'text' in c ? c.text : '').join('\n')
+					: undefined;
+		}
+
+		// Create layered system message
+		const layeredSystemMessage = createLayeredSystemMessage(layers, existingContent);
+
+		// Log cache optimization info
+		console.log(`[Cache] Using layered caching: ${layers.map(l => l.name).join(' → ')}`);
+
+		// Replace or add system message
+		if (systemIndex >= 0) {
+			const updatedMessages = [...messages];
+			updatedMessages[systemIndex] = layeredSystemMessage;
+			return updatedMessages;
+		} else {
+			return [layeredSystemMessage, ...messages];
+		}
+	}
+
+	// Fallback: Build single-block prompt for non-Claude models or when assists are active
 	// Priority: Focus Area > Custom Space with context > System Space
 	let fullPrompt: string;
 	if (focusArea) {
@@ -585,7 +699,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const searchEnabled = body.searchEnabled && braveConfigured;
 
 	// Check if extended thinking is enabled for Claude models
-	const thinkingEnabled = body.thinkingEnabled && supportsExtendedThinking(body.model);
+	// In AUTO mode, allow thinking - router will select a thinking-capable model
+	const isAutoModeRequest = isAutoMode(body.model);
+	const thinkingEnabled = body.thinkingEnabled && (isAutoModeRequest || supportsExtendedThinking(body.model));
 
 	console.log('Search debug:', {
 		bodySearchEnabled: body.searchEnabled,
@@ -595,6 +711,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	console.log('Thinking debug:', {
 		thinkingEnabled: body.thinkingEnabled,
+		isAutoMode: isAutoModeRequest,
 		modelSupportsThinking: supportsExtendedThinking(body.model),
 		actualThinkingEnabled: thinkingEnabled,
 		budgetTokens: body.thinkingBudgetTokens
@@ -856,8 +973,116 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 	}
 
+	// ============================================
+	// AUTO MODEL ROUTING
+	// ============================================
+	// If model is 'auto' or 'AUTO', use the router to select optimal model
+	let routingDecision: RoutingDecision | null = null;
+	let resolvedModel = body.model;
+
+	if (isAutoMode(body.model)) {
+		// Extract the last user message for query analysis
+		const lastUserMessage = body.messages
+			.filter(m => m.role === 'user')
+			.pop();
+
+		const userQuery = lastUserMessage
+			? (typeof lastUserMessage.content === 'string'
+				? lastUserMessage.content
+				: Array.isArray(lastUserMessage.content)
+					? lastUserMessage.content
+						.filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+						.map(c => c.text)
+						.join(' ')
+					: '')
+			: '';
+
+		// Map space type to routing context space type
+		const mapSpaceType = (s: typeof space): RoutingContext['spaceType'] => {
+			if (!s) return null;
+			if (s === 'work' || s === 'research' || s === 'random' || s === 'personal') return s;
+			return null;
+		};
+
+		// Fetch recent complexity scores for cache coherence (non-blocking if fails)
+		let recentComplexityScores: number[] = [];
+		try {
+			recentComplexityScores = await postgresRoutingDecisionsRepository.getRecentScoresForUser(sessionUserId, 3);
+		} catch (err) {
+			console.warn('[Router] Failed to fetch recent complexity scores:', err);
+		}
+
+		// Build routing context from available information
+		const routingContext: RoutingContext = {
+			...getDefaultContext(),
+			provider: body.provider || 'anthropic',
+			thinkingEnabled: !!thinkingEnabled, // Ensure boolean
+			userTier: 'pro', // TODO: Get from user session when available
+			spaceType: mapSpaceType(space),
+			spaceSlug: spaceContext?.slug || null,
+			areaId: areaId || null,
+			areaHasDocs: (focusAreaContext?.contextDocuments?.length ?? 0) > 0,
+			isTaskPlanMode: !!planModeContext,
+			planModePhase: planModeContext?.phase || null,
+			conversationTurn: body.conversationTurn || Math.floor(body.messages.filter(m => m.role === 'user').length),
+			currentModel: body.currentModel || null,
+			recentComplexityScores
+		};
+
+		// Run the router
+		routingDecision = routeQuery(userQuery, routingContext);
+		resolvedModel = routingDecision.selectedModel;
+
+		// Log routing decision
+		console.log('\n========== AUTO MODEL ROUTING ==========');
+		console.log(`[Router] Query: "${userQuery.slice(0, 100)}${userQuery.length > 100 ? '...' : ''}"`);
+		console.log(`[Router] Score: ${routingDecision.complexity.score}/100 (${routingDecision.tier})`);
+		console.log(`[Router] Confidence: ${(routingDecision.complexity.confidence * 100).toFixed(0)}%`);
+		console.log(`[Router] Selected: ${resolvedModel}`);
+		if (routingDecision.overrides.length > 0) {
+			console.log(`[Router] Overrides: ${routingDecision.overrides.map(o => o.type).join(', ')}`);
+		}
+		console.log(`[Router] Time: ${routingDecision.routingTimeMs.toFixed(2)}ms`);
+		console.log(`[Router] Reasoning: ${routingDecision.reasoning}`);
+		console.log('=========================================\n');
+
+		// Log routing decision to database for analytics (non-blocking)
+		postgresRoutingDecisionsRepository.create({
+			userId: sessionUserId,
+			organizationId: locals.session.organizationId || null,
+			conversationId: null, // Not passed in request currently
+			provider: body.provider || 'anthropic',
+			conversationTurn: body.conversationTurn || Math.floor(body.messages.filter(m => m.role === 'user').length),
+			selectedModel: routingDecision.selectedModel,
+			tier: routingDecision.tier,
+			score: routingDecision.complexity.score,
+			confidence: routingDecision.complexity.confidence,
+			reasoning: routingDecision.reasoning,
+			routingTimeMs: routingDecision.routingTimeMs,
+			queryLength: userQuery.length,
+			detectedPatterns: routingDecision.complexity.signals.filter(s => s.matched).map(s => s.name),
+			overrides: routingDecision.overrides.map(o => o.type)
+		}).then(record => {
+			// Store the record ID on the routing decision for outcome updates
+			(routingDecision as RoutingDecision & { recordId?: string }).recordId = record.id;
+		}).catch(err => {
+			// Non-critical - log but don't fail the request
+			console.error('[Router] Failed to log routing decision:', err);
+		});
+	}
+
 	// Remove client-specific fields before forwarding to LiteLLM
-	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, areaId: ___________, ...cleanBody } = body;
+	const { searchEnabled: _, thinkingEnabled: __, thinkingBudgetTokens: ___, space: ____, assistId: _____, assistPhase: ______, assistTasks: _______, assistFocusedTask: ________, focusedTask: _________, planMode: __________, areaId: ___________, provider: ____________, currentModel: _____________, conversationTurn: ______________, systemPrompt: customSystemPrompt, ...cleanBody } = body;
+
+	// Use the resolved model (either original or from routing)
+	cleanBody.model = resolvedModel;
+
+	// If a custom system prompt is provided (e.g., for Page Discussion), inject it into messages
+	// This happens BEFORE platform prompt injection so both get composed properly
+	if (customSystemPrompt && typeof customSystemPrompt === 'string' && customSystemPrompt.trim()) {
+		console.log('[Chat] Custom system prompt provided, injecting into messages');
+		cleanBody.messages = injectSystemPrompt(cleanBody.messages as ChatMessage[], customSystemPrompt);
+	}
 
 	// Disable extended thinking during Plan Mode eliciting phase
 	// Reason: We enforce max_tokens=120 for brief responses, which conflicts with thinking.budget_tokens
@@ -866,12 +1091,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		console.log('[Plan Mode] Extended thinking disabled during eliciting phase (max_tokens constraint)');
 	}
 
-	// Add thinking config if enabled
-	if (effectiveThinkingEnabled) {
+	// Add thinking config if enabled AND resolved model supports it
+	// Note: Router guarantees a thinking-capable model when thinkingEnabled is in context
+	if (effectiveThinkingEnabled && supportsExtendedThinking(resolvedModel)) {
 		cleanBody.thinking = {
 			type: 'enabled',
 			budget_tokens: body.thinkingBudgetTokens || 10000
 		};
+		console.log(`[Thinking] Enabled for ${resolvedModel} with budget ${body.thinkingBudgetTokens || 10000} tokens`);
+	} else if (effectiveThinkingEnabled && !supportsExtendedThinking(resolvedModel)) {
+		console.log(`[Thinking] Warning: Requested but ${resolvedModel} doesn't support it - this shouldn't happen with AUTO routing`);
 	}
 
 	try {
@@ -897,7 +1126,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const needsToolHandling = searchEnabled || hasReferenceDocuments;
 
 		if (needsToolHandling) {
-			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId);
+			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision);
 		}
 
 		// Inject platform system prompt with space + focus area + custom space context (before cache breakpoints so it gets cached)
@@ -970,7 +1199,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			cacheRead: cacheRead ? parseInt(cacheRead, 10) : 0
 		};
 
-		return streamResponse(litellmResponse, effectiveThinkingEnabled, usageContext, cacheHeaders);
+		return streamResponse(litellmResponse, effectiveThinkingEnabled, usageContext, cacheHeaders, routingDecision);
 
 	} catch (err) {
 		console.error('Chat endpoint error:', err);
@@ -1000,7 +1229,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string, routingDecision?: RoutingDecision | null): Promise<Response> {
 	const encoder = new TextEncoder();
 
 	// Build usage context for tracking (if we have the required data)
@@ -1051,6 +1280,19 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	// Create a ReadableStream for SSE
 	const stream = new ReadableStream({
 		async start(controller) {
+			// Emit routing decision first if AUTO mode was used
+			if (routingDecision) {
+				sendSSE(controller, encoder, {
+					type: 'routing',
+					selectedModel: routingDecision.selectedModel,
+					tier: routingDecision.tier,
+					score: routingDecision.complexity.score,
+					confidence: routingDecision.complexity.confidence,
+					reasoning: routingDecision.reasoning,
+					overrides: routingDecision.overrides.map(o => o.type)
+				});
+			}
+
 			try {
 				// Build request options with optional max_tokens constraint
 				const toolRequestOptions: typeof body & { max_tokens?: number } = {
@@ -1190,8 +1432,29 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 							if (filename) {
 								console.log('Reading document:', filename);
 
-								// Use task ID as cache scope (documents are typically read in plan mode)
-								const cacheScope = planModeContext?.taskId || body.planMode?.taskId || null;
+								// Cache scope with fallback hierarchy:
+								// 1. taskId - most specific, cache per task (Plan Mode)
+								// 2. areaId - area level, shared across conversations in same area
+								// 3. spaceId - space level, shared across conversations in same space
+								// This ensures document reads are cached even outside Plan Mode
+								const cacheScope =
+									planModeContext?.taskId ||
+									body.planMode?.taskId ||
+									body.areaId ||
+									focusArea?.spaceId ||
+									spaceInfo?.id ||
+									null;
+
+								// Log cache scope for debugging
+								const cacheScopeType = planModeContext?.taskId || body.planMode?.taskId
+									? 'task'
+									: body.areaId
+										? 'area'
+										: focusArea?.spaceId || spaceInfo?.id
+											? 'space'
+											: 'none';
+								console.log(`[Cache] Scope: ${cacheScopeType} (${cacheScope || 'null'})`);
+
 								const paramsHash = hashParams({ filename });
 								const cacheUserId = userId || 'anonymous';
 								let cachedResult = null;
@@ -1206,7 +1469,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 											cacheUserId
 										);
 										if (cachedResult) {
-											console.log(`Cache hit for document: ${filename}`);
+											console.log(`[Cache] HIT for document: ${filename} (${cacheScopeType}: ${cacheScope})`);
 											// Use cached result
 											toolResults.push({
 												tool_call_id: toolCall.id,
@@ -1246,7 +1509,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 												doc.charCount,
 												cacheUserId
 											);
-											console.log(`Cached document: ${filename}`);
+											console.log(`[Cache] STORED document: ${filename} (${cacheScopeType}: ${cacheScope})`);
 										} catch (cacheError) {
 											console.warn('Failed to cache document:', cacheError);
 										}
@@ -1342,8 +1605,8 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 						});
 					} else {
 						console.log('Starting to stream final response...');
-						// Stream the final response with usage tracking
-						await streamToController(finalResponse, controller, encoder, thinkingEnabled, usageContext);
+						// Stream the final response with usage tracking and routing decision
+						await streamToController(finalResponse, controller, encoder, thinkingEnabled, usageContext, routingDecision);
 						console.log('Finished streaming final response');
 
 						// Send sources after content (deduplicated)
@@ -1400,6 +1663,25 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 						cacheCreationTokens: cacheCreation,
 						cacheReadTokens: cacheRead
 					});
+
+					// Update routing decision outcome if we have a record ID
+					const recordId = (routingDecision as RoutingDecision & { recordId?: string })?.recordId;
+					if (recordId) {
+						const completionTokens = usage.completion_tokens || 0;
+						const cost = estimateCost(
+							usageContext.model,
+							usage.prompt_tokens || 0,
+							completionTokens,
+							cacheRead
+						);
+						postgresRoutingDecisionsRepository.updateOutcome(recordId, {
+							requestSucceeded: true,
+							responseTokens: completionTokens,
+							estimatedCostMillicents: cost
+						}).catch(err => {
+							console.error('[Router] Failed to update routing outcome:', err);
+						});
+					}
 				}
 
 				sendSSE(controller, encoder, '[DONE]');
@@ -1496,7 +1778,8 @@ async function streamToController(
 	controller: ReadableStreamDefaultController,
 	encoder: TextEncoder,
 	thinkingEnabled: boolean = false,
-	usageContext?: UsageContext
+	usageContext?: UsageContext,
+	routingDecision?: RoutingDecision | null
 ) {
 	const reader = response.body?.getReader();
 	if (!reader) {
@@ -1542,6 +1825,25 @@ async function streamToController(
 					cacheCreationTokens: cacheCreation,
 					cacheReadTokens: cacheRead
 				});
+
+				// Update routing decision outcome if we have a record ID
+				const recordId = (routingDecision as RoutingDecision & { recordId?: string })?.recordId;
+				if (recordId) {
+					const completionTokens = usageData.completion_tokens || 0;
+					const cost = estimateCost(
+						usageContext.model,
+						usageData.prompt_tokens || 0,
+						completionTokens,
+						cacheRead
+					);
+					postgresRoutingDecisionsRepository.updateOutcome(recordId, {
+						requestSucceeded: true,
+						responseTokens: completionTokens,
+						estimatedCostMillicents: cost
+					}).catch(err => {
+						console.error('[Router] Failed to update routing outcome:', err);
+					});
+				}
 			} else if (usageContext) {
 				console.log(`[Usage Debug] streamToController: no usage data for ${usageContext.model}`);
 			}
@@ -1683,12 +1985,14 @@ async function handleLiteLLMError(response: Response): Promise<Response> {
  * Stream response with extended thinking support and usage tracking
  * Parses the stream to extract thinking content and regular content separately
  * Tracks token usage and saves to database on completion
+ * Optionally emits routing decision at the start if AUTO mode was used
  */
 function streamResponse(
 	litellmResponse: Response,
 	thinkingEnabled: boolean = false,
 	usageContext?: UsageContext,
-	cacheHeaders?: { cacheCreation: number; cacheRead: number }
+	cacheHeaders?: { cacheCreation: number; cacheRead: number },
+	routingDecision?: RoutingDecision | null
 ): Response {
 	const reader = litellmResponse.body?.getReader();
 	if (!reader) {
@@ -1706,6 +2010,20 @@ function streamResponse(
 
 	const stream = new ReadableStream({
 		async start(controller) {
+			// Emit routing decision first if AUTO mode was used
+			// This lets the frontend know which model was selected before content starts
+			if (routingDecision) {
+				controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+					type: 'routing',
+					selectedModel: routingDecision.selectedModel,
+					tier: routingDecision.tier,
+					score: routingDecision.complexity.score,
+					confidence: routingDecision.complexity.confidence,
+					reasoning: routingDecision.reasoning,
+					overrides: routingDecision.overrides.map(o => o.type)
+				})}\n\n`));
+			}
+
 			let buffer = '';
 			let isThinking = false; // Don't start in thinking mode - wait for actual thinking content
 			let hasReceivedContent = false; // Track if we've received any content yet
@@ -1747,6 +2065,25 @@ function streamResponse(
 								cacheCreationTokens: cacheCreation,
 								cacheReadTokens: cacheRead
 							});
+
+							// Update routing decision outcome if we have a record ID
+							const recordId = (routingDecision as RoutingDecision & { recordId?: string })?.recordId;
+							if (recordId) {
+								const completionTokens = usageData.completion_tokens || 0;
+								const cost = estimateCost(
+									usageContext.model,
+									usageData.prompt_tokens || 0,
+									completionTokens,
+									cacheRead
+								);
+								postgresRoutingDecisionsRepository.updateOutcome(recordId, {
+									requestSucceeded: true,
+									responseTokens: completionTokens,
+									estimatedCostMillicents: cost
+								}).catch(err => {
+									console.error('[Router] Failed to update routing outcome:', err);
+								});
+							}
 						}
 
 						// Send done signal

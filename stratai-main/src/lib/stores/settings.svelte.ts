@@ -146,33 +146,46 @@ class SettingsStore {
 		return { ...this.settings };
 	}
 
+	// Check if AUTO mode is enabled
+	get isAutoMode(): boolean {
+		return this.settings.selectedModel.toLowerCase() === 'auto';
+	}
+
 	// Capability-aware derived properties
 	/**
 	 * Check if the current model supports extended thinking
+	 * In AUTO mode, thinking is supported (router will pick appropriate model)
 	 */
 	get canUseExtendedThinking(): boolean {
+		if (this.isAutoMode) return true; // Router handles model selection
 		return modelSupportsThinking(this.settings.selectedModel);
 	}
 
 	/**
 	 * Check if the current model supports vision/images
+	 * In AUTO mode, vision is supported (router will pick appropriate model)
 	 */
 	get canUseVision(): boolean {
+		if (this.isAutoMode) return true; // Router handles model selection
 		return modelSupportsVision(this.settings.selectedModel);
 	}
 
 	/**
 	 * Get the effective max tokens (minimum of setting and model limit)
+	 * In AUTO mode, use default limit (router will adjust based on selected model)
 	 */
 	get effectiveMaxTokens(): number {
+		if (this.isAutoMode) return this.settings.maxTokens; // Use user setting, router handles limits
 		const modelMax = getMaxOutputTokens(this.settings.selectedModel);
 		return Math.min(this.settings.maxTokens, modelMax);
 	}
 
 	/**
 	 * Get the max output tokens for the current model
+	 * In AUTO mode, return a high limit (router will pick appropriate model)
 	 */
 	get modelMaxOutputTokens(): number {
+		if (this.isAutoMode) return 64000; // Conservative high limit for AUTO mode
 		return getMaxOutputTokens(this.settings.selectedModel);
 	}
 
@@ -193,6 +206,9 @@ class SettingsStore {
 	 * Silently adjust settings when model changes to ensure compatibility
 	 */
 	private adjustSettingsForModel(model: string): void {
+		// Skip adjustments for AUTO mode - router handles compatibility
+		if (model.toLowerCase() === 'auto') return;
+
 		// Adjust max tokens if current value exceeds new model's limit
 		const newModelMaxTokens = getMaxOutputTokens(model);
 		if (this.settings.maxTokens > newModelMaxTokens) {
@@ -283,7 +299,8 @@ class SettingsStore {
 
 	setExtendedThinkingEnabled(value: boolean): void {
 		// Only allow enabling if the current model supports thinking
-		if (value && !modelSupportsThinking(this.settings.selectedModel)) {
+		// In AUTO mode, allow it - router will select appropriate model
+		if (value && !this.isAutoMode && !modelSupportsThinking(this.settings.selectedModel)) {
 			return;
 		}
 		this.settings.extendedThinkingEnabled = value;
@@ -292,8 +309,9 @@ class SettingsStore {
 
 	toggleExtendedThinking(): void {
 		// Only allow toggling on if the model supports thinking
+		// In AUTO mode, allow it - router will select appropriate model
 		const newValue = !this.settings.extendedThinkingEnabled;
-		if (newValue && !modelSupportsThinking(this.settings.selectedModel)) {
+		if (newValue && !this.isAutoMode && !modelSupportsThinking(this.settings.selectedModel)) {
 			return;
 		}
 		this.settings.extendedThinkingEnabled = newValue;

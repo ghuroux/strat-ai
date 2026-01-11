@@ -228,10 +228,10 @@
 
 			<!-- Documents field -->
 			<section class="field-section">
-				<label class="section-label">
+				<span class="section-label">
 					Reference Documents
 					<span class="label-hint">(optional)</span>
-				</label>
+				</span>
 
 				<!-- Linked documents list -->
 				{#if linkedDocuments.length > 0}
@@ -311,7 +311,7 @@
 			<!-- Color field (not for General) -->
 			{#if !isGeneral}
 				<section class="field-section">
-					<label class="section-label">Color</label>
+					<span class="section-label">Color</span>
 					<div class="color-options">
 						{#each colorOptions as option (option.value)}
 							<button

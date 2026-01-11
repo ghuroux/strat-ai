@@ -38,6 +38,26 @@
 	--color-primary-600: #0052e0;
 
 	--color-warning-400: #fbbf24;
+
+	/* Page Editor Variables (Dark Mode - default) */
+	/* Based on DOCUMENT_SYSTEM.md Section 5.1 */
+	--editor-bg: #1e1e1e;
+	--editor-bg-secondary: #252526;
+	--editor-text: #e4e4e7;
+	--editor-text-secondary: #a1a1aa;
+	--editor-text-muted: #71717a;
+	--editor-border: #3f3f46;
+	--editor-border-focus: #3b82f6;
+	--toolbar-bg: #252526;
+	--toolbar-border: #3f3f46;
+	--toolbar-button-hover: #3f3f46;
+	--toolbar-button-active: #52525b;
+	--chat-panel-bg: #252526;
+	--chat-panel-border: #3f3f46;
+	--editor-selection: #1e3a5f;
+	--card-bg: #252526;
+	--card-bg-hover: #2d2d30;
+	--card-border: #3f3f46;
 }
 
 @layer base {
@@ -91,6 +111,26 @@
 		--tw-surface-800: #27272a;
 		--tw-surface-900: #18181b;
 		--tw-surface-950: #0f0f11;
+
+		/* Page Editor Variables (Light Mode) */
+		/* Based on DOCUMENT_SYSTEM.md Section 5.1 */
+		--editor-bg: #ffffff;
+		--editor-bg-secondary: #f8fafc;
+		--editor-text: #1e293b;
+		--editor-text-secondary: #64748b;
+		--editor-text-muted: #94a3b8;
+		--editor-border: #e2e8f0;
+		--editor-border-focus: #3b82f6;
+		--toolbar-bg: #ffffff;
+		--toolbar-border: #e2e8f0;
+		--toolbar-button-hover: #f1f5f9;
+		--toolbar-button-active: #e2e8f0;
+		--chat-panel-bg: #f8fafc;
+		--chat-panel-border: #e2e8f0;
+		--editor-selection: #dbeafe;
+		--card-bg: #ffffff;
+		--card-bg-hover: #f8fafc;
+		--card-border: #e2e8f0;
 	}
 
 	body {
@@ -4902,4 +4942,220 @@ body.konami-activated {
 
 .ship-it-shake {
 	animation: rocket-shake 0.4s ease-in-out;
+}
+
+/* =========================================
+   Page Editor Typography Styles
+   Based on DOCUMENT_SYSTEM.md Section 5.1
+   ========================================= */
+
+.editor-body {
+	font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+	font-size: 16px;
+	line-height: 1.7;
+	color: var(--editor-text);
+}
+
+.editor-body h1 {
+	font-size: 2rem;
+	font-weight: 700;
+	margin-top: 2rem;
+	margin-bottom: 1rem;
+	line-height: 1.3;
+	color: var(--editor-text);
+}
+
+.editor-body h2 {
+	font-size: 1.5rem;
+	font-weight: 600;
+	margin-top: 1.75rem;
+	margin-bottom: 0.75rem;
+	line-height: 1.35;
+	color: var(--editor-text);
+}
+
+.editor-body h3 {
+	font-size: 1.25rem;
+	font-weight: 600;
+	margin-top: 1.5rem;
+	margin-bottom: 0.5rem;
+	line-height: 1.4;
+	color: var(--editor-text);
+}
+
+.editor-body p {
+	margin-bottom: 1rem;
+}
+
+.editor-body code {
+	font-family: 'JetBrains Mono', 'Fira Code', monospace;
+	font-size: 0.9em;
+	background: var(--editor-bg-secondary);
+	padding: 0.2em 0.4em;
+	border-radius: 4px;
+}
+
+.editor-body pre {
+	background: var(--editor-bg-secondary);
+	padding: 1rem;
+	border-radius: 8px;
+	overflow-x: auto;
+	margin: 1rem 0;
+}
+
+.editor-body pre code {
+	background: transparent;
+	padding: 0;
+}
+
+.editor-body blockquote {
+	border-left: 4px solid var(--editor-border-focus);
+	padding-left: 1rem;
+	margin-left: 0;
+	margin-right: 0;
+	margin-top: 1rem;
+	margin-bottom: 1rem;
+	color: var(--editor-text-secondary);
+	font-style: italic;
+}
+
+.editor-body ul,
+.editor-body ol {
+	margin: 1rem 0;
+	padding-left: 1.5rem;
+}
+
+.editor-body li {
+	margin-bottom: 0.5rem;
+}
+
+.editor-body ul li {
+	list-style-type: disc;
+}
+
+.editor-body ol li {
+	list-style-type: decimal;
+}
+
+/* Task list items */
+.editor-body ul[data-type="taskList"] {
+	list-style: none;
+	padding-left: 0;
+}
+
+.editor-body ul[data-type="taskList"] li {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.5rem;
+}
+
+.editor-body ul[data-type="taskList"] li input[type="checkbox"] {
+	margin-top: 0.25rem;
+	width: 1rem;
+	height: 1rem;
+	accent-color: var(--editor-border-focus);
+}
+
+/* Links */
+.editor-body a,
+.editor-body .editor-link {
+	color: var(--editor-border-focus);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.editor-body a:hover,
+.editor-body .editor-link:hover {
+	opacity: 0.8;
+}
+
+/* Horizontal rule */
+.editor-body hr {
+	border: none;
+	border-top: 2px solid var(--editor-border);
+	margin: 2rem 0;
+}
+
+/* Selection */
+.editor-body ::selection {
+	background: var(--editor-selection);
+}
+
+/* Syntax highlighting for code blocks */
+.editor-body pre code .hljs-keyword,
+.editor-body pre code .hljs-selector-tag,
+.editor-body pre code .hljs-title,
+.editor-body pre code .hljs-section,
+.editor-body pre code .hljs-doctag,
+.editor-body pre code .hljs-name,
+.editor-body pre code .hljs-strong {
+	color: #ff7b72;
+}
+
+.editor-body pre code .hljs-string,
+.editor-body pre code .hljs-title.class_,
+.editor-body pre code .hljs-addition {
+	color: #a5d6ff;
+}
+
+.editor-body pre code .hljs-comment,
+.editor-body pre code .hljs-quote,
+.editor-body pre code .hljs-deletion {
+	color: #8b949e;
+}
+
+.editor-body pre code .hljs-literal,
+.editor-body pre code .hljs-number {
+	color: #79c0ff;
+}
+
+.editor-body pre code .hljs-built_in,
+.editor-body pre code .hljs-type {
+	color: #ffa657;
+}
+
+.editor-body pre code .hljs-params {
+	color: var(--editor-text);
+}
+
+.editor-body pre code .hljs-variable {
+	color: #ffa657;
+}
+
+/* Light mode syntax highlighting adjustments */
+html.light .editor-body pre code .hljs-keyword,
+html.light .editor-body pre code .hljs-selector-tag,
+html.light .editor-body pre code .hljs-title,
+html.light .editor-body pre code .hljs-section,
+html.light .editor-body pre code .hljs-doctag,
+html.light .editor-body pre code .hljs-name,
+html.light .editor-body pre code .hljs-strong {
+	color: #cf222e;
+}
+
+html.light .editor-body pre code .hljs-string,
+html.light .editor-body pre code .hljs-title.class_,
+html.light .editor-body pre code .hljs-addition {
+	color: #0a3069;
+}
+
+html.light .editor-body pre code .hljs-comment,
+html.light .editor-body pre code .hljs-quote,
+html.light .editor-body pre code .hljs-deletion {
+	color: #6e7781;
+}
+
+html.light .editor-body pre code .hljs-literal,
+html.light .editor-body pre code .hljs-number {
+	color: #0550ae;
+}
+
+html.light .editor-body pre code .hljs-built_in,
+html.light .editor-body pre code .hljs-type {
+	color: #953800;
+}
+
+html.light .editor-body pre code .hljs-variable {
+	color: #953800;
 }

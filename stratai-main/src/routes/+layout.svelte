@@ -10,8 +10,10 @@
 	import { userStore } from '$lib/stores/user.svelte';
 	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
+	import type { ThemePreference } from '$lib/types/user';
 
 	// Svelte 5: Use @render for slots with Snippets
 	let { children, data }: { children: any; data: PageData } = $props();
@@ -27,18 +29,28 @@
 	// Sync user data from server to client store
 	$effect(() => {
 		userStore.setUser(data.user);
+
+		// Sync theme from database preference to settings store (if available)
+		// This ensures theme persists across cache clears
+		const dbTheme = data.user?.preferences?.theme;
+		if (dbTheme && dbTheme !== settingsStore.theme) {
+			settingsStore.setTheme(dbTheme);
+		}
 	});
 
 	/**
-	 * Apply theme on initial page load
+	 * Apply theme on initial page load and when it changes
 	 */
 	onMount(() => {
-		applyTheme(settingsStore.theme);
+		// Use database theme if available, otherwise use localStorage theme
+		const theme = data.user?.preferences?.theme ?? settingsStore.theme;
+		applyTheme(theme);
 
 		// Listen for system theme changes when using 'system' preference
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 		const handleChange = () => {
-			if (settingsStore.theme === 'system') {
+			const currentTheme = data.user?.preferences?.theme ?? settingsStore.theme;
+			if (currentTheme === 'system') {
 				applyTheme('system');
 			}
 		};
@@ -46,7 +58,7 @@
 		return () => mediaQuery.removeEventListener('change', handleChange);
 	});
 
-	function applyTheme(theme: 'dark' | 'light' | 'system') {
+	function applyTheme(theme: ThemePreference) {
 		const root = document.documentElement;
 
 		if (theme === 'system') {
@@ -68,6 +80,13 @@
 		if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
 			e.preventDefault();
 			commandPaletteStore.toggle();
+			return;
+		}
+
+		// Check for ⌘⇧H or Ctrl+Shift+H - Go to preferred home
+		if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'h') {
+			e.preventDefault();
+			goto(userStore.homeUrl);
 			return;
 		}
 

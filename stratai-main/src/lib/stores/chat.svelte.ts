@@ -70,6 +70,17 @@ class ChatStore {
 	// Task state (for deep work mode - filter to task-linked conversations only)
 	focusedTaskId = $state<string | null>(null);
 
+	// AUTO mode routing state (ephemeral - not persisted)
+	// Tracks which model was actually used when AUTO mode is active
+	routedModel = $state<string | null>(null);
+	autoProvider = $state<'anthropic' | 'openai' | 'google'>('anthropic');
+	routingDecision = $state<{
+		tier: 'simple' | 'medium' | 'complex';
+		score: number;
+		confidence: number;
+		overrides: string[];
+	} | null>(null);
+
 	// Version counter for fine-grained updates (message content changes)
 	_version = $state(0);
 
@@ -542,6 +553,44 @@ class ChatStore {
 	 */
 	setFocusedTaskId(taskId: string | null): void {
 		this.focusedTaskId = taskId;
+	}
+
+	// =====================================================
+	// AUTO Mode Routing Methods
+	// =====================================================
+
+	/**
+	 * Set the routed model (the model actually used when AUTO mode is active)
+	 */
+	setRoutedModel(modelId: string | null): void {
+		this.routedModel = modelId;
+	}
+
+	/**
+	 * Set the preferred provider for AUTO mode
+	 */
+	setAutoProvider(provider: 'anthropic' | 'openai' | 'google'): void {
+		this.autoProvider = provider;
+	}
+
+	/**
+	 * Set the routing decision from the backend
+	 */
+	setRoutingDecision(decision: {
+		tier: 'simple' | 'medium' | 'complex';
+		score: number;
+		confidence: number;
+		overrides: string[];
+	} | null): void {
+		this.routingDecision = decision;
+	}
+
+	/**
+	 * Clear routing state (called when starting a new message or switching conversations)
+	 */
+	clearRoutingState(): void {
+		this.routedModel = null;
+		this.routingDecision = null;
 	}
 
 	/**

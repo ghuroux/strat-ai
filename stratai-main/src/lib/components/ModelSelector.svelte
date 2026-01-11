@@ -6,29 +6,42 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 
+	// AUTO mode identifier
+	const AUTO_MODEL_ID = 'auto';
+
 	// Svelte 5: Use $props - selectedModel can be passed as prop or managed internally
 	let {
 		selectedModel: propSelectedModel = '',
 		disabled = false,
-		onchange
+		routedModel = null,
+		onchange,
+		onproviderchange
 	}: {
 		selectedModel?: string;
 		disabled?: boolean;
+		routedModel?: string | null; // The model actually used when AUTO is selected
 		onchange?: (model: string) => void;
+		onproviderchange?: (provider: 'anthropic' | 'openai' | 'google') => void;
 	} = $props();
 
 	// Internal state for the selected model - sync with prop
-	let internalSelectedModel = $state(propSelectedModel);
+	let internalSelectedModel = $state('');
 
-	// Sync internal state with prop when prop changes
+	// Provider preference for AUTO mode
+	let autoProvider = $state<'anthropic' | 'openai' | 'google'>('anthropic');
+
+	// Sync internal state with prop when prop changes (including initial value)
 	$effect(() => {
-		if (propSelectedModel) {
+		if (propSelectedModel !== undefined) {
 			internalSelectedModel = propSelectedModel;
 		}
 	});
 
 	// Computed value that uses internal state
 	let selectedModel = $derived(internalSelectedModel);
+
+	// Check if AUTO mode is active
+	let isAutoMode = $derived(selectedModel.toLowerCase() === AUTO_MODEL_ID);
 
 	// Svelte 5: Use $state for local reactive state
 	let models = $state<LiteLLMModel[]>([]);
@@ -208,12 +221,17 @@
 
 			// Try to restore saved model preference
 			const savedModel = settingsStore.selectedModel;
-			if (savedModel && models.some((m) => m.id === savedModel)) {
-				internalSelectedModel = savedModel;
-			} else if (!internalSelectedModel && models.length > 0) {
-				internalSelectedModel = models[0].id;
-				// Also trigger onchange for the default selection
-				onchange?.(models[0].id);
+			if (savedModel) {
+				// Check if it's AUTO or a valid model
+				if (savedModel.toLowerCase() === AUTO_MODEL_ID) {
+					internalSelectedModel = AUTO_MODEL_ID;
+				} else if (models.some((m) => m.id === savedModel)) {
+					internalSelectedModel = savedModel;
+				}
+			} else if (!internalSelectedModel) {
+				// Default to AUTO mode for new users
+				internalSelectedModel = AUTO_MODEL_ID;
+				onchange?.(AUTO_MODEL_ID);
 			}
 		} catch (err) {
 			error = true;
@@ -228,6 +246,31 @@
 		internalSelectedModel = modelId;
 		isOpen = false;
 		onchange?.(modelId);
+	}
+
+	function selectAuto() {
+		internalSelectedModel = AUTO_MODEL_ID;
+		isOpen = false;
+		onchange?.(AUTO_MODEL_ID);
+	}
+
+	function selectProvider(provider: 'anthropic' | 'openai' | 'google') {
+		autoProvider = provider;
+		onproviderchange?.(provider);
+	}
+
+	// Get provider badge color for AUTO mode
+	function getAutoProviderColor(provider: string): string {
+		switch (provider) {
+			case 'anthropic':
+				return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+			case 'openai':
+				return 'bg-green-500/20 text-green-400 border-green-500/30';
+			case 'google':
+				return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+			default:
+				return 'bg-surface-600/50 text-surface-400 border-surface-600';
+		}
 	}
 
 	function toggleDropdown(e: MouseEvent) {
@@ -264,13 +307,33 @@
 			type="button"
 			onclick={toggleDropdown}
 			{disabled}
-			class="w-full px-4 py-2.5 bg-surface-800 border border-surface-700 rounded-xl
+			class="w-full px-4 py-2.5 border rounded-xl
 				   text-left flex items-center justify-between gap-2
-				   hover:border-surface-600 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500
-				   transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+				   focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500
+				   transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
+				   {isAutoMode
+					? 'bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border-purple-500/40 hover:border-purple-400/60'
+					: 'bg-surface-800 border-surface-700 hover:border-surface-600'}"
 		>
 			<div class="flex items-center gap-2 min-w-0">
-				{#if selectedModel}
+				{#if isAutoMode}
+					<!-- AUTO mode display -->
+					<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-gradient-to-r from-purple-500/30 to-indigo-500/30 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+						<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+						</svg>
+						AUTO
+					</span>
+					{#if routedModel}
+						<span class="text-surface-400 text-sm">using</span>
+						<span class="px-1.5 py-0.5 rounded text-xs font-medium {getProviderColor(getProvider(routedModel))}">
+							{getProvider(routedModel)}
+						</span>
+						<span class="truncate text-surface-200">{getDisplayName(routedModel)}</span>
+					{:else}
+						<span class="text-surface-400 text-sm">Smart model routing</span>
+					{/if}
+				{:else if selectedModel}
 					<span class="px-1.5 py-0.5 rounded text-xs font-medium {getProviderColor(getProvider(selectedModel))}">
 						{getProvider(selectedModel)}
 					</span>
@@ -317,6 +380,81 @@
 					<div class="px-4 py-3 text-sm text-surface-500">No models available</div>
 				{:else}
 					<div class="max-h-[32rem] overflow-y-auto">
+						<!-- AUTO Mode Option -->
+						<div class="px-3 py-2 text-xs font-semibold text-purple-300 uppercase tracking-wider bg-gradient-to-r from-purple-900/40 to-indigo-900/40 flex items-center gap-2">
+							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+							</svg>
+							Smart Routing
+						</div>
+						<button
+							type="button"
+							onclick={selectAuto}
+							class="w-full px-4 py-3 text-left flex items-center gap-3
+								   transition-colors whitespace-nowrap
+								   {isAutoMode
+									? 'bg-purple-900/30 border-l-2 border-purple-500'
+									: 'hover:bg-surface-700'}"
+						>
+							<span class="px-2 py-1 rounded-md text-xs font-bold bg-gradient-to-r from-purple-500/30 to-indigo-500/30 text-purple-200 border border-purple-500/40 flex items-center gap-1.5">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+								</svg>
+								AUTO
+							</span>
+							<div class="flex flex-col">
+								<span class="text-surface-100 font-medium">Automatic Model Selection</span>
+								<span class="text-xs text-surface-500">Optimal model for each query</span>
+							</div>
+							{#if isAutoMode}
+								<svg class="w-4 h-4 text-purple-400 shrink-0 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+								</svg>
+							{/if}
+						</button>
+
+						<!-- Provider preference (shown when AUTO is selected) -->
+						{#if isAutoMode}
+							<div class="px-4 py-2 border-t border-b border-surface-700 bg-surface-850/50">
+								<div class="text-xs text-surface-500 mb-2">Prefer provider:</div>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										onclick={() => selectProvider('anthropic')}
+										class="px-2.5 py-1 rounded-md text-xs font-medium border transition-all
+											   {autoProvider === 'anthropic'
+												? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+												: 'bg-surface-700 text-surface-400 border-surface-600 hover:bg-surface-600'}"
+									>
+										Claude
+									</button>
+									<button
+										type="button"
+										onclick={() => selectProvider('openai')}
+										class="px-2.5 py-1 rounded-md text-xs font-medium border transition-all
+											   {autoProvider === 'openai'
+												? 'bg-green-500/20 text-green-300 border-green-500/40'
+												: 'bg-surface-700 text-surface-400 border-surface-600 hover:bg-surface-600'}"
+									>
+										GPT
+									</button>
+									<button
+										type="button"
+										onclick={() => selectProvider('google')}
+										class="px-2.5 py-1 rounded-md text-xs font-medium border transition-all
+											   {autoProvider === 'google'
+												? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+												: 'bg-surface-700 text-surface-400 border-surface-600 hover:bg-surface-600'}"
+									>
+										Gemini
+									</button>
+								</div>
+							</div>
+						{/if}
+
+						<!-- Divider -->
+						<div class="my-2 border-t border-surface-700"></div>
+
 						<!-- Proprietary Models Section -->
 						{#if proprietaryGroups.length > 0}
 							<div class="px-3 py-2 text-xs font-semibold text-surface-400 uppercase tracking-wider bg-surface-900/50 sticky top-0 z-10 flex items-center gap-2">

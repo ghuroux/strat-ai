@@ -50,11 +50,11 @@
 	// Calculate max value for scaling
 	const maxValue = $derived(Math.max(...data.map((d) => d.value), 1));
 
-	// Line chart dimensions (for SVG viewBox)
+	// Line chart dimensions (for SVG viewBox) - use $derived to stay reactive to prop changes
 	const lineWidth = 100;
-	const linePadding = { top: 10, right: 10, bottom: showLabels ? 30 : 10, left: 10 };
-	const lineChartWidth = lineWidth - linePadding.left - linePadding.right;
-	const lineChartHeight = height - linePadding.top - linePadding.bottom;
+	const linePadding = $derived({ top: 10, right: 10, bottom: showLabels ? 30 : 10, left: 10 });
+	const lineChartWidth = $derived(lineWidth - linePadding.left - linePadding.right);
+	const lineChartHeight = $derived(height - linePadding.top - linePadding.bottom);
 
 	// Calculate Y position from value (inverted because SVG Y is top-down)
 	function yPos(value: number): number {

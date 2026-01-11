@@ -33,6 +33,12 @@
 	let effectiveModel = $derived(
 		chatStore.activeConversation?.model || settingsStore.selectedModel || ''
 	);
+
+	// AUTO mode detection and routing state
+	let isAutoMode = $derived(effectiveModel.toLowerCase() === 'auto');
+	let routedModel = $derived(chatStore.routedModel);
+	let autoProvider = $derived(chatStore.autoProvider);
+
 	let settingsOpen = $state(false);
 	let isGeneratingSummary = $state(false);
 	let isCompacting = $state(false);
@@ -328,6 +334,11 @@
 				apiMessages.push({ role: 'user', content: visionContent });
 			}
 
+			// Clear previous routing state before new request
+			if (isAutoMode) {
+				chatStore.clearRoutingState();
+			}
+
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -339,7 +350,13 @@
 					searchEnabled: settingsStore.webSearchEnabled,
 					// Extended thinking - only enable if model supports it
 					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
-					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
+					// AUTO mode routing params
+					...(isAutoMode && {
+						provider: autoProvider,
+						currentModel: routedModel, // Previous model for cache coherence
+						conversationTurn: Math.floor(chatStore.messages.length / 2) + 1
+					})
 				}),
 				signal: controller.signal
 			});
@@ -376,7 +393,16 @@
 							const parsed = JSON.parse(data);
 
 							// Handle new extended format
-							if (parsed.type === 'status') {
+							if (parsed.type === 'routing') {
+								// AUTO mode routing decision from backend
+								chatStore.setRoutedModel(parsed.selectedModel);
+								chatStore.setRoutingDecision({
+									tier: parsed.tier,
+									score: parsed.score,
+									confidence: parsed.confidence,
+									overrides: parsed.overrides || []
+								});
+							} else if (parsed.type === 'status') {
 								if (parsed.status === 'searching') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: 'searching',
@@ -769,6 +795,11 @@
 				}
 			}
 
+			// Clear previous routing state before new request
+			if (isAutoMode) {
+				chatStore.clearRoutingState();
+			}
+
 			const response = await fetch('/api/chat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -780,7 +811,13 @@
 					searchEnabled: settingsStore.webSearchEnabled,
 					// Extended thinking - only enable if model supports it
 					thinkingEnabled: settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking,
-					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens
+					thinkingBudgetTokens: settingsStore.thinkingBudgetTokens,
+					// AUTO mode routing params
+					...(isAutoMode && {
+						provider: autoProvider,
+						currentModel: routedModel, // Previous model for cache coherence
+						conversationTurn: Math.floor(chatStore.messages.length / 2) + 1
+					})
 				}),
 				signal: controller.signal
 			});
@@ -815,7 +852,16 @@
 						try {
 							const parsed = JSON.parse(data);
 
-							if (parsed.type === 'status') {
+							if (parsed.type === 'routing') {
+								// AUTO mode routing decision from backend
+								chatStore.setRoutedModel(parsed.selectedModel);
+								chatStore.setRoutingDecision({
+									tier: parsed.tier,
+									score: parsed.score,
+									confidence: parsed.confidence,
+									overrides: parsed.overrides || []
+								});
+							} else if (parsed.type === 'status') {
 								if (parsed.status === 'searching') {
 									chatStore.updateMessage(conversationId, assistantMessageId, {
 										searchStatus: 'searching',
@@ -1153,7 +1199,11 @@
 
 <div class="h-screen flex flex-col overflow-hidden">
 	<!-- Header -->
-	<Header onModelChange={handleModelChange} onSettingsClick={() => settingsOpen = true} />
+	<Header
+		onModelChange={handleModelChange}
+		onProviderChange={(provider) => chatStore.setAutoProvider(provider)}
+		onSettingsClick={() => settingsOpen = true}
+	/>
 
 	<div class="flex-1 flex overflow-hidden">
 		<!-- Sidebar -->

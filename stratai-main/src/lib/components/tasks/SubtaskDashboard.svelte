@@ -465,23 +465,6 @@
 		box-shadow: 0 8px 24px color-mix(in srgb, var(--task-color) 15%, transparent);
 	}
 
-	.next-up-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 3rem;
-		height: 3rem;
-		background: color-mix(in srgb, var(--task-color) 20%, transparent);
-		border-radius: 0.75rem;
-		flex-shrink: 0;
-	}
-
-	.next-up-icon svg {
-		width: 1.5rem;
-		height: 1.5rem;
-		color: var(--task-color);
-	}
-
 	.checkbox-icon {
 		width: 1.25rem;
 		height: 1.25rem;
@@ -563,21 +546,6 @@
 		background: rgba(255, 255, 255, 0.05);
 		border-color: rgba(255, 255, 255, 0.12);
 		transform: translateY(-1px);
-	}
-
-	.card-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		flex-shrink: 0;
-	}
-
-	.card-icon svg {
-		width: 1.125rem;
-		height: 1.125rem;
-		color: rgba(255, 255, 255, 0.4);
 	}
 
 	.checkbox-small {

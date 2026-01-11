@@ -21,7 +21,7 @@ import type {
 	PlanningData
 } from '$lib/types/tasks';
 import type { TaskRepository } from './types';
-import { sql } from './db';
+import { sql, type JSONValue } from './db';
 import { getNextTaskColor } from '$lib/config/task-colors';
 
 /**
@@ -325,7 +325,7 @@ export const postgresTaskRepository: TaskRepository = {
 		await sql`
 			UPDATE tasks
 			SET
-				planning_data = ${planningData ? JSON.stringify(planningData) : null}::jsonb,
+				planning_data = ${planningData ? sql.json(planningData as JSONValue) : null},
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}

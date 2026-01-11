@@ -66,6 +66,11 @@ export interface ChatCompletionRequest {
 	thinking?: ThinkingConfig;
 	thinkingEnabled?: boolean;
 	thinkingBudgetTokens?: number;
+	// AUTO model routing
+	// When model is 'auto' or 'AUTO', the router selects the optimal model
+	provider?: 'anthropic' | 'openai' | 'google'; // Preferred provider for AUTO mode
+	currentModel?: string; // Model used in previous turns (for cache coherence)
+	conversationTurn?: number; // Turn count in conversation
 	// Space context for space-aware prompts
 	space?: 'work' | 'research' | 'random' | 'personal' | null;
 	// Assist context for assist-specific system prompts
@@ -98,6 +103,8 @@ export interface ChatCompletionRequest {
 	} | null;
 	// Area context (specialized context within a space)
 	areaId?: string | null;
+	// Custom system prompt (e.g., for Page Discussion with page content context)
+	systemPrompt?: string | null;
 }
 
 // Tool use types for Claude

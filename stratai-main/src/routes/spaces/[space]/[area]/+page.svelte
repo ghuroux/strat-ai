@@ -26,11 +26,15 @@
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
 	import { TasksPanel, ContextPanel, TaskSuggestionCard } from '$lib/components/areas';
+	import { CreatePageModal } from '$lib/components/pages';
+	import PageSuggestion from '$lib/components/chat/PageSuggestion.svelte';
+	import { shouldSuggestPage, type PageSuggestion as PageSuggestionType } from '$lib/utils/page-detection';
 	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
 	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
+	import { pageStore } from '$lib/stores/pages.svelte';
 	import type { CreateTaskInput, Task } from '$lib/types/tasks';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -44,6 +48,9 @@
 	import type { Space, SystemSpaceSlug } from '$lib/types/spaces';
 	import { isSystemSpace as checkIsSystemSpace } from '$lib/types/spaces';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
+	import { GuidedCreationBanner } from '$lib/components/pages';
+	import { guidedCreationStore } from '$lib/stores/guidedCreation.svelte';
+	import { detectPageIntent, buildGuidedSystemPrompt, isReadyToGenerate } from '$lib/utils/page-intent';
 
 	// Route params
 	let spaceParam = $derived($page.params.space);
@@ -193,11 +200,26 @@
 	let contextPanelOpen = $state(false);
 	let taskModalOpen = $state(false);
 
+	// Create Page modal state
+	let createPageModalOpen = $state(false);
+	let createPageFromMessageId = $state<string | null>(null);
+
+	// Page suggestion state (P6-IN-02: dismissed state persists in session)
+	let dismissedPageSuggestions = $state<Set<string>>(new Set());
+	let pageSuggestionPageType = $state<PageSuggestionType['pageType'] | null>(null);
+
+	// Guided creation state (Phase 8)
+	let guidedModeActive = $derived(guidedCreationStore.active);
+	let guidedPageType = $derived(guidedCreationStore.pageType);
+	let guidedTopic = $derived(guidedCreationStore.topic);
+	let guidedReadyToGenerate = $derived(guidedCreationStore.readyToGenerate);
+	let guidedIsGenerating = $derived(guidedCreationStore.isGenerating);
+
 	// Task suggestion state
 	let dismissedSuggestions = $state<Set<string>>(new Set()); // Message IDs with dismissed suggestions
 	let pendingSuggestion = $state<TaskSuggestion | null>(null); // Suggestion waiting to create task
 
-	// Parse suggestions from the last assistant message
+	// Parse task suggestions from the last assistant message
 	let currentSuggestionInfo = $derived.by(() => {
 		if (!messages.length) return null;
 
@@ -223,11 +245,46 @@
 		return null;
 	});
 
+	// Parse page suggestions from the last assistant message
+	// P6-IN-03: Only one suggestion per message (we only check the last one)
+	let currentPageSuggestionInfo = $derived.by(() => {
+		if (!messages.length) return null;
+
+		// Don't show page suggestion if there's already a task suggestion showing
+		// This prevents overwhelming the user with multiple suggestion types
+		if (currentSuggestionInfo) return null;
+
+		// Find the last assistant message that's not streaming
+		for (let i = messages.length - 1; i >= 0; i--) {
+			const msg = messages[i];
+			if (msg.role === 'assistant' && !msg.isStreaming && msg.content) {
+				// Skip if already dismissed (P6-IN-02)
+				if (dismissedPageSuggestions.has(msg.id)) return null;
+
+				const suggestion = shouldSuggestPage(msg);
+				if (suggestion.shouldSuggest) {
+					return {
+						messageId: msg.id,
+						messageIndex: i,
+						suggestion
+					};
+				}
+				// Only check the last assistant message
+				break;
+			}
+		}
+		return null;
+	});
+
 	// Counts for header badges
 	let areaTaskCount = $derived(areaTasks.length);
 	let spaceDocCount = $derived.by(() => {
 		if (!properSpaceId) return 0;
 		return documentStore.getDocuments(properSpaceId).length;
+	});
+	let areaPageCount = $derived.by(() => {
+		if (!area?.id) return 0;
+		return pageStore.getPagesForArea(area.id).length;
 	});
 
 	// All areas for TaskModal (uses proper space ID)
@@ -298,6 +355,9 @@
 			goto(`/spaces/${spaceParam}`);
 			return;
 		}
+
+		// Load pages for this area
+		pageStore.loadPages(loadedArea.id);
 
 		// Check for conversation query param
 		const conversationId = $page.url.searchParams.get('conversation');
@@ -403,6 +463,16 @@
 			return;
 		}
 
+		// Phase 8: Detect page creation intent (P8-ID-*)
+		// Only check if not already in guided mode
+		if (!guidedCreationStore.active && area) {
+			const intent = detectPageIntent(content);
+			if (intent.detected) {
+				// Start guided creation mode (P8-GF-01)
+				guidedCreationStore.startGuidedMode(intent.pageType, intent.topic);
+			}
+		}
+
 		let conversationId = chatStore.activeConversation?.id;
 		if (!conversationId) {
 			// Create new conversation with area context
@@ -410,6 +480,11 @@
 				spaceId: spaceParam || undefined,
 				areaId: area?.id || undefined
 			});
+		}
+
+		// Link guided mode to this conversation
+		if (guidedCreationStore.active && !guidedCreationStore.conversationId) {
+			guidedCreationStore.setConversationId(conversationId);
 		}
 
 		chatStore.addMessage(conversationId, { role: 'user', content, attachments });
@@ -433,6 +508,15 @@
 
 			if (systemPrompt) {
 				apiMessages.push({ role: 'system', content: systemPrompt });
+			}
+
+			// Phase 8: Add guided creation system prompt (P8-GF-02, P8-GF-03)
+			if (guidedCreationStore.active) {
+				const guidedPrompt = buildGuidedSystemPrompt(
+					guidedCreationStore.pageType,
+					guidedCreationStore.topic
+				);
+				apiMessages.push({ role: 'system', content: guidedPrompt });
 			}
 
 			if (attachments && !hasImages) {
@@ -550,6 +634,16 @@
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
 				sources: collectedSources.length > 0 ? collectedSources : undefined
 			});
+
+			// Phase 8: Check if AI is ready to generate (P8-GF-04, P8-GF-05)
+			if (guidedCreationStore.active) {
+				const lastMessage = chatStore.getConversation(conversationId!)?.messages.find(
+					m => m.id === assistantMessageId
+				);
+				if (lastMessage && isReadyToGenerate(lastMessage.content)) {
+					guidedCreationStore.setReadyToGenerate(true);
+				}
+			}
 
 		} catch (err) {
 			if (err instanceof Error && err.name === 'AbortError') {
@@ -746,6 +840,10 @@
 
 	function goToTask(taskId: string) {
 		goto(`/spaces/${spaceParam}/task/${taskId}`);
+	}
+
+	function goToPages() {
+		goto(`/spaces/${spaceParam}/${areaParam}/pages`);
 	}
 
 	// Handle area context/document updates from ContextPanel
@@ -1138,6 +1236,111 @@
 		chatStore.deleteConversation(convId);
 		toastStore.success('Conversation deleted');
 	}
+
+	// ============================================
+	// Create Page handlers
+	// ============================================
+
+	function handleCreatePageFromMessage(messageId: string) {
+		createPageFromMessageId = messageId;
+		createPageModalOpen = true;
+	}
+
+	function handlePageCreated(pageId: string) {
+		createPageModalOpen = false;
+		createPageFromMessageId = null;
+		toastStore.success('Page created successfully');
+		// Navigate to the new page
+		goto(`/spaces/${spaceParam}/${areaParam}/pages/${pageId}`);
+	}
+
+	function handleCreatePageModalClose() {
+		createPageModalOpen = false;
+		createPageFromMessageId = null;
+		pageSuggestionPageType = null;
+	}
+
+	// ============================================
+	// Page Suggestion handlers (Phase 6)
+	// ============================================
+
+	/**
+	 * Handle accepting a page suggestion
+	 * P6-UI-06: Opens CreatePageModal with correct type (P6-IN-01)
+	 */
+	function handleAcceptPageSuggestion() {
+		if (!currentPageSuggestionInfo) return;
+
+		// Store the suggested page type for the modal (P6-IN-01)
+		pageSuggestionPageType = currentPageSuggestionInfo.suggestion.pageType;
+		createPageModalOpen = true;
+	}
+
+	/**
+	 * Handle dismissing a page suggestion
+	 * P6-UI-07: Hides suggestion
+	 * P6-IN-02: State persists in session
+	 */
+	function handleDismissPageSuggestion() {
+		if (!currentPageSuggestionInfo) return;
+
+		// Add to dismissed set so it won't show again
+		dismissedPageSuggestions = new Set([
+			...dismissedPageSuggestions,
+			currentPageSuggestionInfo.messageId
+		]);
+	}
+
+	/**
+	 * Phase 8: Cancel guided creation mode (P8-GF-06)
+	 */
+	function handleCancelGuidedCreation() {
+		guidedCreationStore.exitGuidedMode();
+	}
+
+	/**
+	 * Phase 8: Generate page from guided conversation (P8-DG-*)
+	 */
+	async function handleGeneratePage() {
+		if (!guidedCreationStore.active || !guidedCreationStore.conversationId || !area) {
+			return;
+		}
+
+		guidedCreationStore.setGenerating(true);
+
+		try {
+			const response = await fetch('/api/pages/generate', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					conversationId: guidedCreationStore.conversationId,
+					pageType: guidedCreationStore.pageType,
+					topic: guidedCreationStore.topic,
+					areaId: area.id
+				})
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.error || 'Failed to generate page');
+			}
+
+			const result = await response.json();
+
+			// P8-DG-04: Navigate to editor
+			toastStore.success('Page generated successfully!');
+			guidedCreationStore.exitGuidedMode();
+
+			// Navigate to the new page
+			goto(`/spaces/${spaceParam}/${areaParam}/pages/${result.page.id}`);
+
+		} catch (error) {
+			console.error('Failed to generate page:', error);
+			toastStore.error(error instanceof Error ? error.message : 'Failed to generate page');
+		} finally {
+			guidedCreationStore.setGenerating(false);
+		}
+	}
 </script>
 
 <svelte:head>
@@ -1208,6 +1411,19 @@
 				<button
 					type="button"
 					class="tool-button"
+					onclick={goToPages}
+					title="Pages ({areaPageCount})"
+				>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 12H5.625c-.621 0-1.125-.504-1.125-1.125V3.375c0-.621.504-1.125 1.125-1.125h5.25c.207 0 .404.057.573.158L17.625 7.5v7.875c0 .621-.504 1.125-1.125 1.125H13.5" />
+					</svg>
+					{#if areaPageCount > 0}
+						<span class="tool-badge">{areaPageCount}</span>
+					{/if}
+				</button>
+				<button
+					type="button"
+					class="tool-button"
 					onclick={() => contextPanelOpen = true}
 					title="Context ({spaceDocCount} docs)"
 				>
@@ -1265,6 +1481,20 @@
 				/>
 			{/if}
 
+			<!-- Phase 8: Guided creation banner (P8-GF-01) -->
+			{#if guidedModeActive}
+				<div class="guided-banner-wrapper">
+					<GuidedCreationBanner
+						pageType={guidedPageType}
+						topic={guidedTopic}
+						readyToGenerate={guidedReadyToGenerate}
+						isGenerating={guidedIsGenerating}
+						onCancel={handleCancelGuidedCreation}
+						onGenerate={handleGeneratePage}
+					/>
+				</div>
+			{/if}
+
 			<ChatMessageList bind:containerRef={messagesContainer}>
 				{#if messages.length === 0}
 					<AreaWelcomeScreen
@@ -1292,6 +1522,7 @@
 								onResend={handleResend}
 								onRegenerate={handleRegenerate}
 								onSecondOpinion={handleSecondOpinionTrigger}
+								onCreatePage={handleCreatePageFromMessage}
 							/>
 							<!-- Task suggestion card (appears after assistant message with suggestion) -->
 							{#if currentSuggestionInfo && currentSuggestionInfo.messageIndex === i}
@@ -1301,6 +1532,18 @@
 										areaColor={areaColor}
 										onAccept={handleAcceptSuggestion}
 										onDismiss={handleDismissSuggestion}
+									/>
+								</div>
+							{/if}
+							<!-- Page suggestion (appears after assistant message with page-worthy content) -->
+							<!-- P6-UI-01: Appears after qualifying message -->
+							{#if currentPageSuggestionInfo && currentPageSuggestionInfo.messageIndex === i}
+								<div class="suggestion-container">
+									<PageSuggestion
+										pageType={currentPageSuggestionInfo.suggestion.pageType}
+										confidence={currentPageSuggestionInfo.suggestion.confidence}
+										onAccept={handleAcceptPageSuggestion}
+										onDismiss={handleDismissPageSuggestion}
 									/>
 								</div>
 							{/if}
@@ -1423,6 +1666,19 @@
 			}}
 			onCreate={handleCreateTaskFromModal}
 		/>
+
+		<!-- Create Page from Chat Modal -->
+		{#if chatStore.activeConversation && area}
+			<CreatePageModal
+				isOpen={createPageModalOpen}
+				conversationId={chatStore.activeConversation.id}
+				messages={messages}
+				areaId={area.id}
+				suggestedPageType={pageSuggestionPageType ?? undefined}
+				onClose={handleCreatePageModalClose}
+				onCreated={handlePageCreated}
+			/>
+		{/if}
 	</div>
 {:else}
 	<div class="error-container">
@@ -1635,167 +1891,11 @@
 		margin: 0 auto;
 	}
 
-	/* Conversation menu */
-	.conversation-menu-container {
-		position: relative;
-	}
-
-	.menu-button {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		color: rgba(255, 255, 255, 0.5);
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 0.375rem;
-		transition: all 0.15s ease;
-	}
-
-	.menu-button:hover {
-		color: rgba(255, 255, 255, 0.9);
-		background: rgba(255, 255, 255, 0.1);
-		border-color: rgba(255, 255, 255, 0.2);
-	}
-
-	.menu-button svg {
-		width: 1rem;
-		height: 1rem;
-	}
-
-	.menu-backdrop {
-		position: fixed;
-		inset: 0;
-		z-index: 40;
-	}
-
-	.conversation-menu {
-		position: absolute;
-		top: calc(100% + 0.5rem);
-		right: 0;
-		min-width: 160px;
-		padding: 0.375rem;
-		background: var(--bg-secondary, #18181b);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 0.5rem;
-		box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
-		z-index: 50;
-	}
-
-	.menu-item {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		font-size: 0.8125rem;
-		color: rgba(255, 255, 255, 0.8);
-		background: transparent;
-		border-radius: 0.375rem;
-		text-align: left;
-		transition: all 0.1s ease;
-	}
-
-	.menu-item:hover {
-		color: rgba(255, 255, 255, 1);
-		background: rgba(255, 255, 255, 0.08);
-	}
-
-	.menu-item.danger {
-		color: #ef4444;
-	}
-
-	.menu-item.danger:hover {
-		background: rgba(239, 68, 68, 0.15);
-	}
-
-	.menu-item svg {
-		width: 1rem;
-		height: 1rem;
-		flex-shrink: 0;
-	}
-
-	/* Rename dialog */
-	.rename-overlay {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		z-index: 60;
-	}
-
-	.rename-dialog {
-		position: fixed;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: 90%;
-		max-width: 400px;
-		padding: 1.5rem;
-		background: var(--bg-secondary, #18181b);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 0.75rem;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-		z-index: 70;
-	}
-
-	.rename-dialog h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1rem;
-		font-weight: 600;
-		color: rgba(255, 255, 255, 0.9);
-	}
-
-	.rename-input {
-		width: 100%;
-		padding: 0.625rem 0.875rem;
-		font-size: 0.875rem;
-		color: rgba(255, 255, 255, 0.9);
-		background: rgba(255, 255, 255, 0.05);
-		border: 1px solid rgba(255, 255, 255, 0.15);
-		border-radius: 0.5rem;
-		outline: none;
-		transition: all 0.15s ease;
-	}
-
-	.rename-input:focus {
-		border-color: var(--area-color, #3b82f6);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--area-color, #3b82f6) 20%, transparent);
-	}
-
-	.rename-actions {
-		display: flex;
-		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 1rem;
-	}
-
-	.btn-cancel,
-	.btn-save {
-		padding: 0.5rem 1rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border-radius: 0.375rem;
-		transition: all 0.15s ease;
-	}
-
-	.btn-cancel {
-		color: rgba(255, 255, 255, 0.7);
-		background: rgba(255, 255, 255, 0.08);
-	}
-
-	.btn-cancel:hover {
-		color: rgba(255, 255, 255, 0.9);
-		background: rgba(255, 255, 255, 0.12);
-	}
-
-	.btn-save {
-		color: white;
-		background: var(--area-color, #3b82f6);
-	}
-
-	.btn-save:hover {
-		filter: brightness(1.1);
+	/* Phase 8: Guided creation banner wrapper */
+	.guided-banner-wrapper {
+		padding: 0.75rem 1.5rem;
+		background: var(--bg-chat, #0f0f11);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 	}
 
 	/* Panels */

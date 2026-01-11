@@ -272,6 +272,7 @@
 	></div>
 
 	<!-- Panel -->
+	<!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
 	<aside
 		class="panel fixed top-0 right-0 h-full flex flex-col bg-surface-900/98 backdrop-blur-md border-l border-surface-700 shadow-2xl z-50"
 		style="width: 22rem; --space-color: {spaceColor};"

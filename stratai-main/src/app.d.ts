@@ -7,6 +7,7 @@ declare global {
 				userId: string;
 				organizationId: string;
 				displayName: string | null;
+				email: string | null;
 				role: 'owner' | 'admin' | 'member';
 				createdAt: number;
 			} | null;

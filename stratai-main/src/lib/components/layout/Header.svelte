@@ -5,6 +5,7 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
+	import { userStore } from '$lib/stores/user.svelte';
 	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import ModelSelector from '../ModelSelector.svelte';
@@ -17,13 +18,17 @@
 
 	interface Props {
 		onModelChange?: (model: string) => void;
+		onProviderChange?: (provider: 'anthropic' | 'openai' | 'google') => void;
 		onSettingsClick?: () => void;
 	}
 
-	let { onModelChange, onSettingsClick }: Props = $props();
+	let { onModelChange, onProviderChange, onSettingsClick }: Props = $props();
 
 	// Read selected model directly from store (for new conversations)
 	let selectedModel = $derived(settingsStore.selectedModel || '');
+
+	// AUTO mode: track the routed model from chat store
+	let routedModel = $derived(chatStore.routedModel);
 
 	// Spaces state
 	let showSpaceModal = $state(false);
@@ -112,6 +117,7 @@
 	let logoElement: HTMLAnchorElement | undefined = $state();
 
 	function handleLogoClick(e: MouseEvent) {
+		// Check for easter egg first
 		const triggered = easterEggsStore.trackLogoClick();
 		if (triggered) {
 			e.preventDefault();
@@ -131,7 +137,12 @@
 			} else {
 				toastStore.info('The logo appreciates your enthusiasm!', 3000);
 			}
+			return;
 		}
+
+		// Navigate to user's preferred home page
+		e.preventDefault();
+		goto(userStore.homeUrl);
 	}
 </script>
 
@@ -291,7 +302,13 @@
 	{:else if !chatStore.messages || chatStore.messages.length === 0}
 		<div class="flex-1 flex justify-center">
 			<div class="w-full max-w-xs">
-				<ModelSelector {selectedModel} disabled={chatStore.isStreaming} onchange={handleModelChange} />
+				<ModelSelector
+					{selectedModel}
+					{routedModel}
+					disabled={chatStore.isStreaming}
+					onchange={handleModelChange}
+					onproviderchange={onProviderChange}
+				/>
 			</div>
 		</div>
 	{:else}

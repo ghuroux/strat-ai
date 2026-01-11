@@ -188,6 +188,7 @@
 	class="markdown-content prose prose-invert prose-sm max-w-none"
 	bind:this={containerRef}
 	onclick={handleClick}
+	role="presentation"
 >
 	{@html htmlContent}{#if isStreaming}<span class="streaming-cursor"></span>{/if}
 </div>

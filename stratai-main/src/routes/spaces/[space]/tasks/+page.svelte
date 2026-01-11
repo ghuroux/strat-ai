@@ -13,6 +13,9 @@
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import TaskDashboard from '$lib/components/tasks/TaskDashboard.svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	// Get space from route param (slug from URL)
 	let spaceParam = $derived($page.params.space);
@@ -85,6 +88,7 @@
 		spaceColor={spaceConfig.color}
 		spaceName={spaceConfig.name}
 		{areas}
+		user={data.user}
 	/>
 {:else}
 	<div class="error-container">

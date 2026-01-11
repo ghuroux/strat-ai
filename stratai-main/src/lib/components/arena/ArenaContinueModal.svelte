@@ -35,13 +35,13 @@
 
 	// Destination type: 'main' for Main Chat, 'space' for Space/Area
 	type DestinationType = 'main' | 'space';
-	let destinationType = $state<DestinationType>(battleContextSpaceId ? 'space' : 'main');
+	let destinationType = $state<DestinationType>('main');
 
 	// Pre-fill from battle context if available
-	let selectedSpaceId = $state<string | null>(battleContextSpaceId || null);
-	let selectedAreaId = $state<string | null>(battleContextAreaId || null);
+	let selectedSpaceId = $state<string | null>(null);
+	let selectedAreaId = $state<string | null>(null);
 
-	// Sync with battle context when modal opens
+	// Sync with battle context when modal opens or context props change
 	$effect(() => {
 		if (isOpen) {
 			if (battleContextSpaceId) {

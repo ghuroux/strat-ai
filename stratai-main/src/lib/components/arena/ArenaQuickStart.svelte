@@ -116,6 +116,7 @@
 					class="absolute top-full right-0 sm:left-0 mt-2 w-80 sm:w-96 max-h-[60vh] overflow-hidden
 						   bg-surface-800 border border-surface-700 rounded-xl shadow-2xl z-50"
 					onclick={(e) => e.stopPropagation()}
+					role="presentation"
 				>
 					<!-- Header with category tabs -->
 					<div class="p-3 border-b border-surface-700">

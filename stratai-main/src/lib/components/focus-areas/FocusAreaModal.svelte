@@ -278,6 +278,7 @@
 						<!-- Name field -->
 						<div class="field">
 							<label for="name" class="field-label">Name</label>
+							<!-- svelte-ignore a11y_autofocus -->
 							<input
 								id="name"
 								type="text"
@@ -310,10 +311,10 @@
 
 						<!-- Documents field -->
 						<div class="field">
-							<label class="field-label">
+							<span class="field-label">
 								Reference Documents
 								<span class="field-hint">(optional)</span>
-							</label>
+							</span>
 
 							<!-- Linked documents list -->
 							{#if linkedDocuments.length > 0}

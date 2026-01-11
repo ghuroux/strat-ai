@@ -5,7 +5,7 @@
  * Uses UUID primary keys for enterprise-grade identity management.
  */
 
-import { sql } from './db';
+import { sql, type JSONValue } from './db';
 import type { UserRepository, User } from './types';
 
 /**
@@ -120,7 +120,7 @@ export const postgresUserRepository: UserRepository = {
 				${input.displayName || null},
 				${input.passwordHash || null},
 				${input.status || 'active'},
-				${JSON.stringify(input.settings || {})}
+				${sql.json((input.settings || {}) as JSONValue)}
 			)
 			RETURNING *
 		`;
@@ -158,7 +158,7 @@ export const postgresUserRepository: UserRepository = {
 			await sql`UPDATE users SET status = ${updates.status} WHERE id = ${id} AND deleted_at IS NULL`;
 		}
 		if (updates.settings !== undefined) {
-			await sql`UPDATE users SET settings = ${JSON.stringify(updates.settings)} WHERE id = ${id} AND deleted_at IS NULL`;
+			await sql`UPDATE users SET settings = ${sql.json(updates.settings as JSONValue)} WHERE id = ${id} AND deleted_at IS NULL`;
 		}
 
 		return this.findById(id);
@@ -187,5 +187,36 @@ export const postgresUserRepository: UserRepository = {
 			  AND deleted_at IS NULL
 		`;
 		return result.count > 0;
+	},
+
+	/**
+	 * Get user preferences
+	 */
+	async getPreferences(id: string): Promise<Record<string, unknown>> {
+		const rows = await sql<{ preferences: Record<string, unknown> | null }[]>`
+			SELECT preferences FROM users
+			WHERE id = ${id}
+			  AND deleted_at IS NULL
+		`;
+		if (rows.length === 0) return {};
+		return rows[0].preferences ?? {};
+	},
+
+	/**
+	 * Update user preferences (merges with existing)
+	 */
+	async updatePreferences(id: string, preferences: Record<string, unknown>): Promise<Record<string, unknown>> {
+		const rows = await sql<{ preferences: Record<string, unknown> }[]>`
+			UPDATE users
+			SET preferences = COALESCE(preferences, '{}'::jsonb) || ${sql.json(preferences as JSONValue)},
+			    updated_at = NOW()
+			WHERE id = ${id}
+			  AND deleted_at IS NULL
+			RETURNING preferences
+		`;
+		if (rows.length === 0) {
+			throw new Error('User not found');
+		}
+		return rows[0].preferences;
 	}
 };

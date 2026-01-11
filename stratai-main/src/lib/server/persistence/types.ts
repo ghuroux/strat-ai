@@ -362,6 +362,8 @@ export interface UserRepository {
 	): Promise<User | null>;
 	updateLastLogin(id: string): Promise<void>;
 	delete(id: string): Promise<boolean>;
+	getPreferences(id: string): Promise<Record<string, unknown>>;
+	updatePreferences(id: string, preferences: Record<string, unknown>): Promise<Record<string, unknown>>;
 }
 
 // =====================================================
