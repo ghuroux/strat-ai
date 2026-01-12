@@ -279,10 +279,11 @@ export const postgresAreaRepository: AreaRepository = {
 			throw new Error('Cannot delete the General area');
 		}
 
-		// Find the General area for this space (needed for moving conversations)
-		const generalArea = await this.findGeneral(area.spaceId, userId);
+		// Find or create the General area for this space (needed for moving conversations)
+		let generalArea = await this.findGeneral(area.spaceId, userId);
 		if (!generalArea && !deleteContent) {
-			throw new Error('Cannot find General area to move conversations to');
+			// Create General area if it doesn't exist (handles legacy spaces)
+			generalArea = await this.createGeneral(area.spaceId, userId);
 		}
 
 		if (deleteContent) {
