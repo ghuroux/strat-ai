@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { toastStore } from '$lib/stores/toast.svelte';
 
+	const MAX_PASSWORD_LENGTH = 128;
+
 	let currentPassword = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
@@ -10,14 +12,23 @@
 	// Validation
 	let passwordsMatch = $derived(newPassword === confirmPassword);
 	let isLongEnough = $derived(newPassword.length >= 8);
+	let isTooLong = $derived(newPassword.length > MAX_PASSWORD_LENGTH);
 	let canSubmit = $derived(
 		currentPassword.length > 0 &&
 			newPassword.length > 0 &&
 			confirmPassword.length > 0 &&
 			passwordsMatch &&
 			isLongEnough &&
+			!isTooLong &&
 			!isSaving
 	);
+
+	// Clear API error when user starts typing
+	function handleInput() {
+		if (error) {
+			error = '';
+		}
+	}
 
 	function clearForm() {
 		currentPassword = '';
@@ -74,7 +85,7 @@
 	</div>
 
 	{#if error}
-		<div class="error-message">
+		<div class="error-message" role="alert" aria-live="polite">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<circle cx="12" cy="12" r="10" />
 				<line x1="12" y1="8" x2="12" y2="12" />
@@ -92,6 +103,7 @@
 			class="form-input"
 			placeholder="Enter your current password"
 			bind:value={currentPassword}
+			oninput={handleInput}
 			onkeydown={handleKeydown}
 			autocomplete="current-password"
 		/>
@@ -103,14 +115,18 @@
 			type="password"
 			id="newPassword"
 			class="form-input"
-			class:invalid={newPassword.length > 0 && !isLongEnough}
+			class:invalid={(newPassword.length > 0 && !isLongEnough) || isTooLong}
 			placeholder="Enter a new password"
 			bind:value={newPassword}
+			oninput={handleInput}
 			onkeydown={handleKeydown}
 			autocomplete="new-password"
+			aria-describedby={newPassword.length > 0 && (!isLongEnough || isTooLong) ? 'newPassword-error' : undefined}
 		/>
 		{#if newPassword.length > 0 && !isLongEnough}
-			<p class="form-error">Password must be at least 8 characters</p>
+			<p class="form-error" id="newPassword-error">Password must be at least 8 characters</p>
+		{:else if isTooLong}
+			<p class="form-error" id="newPassword-error">Password must be less than {MAX_PASSWORD_LENGTH} characters</p>
 		{/if}
 	</div>
 
@@ -123,11 +139,13 @@
 			class:invalid={confirmPassword.length > 0 && !passwordsMatch}
 			placeholder="Confirm your new password"
 			bind:value={confirmPassword}
+			oninput={handleInput}
 			onkeydown={handleKeydown}
 			autocomplete="new-password"
+			aria-describedby={confirmPassword.length > 0 && !passwordsMatch ? 'confirmPassword-error' : undefined}
 		/>
 		{#if confirmPassword.length > 0 && !passwordsMatch}
-			<p class="form-error">Passwords do not match</p>
+			<p class="form-error" id="confirmPassword-error">Passwords do not match</p>
 		{/if}
 	</div>
 

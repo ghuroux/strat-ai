@@ -11,6 +11,7 @@ import { postgresUserRepository } from '$lib/server/persistence/users-postgres';
 import { hashPassword, verifyPassword } from '$lib/server/auth';
 
 const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 128;
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	// Check authentication
@@ -39,6 +40,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		if (newPassword.length < MIN_PASSWORD_LENGTH) {
 			return json(
 				{ error: { message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`, type: 'validation_error' } },
+				{ status: 400 }
+			);
+		}
+
+		if (newPassword.length > MAX_PASSWORD_LENGTH) {
+			return json(
+				{ error: { message: `Password must be less than ${MAX_PASSWORD_LENGTH} characters`, type: 'validation_error' } },
 				{ status: 400 }
 			);
 		}
