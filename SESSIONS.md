@@ -1,6 +1,162 @@
 # Session History
 
-Full session logs for StratAI development. Recent session in `CLAUDE.md`.
+Full session logs for StratAI development. Recent sessions in `CLAUDE.md`.
+
+---
+
+## 2026-01-11: Document System Implementation & AUTO Model Routing
+
+**Completed:**
+- AI-Native Document System with TipTap editor, document types, discussion panel
+- Discussion Panel with custom system prompts, markdown rendering, quick prompts
+- Apply Button fix for cross-formatting text (regex fix, cross-node replacement algorithm)
+- AUTO Model Routing: query complexity analysis, context-aware routing, tier-based selection
+- Layered System Prompt Caching for improved cache hits
+- Settings Pages infrastructure with sidebar navigation
+
+**Key Files:** `src/lib/components/pages/*.svelte`, `src/lib/services/model-router/**`, `src/routes/api/pages/**`, `src/routes/admin/routing/`
+
+---
+
+## 2026-01-11: Document System Architecture
+
+**Completed:**
+- DOCUMENT_SYSTEM.md specification (~3200 lines) - full implementation spec
+- Three entry points: From Chat, Guided Creation, Direct Create
+- TipTap editor with collapsible chat panel for document discussions
+
+---
+
+## 2026-01-09: Admin Portal & Easter Eggs Phase 2
+
+**Completed:**
+- Admin Portal with 6 pages: Overview, Members, Groups, Model Access, Budgets, Settings
+- Groups Management with full CRUD, member management, lead roles
+- Easter Eggs: Hacker Mode, time-based greetings, keyboard shortcuts modal, rage click detector
+- Migrations 018-021
+
+---
+
+## 2026-01-09: Cost Optimization Strategy
+
+**Completed:**
+- COST_OPTIMIZATION_STRATEGY.md with 50-85% savings roadmap
+- Key findings: prompt caching (90%), model cascading (40-85%), batch APIs (50%)
+- Implementation phases defined
+
+---
+
+## 2026-01-09: Usage Tracking & Auto Model Routing Research
+
+**Completed:**
+- Fixed cache metrics extraction (Anthropic usage object, not headers)
+- auto-model-routing-research.md with industry analysis
+- Hybrid approach: context rules → signal detection → embedding classification → user learning
+
+---
+
+## 2026-01-09: Command Palette & Enterprise Foundation
+
+**Completed:**
+- Command Palette (Cmd+K) with fuzzy search, conversation search, navigation
+- Enterprise Auth scaffolding with user/org persistence layers
+- Admin infrastructure with usage dashboard
+- Migrations 015-017
+
+---
+
+## 2026-01-09: Entity Model Architecture
+
+**Completed:**
+- ENTITY_MODEL.md - authoritative data architecture (25+ tables, access algorithms)
+- Key decisions: Models as first-class, two Space types, Areas as collaboration unit
+
+---
+
+## 2026-01-08: LLM Gateway Evaluation & Enterprise Architecture
+
+**Completed:**
+- LiteLLM vs Bifrost evaluation (LiteLLM wins - PostgreSQL in OSS)
+- enterprise-roadmap.md with 4-phase implementation plan
+- Auth decision: WorkOS (was Auth0)
+
+---
+
+## 2026-01-08: Pricing Strategy
+
+**Completed:**
+- PRICING_STRATEGY.md with V1 (per-seat) and V2 (% of AI spend) models
+- Tiers: Explorer (free), Pro ($29), Team ($45), Enterprise (custom)
+
+---
+
+## 2026-01-08: Context Management Strategy
+
+**Completed:**
+- CONTEXT_STRATEGY.md (~1800 lines) - memory architecture
+- 4 phases: Foundation → Active Memory → Shared Context → Organizational Intelligence
+- Hierarchical memory: Space → Area → Task
+
+---
+
+## 2026-01-08: Quick Starts, Clear Modal, Move Chat
+
+**Completed:**
+- Contextual Quick Starts with prepopulate support
+- Clear Conversations Modal (preserves Space conversations)
+- Move Chat Modal between Main/Spaces/Areas
+
+---
+
+## 2026-01-08: Model Arena Redesign (Complete)
+
+**Completed:**
+- Setup screen with Quick Start templates, category chips
+- Battle experience with sword animation, focus mode, token display
+- Voting with blind mode reveal, AI Judge
+- Post-battle continue conversation modal
+
+---
+
+## 2026-01-07: Session Log Cleanup & Verification
+
+**Verified:** Task Planning Model Selection, Day Change Detection, Area Deletion all complete.
+
+---
+
+## 2026-01-07: Multiple Plan Mode & Model Selection
+
+**Completed:**
+- Multiple tasks in planning simultaneously
+- TaskPlanningModelModal with tiered selection
+- Documents API fix (slug normalization)
+
+---
+
+## 2026-01-06: Task Focus UX & Navigation
+
+**Completed:**
+- Task Focus preserves conversation via query param
+- Hidden empty subtasks panel
+- Context isolation on area entry
+- ModelBadge component
+
+---
+
+## 2026-01-06: Task Dashboard & Scaling UX
+
+**Completed:**
+- TaskDashboard with time-based grouping
+- Stale task detection (7+ days)
+- RecentlyCompletedSection with reopen
+
+---
+
+## 2026-01-04: Task Planning & AI Prompt Engineering
+
+**Completed:**
+- TaskModal, ConversationDrawer, TaskContextBanner
+- Space dashboard and area routing
 
 ---
 

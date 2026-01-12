@@ -41,7 +41,7 @@ export type EstimatedEffort = 'quick' | 'short' | 'medium' | 'long' | 'multi_day
 /**
  * Source of task creation
  */
-export type TaskSourceType = 'assist' | 'meeting' | 'chat' | 'manual';
+export type TaskSourceType = 'assist' | 'meeting' | 'chat' | 'manual' | 'document';
 
 /**
  * Subtask type - conversation has chat, action is checkbox-only

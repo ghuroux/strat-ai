@@ -1,14 +1,16 @@
-# Document System - Implementation Specification
+# Pages System - Implementation Specification
 
 > **Status:** Approved for V1 Implementation
 > **Created:** 2026-01-11
-> **Last Updated:** 2026-01-11
+> **Last Updated:** 2026-01-12
+>
+> **Terminology Note:** This document covers **Pages** - rich-text content **created within** StratAI (meeting notes, proposals, etc.) that live at **Area-level**. For **uploaded documents** (PDFs, specs) that live at **Space-level** with Area-granular sharing, see `DOCUMENT_SHARING.md`.
 
 ---
 
 ## Executive Summary
 
-StratAI's Document System transforms the platform from "chat with AI" to "AI-powered workspace where knowledge lives." Users can create, edit, and manage documents that are deeply integrated with AI - not as a bolt-on feature, but as a native experience.
+StratAI's Pages System transforms the platform from "chat with AI" to "AI-powered workspace where knowledge lives." Users can create, edit, and manage pages that are deeply integrated with AI - not as a bolt-on feature, but as a native experience.
 
 **Three Entry Points:**
 1. **From Chat** - Conversation outcomes become documents (AI suggests when appropriate)

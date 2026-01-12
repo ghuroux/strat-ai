@@ -1170,6 +1170,612 @@ CREATE INDEX idx_arena_outcomes_user_winner ON arena_outcomes(user_winner_id);
 
 ---
 
+## Pages System: Future Enhancements
+
+> **Status**: Documented for future implementation. Not V1 blockers.
+
+### Image Upload in Pages
+
+**Goal**: Allow users to embed images in Pages (screenshots, diagrams, photos)
+
+**Why Deferred**: Pages work well text-only for V1 use cases (meeting notes, proposals, briefs). Images add infrastructure complexity without blocking core value.
+
+#### Conceptual Model
+
+Images in Pages are **content** (integral to document), not **attachments** (supporting files). This differs from Documents (uploaded files at Space-level).
+
+#### Recommended Phased Approach
+
+**Phase 1 (MVP)**: Base64 in JSONB
+- Install `@tiptap/extension-image`
+- Images stored as base64 data URLs in TipTap JSON
+- Client-side compression before upload (canvas resize, cap at 2MB)
+- Validates feature, zero infrastructure
+
+**Phase 2 (Polish)**: Page Assets Table
+- Decouple images from page JSON for performance
+- Deduplication by checksum
+- Image optimization pipeline (Sharp)
+- Migration: detect base64 images → extract to assets table
+
+**Phase 3 (Scale)**: S3 Migration
+- Only if usage justifies (monitor asset table size)
+- Assets table becomes metadata pointing to S3
+- CDN integration for global delivery
+
+#### Storage Strategy Analysis
+
+| Approach | Pros | Cons | When to Use |
+|----------|------|------|-------------|
+| Base64 in JSONB | Zero infrastructure, atomic saves, offline-capable | 33% size overhead, no CDN, duplicates across pages | MVP, <20 images/page |
+| Page Assets Table | Dedup by checksum, fast page saves, can optimize | More complex, orphan cleanup needed | Production, moderate usage |
+| S3 + Signed URLs | Infinite scale, CDN-ready, cost-efficient at scale | AWS dependency, signed URL complexity | Enterprise, heavy media |
+
+#### UX Requirements
+
+**Insert Methods** (priority order):
+1. **Paste from clipboard** - Critical for screenshots (Cmd+Shift+4 → Cmd+V)
+2. **Toolbar button** - Most discoverable (click → file picker → upload)
+3. **Drag and drop** - Intuitive (TipTap supports natively)
+4. **Markdown syntax** - `![alt](url)` (nice-to-have)
+
+**Upload Flow**:
+```
+User pastes/drops image
+    ↓
+[Inline placeholder with spinner]
+    ↓
+Validate (size ≤5MB, type: jpeg/png/gif/webp)
+    ↓
+Compress if needed (client-side canvas)
+    ↓
+Upload to server
+    ↓
+[Replace placeholder with image]
+    ↓
+Auto-save triggers
+```
+
+**In-Editor Controls**:
+- Resize handles (TipTap default)
+- Alignment (left, center, right)
+- Alt text editing
+- Delete
+- **Skip**: Crop, filters, advanced editing
+
+#### AI Integration
+
+The discussion panel needs to handle images for context:
+
+```typescript
+// Pass images to AI when discussing page
+messages: [
+  {
+    role: "user",
+    content: [
+      { type: "text", text: "Help me improve this document" },
+      { type: "image_url", url: "data:image/png;base64,..." }
+    ]
+  }
+]
+```
+
+**Considerations**:
+- Claude Sonnet: ~$0.48/1000 image tiles (each tile ~768 tokens)
+- Downsample images before sending to AI
+- Consider only sending images when user explicitly asks
+- Cache AI responses about images
+
+#### Export Handling
+
+**PDF**: Base64 images work directly in HTML → PDF conversion
+**DOCX**: Requires `ImageRun` with buffer - more complex than text export
+
+```typescript
+// docx library pattern
+new ImageRun({
+  data: imageBuffer,
+  transformation: { width: 400, height: 300 }
+})
+```
+
+Test export early - image handling is a common pain point.
+
+#### Security Requirements
+
+1. **File Validation**
+   - Validate MIME type server-side (check magic bytes)
+   - Reject SVG (XSS vector) unless sanitized
+   - Allowlist: jpeg, png, gif, webp
+
+2. **Size Limits**
+   - Per-image: 5MB
+   - Per-page total: 20MB
+   - Prevent DOS via massive uploads
+
+3. **Access Control**
+   - Asset endpoint must verify page access
+   - No predictable/guessable URLs without auth
+
+4. **Future (Enterprise)**
+   - Malware scanning on upload
+   - Sensitive content detection (PII in screenshots)
+
+#### Database Schema (If Page Assets)
+
+```sql
+CREATE TABLE page_assets (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  page_id TEXT NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+
+  -- File metadata
+  filename TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  width INTEGER,
+  height INTEGER,
+
+  -- Storage (supports future S3 migration)
+  storage_type TEXT NOT NULL DEFAULT 'database', -- 'database' | 's3'
+  content BYTEA,          -- if storage_type = 'database'
+  storage_key TEXT,       -- if storage_type = 's3'
+
+  -- Deduplication
+  checksum TEXT NOT NULL,
+
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT valid_storage CHECK (
+    (storage_type = 'database' AND content IS NOT NULL) OR
+    (storage_type = 's3' AND storage_key IS NOT NULL)
+  )
+);
+
+CREATE INDEX idx_page_assets_page ON page_assets(page_id);
+CREATE INDEX idx_page_assets_checksum ON page_assets(checksum);
+```
+
+#### Open Questions (Resolve When Implementing)
+
+1. **Should images be shareable across pages?** (Like Documents across Areas) Or always page-specific?
+2. **Image-from-chat flow?** Screenshot in chat → "Add to page" button?
+3. **Thumbnail generation?** For page list previews?
+4. **Version history?** Track image changes across page versions?
+
+#### Implementation Checklist
+
+- [ ] Install `@tiptap/extension-image`
+- [ ] Add image button to `EditorToolbar.svelte`
+- [ ] Implement paste handler in `PageEditor.svelte`
+- [ ] Implement drag-drop handler
+- [ ] Client-side image compression utility
+- [ ] Image upload endpoint (`POST /api/pages/[id]/assets`)
+- [ ] Asset serving endpoint (`GET /api/pages/assets/[assetId]`)
+- [ ] Update `extractTextFromContent()` to include alt text
+- [ ] Update PDF export to handle images
+- [ ] Update DOCX export to handle images
+- [ ] Test AI discussion panel with image context
+
+---
+
+### Pages Editor UX Polish
+
+**Goal**: Tighten the editor experience with expected rich text editor behaviors.
+
+**Status**: Audit complete. Ready for implementation sprint.
+
+#### Priority Summary
+
+| Priority | Issues | Effort |
+|----------|--------|--------|
+| P0 (Critical) | Toolbar reactivity | Low |
+| P1 (High) | Undo/redo, paragraph option, link modal | Low |
+| P2 (Medium) | Char count, title input, clear formatting, visibility confirm | Low |
+| P3 (Low) | Alignment, shortcuts ref, PDF export, auto-save indicator | Medium |
+| P4 (Future) | Drag handles, link click-edit, page type edit, version history | Medium-High |
+
+---
+
+#### P0: Critical - Toolbar State Not Reactive
+
+**Problem**: Toolbar buttons use `editor.isActive('bold')` but don't update when cursor moves to differently-formatted text. Heading buttons don't reflect current heading level.
+
+**Root Cause**: TipTap's `editor.isActive()` is synchronous. Svelte doesn't re-evaluate when selection changes because there's no reactive dependency.
+
+**Location**: `EditorToolbar.svelte:67` and similar `class:active={editor.isActive(...)}` calls.
+
+**Fix**:
+```typescript
+// In PageEditor.svelte
+let editorTick = $state(0);
+
+editor = new Editor({
+  ...
+  onTransaction: () => {
+    editorTick++; // Force reactive update
+  }
+});
+
+// Pass to toolbar
+<EditorToolbar {editor} {editorTick} />
+```
+
+```svelte
+// In EditorToolbar.svelte - use editorTick as dependency
+// Option 1: {#key editorTick} wrapper
+// Option 2: Derived state that depends on editorTick
+let isBoldActive = $derived(editorTick && editor?.isActive('bold'));
+```
+
+**Checklist**:
+- [ ] Add `onTransaction` callback to editor initialization
+- [ ] Create reactive `editorTick` counter
+- [ ] Pass to `EditorToolbar` as prop
+- [ ] Update all `isActive()` checks to be reactive
+- [ ] Test: Click in bold text → Bold button highlighted
+- [ ] Test: Click in H2 → H2 button highlighted
+- [ ] Test: Click in list → List button highlighted
+
+---
+
+#### P1: High Priority
+
+##### Undo/Redo Buttons
+
+**Problem**: History works via keyboard (Cmd+Z) but no visual buttons.
+
+**Fix**: Add to toolbar with proper disabled states.
+
+```svelte
+<button
+  class="toolbar-btn"
+  onclick={() => editor.chain().focus().undo().run()}
+  disabled={!editor.can().undo()}
+  title="Undo ({modKey}+Z)"
+>
+  <!-- Undo icon -->
+</button>
+
+<button
+  class="toolbar-btn"
+  onclick={() => editor.chain().focus().redo().run()}
+  disabled={!editor.can().redo()}
+  title="Redo ({modKey}+Shift+Z)"
+>
+  <!-- Redo icon -->
+</button>
+```
+
+**Checklist**:
+- [ ] Add undo button with icon
+- [ ] Add redo button with icon
+- [ ] Wire up `editor.can().undo()` / `editor.can().redo()` for disabled state
+- [ ] Position in toolbar (typically far left, before text formatting)
+
+##### Paragraph / Normal Text Option
+
+**Problem**: Can toggle H1/H2/H3, but no explicit way to convert back to normal paragraph. Users must know to "toggle off" the current heading.
+
+**Fix**: Add paragraph button or convert heading group to dropdown.
+
+**Option A - Paragraph Button**:
+```svelte
+<button
+  class="toolbar-btn"
+  class:active={editor.isActive('paragraph') && !editor.isActive('heading')}
+  onclick={() => editor.chain().focus().setParagraph().run()}
+  title="Normal text"
+>
+  <span class="text-label">¶</span>
+</button>
+```
+
+**Option B - Heading Dropdown** (better UX, more complex):
+```svelte
+<select onchange={(e) => {
+  const level = e.target.value;
+  if (level === 'p') editor.chain().focus().setParagraph().run();
+  else editor.chain().focus().setHeading({ level: parseInt(level) }).run();
+}}>
+  <option value="p">Normal</option>
+  <option value="1">Heading 1</option>
+  <option value="2">Heading 2</option>
+  <option value="3">Heading 3</option>
+</select>
+```
+
+**Checklist**:
+- [ ] Decide: Button or dropdown approach
+- [ ] Implement chosen approach
+- [ ] Ensure active state reflects current block type
+
+##### Link Modal UX Improvements
+
+**Problems**:
+1. Input doesn't auto-focus when modal opens
+2. No way to remove existing link
+3. Can't see what text is being linked
+
+**Location**: `EditorToolbar.svelte:270-300`
+
+**Fixes**:
+
+```svelte
+<!-- Auto-focus input -->
+{#if showLinkModal}
+  <input
+    type="url"
+    bind:value={linkUrl}
+    use:autofocus
+    ...
+  />
+{/if}
+
+<!-- Add remove link button -->
+<div class="link-modal-footer">
+  {#if editor.isActive('link')}
+    <button
+      type="button"
+      class="btn-remove"
+      onclick={() => {
+        editor.chain().focus().unsetLink().run();
+        showLinkModal = false;
+      }}
+    >
+      Remove link
+    </button>
+  {/if}
+  <button class="btn-cancel" ...>Cancel</button>
+  <button class="btn-apply" ...>Apply</button>
+</div>
+```
+
+**Checklist**:
+- [ ] Add `use:autofocus` action or manual focus in `openLinkModal()`
+- [ ] Show selected text in modal (read-only, for context)
+- [ ] Add "Remove link" button (only when editing existing link)
+- [ ] Style remove button as destructive action
+
+---
+
+#### P2: Medium Priority
+
+##### Character Count
+
+**Problem**: Only word count shown. Character count needed for constrained content.
+
+**Location**: `PageEditor.svelte:346` (footer)
+
+**Fix**:
+```typescript
+let charCount = $derived(extractTextFromContent(content).length);
+let charCountNoSpaces = $derived(extractTextFromContent(content).replace(/\s/g, '').length);
+```
+
+```svelte
+<span class="word-count">{wordCount} words · {charCount} chars</span>
+```
+
+**Checklist**:
+- [ ] Add character count derived state
+- [ ] Display in footer alongside word count
+- [ ] Consider toggle or hover for "with/without spaces"
+
+##### Title Input Behavior
+
+**Problem**: Clicking to edit title doesn't auto-focus or select text.
+
+**Location**: `PageHeader.svelte:91-94`
+
+**Fix**:
+```typescript
+function startEditingTitle() {
+  editedTitle = title;
+  isEditingTitle = true;
+  // Focus and select happens via effect
+}
+
+$effect(() => {
+  if (isEditingTitle) {
+    // Need ref to input element
+    tick().then(() => {
+      titleInputRef?.focus();
+      titleInputRef?.select();
+    });
+  }
+});
+```
+
+**Checklist**:
+- [ ] Add ref to title input element
+- [ ] Auto-focus on edit start
+- [ ] Select all text for easy replacement
+- [ ] Test: Click title → all text selected, ready to type
+
+##### Clear Formatting Button
+
+**Problem**: No easy way to strip all formatting from selected text.
+
+**Fix**:
+```svelte
+<button
+  class="toolbar-btn"
+  onclick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+  title="Clear formatting"
+>
+  <!-- Clear format icon: Tx with strikethrough -->
+</button>
+```
+
+**Checklist**:
+- [ ] Add clear formatting button to toolbar
+- [ ] Position after text formatting group
+- [ ] Test: Select formatted text → click → plain text
+
+##### Visibility Change Confirmation
+
+**Problem**: Changing from private to shared has no confirmation. Could accidentally expose sensitive content.
+
+**Location**: `PageHeader.svelte:100-104`
+
+**Fix**:
+```typescript
+function handleVisibilityChange(newVisibility: PageVisibility) {
+  if (newVisibility === 'shared' && visibility === 'private') {
+    const confirmed = confirm(
+      'This will make the page visible to all Area members. Continue?'
+    );
+    if (!confirmed) return;
+  }
+  if (onVisibilityChange && newVisibility !== visibility) {
+    onVisibilityChange(newVisibility);
+  }
+}
+```
+
+**Checklist**:
+- [ ] Add confirmation when changing private → shared
+- [ ] Consider toast notification after change
+- [ ] No confirmation needed for shared → private (safe direction)
+
+---
+
+#### P3: Lower Priority
+
+##### Text Alignment
+
+**Problem**: No left/center/right alignment options.
+
+**Fix**: Install and configure TextAlign extension.
+
+```bash
+npm install @tiptap/extension-text-align
+```
+
+```typescript
+import TextAlign from '@tiptap/extension-text-align';
+
+// In editor config
+TextAlign.configure({
+  types: ['heading', 'paragraph'],
+})
+```
+
+**Checklist**:
+- [ ] Install `@tiptap/extension-text-align`
+- [ ] Add to editor extensions
+- [ ] Add alignment buttons to toolbar
+- [ ] Test with headings and paragraphs
+
+##### Keyboard Shortcuts Reference
+
+**Problem**: Shortcuts exist but no central reference in editor.
+
+**Fix**: Add help button that shows shortcuts modal (reuse pattern from main app's `KeyboardShortcutsModal`).
+
+**Checklist**:
+- [ ] Create `EditorShortcutsModal.svelte` or reuse existing
+- [ ] Add "?" button to toolbar or header
+- [ ] List all editor shortcuts
+
+##### PDF Export
+
+**Problem**: Only Markdown and DOCX export. PDF commonly requested.
+
+**Fix**: Add PDF option using html-pdf or puppeteer.
+
+**Checklist**:
+- [ ] Research PDF generation library (puppeteer, html-pdf, pdfkit)
+- [ ] Add PDF option to ExportMenu
+- [ ] Implement PDF endpoint
+- [ ] Test with various content types
+
+##### Auto-Save Visual Indicator
+
+**Problem**: No visual feedback during auto-save (only "Last saved X ago" after).
+
+**Fix**: Show subtle indicator when auto-save is in progress.
+
+```svelte
+{#if saveStatus === 'saving'}
+  <span class="auto-save-indicator">
+    <span class="pulse-dot"></span>
+    Saving...
+  </span>
+{/if}
+```
+
+**Checklist**:
+- [ ] Add auto-save indicator in footer or header
+- [ ] Subtle animation (pulse dot or spinner)
+- [ ] Disappears after save completes
+
+---
+
+#### P4: Future Enhancements
+
+##### Block Drag Handles
+
+TipTap supports dragging blocks to reorder. Add visual drag handles.
+
+- [ ] Research TipTap drag handle implementation
+- [ ] Add drag handle UI to block nodes
+- [ ] Test with paragraphs, lists, code blocks
+
+##### Link Click-to-Edit
+
+Currently links don't open on click and require manual selection to edit.
+
+- [ ] Add floating menu on link click
+- [ ] Options: Edit URL, Open link, Remove link
+- [ ] Consider bubble menu extension
+
+##### Page Type Editable
+
+Type badge is display-only after creation.
+
+- [ ] Make type badge clickable
+- [ ] Show type selector dropdown
+- [ ] Update page type via API
+
+##### Version History UI
+
+Version API exists but no UI to browse/restore.
+
+- [ ] Add "History" button to header
+- [ ] Create version list panel/modal
+- [ ] Show diff between versions
+- [ ] Restore functionality
+
+---
+
+#### Implementation Order (Recommended Sprint)
+
+**Day 1: Critical + Quick Wins**
+- [ ] P0: Toolbar reactivity fix
+- [ ] P1: Undo/redo buttons
+- [ ] P1: Paragraph option
+- [ ] P1: Link modal auto-focus
+
+**Day 2: Polish**
+- [ ] P2: Character count
+- [ ] P2: Title input auto-select
+- [ ] P2: Clear formatting button
+- [ ] P2: Visibility confirmation
+- [ ] P1: Link modal remove link
+
+**Day 3: Nice-to-haves**
+- [ ] P3: Auto-save indicator
+- [ ] P3: Text alignment (if time)
+
+**Later Sprint**
+- [ ] P3: Keyboard shortcuts reference
+- [ ] P3: PDF export
+- [ ] P4: Future enhancements
+
+---
+
 ## Technical Improvements (Ongoing)
 
 ### Google Deep Research Integration

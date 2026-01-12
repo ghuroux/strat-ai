@@ -749,24 +749,34 @@ Workflow for sharing memories to broader scope.
 | `supporting_conversations` | JSONB | Evidence references |
 | `confidence_score` | FLOAT | Auto-calculated confidence |
 
-### 7.5 Documents
+### 7.5 Context Documents (Uploaded Files)
 
-Uploaded files with content extraction.
+> **Important Distinction:** Context Documents are **uploaded files** (PDFs, specs, guidelines) that live at **Space-level** and can be shared at **Area-level**. This is different from **Pages** (Section 7.6) which are **created content** (meeting notes, proposals) that live at **Area-level**.
+>
+> **See:** `docs/DOCUMENT_SHARING.md` for full implementation specification including UX flows and acceptance tests.
+
+Documents are **stored at Space-level** (deduplication) but **shared at Area-level** (precision, no noise).
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | UUID | Primary key |
 | `organization_id` | UUID | FK to organizations |
-| `space_id` | UUID | FK to spaces |
+| `space_id` | UUID | FK to spaces (storage location) |
 | `name` | TEXT | Document name |
 | `content_type` | TEXT | MIME type |
 | `size_bytes` | INTEGER | File size |
 | `storage_path` | TEXT | File storage location |
 | `content` | TEXT | Extracted text content |
 | `chunks` | JSONB | Chunked content with embeddings |
+| `visibility` | TEXT | 'private', 'areas', or 'space' |
 | `uploaded_by` | UUID | FK to users |
 | `created_at` | TIMESTAMPTZ | Upload timestamp |
 | `updated_at` | TIMESTAMPTZ | Last modification |
+
+**Visibility Levels:**
+- `private` - Only uploader can see (default)
+- `areas` - Specific Areas can see (granular sharing)
+- `space` - All Space members can see (universal documents)
 
 **Chunks JSONB Structure:**
 ```json
@@ -779,6 +789,108 @@ Uploaded files with content extraction.
   }
 ]
 ```
+
+#### Document Area Shares
+
+When `visibility = 'areas'`, this table defines which Areas can see the document.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `document_id` | UUID | FK to documents |
+| `area_id` | UUID | FK to areas |
+| `shared_by` | UUID | FK to users (who shared) |
+| `shared_at` | TIMESTAMPTZ | When shared |
+| `notifications_sent` | BOOLEAN | Whether notifications were sent |
+
+**Constraints:**
+- `UNIQUE(document_id, area_id)` - One share entry per document-area pair
+
+#### Document References (V2 - Cross-Space)
+
+For V2, documents can be referenced from other Spaces without duplication.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `document_id` | UUID | FK to documents (canonical location) |
+| `target_space_id` | UUID | FK to spaces (where referenced) |
+| `added_by` | UUID | FK to users |
+| `added_at` | TIMESTAMPTZ | When referenced |
+
+**Constraints:**
+- `UNIQUE(document_id, target_space_id)` - One reference per document-space pair
+
+**Key Behaviors:**
+- Documents stored at Space-level, shared at Area-level
+- Upload from Area context prompts "Share with Area?"
+- Sharing is granular: specific Areas, not entire Space by default
+- Unsharing auto-deactivates document from Area's `context_document_ids`
+- Owner or Space admin can manage sharing settings
+- V1: "Copy to My Space" creates duplicate; V2: References with sync
+
+**Access Rules:**
+```
+Can SEE document:
+  → Owner (uploaded_by = self)
+  → OR visibility='space' AND CanAccessSpace
+  → OR visibility='areas' AND CanAccessAnySharedArea
+
+Can SHARE document:
+  → Owner OR Space admin/owner
+
+Can ACTIVATE for Area:
+  → Can see AND Area access AND (visibility='space' OR Area in shares)
+```
+
+### 7.6 Pages (Created Content)
+
+> **See:** `docs/DOCUMENT_SYSTEM.md` for full implementation specification.
+
+Pages are rich-text documents **created within** StratAI (not uploaded). They live at **Area-level** because they're born from area context—often from chat conversations or guided creation flows.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `space_id` | UUID | FK to spaces |
+| `area_id` | UUID | FK to areas (pages live in Areas) |
+| `task_id` | UUID | FK to tasks (optional association) |
+| `created_by` | UUID | FK to users |
+| `title` | TEXT | Page title |
+| `content` | JSONB | TipTap JSON content |
+| `content_text` | TEXT | Plain text extraction for search |
+| `page_type` | TEXT | Type enum (see below) |
+| `visibility` | TEXT | 'private' or 'shared' |
+| `source_conversation_id` | UUID | FK to conversations (if created from chat) |
+| `word_count` | INTEGER | Word count |
+| `created_at` | TIMESTAMPTZ | Creation timestamp |
+| `updated_at` | TIMESTAMPTZ | Last modification |
+| `last_edited_at` | TIMESTAMPTZ | Last user edit (vs system updates) |
+| `deleted_at` | TIMESTAMPTZ | Soft delete timestamp |
+
+**Page Types:**
+- `general` - Free-form content
+- `meeting_notes` - Meeting documentation
+- `decision_record` - Decision documentation with context
+- `proposal` - Proposals for review
+- `project_brief` - Project overview
+- `weekly_update` - Status updates
+- `technical_spec` - Technical specifications
+
+**Visibility:**
+- `private` - Only creator can see
+- `shared` - All Area members can see
+
+**Related Tables:**
+- `page_versions` - Version history for undo/audit
+- `page_conversations` - Links pages to chat discussions
+
+**Key Behaviors:**
+- Pages live in Areas, not Spaces (work context determines location)
+- Created from chat conversations or guided creation
+- Chat panel allows discussing page content with AI
+- Can be exported to Markdown or DOCX
+- Visibility controls who in the Area can see it
 
 ---
 
@@ -1695,7 +1807,8 @@ CREATE TABLE memory_proposals (
 );
 
 -- ============================================================
--- DOCUMENTS
+-- CONTEXT DOCUMENTS (Uploaded Files - Space Level)
+-- See Section 7.5 and docs/DOCUMENT_SHARING.md for full spec
 -- ============================================================
 
 CREATE TABLE documents (
@@ -1708,9 +1821,87 @@ CREATE TABLE documents (
     storage_path TEXT,
     content TEXT,
     chunks JSONB,
-    uploaded_by UUID REFERENCES users(id),
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (
+        visibility IN ('private', 'areas', 'space')
+    ),
+    uploaded_by UUID NOT NULL REFERENCES users(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Document sharing at Area level (when visibility = 'areas')
+CREATE TABLE document_area_shares (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    area_id UUID NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+    shared_by UUID NOT NULL REFERENCES users(id),
+    shared_at TIMESTAMPTZ DEFAULT NOW(),
+    notifications_sent BOOLEAN DEFAULT FALSE,
+    UNIQUE(document_id, area_id)
+);
+
+-- Cross-Space document references (V2 feature)
+CREATE TABLE document_references (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    target_space_id UUID NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    added_by UUID NOT NULL REFERENCES users(id),
+    added_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(document_id, target_space_id)
+);
+
+-- ============================================================
+-- PAGES (Created Content - Area Level)
+-- See Section 7.6 and docs/DOCUMENT_SYSTEM.md for full spec
+-- ============================================================
+
+CREATE TABLE pages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    space_id UUID NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    area_id UUID NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+    task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+    created_by UUID NOT NULL REFERENCES users(id),
+
+    title TEXT NOT NULL,
+    content JSONB NOT NULL DEFAULT '{}',  -- TipTap JSON format
+    content_text TEXT,  -- Plain text for search
+    page_type TEXT NOT NULL DEFAULT 'general' CHECK (
+        page_type IN ('general', 'meeting_notes', 'decision_record',
+                      'proposal', 'project_brief', 'weekly_update', 'technical_spec')
+    ),
+
+    visibility TEXT NOT NULL DEFAULT 'private' CHECK (
+        visibility IN ('private', 'shared')
+    ),
+    source_conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+    word_count INTEGER DEFAULT 0,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_edited_at TIMESTAMPTZ,
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE TABLE page_versions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    page_id UUID NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+    content JSONB NOT NULL,
+    content_text TEXT,
+    title TEXT NOT NULL,
+    word_count INTEGER DEFAULT 0,
+    created_by UUID NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    version_number INTEGER NOT NULL,
+    change_summary TEXT
+);
+
+CREATE TABLE page_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    page_id UUID NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    relationship TEXT NOT NULL CHECK (relationship IN ('source', 'discussion', 'reference')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(page_id, conversation_id, relationship)
 );
 ```
 
@@ -2170,6 +2361,8 @@ CREATE INDEX idx_groups_org ...;
 | 2026-01 | UUID primary keys from Day 1 | Avoid painful TEXT→UUID migration in production; enterprise-standard | TEXT IDs with semantic prefixes |
 | 2026-01 | Fixed seed UUIDs | Predictable IDs for StraTech org (`10000000-...-001`), Gabriel user (`20000000-...-001`) | Generated UUIDs |
 | 2026-01 | user_id_mappings table | Backward compatibility bridge from legacy TEXT user_ids to UUIDs during transition | Update all data in place |
+| 2026-01 | Documents vs Pages distinction | **Documents** = uploaded files at Space-level (avoid duplication, activate per-area); **Pages** = created content at Area-level (born from context, lives where created) | Single "documents" concept for both |
+| 2026-01 | Document Area-level sharing | Documents stored at Space (dedup), shared at Area (precision). Avoids noise - only relevant Areas see shared docs. Unshare auto-deactivates from contextDocumentIds. | Space-level visibility only |
 
 ---
 

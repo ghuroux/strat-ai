@@ -8,6 +8,8 @@
 >
 > **Related Documents:**
 > - [`context-loading-architecture.md`](./context-loading-architecture.md) — Technical architecture for HOW to load context (hybrid upfront + just-in-time via tool calling)
+> - [`DOCUMENT_SHARING.md`](./DOCUMENT_SHARING.md) — Uploaded documents sharing model (Space storage, Area-level visibility)
+> - [`DOCUMENT_SYSTEM.md`](./DOCUMENT_SYSTEM.md) — Pages system (created content at Area-level)
 
 ---
 

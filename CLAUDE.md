@@ -24,7 +24,9 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 
 **Strategic Documents:**
 - `stratai-main/ENTITY_MODEL.md` - **Authoritative data architecture** (implementation source of truth)
-- `stratai-main/docs/DOCUMENT_SYSTEM.md` - **AI-native document system** (V1 feature - Confluence replacement)
+- `stratai-main/docs/DOCUMENT_SYSTEM.md` - **Pages system** (AI-native created content - Area-level, TipTap editor)
+- `stratai-main/docs/DOCUMENT_SHARING.md` - **Document sharing** (uploaded files - Space storage, Area-level sharing)
+- `stratai-main/docs/GUIDED_CREATION.md` - **Guided creation system** (templates as data schemas, Meeting Notes first)
 - `stratai-main/docs/CONTEXT_STRATEGY.md` - **Context/memory architecture** (WHAT to store - moat-level work)
 - `stratai-main/docs/context-loading-architecture.md` - **Just-in-time context loading** (HOW to load via tool calling)
 - `stratai-main/docs/COST_OPTIMIZATION_STRATEGY.md` - **LLM cost optimization** (50-85% savings roadmap)
@@ -104,10 +106,16 @@ Don't revisit without good reason:
 | `space_id` in usage_records | Enable V2 project-based cost attribution |
 | WorkOS for auth | 1M MAU free tier, native SvelteKit SDK, predictable SSO pricing ($125/connection), B2B focus |
 | TipTap for document editor | ProseMirror-based, extensible, Y.js compatible for future real-time collab |
-| Documents in Areas (not Spaces) | Natural filing - work context determines location, reduces "where do I put this" |
+| Pages in Areas (not Spaces) | Natural filing - work context determines location, reduces "where do I put this" |
 | AI-native docs, not bolted on | Inline suggestions, guided creation, chat panel - AI woven into experience |
-| Document visibility: private/shared | Simple binary for V1; per-user/group sharing is V2 complexity |
+| Page visibility: private/shared | Simple binary for V1; per-user/group sharing is V2 complexity |
 | Document ↔ Chat bidirectional | Docs created from chat, chat discusses docs - peers not hierarchy |
+| Documents vs Pages | **Documents** = uploaded files (Space-level, activate per-area); **Pages** = created content (Area-level, born from context) |
+| Document Area-level sharing | Documents stored at Space (dedup), shared at Area (precision, no noise). Unshare auto-deactivates. V2 adds cross-Space references. |
+| Templates as data schemas | Guided creation collects structured JSON, renders to TipTap + creates entities (Tasks) |
+| Meeting Notes first template | Most common, clearest structure, proves pattern before expanding |
+| Guided creation progressive disclosure | Card-based interview (not wizard forms), skip always available, context does heavy lifting |
+| Decisions feed context hierarchy | Structured decisions from meetings bubble up to Area memory (CONTEXT_STRATEGY.md integration) |
 
 ---
 
@@ -141,879 +149,112 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-11 (Phase 5 Research & Area Sharing Analysis)
+### Latest: 2026-01-12 (Document Sharing Architecture & ENTITY_MODEL Reconciliation)
 
 **Completed:**
 
-*AUTO Model Routing - Phase 5 Research:*
-- Researched embedding-based recommendation engine for Phase 5 (Embedding Intelligence)
-- Decision: DEFER Phase 5 with metrics gate until data-driven justification exists
-- Documented Phase 5 acceptance criteria in `auto-model-routing-research.md`:
-  - User override rate >10% sustained for 2 weeks
-  - Low confidence queries >30% at <0.70 confidence
-- Updated `AUTO_MODEL_ROUTING.md` with comprehensive implementation details
-
-*Area Sharing Gap Analysis:*
-- Analyzed ENTITY_MODEL.md against current implementation for area sharing
-- Comprehensive gap analysis completed:
-
-**Implemented:**
-- Organizations table and persistence (`organizations-postgres.ts`)
-- Users table with org_id (`users-postgres.ts`)
-- Groups table and persistence (`groups-postgres.ts`)
-- Group memberships with roles (lead/member)
-
-**NOT Implemented (gaps identified):**
-- `space_memberships` table - user/group access to Spaces
-- `space_group_access` table - group-level Space permissions
-- `area_memberships` table - user/group access to Areas
-- `is_restricted` flag on focus_areas - private Areas in org Spaces
-- Current `focus_areas` schema is user-scoped only, no sharing capability
-- Access resolution algorithm (CanAccessArea) not built
-
-*Implementation Order Defined:*
-1. Migration: Add `is_restricted` to focus_areas, create `area_memberships` table
-2. Repository: `area-memberships-postgres.ts` with CRUD operations
-3. Service: Access resolution implementing CanAccessArea algorithm from ENTITY_MODEL.md
-4. API: Endpoints for area sharing (invite user/group, manage permissions)
-5. UI: Share modal, member management in Area settings
-
-**Analysis Documented:**
-- Gap between designed schema (ENTITY_MODEL.md) and current implementation
-- Priority: Area sharing before Space sharing (Areas as collaboration unit per Decision Log)
-
-**Next Steps:**
-- Begin area sharing implementation (Phase 1: migration + repository)
-- Run database migrations (022, 023) for Pages system
-- Monitor AUTO routing metrics for Phase 5 gate conditions
-
-### Previous: 2026-01-11 (Document System Implementation & AUTO Model Routing)
-
-**Completed:**
-
-*AI-Native Document System - Full Implementation:*
-- Complete Pages system with TipTap rich text editor
-- Document types: general, meeting notes, decision records, proposals, briefs
-- Editor toolbar with formatting, lists, code blocks, links
-- Page list and card UI with search and filtering
-- Visibility controls (private/shared)
-- Export menu functionality
-- Guided creation banner
-
-*Discussion Panel Integration (Phase 7):*
-- `EditorChatPanel.svelte` - Collapsible chat panel (350px) for page discussions
-- Added `systemPrompt` field to `ChatCompletionRequest` interface
-- Modified `/api/chat/+server.ts` to extract and inject custom system prompts
-- AI now receives full page context (title, type, content)
-- Markdown rendering in chat panel responses
-- Quick prompts: "Check spelling", "Make formal", "Summarize"
-
-*Apply Button Fix (Cross-Formatting Text):*
-- Fixed regex for suggested changes extraction: `.+?` to `[^\n]+`
-- Solved truncation issue (e.g., "200% growth" extracted as "2")
-- Added `stripQuotes()` helper for clean text extraction
-- New cross-node text replacement algorithm in `PageEditor.svelte`
-- Maps concatenated text positions to document positions
-- Apply button now works for text spanning bold/italic/formatting
-
-*AUTO Model Routing System:*
-- `src/lib/services/model-router/` - Complete routing infrastructure
-- Query complexity analysis (code patterns, reasoning indicators, length)
-- Context-aware routing (space type, area, plan mode, thinking enabled)
-- Provider support: Anthropic, OpenAI, Google
-- Tier-based model selection: simple/standard/complex/specialist
-- Routing decisions logged to database for analytics
-- Admin dashboard at `/admin/routing` for statistics
-
-*Layered System Prompt Caching:*
-- `createLayeredSystemMessage()` for multi-block caching
-- Platform prompt cached globally (shared across users)
-- Context cached per-area (shared across conversations)
-- Improved cache hit rates vs single-block approach
-
-*Settings Pages Infrastructure:*
-- Settings layout with sidebar navigation at `/settings`
-- Profile, appearance, AI preferences, shortcuts sections
-- User preferences API endpoints
-
-**Files Created:**
-- `src/lib/components/pages/*.svelte` - 12 page editor components
-- `src/lib/services/model-router/**` - Router with analyzers, config, types
-- `src/lib/components/settings/*.svelte` - 9 settings components
-- `src/routes/api/pages/**` - Complete Pages API (CRUD, discussion, export)
-- `src/routes/admin/routing/` - Routing admin dashboard
-- `src/lib/server/persistence/pages-postgres.ts` - Pages persistence
-- `src/lib/server/persistence/routing-decisions-postgres.ts` - Routing logs
-- `src/lib/stores/pages.svelte.ts` - Pages store
-- `src/lib/types/page.ts` - Page types and utilities
-- Migrations: 022-user-preferences.sql, 023-pages-system.sql, 023-routing-decisions.sql
-
-**Files Modified:**
-- `src/lib/types/api.ts` - Added systemPrompt, provider, conversationTurn fields
-- `src/routes/api/chat/+server.ts` - AUTO routing, layered caching, custom prompts
-- `src/lib/config/system-prompts.ts` - Layered prompt structure
-- `src/lib/server/litellm.ts` - Model listing improvements
-- Various UI components - Light mode support, bug fixes
-
-**Commits Made:**
-- `4145386` - feat: Add AI-native Document System with AUTO model routing
-
-**Next Steps:**
-- Run database migrations (022, 023)
-- Test AUTO routing in production
-- Test page discussions with Apply button
-- Continue with guided creation flow (Phase 8)
-
-### Previous: 2026-01-11 (Document System Architecture)
-
-**Completed:**
-
-*AI-Native Document System - Complete Specification:*
-- Comprehensive design discussion exploring Confluence replacement opportunity
-- Three entry points defined: From Chat, Guided Creation, Direct Create
-- Bidirectional document ↔ chat flow architecture
-- TipTap editor with Word-doc quality feel
-- Collapsible chat panel for document discussions
-
-*DOCUMENT_SYSTEM.md - Full Implementation Spec (~3200 lines):*
-- **Architecture Overview** - System diagram, core principles, file structure
-- **Database Schema** - documents, document_versions, document_conversations tables
-- **API Specification** - Full CRUD, export endpoints, document chat
-- **Component Specifications** - 10 components with props and structure
-- **UX Specifications** - Design system, color tokens, typography, layouts
-- **9 Implementation Phases** - Each with detailed agent instructions
-- **Test Cases** - Unit, integration, and E2E test specifications
-- **Acceptance Criteria** - 150+ testable criteria across all phases
-
-**Files Created:**
-- `stratai-main/docs/DOCUMENT_SYSTEM.md` - Complete implementation specification
-
-### Previous: 2026-01-09 (Admin Portal & Easter Eggs Phase 2)
-
-**Completed:**
-
-*Admin Portal - Complete Infrastructure:*
-- `AdminLayout.svelte`, `AdminHeader.svelte`, `AdminSidebar.svelte` - Shared admin components
-- Refactored from single-page to multi-route layout with sidebar navigation
-- Six admin pages: Overview, Members, Groups, Model Access, Budgets, Settings
-- Admin layout with persistent sidebar and breadcrumbs
-
-*Groups Management:*
-- Full CRUD for groups with `CreateGroupModal.svelte` and `DeleteGroupModal.svelte`
-- Group detail page (`/admin/groups/[id]`) with member management
-- Add/remove members, promote to lead role
-- `groups-postgres.ts` persistence layer with comprehensive queries
-- Migration `019-groups.sql` for groups and group_members tables
-
-*Members Page Enhancements:*
-- Search bar with real-time filtering by name/username/email
-- Role filter buttons (All, Owners, Admins, Members)
-- Groups column showing memberships with lead badge indicators
-- Light mode support matching admin design system
-
-*Model Access & Budgets:*
-- Model tier management (Basic, Standard, Premium) at `/admin/model-access`
-- User tier assignments with upgrade/downgrade functionality
-- Budget tracking by tier with usage visualization at `/admin/budgets`
-- Migrations `020-org-budget-tiers.sql` and `021-model-tier-assignments.sql`
-
-*Easter Eggs Phase 2:*
-- Discovery toast type with shimmer animation for first-time finds
-- Hacker Mode command (matrix-style green theme via Cmd+K)
-- Time-based greetings for unusual hours and special days
-- Keyboard shortcuts modal (? key) with easter egg hints
-- Rage click detector with calming messages
-- Ship It! rocket animation on "ship it" in chat
-- `easter-eggs.svelte.ts` store for tracking discoveries
-- `EASTER_EGGS.md` documentation
-
-*Additional Infrastructure:*
-- `user.svelte.ts` store for current user state
-- `summarization.ts` service for conversation summaries
-- `KeyboardShortcutsModal.svelte` for keyboard shortcuts reference
-- Light mode styling throughout admin pages in `app.css`
-- `admin-portal-design.md` architecture documentation
-
-**Files Created:**
-- `src/lib/components/admin/AdminLayout.svelte`
-- `src/lib/components/admin/AdminHeader.svelte`
-- `src/lib/components/admin/AdminSidebar.svelte`
-- `src/lib/components/admin/index.ts`
-- `src/routes/admin/+layout.svelte`
-- `src/routes/admin/+layout.server.ts`
-- `src/routes/admin/overview/+page.svelte`, `+page.server.ts`
-- `src/routes/admin/members/+page.svelte`, `+page.server.ts`
-- `src/routes/admin/groups/+page.svelte`, `+page.server.ts`
-- `src/routes/admin/groups/[id]/+page.svelte`, `+page.server.ts`
-- `src/routes/admin/groups/CreateGroupModal.svelte`
-- `src/routes/admin/groups/DeleteGroupModal.svelte`
-- `src/routes/admin/model-access/+page.svelte`, `+page.server.ts`
-- `src/routes/admin/budgets/+page.svelte`, `+page.server.ts`
-- `src/routes/admin/settings/+page.svelte`, `+page.server.ts`
-- `src/routes/admin/usage/+page.svelte`, `+page.server.ts`
-- `src/routes/api/admin/groups/+server.ts`
-- `src/routes/api/admin/groups/[id]/+server.ts`
-- `src/routes/api/admin/groups/[id]/members/+server.ts`
-- `src/routes/api/admin/groups/[id]/members/[userId]/+server.ts`
-- `src/routes/api/admin/budgets/+server.ts`
-- `src/routes/api/admin/model-access/+server.ts`
-- `src/routes/api/admin/settings/+server.ts`
-- `src/routes/api/admin/usage/user/[userId]/+server.ts`
-- `src/lib/server/persistence/groups-postgres.ts`
-- `src/lib/server/persistence/migrations/018-system-prompts.sql`
-- `src/lib/server/persistence/migrations/019-groups.sql`
-- `src/lib/server/persistence/migrations/020-org-budget-tiers.sql`
-- `src/lib/server/persistence/migrations/021-model-tier-assignments.sql`
-- `src/lib/server/summarization.ts`
-- `src/lib/stores/easter-eggs.svelte.ts`
-- `src/lib/stores/user.svelte.ts`
-- `src/lib/components/KeyboardShortcutsModal.svelte`
-- `docs/EASTER_EGGS.md`
-- `docs/admin-portal-design.md`
-
-**Files Modified:**
-- `src/routes/admin/+page.svelte` - Redirects to overview
-- `src/routes/+layout.svelte` - Easter eggs integration, keyboard shortcuts
-- `src/app.css` - Light mode admin styles, discovery toast animation
-- `src/lib/components/ChatInput.svelte` - Ship It! easter egg
-- `src/lib/components/Toast.svelte` - Discovery toast type
-- `src/lib/components/layout/Header.svelte` - Easter egg triggers
-- `src/lib/components/layout/UserMenu.svelte` - Admin navigation
-- `src/lib/config/commands.ts` - Hacker Mode command
-- `src/lib/config/system-prompts.ts` - Structured for caching
-- `src/lib/server/litellm.ts` - Model listing improvements
-- `src/lib/server/persistence/usage-postgres.ts` - User usage queries
-- `src/lib/utils/temporal-context.ts` - Time-based easter eggs
-- `src/routes/api/chat/+server.ts` - Summarization integration
-- `src/routes/api/documents/+server.ts` - Error handling
-
-**Commits Made:**
-- `c776d83` - feat: Add Easter Eggs Phase 2 and Admin Portal restructure
-
-**Next Steps:**
-- Run database migrations (018-021)
-- Test admin portal functionality across all pages
-- Continue with enterprise auth integration
-
-### Previous: 2026-01-09 (Cost Optimization Strategy)
-
-**Completed:**
-
-*Comprehensive Cost Optimization Research:*
-- Launched 6 parallel research agents covering:
-  - Prompt compression (LLMLingua-2, Chain-of-Draft)
-  - Advanced caching (semantic caching, prefix caching, KV cache)
-  - Multi-model strategies (cascading, speculative decoding, distillation)
-  - Provider economics (batch APIs, committed use, pricing trends)
-  - Output optimization (token-efficient tools, max tokens, structured outputs)
-  - Emerging techniques (vLLM, SGLang, dynamic token pruning)
-
-*Codebase Analysis for Optimization Opportunities:*
-- Analyzed LLM integration points in `chat/+server.ts`
-- Reviewed system prompt structure in `system-prompts.ts`
-- Examined existing caching in `tool-cache-postgres.ts`
-- Identified model pricing configuration in `model-pricing.ts`
-
-*COST_OPTIMIZATION_STRATEGY.md - Comprehensive Document:*
-
-**Key Findings:**
-- Anthropic prompt caching: 90% savings on cache reads
-- Model routing/cascading: 40-85% cost reduction (RouteLLM)
-- Batch APIs: 50% automatic discount (OpenAI, Anthropic)
-- Semantic caching: 40%+ savings on repeated queries
-- Token-efficient tools header: 14-70% output reduction
-
-**StratAI-Specific Opportunities Identified:**
-1. System prompt caching structure (25-30% savings)
-2. Enable GPT/Gemini cache optimization (10-15% savings)
-3. Model cascading via LiteLLM (40-60% savings)
-4. Task-level document caching vs conversation-level (15-25% savings)
-5. Token-efficient tools header for Claude (14-70% output savings)
-6. Batch API for non-interactive work (50% savings)
-
-**Implementation Roadmap:**
-- Phase 1 (Week 1-2): Quick wins - token-efficient tools, prompt restructuring
-- Phase 2 (Week 3-4): Model routing - query classifier, cascade fallback
-- Phase 3 (Week 5-8): Batch & semantic caching infrastructure
-
-**Target Outcomes:**
-- Cost per conversation: ~$0.15-0.50 → ~$0.03-0.10 (50-85% reduction)
-- Cache hit rate: ~10% → 60-80%
-- Cheap model usage: 0% → 40-60%
-
-**Files Created:**
-- `stratai-main/docs/COST_OPTIMIZATION_STRATEGY.md` - Full strategy document
-
-**Files Modified:**
-- `CLAUDE.md` - Added strategic document reference, session log
-
-**Next Steps:**
-- Phase 1 implementation: Token-efficient tools header, prompt restructuring
-- Set up cost monitoring dashboard
-- Implement simple model routing heuristics
-
-### Previous: 2026-01-09 (Usage Tracking & Auto Model Routing Research)
-
-**Completed:**
-
-*Usage Tracking Cache Fix:*
-- Fixed cache metrics not being saved to database
-- Root cause: Code extracted cache from HTTP headers, but Anthropic returns in usage object
-- Fixed `handleChatWithTools` at lines 1331-1345 to extract from `responseData.usage`
-- Added logging: `[Cache] model: created=X, read=Y tokens`
-
-*Auto Model Routing Research:*
-- Comprehensive research on LLM model routing approaches (Jan 2026)
-- Analyzed industry players: OpenRouter Auto, Martian, Not Diamond, RouteLLM
-- Documented approaches: Rule-based, Embedding-based, Classifier, Meta-model, Cascading
-- Research finding: 2-5x cost savings possible without quality degradation
-- Created strategic document: `stratai-main/docs/auto-model-routing-research.md`
-
-*Recommended Hybrid Approach:*
-- Tier 1: Explicit context rules (Space/Area type → model preference)
-- Tier 2: Fast signal detection (code patterns, keywords, query length)
-- Tier 3: Embedding-based classification (~50ms, for ambiguous queries)
-- Tier 4: User preference learning (personalization over time)
-
-**Files Created:**
-- `stratai-main/docs/auto-model-routing-research.md` - Complete research & strategy document
-
-**Files Modified:**
-- `src/routes/api/chat/+server.ts` - Fixed cache metrics extraction in handleChatWithTools
-
-**Key Research Sources:**
-- RouteLLM (LMSYS, ICLR 2025) - 85% cost reduction at 95% quality
-- OpenRouter Auto Router - Meta-model analysis
-- Martian - Model behavior prediction, 98% cost savings claim
-- Red Hat Semantic Router - Embedding-based approach
-
-**Next Steps:**
-- Finalize Auto routing approach (leaning embedding-based with explicit rules for Spaces)
-- Phase 1 implementation: Model capabilities matrix, basic context rules
-- Test cache metrics capture with new fix
-
-### Previous: 2026-01-09 (Command Palette & Enterprise Foundation)
-
-**Completed:**
-
-*Command Palette (Cmd+K / Ctrl+K):*
-- `src/lib/stores/commandPalette.svelte.ts` - Store for open/close state and search query
-- `src/lib/config/commands.ts` - Command definitions (~580 lines):
-  - Static commands: navigation (Home, Arena, Spaces), actions (New Chat, Toggle Sidebar), settings (Theme toggle)
-  - Dynamic commands: Spaces, Areas, Tasks (auto-populated from stores)
-- `src/lib/components/CommandPalette.svelte` - Full UI (~490 lines):
-  - Search input with live filtering
-  - Keyboard navigation (Arrow keys, Enter, Escape)
-  - Category grouping (Navigation, Actions, Settings, Conversations)
-  - Fuzzy matching on labels, descriptions, and keywords
-- Integrated into `+layout.svelte` with global Cmd+K/Ctrl+K shortcut
-
-*Conversation Search in Command Palette:*
-- 'conversations' category only appears when searching (2+ chars)
-- Smart scoring: title starts (100pts) > title contains (50pts) > message contains (25pts)
-- Searches 100 most recent conversations, first 10 messages each, returns max 8 results
-- Rich context display showing where conversations live (Main Chat, Space, Area, Task)
-- Smart icons based on context (MessageSquare, FolderOpen, Target, ListTodo)
-- `getSpaceByIdOrSlug()` helper for system spaces (slug-based) vs custom spaces (UUID)
-- `isConversationContextValid()` filters out orphaned conversations
-
-*Enterprise Auth Foundation:*
-- `getRequiredUser()` helper in `src/lib/server/auth.ts`
-- API route authentication added across all endpoints (areas, documents, spaces, tasks, chat)
-- Session handling updates in hooks and login flow
-- User persistence layer (`users-postgres.ts`, `users-schema.sql`)
-- Organization persistence layer (`organizations-postgres.ts`, `org-memberships-postgres.ts`)
-- User ID mappings for Auth0 integration preparation
-
-*Admin Infrastructure:*
-- `src/routes/admin/+page.svelte` - Admin dashboard page (~900 lines)
-- `src/routes/admin/+page.server.ts` - Server-side data loading
-- `src/lib/components/admin/UsageDashboard.svelte` - Usage analytics component
-- `src/lib/components/admin/UsageChart.svelte` - Usage visualization
-- Database migrations: 015 (foundation), 016 (user-id-uuid), 017 (llm-usage)
-
-*Documentation:*
-- Moved `CONTEXT_STRATEGY.md` to `docs/` directory
-- Removed deprecated `DESIGN-CHAT-CONTEXT-AWARENESS.md`
-- Added comprehensive light mode styling to `app.css` (~120 lines)
-
-*Other:*
-- `src/lib/config/model-pricing.ts` - Model cost calculations
-- `src/lib/components/layout/UserMenu.svelte` - Auth UI component
-- `src/routes/+layout.server.ts` - Layout server load function
-
-**Files Created:**
-- `src/lib/stores/commandPalette.svelte.ts`
-- `src/lib/components/CommandPalette.svelte`
-- `src/lib/config/commands.ts`
-- `src/lib/config/model-pricing.ts`
-- `src/lib/components/layout/UserMenu.svelte`
-- `src/lib/components/admin/UsageDashboard.svelte`
-- `src/lib/components/admin/UsageChart.svelte`
-- `src/routes/admin/+page.svelte`
-- `src/routes/admin/+page.server.ts`
-- `src/routes/+layout.server.ts`
-- `src/lib/server/persistence/users-postgres.ts`
-- `src/lib/server/persistence/users-schema.sql`
-- `src/lib/server/persistence/organizations-postgres.ts`
-- `src/lib/server/persistence/organizations-schema.sql`
-- `src/lib/server/persistence/org-memberships-postgres.ts`
-- `src/lib/server/persistence/org-memberships-schema.sql`
-- `src/lib/server/persistence/usage-postgres.ts`
-- `src/lib/server/persistence/user-id-mappings-postgres.ts`
-- `src/lib/server/persistence/user-id-mappings-schema.sql`
-- `src/lib/server/persistence/migrations/015-foundation-tables.sql`
-- `src/lib/server/persistence/migrations/016-user-id-uuid-migration.sql`
-- `src/lib/server/persistence/migrations/017-llm-usage.sql`
-- `docs/UI_AUDIT.md`
-- `docs/context-loading-architecture.md`
-
-**Files Modified:**
-- `src/routes/+layout.svelte` - CommandPalette integration
-- `src/app.css` - Light mode styling for command palette
-- `src/lib/server/auth.ts` - getRequiredUser helper
-- `src/hooks.server.ts` - Session handling
-- All API routes - Authentication middleware
-- `BACKLOG.md` - New items added
+*Documents vs Pages Clarification:*
+- Identified naming confusion between uploaded Documents and created Pages
+- Documents = uploaded files (PDFs, specs) at Space-level for deduplication
+- Pages = created content (meeting notes, proposals) at Area-level
+- Updated ENTITY_MODEL.md Section 7.5 with complete distinction
+- Added new Section 7.6 for Pages schema
+- Updated DOCUMENT_SYSTEM.md → renamed to Pages System with terminology note
+
+*Document Sharing Architecture - Deep Design:*
+- Collaborative ultrathink sessions defining the mental model
+- Key insight: **Stored at Space-level (dedup), shared at Area-level (precision)**
+- Prevents Slack/Teams anti-pattern where same doc gets uploaded multiple times
+- Visibility levels: private → areas (granular) → space (rare)
+- Upload context matters: Area upload prompts "Share with Area?"
+- Unshare auto-deactivates document from Area's contextDocumentIds
+
+*DOCUMENT_SHARING.md Implementation Specification (~900 lines):*
+- Complete mental model documentation
+- Database schema: documents (with visibility), document_area_shares, document_references (V2)
+- Access control algorithms: CanSeeDocument, CanShareDocument, CanActivateDocumentForArea
+- Detailed UX flows with ASCII wireframes: upload, share modal, document views, unshare
+- 8 implementation phases with acceptance tests per phase
+- Edge cases: unshare handling, ownership transfer, duplicate detection
+- V2 cross-Space references design (for future)
 
 **Key Decisions:**
-- Command Palette uses Cmd+K (Mac) / Ctrl+K (Windows) - standard convention
-- Conversation search only activates at 2+ characters (reduces noise)
-- Orphaned conversations filtered out to prevent navigation errors
-- Enterprise auth uses session-based approach with Auth0 preparation
+- Documents stored at Space, shared at Area (no noise for irrelevant Areas)
+- Area-level sharing instead of Space-level (precision)
+- Unshare auto-deactivates from contextDocumentIds (clean break)
+- V1: "Copy to My Space" creates duplicate; V2: References with sync
+
+**Files Created:**
+- `stratai-main/docs/DOCUMENT_SHARING.md` - Complete implementation specification
+
+**Files Modified:**
+- `stratai-main/ENTITY_MODEL.md` - Section 7.5 updated, Section 7.6 added, Complete Schema updated, Decision Log
+- `stratai-main/docs/DOCUMENT_SYSTEM.md` - Renamed to Pages System, added terminology note
+- `stratai-main/docs/CONTEXT_STRATEGY.md` - Added Related Documents references
+- `CLAUDE.md` - Strategic doc reference, Decision Log entries
 
 **Next Steps:**
-- Test Command Palette across different scenarios
-- Complete enterprise auth integration with Auth0
-- Run database migrations for new schema
+- Area sharing implementation (separate track)
+- Document sharing Phase 1: Migration (024-document-sharing.sql)
+- Document sharing Phase 2: Repository layer
 
-### Previous: 2026-01-09 (Entity Model Architecture)
+### Previous: 2026-01-12 (Guided Creation System Design)
 
 **Completed:**
 
-*Entity Model Document - ENTITY_MODEL.md:*
-- Created authoritative data architecture reference (implementation source of truth)
-- Comprehensive 1800+ line document covering all entity definitions
+*Environment Setup (fresh pull):*
+- Ran database migrations 018-023 (groups, pages, routing_decisions, user_preferences)
+- Database now has 21 tables (up from 15)
+- Installed TipTap dependencies, TypeScript compiles cleanly
 
-*Key Architectural Decisions:*
-- **Models as first-class entities**: Separate `models` table (individual LLMs) from `model_tiers` (subscription bundles) - enables per-model guardrails
-- **Two Space types**: `organizational` (org-provided, auto-access via groups) vs `personal` (user-created) - clear governance boundary
-- **Areas as collaboration unit**: Granular sharing via `area_memberships` (users + groups) without exposing entire Spaces
-- **Separate subscription from governance**: Tiers for billing, guardrails for access control (orthogonal concerns)
-- **Private Areas in Org Spaces**: Users can create restricted areas for incubation before sharing
+*Guided Creation System - Comprehensive Design:*
+- Deep UX analysis of template-based document creation
+- Key insight: **Templates as data schemas**, not just layouts
+- Guided interview collects structured JSON → renders to TipTap + creates entities
+- Progressive disclosure: Card-based steps, skip always available, context does heavy lifting
 
-*Entity Hierarchy Defined:*
-```
-Platform: Models, Model Tiers, Guardrails
-Organization: Organizations, Groups, Users, Profiles, Memberships
-Workspace: Spaces (org/personal), Areas, Tasks
-Context: Conversations, Messages, Memories, Documents
-Operations: Usage Records, Budgets, Invoices, Audit Log
-```
+*Meeting Notes as First Implementation:*
+- 5-step flow: Basics → Attendees → Context → Outcomes → Actions
+- Attendees: Internal (from Space/Area members) + External (freeform)
+- Decisions with owner + rationale (feeds context hierarchy)
+- Action items with "Create as Task" toggle → automatic Task creation
+- Area context can be included in document
 
-*Complete Schema Defined:*
-- 25+ tables with full DDL
-- All constraints and relationships
-- Access resolution algorithms (Space, Area, Model access)
-- Guardrails resolution logic (stacking, most-restrictive-wins)
-- Comprehensive index strategy for all query patterns
-- Migration path from current state (8 phases)
-
-*Clarifications from Discussion:*
-- "Modules" = "Model Tiers" (subscription bundles for billing)
-- Individual model guardrails = governance layer (separate from tiers)
-- Spaces = broad context container (Work, Department)
-- Areas = sub-context with collaboration (Client, Project)
+*GUIDED_CREATION.md Specification (~1600 lines):*
+- Complete architecture with component structure
+- Core type definitions (TemplateSchema, StepDefinition, FieldDefinition)
+- Meeting Notes data schema with full field definitions
+- 6 implementation phases with clear acceptance tests
+- Template renderer design (JSON → TipTap)
+- Entity creation service design (action items → Tasks)
+- Context Strategy integration (decisions → Area memory)
+- Future templates outlined (Decision Record, Proposal, Project Brief, Weekly Update)
+- Admin Template Editor vision (future)
 
 **Files Created:**
-- `stratai-main/ENTITY_MODEL.md` - Complete entity model reference
+- `stratai-main/docs/GUIDED_CREATION.md` - Complete specification
 
-**Files Modified:**
-- `CLAUDE.md` - Added entity model to strategic documents, added decisions to Decision Log
-
-**Key Decisions Made:**
-1. Models as first-class entities (enable per-model guardrails)
-2. Two Space types (organizational/personal) with clear governance boundary
-3. Areas as collaboration unit with group + user invites
-4. `is_restricted` flag for private Areas in org Spaces
-5. `space_id` in usage_records for V2 project attribution
-6. Separate document from enterprise-roadmap (schema vs implementation)
-
-**Next Steps:**
-- Review ENTITY_MODEL.md for final approval
-- Begin Phase 1 migrations (organization infrastructure)
-- Update enterprise-roadmap.md to reference entity model for schema details
-
-### Previous: 2026-01-08 (LLM Gateway Evaluation & Enterprise Architecture)
+### Previous: 2026-01-11 (Phase 5 Research & Area Sharing Analysis)
 
 **Completed:**
+- AUTO Model Routing Phase 5: DEFERRED with metrics gate (override rate >10% or low confidence >30%)
+- Area Sharing gap analysis vs ENTITY_MODEL.md
 
-*LLM Gateway Evaluation - LiteLLM vs Bifrost:*
-- Researched Bifrost OSS vs LiteLLM OSS for B2B multi-tenant requirements
-- Tested both gateways with load testing scripts
-- **Key finding:** Bifrost OSS is SQLite-only (PostgreSQL requires Enterprise license)
-  - This breaks horizontal scaling for production multi-tenant deployment
-- **Recommendation:** LiteLLM OSS remains the right choice
-  - PostgreSQL included in OSS version
-  - Enables horizontal scaling
-  - Virtual keys for per-customer API key management
-- Created comprehensive evaluation: `stratai-main/docs/llm-gateway-evaluation.md`
+**Gaps Identified:**
+- `area_memberships` table not implemented
+- `is_restricted` flag on focus_areas missing
+- CanAccessArea algorithm not built
 
-*Enterprise Architecture Roadmap:*
-- Analyzed gaps between current single-tenant app and B2B enterprise vision
-- Clarified "Modules" terminology = Model Access Tiers (Basic/Standard/Premium)
-- **Auth decision:** Auth0 recommended (3 days vs 3 weeks to build custom)
-  - SSO-ready for enterprise upsell
-  - RBAC support built-in
-- **SSO analysis:** Phase 3 feature (enterprise tier upsell, not launch blocker)
-- Multi-tenancy architecture designed:
-  - Org -> Group -> User hierarchy
-  - `org_id` column migration for all tenant-scoped tables
-  - Row-level security considerations
-- 4-week implementation timeline:
-  - Phase 1: Auth0 integration (3 days)
-  - Phase 2: Multi-tenancy core (5 days)
-  - Phase 3: Model tiers + virtual keys (4 days)
-  - Phase 4: Usage tracking (3 days)
-- Created comprehensive roadmap: `stratai-main/docs/enterprise-roadmap.md`
-
-**Files Created:**
-- `stratai-main/docs/llm-gateway-evaluation.md` - LiteLLM vs Bifrost comparison
-- `stratai-main/docs/enterprise-roadmap.md` - Full B2B transformation plan
-
-**Files Modified:**
-- `docker-compose.yml` - Added Bifrost environment variables for testing
-- `.gitignore` - Added Bifrost SQLite files (data/*.db)
-
-**Key Decisions Made:**
-1. **LiteLLM OSS** - Stick with it (PostgreSQL enables horizontal scaling)
-2. **Modules = Model Tiers** - Basic/Standard/Premium model access levels
-3. **Auth0** for authentication (speed to market, SSO-ready)
-4. **SSO in Phase 3** - Enterprise upsell, not launch requirement
-5. **Admin via RBAC** - In main app, not separate admin routes
-
-**Next Steps:**
-- Phase 1: Auth0 integration (3 days)
-- Phase 2: Multi-tenancy core with org_id migration (5 days)
-- Phase 3: Model tiers + virtual keys (4 days)
-- Phase 4: Usage tracking (3 days)
-- Internal pilot target: ~3-4 weeks
-- External beta target: +1 month
-
-### Previous: 2026-01-08 (Pricing Strategy)
+### Previous: 2026-01-11 (Document System & AUTO Routing)
 
 **Completed:**
-
-*Pricing Strategy Document - PRICING_STRATEGY.md:*
-
-**V1: Launch Pricing (Per-Seat Model)**
-- **Explorer** (Free): 100 msgs/mo, 1 space, session memory only - conversion funnel entry
-- **Pro** ($29/user/mo): Unlimited messages, full memory persistence, all standard models
-- **Team** ($45/user/mo, min 3 seats): Shared spaces, team context, basic admin
-- **Enterprise** (Custom ~$65+): Org memory, governance, SSO/SAML, audit logs, SLA
-
-*Strategic Principles:*
-- Memory unlimited on paid tiers (don't monetize the moat)
-- Premium models at cost + 25% (transparency builds trust)
-- Volume discounts encourage adoption (10-20% based on seats)
-- Annual commitment: 17% off (2 months free)
-
-**V2: Enterprise AI Operating System (Future Evolution)**
-- Pricing shifts to % of AI spend managed (8-15% based on tier)
-- AI Spend Dashboard with real-time cost tracking by team/project
-- Intelligent Cost Optimization (smart model routing, recommendations)
-- ROI Measurement (the holy grail - prove AI investment returns)
-- Path to $1B valuation with <200 enterprise customers
-
-*Revenue Projections (V1):*
-- Year 1: ~$750k ARR (conservative)
-- Year 2: ~$4.5M ARR (growth)
-- Year 3: ~$19M ARR (scale)
-
-*Key Strategic Insight:*
-- V1 proves the value, funds development, builds data foundation
-- V2 captures full enterprise opportunity once platform and market ready
-- The "AI Tax" play: become the financial control plane for enterprise AI
-
-**Files Created:**
-- `stratai-main/PRICING_STRATEGY.md` - Comprehensive pricing strategy document
-
-**Files Modified:**
-- `CLAUDE.md` - Added pricing strategy reference
-
-**Key Decisions:**
-- Memory unlimited (don't monetize core value prop)
-- $29 Pro signals quality, not commodity
-- V2 as evolution, not pivot (smooth transition path)
-
-**Next steps:**
-- Begin CONTEXT_STRATEGY.md Phase 1 implementation
-- Build billing infrastructure when ready for launch
-- Gather usage data to validate pricing assumptions
-
-### Previous: 2026-01-08 (Context Management Strategy + Organizational Knowledge)
-
-**Completed:**
-
-*Strategic Research - Context Management:*
-- Launched 6 parallel research agents covering:
-  - LLM memory architectures (MemGPT/Letta, MemoryOS, hierarchical systems)
-  - RAG and retrieval innovations (GraphRAG, Agentic RAG, hybrid search)
-  - Commercial product patterns (ChatGPT Memory, Claude Projects, Cursor/Windsurf)
-  - Academic research (long context models, attention optimization, infinite context)
-  - Startup innovations (Mem0, Zep/Graphiti, LangMem)
-  - Database/storage strategies (vector DBs, graph DBs, hybrid patterns)
-
-*CONTEXT_STRATEGY.md - Comprehensive Architecture Document:*
-
-**Phase 1: Foundation**
-- PostgreSQL + pgvector, conversation persistence migration
-- Memory search (semantic + keyword + hybrid)
-- Basic memory UI in Context Panel
-
-**Phase 2: Active Memory**
-- Memory extraction pipeline (post-conversation)
-- Memory evaluation and deduplication
-- Decay and consolidation services
-- Context assembly service
-
-**Phase 3: Shared Context** (NEW)
-- Space-level and Area-level shared context
-- Approval workflows for memory sharing
-- Memory proposals and review system
-- Context inheritance queries
-
-**Phase 4: Organizational Intelligence** (NEW)
-- Multi-tenant infrastructure (organizations, groups)
-- Full context hierarchy: Org → Group → Space → Area → User
-- Admin dashboards and governance tools
-- Compliance and audit features
-
-*Organizational Knowledge Architecture:*
-- Knowledge propagation model with clear hierarchy
-- Contribution mechanism (explicit sharing + auto-detection)
-- Conflict resolution strategies (temporal, admin, scope, confidence)
-- Privacy and governance controls at every level
-- Integration with planned admin panel hierarchy
-- Business case: "Your organization's AI brain"
-- Network effects: more users = smarter AI for everyone
-
-*Database Schemas Added:*
-- `organizations` - Multi-tenant support
-- `groups` - Teams/departments within orgs
-- `user_memberships` - Roles and permissions
-- `memory_proposals` - Approval workflow
-- `context_audit_log` - Compliance tracking
-
-*UI Fix:*
-- Standardized chat input styling across space/area/task pages
-- Removed redundant input-container border that created visual inconsistency
-
-**Files Created:**
-- `stratai-main/CONTEXT_STRATEGY.md` - Strategic architecture document (1800+ lines)
-
-**Files Modified:**
-- `src/routes/spaces/[space]/[area]/+page.svelte` - Removed input-container wrapper
-- `src/routes/spaces/[space]/task/[taskId]/+page.svelte` - Removed redundant border
-- `CLAUDE.md` - Updated with new phase, decisions, and strategy reference
-
-**Commits Made:**
-- `a7096c6` - fix: Standardize chat input styling across space/area/task pages
-
-**Key Strategic Decisions:**
-- Hierarchical inheritance mirrors org structure (Org → Group → Space → Area)
-- Approval workflow for sharing (trust and quality control)
-- Temporal conflict resolution as default (most intuitive, auditable)
-- Network effects as moat (knowledge compounds with usage)
-
-**Next steps:**
-- Review CONTEXT_STRATEGY.md and validate organizational approach
-- Begin Phase 1: Database migrations, embedding service
-- Design memory UI components in parallel
-
-### Previous: 2026-01-08 (Quick Starts, Clear Modal, Move Chat)
-
-**Completed:**
-
-*Contextual Quick Starts with Prepopulate Support:*
-- `src/lib/utils/quick-starts.ts` - unified utility with template library
-- Task type detection via keywords (audit, plan, research, create, fix, document)
-- SVG icons instead of emojis in all welcome components
-- Added `prepopulate-input` event listener to ChatInput
-- Quick start badges now populate chat input when clicked
-- Updated TaskWorkWelcome, SubtaskWelcome, TaskContextPanel components
-
-*Clear Conversations Modal:*
-- `ClearConversationsModal.svelte` with styled warning UI
-- `clearMainConversations()` method that preserves space/area chats
-- `mainConversationCount` derived property for accurate footer count
-- "Clear all" now only affects main nav conversations, keeps Space conversations safe
-- Proper confirmation modal instead of browser's native confirm()
-
-*Area Conversation Drawer Improvements:*
-- Enhanced TaskInfo interface with `isSubtask` and `parentTaskTitle` fields
-- Split conversations into **General** and **Task Conversations** groups
-- General conversations appear first (before Task Conversations)
-- Section headers use area color styling
-- Subtask badges show "Subtask" label + parent task name
-- Fixed badge ellipsis using inline-block instead of inline-flex
-
-*Move Chat Modal:*
-- `MoveChatModal.svelte` - destination picker for moving conversations between Main Chat, Spaces, and Areas
-- `moveChatModal.svelte.ts` - global store for modal state (open/close/move methods)
-- Context menu "Move Chat..." option on conversation items in sidebar
-- Dynamic area loading when space is selected, auto-selects General area
-- Shows success toast on move completion
-- Refactored from per-page to global store pattern for reusability
-
-*Backlog Update:*
-- Added "Settings Architecture Review" section documenting system prompt scope concerns
-
-**Files Created:**
-- `src/lib/utils/quick-starts.ts`
-- `src/lib/components/layout/ClearConversationsModal.svelte`
-- `src/lib/components/chat/MoveChatModal.svelte`
-- `src/lib/stores/moveChatModal.svelte.ts`
-
-**Files Modified:**
-- `src/lib/components/ChatInput.svelte`
-- `src/lib/components/tasks/TaskWorkWelcome.svelte`
-- `src/lib/components/tasks/SubtaskWelcome.svelte`
-- `src/lib/components/tasks/TaskContextPanel.svelte`
-- `src/lib/utils/subtask-welcome.ts`
-- `src/lib/components/layout/Sidebar.svelte`
-- `src/lib/stores/chat.svelte.ts`
-- `src/lib/components/chat/ConversationDrawer.svelte`
-- `src/routes/spaces/[space]/[area]/+page.svelte`
-- `src/lib/components/layout/ConversationItem.svelte`
-- `src/routes/+layout.svelte`
-- `src/routes/+page.svelte`
-- `BACKLOG.md`
-
-**Commits Made:**
-- `69ae980` - feat: Add contextual quick starts with prepopulate support
-- `18ea44f` - feat: Add confirmation modal for clearing main nav conversations
-- `ececd9d` - feat: Improve area conversation drawer grouping and styling
-- `9843552` - feat: Add Move Chat modal for relocating conversations
-
-**Next steps:**
-- Continue Areas Architecture work
-- Test Move Chat functionality across different scenarios
-
-### Previous: 2026-01-08 (Model Arena Redesign - COMPLETE)
-
-**Model Arena UX Redesign - All Phases Complete:**
-
-*Setup Screen (Phases 1-2):*
-- Quick Start template dropdown with category filtering
-- "Customize Your Battle" section with category chips + context picker
-- Mutually exclusive modes: template selected hides customize, customizing hides templates
-- Smart model selection with grid expansion, "Surprise me", click-outside collapse
-
-*Battle Experience:*
-- Sword burst animation on battle start (900ms, 10 particles)
-- 2-column max response grid for readability
-- Focus mode: expand button to view single response full-width (Escape to exit)
-- Copy response button with visual feedback
-- Enhanced token usage display (total + breakdown)
-
-*Voting & Results:*
-- Winner badge timing fix: only shows after user votes/skips
-- Blind mode reveal animation (cascading scale/fly transitions)
-- Vote-first flow with ArenaVotingPrompt
-- AI Judge with score comparison
-
-*Post-Battle:*
-- Continue conversation modal with Space/Area pre-fill
-- New Battle options
-
-**Files Modified:**
-- `src/routes/arena/+page.svelte` - Main arena page with all features
-- `src/lib/components/arena/ArenaResponseCard.svelte` - Focus mode, copy, tokens, reveal animation
-- `src/lib/components/arena/ArenaGrid.svelte` - Focus mode layout support
-- `src/lib/components/arena/ArenaQuickStart.svelte` - Template dropdown
-- `src/lib/components/arena/ArenaModelSelection.svelte` - Grid improvements
-- `src/lib/components/arena/ArenaInput.svelte` - Sword burst animation, template reset
-- `src/lib/components/arena/ArenaCategoryChips.svelte` - Removed duplicate label
-- `src/lib/components/arena/ArenaContextPicker.svelte` - Side-by-side layout
-
-**Deferred to Future:**
-- Phase 6 (BattleOutcome persistence): Documented in BACKLOG.md for Rankings Dashboard
-- Mobile responsiveness: Added to Known Issues (app-wide concern)
-
-**Next steps:**
-- Continue with Areas Architecture Redesign work
-- Address mobile responsiveness across application
-
-### Previous: 2026-01-07 (Session Log Cleanup)
-
-**Verified as Complete:**
-
-*Task Planning Model Selection - FULLY WIRED:*
-- `TaskPlanningModelModal.svelte` shows tiered model selection
-- "Help me plan this" button -> `handlePlanButtonClick()` -> shows modal (or skips if preference saved)
-- Modal selection -> `handlePlanningModelSelect()` -> `handleStartPlanMode(modelId)`
-- Conversation created WITH selected model, initial planning message sent
-- Skip modal option with localStorage persistence works
-
-*Day Change Detection - FULLY IMPLEMENTED:*
-- `temporal-context.ts` - tracks visits, detects new day/Monday/absence (3+ days)
-- `greeting.ts` - generates context-aware greetings based on tasks, urgency, time of day
-- `GreetingMessage.svelte` - displays greeting with task previews and action buttons
-- `FocusSuggestion.svelte` - uses temporal context for suggestions
-
-*Area Deletion (from previous session):*
-- `DeleteAreaModal.svelte` with keep/delete content options
-- Context menu on `AreaCard.svelte` (three-dot button)
-- General area protected from deletion
-
-**Note:** Previous "Next steps" were stale - these features were already complete.
-
-### Previous: 2026-01-07 (Multiple Plan Mode & Model Selection)
-
-**Completed:**
-
-*Documents API Fix:*
-- Normalized documents with slug-style space_ids to UUIDs
-- Migration `011-documents-space-id-normalize.sql` (already applied)
-
-*Task Loading Race Condition Fix:*
-- Changed from `onMount` to reactive `$effect` for space switching
-
-*Multiple Plan Mode Support:*
-- Multiple tasks can be in planning simultaneously
-- `PlanningTasksIndicator.svelte` - purple badge in header with dropdown
-
-*Task Planning Model Selection:*
-- `TaskPlanningCapabilities` interface with tiers (recommended/capable/experimental)
-- `TaskPlanningModelModal.svelte` - tiered model selection with localStorage persistence
-- Full flow wired: button → modal → model selection → conversation creation → planning
-
-### Previous: 2026-01-06 (Task Focus UX & Navigation Fixes)
-
-**Completed:**
-- Fixed "Open Task Focus" to preserve current conversation via `conversationId` query param
-- Hidden empty subtasks panel - only shows when subtasks actually exist
-- Added context isolation: clears conversation when entering area if it doesn't belong
-- `ModelBadge.svelte` - compact badge showing locked model
-- Renamed `DocsPanel` to `ContextPanel`
-- Added `estimated_effort` field to tasks
-
-### Previous: 2026-01-06 (Task Dashboard & Scaling UX)
-
-**Completed:**
-- `TaskDashboard.svelte` - time-based task grouping
-- `TaskGroupSection.svelte`, `TaskCard.svelte`, `StatsRow.svelte`, `FocusSuggestion.svelte`
-- `RecentlyCompletedSection.svelte` with reopen action
-- Stale task detection (7+ days no activity)
-- `dismissStale()` and `reopenTask()` methods
-
-### Previous: 2026-01-04 (Task Planning & AI Prompt Engineering)
-
-**Completed:**
-- `TaskModal.svelte` - modal for task creation
-- ConversationDrawer, TaskContextBanner, AreaWelcomeScreen components
-- Space dashboard components and area routing
+- AI-Native Document System: TipTap editor, document types, discussion panel, export
+- Apply Button fix for cross-formatting text
+- AUTO Model Routing: complexity analysis, context-aware, tier-based selection
+- Layered System Prompt Caching
+- Settings pages infrastructure
+
+**Key Files:** `src/lib/components/pages/`, `src/lib/services/model-router/`, `src/routes/admin/routing/`
 
 ---
 
