@@ -12,6 +12,8 @@
 -->
 <script lang="ts">
 	import PanelBase from './PanelBase.svelte';
+	import UploadSharePrompt from '$lib/components/documents/UploadSharePrompt.svelte';
+	import ShareDocumentModal from '$lib/components/documents/ShareDocumentModal.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
@@ -44,6 +46,14 @@
 	let isSavingNotes = $state(false);
 	let searchQuery = $state('');
 	let deleteConfirmId = $state<string | null>(null);
+
+	// Share prompt state (for upload)
+	let showSharePrompt = $state(false);
+	let uploadedDocForPrompt = $state<Document | null>(null);
+
+	// Share modal state (full sharing management)
+	let shareModalOpen = $state(false);
+	let docToShare = $state<Document | null>(null);
 
 	// Load documents when panel opens
 	$effect(() => {
@@ -135,7 +145,13 @@
 		try {
 			await onAreaUpdate(area.id, { contextDocumentIds: newIds });
 		} catch (e) {
-			toastStore.error('Failed to update document activation');
+			// Handle specific visibility validation error
+			if (e instanceof Error && e.message.includes('not visible')) {
+				toastStore.error('Cannot activate: document is not shared with this Area');
+			} else {
+				toastStore.error('Failed to update document activation');
+			}
+			console.error('Failed to toggle document:', e);
 		}
 	}
 
@@ -192,14 +208,15 @@
 
 	async function uploadFiles(files: File[]) {
 		// Filter for supported types
-		const supported = files.filter(f =>
-			f.type === 'application/pdf' ||
-			f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-			f.type === 'text/plain' ||
-			f.type === 'text/markdown' ||
-			f.name.endsWith('.md') ||
-			f.name.endsWith('.txt') ||
-			f.name.endsWith('.docx')
+		const supported = files.filter(
+			(f) =>
+				f.type === 'application/pdf' ||
+				f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+				f.type === 'text/plain' ||
+				f.type === 'text/markdown' ||
+				f.name.endsWith('.md') ||
+				f.name.endsWith('.txt') ||
+				f.name.endsWith('.docx')
 		);
 
 		if (supported.length < files.length) {
@@ -209,8 +226,21 @@
 		if (supported.length === 0) return;
 
 		isUploading = true;
-		const uploadedDocIds: string[] = [];
 
+		// Single file: show share prompt after upload
+		if (supported.length === 1) {
+			const doc = await documentStore.uploadDocument(supported[0], spaceId);
+			isUploading = false;
+
+			if (doc) {
+				uploadedDocForPrompt = doc;
+				showSharePrompt = true;
+			}
+			return;
+		}
+
+		// Multiple files: auto-activate all without prompt (existing behavior)
+		const uploadedDocIds: string[] = [];
 		for (const file of supported) {
 			const doc = await documentStore.uploadDocument(file, spaceId);
 			if (doc) {
@@ -224,13 +254,76 @@
 			const newIds = [...currentIds, ...uploadedDocIds];
 			try {
 				await onAreaUpdate(area.id, { contextDocumentIds: newIds });
-				toastStore.success(`${uploadedDocIds.length} document${uploadedDocIds.length > 1 ? 's' : ''} added`);
+				toastStore.success(`${uploadedDocIds.length} documents added`);
 			} catch (e) {
 				toastStore.warning('Documents uploaded but not activated');
 			}
 		}
 
 		isUploading = false;
+	}
+
+	// Share prompt callback handlers
+	async function handleKeepPrivate() {
+		if (!uploadedDocForPrompt) return;
+
+		// Auto-activate the private document (owner can still use it in their own Areas)
+		if (onAreaUpdate) {
+			const currentIds = area.contextDocumentIds ?? [];
+			try {
+				await onAreaUpdate(area.id, {
+					contextDocumentIds: [...currentIds, uploadedDocForPrompt.id]
+				});
+			} catch (e) {
+				// Silent fail - document still uploaded
+			}
+		}
+
+		showSharePrompt = false;
+		uploadedDocForPrompt = null;
+		toastStore.success('Document uploaded (private)');
+	}
+
+	async function handleShareWithArea() {
+		if (!uploadedDocForPrompt) return;
+
+		try {
+			// Call share API to set visibility='areas' and share with current area
+			const response = await fetch(`/api/documents/${uploadedDocForPrompt.id}/share`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					visibility: 'areas',
+					areaIds: [area.id]
+				})
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to share');
+			}
+
+			// Auto-activate the shared document
+			if (onAreaUpdate) {
+				const currentIds = area.contextDocumentIds ?? [];
+				await onAreaUpdate(area.id, {
+					contextDocumentIds: [...currentIds, uploadedDocForPrompt.id]
+				});
+			}
+
+			toastStore.success(`Shared with ${area.name}`);
+		} catch (e) {
+			toastStore.error('Failed to share document');
+			// Still activate since upload succeeded
+			if (onAreaUpdate) {
+				const currentIds = area.contextDocumentIds ?? [];
+				await onAreaUpdate(area.id, {
+					contextDocumentIds: [...currentIds, uploadedDocForPrompt!.id]
+				});
+			}
+		}
+
+		showSharePrompt = false;
+		uploadedDocForPrompt = null;
 	}
 
 	async function handleDelete(doc: Document) {
@@ -245,6 +338,24 @@
 			toastStore.success('Document deleted');
 		}
 		deleteConfirmId = null;
+	}
+
+	// Share modal handlers
+	function openShareModal(doc: Document) {
+		docToShare = doc;
+		shareModalOpen = true;
+	}
+
+	function closeShareModal() {
+		shareModalOpen = false;
+		docToShare = null;
+	}
+
+	async function handleShareSaved() {
+		// Refresh documents to show updated visibility
+		await documentStore.loadDocuments(spaceId);
+		closeShareModal();
+		toastStore.success('Sharing updated');
 	}
 </script>
 
@@ -389,31 +500,53 @@
 								<!-- Doc info -->
 								<div class="doc-info">
 									<span class="doc-name" title={doc.filename}>{doc.title || doc.filename}</span>
-									<span class="doc-meta">{formatCharCount(doc.charCount)} chars</span>
+									<div class="doc-meta-row">
+										<span class="doc-meta">{formatCharCount(doc.charCount)} chars</span>
+										{#if doc.visibility === 'space'}
+											<span class="visibility-badge space">Space</span>
+										{:else if doc.visibility === 'areas'}
+											<span class="visibility-badge shared">Shared</span>
+										{/if}
+									</div>
 								</div>
 
-								<!-- Delete button -->
-								{#if deleteConfirmId === doc.id}
-									<div class="delete-confirm">
-										<button type="button" class="confirm-yes" onclick={() => handleDelete(doc)}>
-											Delete
-										</button>
-										<button type="button" class="confirm-no" onclick={() => deleteConfirmId = null}>
-											Cancel
-										</button>
-									</div>
-								{:else}
+								<!-- Actions -->
+								<div class="doc-actions">
+									<!-- Share button -->
 									<button
 										type="button"
-										class="doc-delete"
-										onclick={() => deleteConfirmId = doc.id}
-										title="Delete document"
+										class="doc-action"
+										onclick={() => openShareModal(doc)}
+										title="Share"
 									>
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-											<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+											<path stroke-linecap="round" stroke-linejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
 										</svg>
 									</button>
-								{/if}
+
+									<!-- Delete button -->
+									{#if deleteConfirmId === doc.id}
+										<div class="delete-confirm">
+											<button type="button" class="confirm-yes" onclick={() => handleDelete(doc)}>
+												Delete
+											</button>
+											<button type="button" class="confirm-no" onclick={() => deleteConfirmId = null}>
+												Cancel
+											</button>
+										</div>
+									{:else}
+										<button
+											type="button"
+											class="doc-action doc-delete"
+											onclick={() => deleteConfirmId = doc.id}
+											title="Delete"
+										>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+											</svg>
+										</button>
+									{/if}
+								</div>
 							</div>
 						{/each}
 					</div>
@@ -459,6 +592,25 @@
 		</div>
 	{/snippet}
 </PanelBase>
+
+<!-- Share Prompt Modal (after upload) -->
+<UploadSharePrompt
+	open={showSharePrompt}
+	document={uploadedDocForPrompt}
+	{area}
+	areaColor={spaceColor}
+	onKeepPrivate={handleKeepPrivate}
+	onShareWithArea={handleShareWithArea}
+/>
+
+<!-- Share Document Modal (full sharing management) -->
+<ShareDocumentModal
+	open={shareModalOpen}
+	document={docToShare}
+	{spaceId}
+	onClose={closeShareModal}
+	onSaved={handleShareSaved}
+/>
 
 <style>
 	.context-content {
@@ -766,28 +918,69 @@
 		color: rgba(255, 255, 255, 0.4);
 	}
 
-	.doc-delete {
-		flex-shrink: 0;
-		width: 1.25rem;
-		height: 1.25rem;
-		color: rgba(255, 255, 255, 0.25);
-		border-radius: 0.25rem;
-		opacity: 0;
-		transition: all 0.15s ease;
+	.doc-meta-row {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
 	}
 
-	.doc-item:hover .doc-delete {
+	.visibility-badge {
+		font-size: 0.5rem;
+		font-weight: 600;
+		padding: 0.0625rem 0.25rem;
+		border-radius: 0.1875rem;
+		text-transform: uppercase;
+		letter-spacing: 0.02em;
+	}
+
+	.visibility-badge.space {
+		background: rgba(139, 92, 246, 0.2);
+		color: rgb(167, 139, 250);
+	}
+
+	.visibility-badge.shared {
+		background: rgba(59, 130, 246, 0.2);
+		color: rgb(96, 165, 250);
+	}
+
+	/* Document actions */
+	.doc-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.125rem;
+		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity 0.15s ease;
+	}
+
+	.doc-item:hover .doc-actions {
 		opacity: 1;
 	}
 
-	.doc-delete:hover {
+	.doc-action {
+		width: 1.25rem;
+		height: 1.25rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: rgba(255, 255, 255, 0.35);
+		border-radius: 0.25rem;
+		transition: all 0.15s ease;
+	}
+
+	.doc-action:hover {
+		background: rgba(255, 255, 255, 0.1);
+		color: rgba(255, 255, 255, 0.7);
+	}
+
+	.doc-action.doc-delete:hover {
 		background: rgba(239, 68, 68, 0.15);
 		color: #ef4444;
 	}
 
-	.doc-delete svg {
-		width: 100%;
-		height: 100%;
+	.doc-action svg {
+		width: 0.75rem;
+		height: 0.75rem;
 	}
 
 	/* Delete confirmation */

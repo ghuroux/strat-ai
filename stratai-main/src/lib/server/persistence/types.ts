@@ -20,7 +20,9 @@ import type {
 	UpdateDocumentInput,
 	TaskDocument,
 	DocumentContextRole,
-	DocumentWithTaskInfo
+	DocumentWithTaskInfo,
+	DocumentAreaShare,
+	DocumentVisibility
 } from '$lib/types/documents';
 import type { Area, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
 import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
@@ -212,6 +214,66 @@ export interface DocumentRepository {
 	unlinkFromTask(documentId: string, taskId: string, userId: string): Promise<void>;
 	getDocumentsForTask(taskId: string, userId: string): Promise<DocumentWithTaskInfo[]>;
 	getTaskIdsForDocument(documentId: string, userId: string): Promise<string[]>;
+	// Document sharing queries
+	findSharedWithUser(userId: string, spaceId: string): Promise<Document[]>;
+	findAvailableForArea(userId: string, areaId: string, spaceId: string): Promise<Document[]>;
+}
+
+// =====================================================
+// Document Sharing Types (Area-level document sharing)
+// =====================================================
+
+/**
+ * Repository interface for Document Sharing operations
+ * Handles document visibility and area-level sharing
+ */
+export interface DocumentSharingRepository {
+	// Share operations
+	shareDocumentWithArea(
+		documentId: string,
+		areaId: string,
+		userId: string
+	): Promise<DocumentAreaShare>;
+
+	shareDocumentWithAreas(
+		documentId: string,
+		areaIds: string[],
+		userId: string
+	): Promise<DocumentAreaShare[]>;
+
+	unshareDocumentFromArea(documentId: string, areaId: string): Promise<void>;
+
+	// Query operations
+	getDocumentSharedAreas(documentId: string): Promise<string[]>;
+
+	getDocumentsSharedWithArea(areaId: string): Promise<string[]>;
+
+	findShare(documentId: string, areaId: string): Promise<DocumentAreaShare | null>;
+
+	// Visibility operations
+	updateDocumentVisibility(
+		documentId: string,
+		visibility: DocumentVisibility,
+		userId: string
+	): Promise<void>;
+
+	// Access check
+	canUserAccessDocument(
+		userId: string,
+		documentId: string,
+		areaId?: string
+	): Promise<boolean>;
+
+	// Notification tracking
+	markNotificationsSent(documentId: string, areaId: string): Promise<void>;
+
+	// Activation validation
+	canActivateDocument(
+		userId: string,
+		documentId: string,
+		areaId: string,
+		spaceId: string
+	): Promise<boolean>;
 }
 
 // =====================================================

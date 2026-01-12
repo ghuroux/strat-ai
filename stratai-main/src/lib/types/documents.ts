@@ -11,6 +11,11 @@
 export type DocumentContextRole = 'reference' | 'input' | 'output';
 
 /**
+ * Document visibility levels for sharing
+ */
+export type DocumentVisibility = 'private' | 'areas' | 'space';
+
+/**
  * Core Document entity
  */
 export interface Document {
@@ -33,6 +38,9 @@ export interface Document {
 	title?: string;
 	summary?: string;
 	truncated: boolean;
+
+	// Sharing
+	visibility: DocumentVisibility;
 
 	// Timestamps
 	createdAt: Date;
@@ -58,6 +66,7 @@ export interface DocumentRow {
 	title: string | null;
 	summary: string | null;
 	truncated: boolean;
+	visibility: string;
 	createdAt: Date;
 	updatedAt: Date;
 	deletedAt: Date | null;
@@ -110,6 +119,7 @@ export interface UpdateDocumentInput {
 	title?: string;
 	summary?: string;
 	spaceId?: string;
+	visibility?: DocumentVisibility;
 }
 
 /**
@@ -161,6 +171,7 @@ export function rowToDocument(row: DocumentRow): Document {
 		title: row.title ?? undefined,
 		summary: row.summary ?? undefined,
 		truncated: row.truncated,
+		visibility: (row.visibility as DocumentVisibility) ?? 'private',
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
 		deletedAt: row.deletedAt ?? undefined
@@ -179,5 +190,50 @@ export function rowToTaskDocument(row: TaskDocumentRow): TaskDocument {
 		contextRole: row.contextRole as DocumentContextRole,
 		contextNote: row.contextNote ?? undefined,
 		createdAt: row.createdAt
+	};
+}
+
+// =====================================================
+// Document Area Sharing Types
+// =====================================================
+
+/**
+ * Document Area Share junction record
+ * Represents a document being shared with a specific Area
+ */
+export interface DocumentAreaShare {
+	id: string;
+	documentId: string;
+	areaId: string;
+	sharedBy: string;
+	sharedAt: Date;
+	notificationsSent: boolean;
+}
+
+/**
+ * Database row for document_area_shares
+ * Note: postgres.js transforms column names to camelCase automatically
+ */
+export interface DocumentAreaShareRow {
+	id: string;
+	documentId: string;
+	areaId: string;
+	sharedBy: string;
+	sharedAt: Date;
+	notificationsSent: boolean;
+}
+
+/**
+ * Convert document_area_shares row to DocumentAreaShare
+ * Note: postgres.js auto-transforms snake_case to camelCase
+ */
+export function rowToDocumentAreaShare(row: DocumentAreaShareRow): DocumentAreaShare {
+	return {
+		id: row.id,
+		documentId: row.documentId,
+		areaId: row.areaId,
+		sharedBy: row.sharedBy,
+		sharedAt: row.sharedAt,
+		notificationsSent: row.notificationsSent
 	};
 }

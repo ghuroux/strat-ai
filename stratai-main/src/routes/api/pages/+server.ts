@@ -9,7 +9,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
-import { createEntitiesFromGuidedCreation } from '$lib/services/template-renderers';
+import { createEntitiesFromGuidedCreation } from '$lib/services/guided-entity-creator';
 import type { CreatePageInput, PageType, PageVisibility } from '$lib/types/page';
 import type { EntityCreationResult } from '$lib/types/guided-creation';
 import type { EntityToCreate } from '$lib/services/template-renderers';

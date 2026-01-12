@@ -161,6 +161,13 @@ export const postgresDocumentRepository: DocumentRepository = {
 				WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
 			`;
 		}
+		if (updates.visibility !== undefined) {
+			await sql`
+				UPDATE documents
+				SET visibility = ${updates.visibility}, updated_at = NOW()
+				WHERE id = ${id} AND user_id = ${userId} AND deleted_at IS NULL
+			`;
+		}
 
 		return this.findById(id, userId);
 	},
@@ -278,5 +285,54 @@ export const postgresDocumentRepository: DocumentRepository = {
 		`;
 
 		return rows.map((r) => r.task_id);
+	},
+
+	/**
+	 * Get documents shared with user's Areas in a Space
+	 * Returns documents where:
+	 * - visibility='space' (visible to all Space members)
+	 * - visibility='areas' AND shared with one of user's Areas
+	 * Excludes documents owned by the user (use findAll for those)
+	 */
+	async findSharedWithUser(userId: string, spaceId: string): Promise<Document[]> {
+		const rows = await sql<DocumentRow[]>`
+			SELECT DISTINCT d.*
+			FROM documents d
+			LEFT JOIN document_area_shares das ON d.id = das.document_id
+			LEFT JOIN areas a ON das.area_id = a.id AND a.user_id = ${userId}
+			WHERE d.space_id = ${spaceId}
+			  AND d.deleted_at IS NULL
+			  AND d.user_id != ${userId}
+			  AND (
+			    d.visibility = 'space'
+			    OR (d.visibility = 'areas' AND a.id IS NOT NULL)
+			  )
+			ORDER BY d.updated_at DESC
+		`;
+		return rows.map(rowToDocument);
+	},
+
+	/**
+	 * Get documents available for activation in a specific Area
+	 * Returns documents where:
+	 * - User owns the document (any visibility)
+	 * - visibility='space' (available to all Areas in Space)
+	 * - visibility='areas' AND shared with this specific Area
+	 */
+	async findAvailableForArea(userId: string, areaId: string, spaceId: string): Promise<Document[]> {
+		const rows = await sql<DocumentRow[]>`
+			SELECT DISTINCT d.*
+			FROM documents d
+			LEFT JOIN document_area_shares das ON d.id = das.document_id AND das.area_id = ${areaId}
+			WHERE d.space_id = ${spaceId}
+			  AND d.deleted_at IS NULL
+			  AND (
+			    d.user_id = ${userId}
+			    OR d.visibility = 'space'
+			    OR (d.visibility = 'areas' AND das.area_id IS NOT NULL)
+			  )
+			ORDER BY d.updated_at DESC
+		`;
+		return rows.map(rowToDocument);
 	}
 };

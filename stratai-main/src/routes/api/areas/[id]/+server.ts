@@ -11,6 +11,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
+import { postgresDocumentSharingRepository } from '$lib/server/persistence/document-sharing-postgres';
 import type { UpdateAreaInput } from '$lib/types/areas';
 
 /**
@@ -70,6 +71,45 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		// Validate name if provided
 		if (body.name !== undefined && (typeof body.name !== 'string' || body.name.trim() === '')) {
 			return json({ error: 'name must be a non-empty string' }, { status: 400 });
+		}
+
+		// Validate document activation if contextDocumentIds is being updated
+		if (body.contextDocumentIds !== undefined) {
+			// Get current area to find spaceId and current contextDocumentIds
+			const existingArea = await postgresAreaRepository.findById(params.id, userId);
+			if (!existingArea) {
+				return json({ error: 'Area not found' }, { status: 404 });
+			}
+
+			const currentIds = new Set(existingArea.contextDocumentIds ?? []);
+			const newIds: string[] = body.contextDocumentIds ?? [];
+
+			// Find documents being ADDED (not already activated)
+			const addedIds = newIds.filter((id: string) => !currentIds.has(id));
+
+			// Validate each new document can be activated
+			const invalidIds: string[] = [];
+			for (const docId of addedIds) {
+				const canActivate = await postgresDocumentSharingRepository.canActivateDocument(
+					userId,
+					docId,
+					params.id,
+					existingArea.spaceId
+				);
+				if (!canActivate) {
+					invalidIds.push(docId);
+				}
+			}
+
+			if (invalidIds.length > 0) {
+				return json(
+					{
+						error: 'Cannot activate documents that are not visible to this Area',
+						invalidDocumentIds: invalidIds
+					},
+					{ status: 400 }
+				);
+			}
 		}
 
 		const updates: UpdateAreaInput = {};

@@ -16,6 +16,8 @@ import { generateSummaryBackground } from '$lib/server/summarization';
  * GET /api/documents
  * Query params:
  * - spaceId: Filter by space ID or slug (resolved to proper ID)
+ * - shared: If 'true', returns documents shared with user (not owned)
+ * - areaId: If provided with spaceId, returns documents available for this Area
  */
 export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
@@ -25,6 +27,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 		const userId = locals.session.userId;
 		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
+		const shared = url.searchParams.get('shared') === 'true';
+		const areaId = url.searchParams.get('areaId') ?? undefined;
 
 		// Resolve space identifier (slug or ID) to proper ID
 		let resolvedSpaceId: string | undefined;
@@ -36,10 +40,28 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			resolvedSpaceId = resolved;
 		}
 
-		const documents = await postgresDocumentRepository.findAll(
-			userId,
-			resolvedSpaceId
-		);
+		let documents;
+
+		if (areaId && resolvedSpaceId) {
+			// Get documents available for activation in this Area
+			documents = await postgresDocumentRepository.findAvailableForArea(
+				userId,
+				areaId,
+				resolvedSpaceId
+			);
+		} else if (shared && resolvedSpaceId) {
+			// Get documents shared with user's Areas in this Space (not owned)
+			documents = await postgresDocumentRepository.findSharedWithUser(
+				userId,
+				resolvedSpaceId
+			);
+		} else {
+			// Get user's own documents (existing behavior)
+			documents = await postgresDocumentRepository.findAll(
+				userId,
+				resolvedSpaceId
+			);
+		}
 
 		// Return without full content to reduce payload size
 		const summaries = documents.map((doc) => ({
@@ -53,6 +75,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			summary: doc.summary,
 			truncated: doc.truncated,
 			spaceId: doc.spaceId,
+			visibility: doc.visibility,
 			createdAt: doc.createdAt,
 			updatedAt: doc.updatedAt
 		}));
@@ -166,6 +189,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					title: document.title,
 					truncated: document.truncated,
 					spaceId: document.spaceId,
+					visibility: document.visibility,
 					createdAt: document.createdAt,
 					updatedAt: document.updatedAt
 				}

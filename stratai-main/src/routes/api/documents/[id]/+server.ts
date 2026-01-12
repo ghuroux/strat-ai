@@ -9,6 +9,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
+import { postgresDocumentSharingRepository } from '$lib/server/persistence/document-sharing-postgres';
+import type { UpdateDocumentInput } from '$lib/types/documents';
 
 /**
  * GET /api/documents/[id]
@@ -32,13 +34,26 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 			return json({ error: 'Document not found' }, { status: 404 });
 		}
 
+		// Get shared areas for this document
+		const sharedAreas = await postgresDocumentSharingRepository.getDocumentSharedAreas(id);
+
 		if (includeContent) {
-			return json({ document });
+			return json({
+				document: {
+					...document,
+					sharedAreas
+				}
+			});
 		}
 
 		// Return without content
 		const { content, ...summary } = document;
-		return json({ document: summary });
+		return json({
+			document: {
+				...summary,
+				sharedAreas
+			}
+		});
 	} catch (error) {
 		console.error('Failed to fetch document:', error);
 		return json(
@@ -54,7 +69,7 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 /**
  * PATCH /api/documents/[id]
  * Update document metadata
- * Body: { title?, summary?, space? }
+ * Body: { title?, summary?, spaceId?, visibility? }
  */
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
@@ -72,24 +87,30 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			return json({ error: 'Document not found' }, { status: 404 });
 		}
 
-		// Validate space if provided
-		const updated = await postgresDocumentRepository.update(
-			id,
-			{
-				title: body.title,
-				summary: body.summary,
-				spaceId: body.spaceId as string | undefined
-			},
-			userId
-		);
+		// Build update input
+		const updates: UpdateDocumentInput = {};
+		if (body.title !== undefined) updates.title = body.title;
+		if (body.summary !== undefined) updates.summary = body.summary;
+		if (body.spaceId !== undefined) updates.spaceId = body.spaceId;
+		if (body.visibility !== undefined) updates.visibility = body.visibility;
+
+		const updated = await postgresDocumentRepository.update(id, updates, userId);
 
 		if (!updated) {
 			return json({ error: 'Failed to update document' }, { status: 500 });
 		}
 
+		// Get shared areas for response
+		const sharedAreas = await postgresDocumentSharingRepository.getDocumentSharedAreas(id);
+
 		// Return without content
 		const { content, ...summary } = updated;
-		return json({ document: summary });
+		return json({
+			document: {
+				...summary,
+				sharedAreas
+			}
+		});
 	} catch (error) {
 		console.error('Failed to update document:', error);
 		return json(

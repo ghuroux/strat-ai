@@ -33,8 +33,11 @@ export interface TaskDocumentLink {
 }
 
 class DocumentStore {
-	// Document cache by ID
+	// Document cache by ID (user's own documents)
 	documents = new SvelteMap<string, Document>();
+
+	// Shared documents cache: spaceId -> shared documents (not owned by user)
+	sharedDocuments = new SvelteMap<string, Document[]>();
 
 	// Task documents cache: taskId -> linked documents
 	taskDocuments = new SvelteMap<string, TaskDocumentLink[]>();
@@ -48,6 +51,7 @@ class DocumentStore {
 
 	// Track which spaces/tasks have been loaded
 	private loadedSpaces = new Set<string>();
+	private loadedSharedSpaces = new Set<string>();
 	private loadedTasks = new Set<string>();
 
 	/**
@@ -89,6 +93,48 @@ class DocumentStore {
 		} finally {
 			this.isLoading = false;
 		}
+	}
+
+	/**
+	 * Load documents shared with user's Areas in a Space
+	 * These are documents owned by others but shared via visibility settings
+	 */
+	async loadSharedDocuments(spaceId: string): Promise<void> {
+		if (this.loadedSharedSpaces.has(spaceId)) return;
+
+		try {
+			const response = await fetch(`/api/documents?spaceId=${spaceId}&shared=true`);
+
+			if (!response.ok) {
+				if (response.status === 401) return;
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.documents) {
+				const docs: Document[] = data.documents.map((doc: Document & { createdAt: string; updatedAt: string; deletedAt?: string }) => ({
+					...doc,
+					createdAt: new Date(doc.createdAt),
+					updatedAt: new Date(doc.updatedAt),
+					deletedAt: doc.deletedAt ? new Date(doc.deletedAt) : undefined
+				}));
+				this.sharedDocuments.set(spaceId, docs);
+				this.loadedSharedSpaces.add(spaceId);
+				this._version++;
+			}
+		} catch (e) {
+			console.error('Failed to load shared documents:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to load shared documents';
+		}
+	}
+
+	/**
+	 * Get shared documents for a space (from cache)
+	 */
+	getSharedDocuments(spaceId: string): Document[] {
+		// Reference _version for Svelte reactivity
+		void this._version;
+		return this.sharedDocuments.get(spaceId) ?? [];
 	}
 
 	/**
@@ -325,10 +371,21 @@ class DocumentStore {
 	 */
 	clearAll(): void {
 		this.documents.clear();
+		this.sharedDocuments.clear();
 		this.taskDocuments.clear();
 		this.loadedSpaces.clear();
+		this.loadedSharedSpaces.clear();
 		this.loadedTasks.clear();
 		this.error = null;
+		this._version++;
+	}
+
+	/**
+	 * Clear shared documents cache for a space (forces reload)
+	 */
+	clearSharedCache(spaceId: string): void {
+		this.loadedSharedSpaces.delete(spaceId);
+		this.sharedDocuments.delete(spaceId);
 		this._version++;
 	}
 

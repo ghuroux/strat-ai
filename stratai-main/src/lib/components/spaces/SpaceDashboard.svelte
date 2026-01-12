@@ -199,6 +199,21 @@
 					{/if}
 				</div>
 			</div>
+			<!-- Quick nav links -->
+			<nav class="space-nav">
+				<a href="/spaces/{spaceSlug}/tasks" class="nav-link">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+					</svg>
+					Tasks
+				</a>
+				<a href="/spaces/{spaceSlug}/documents" class="nav-link">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+					</svg>
+					Documents
+				</a>
+			</nav>
 		</div>
 	</header>
 
@@ -370,6 +385,38 @@
 		margin: 0;
 		max-width: 400px;
 		line-height: 1.5;
+	}
+
+	/* Quick nav links */
+	.space-nav {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.nav-link {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.5rem 0.875rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.6);
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 0.5rem;
+		text-decoration: none;
+		transition: all 0.15s ease;
+	}
+
+	.nav-link:hover {
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.08);
+		border-color: rgba(255, 255, 255, 0.12);
+	}
+
+	.nav-link svg {
+		width: 1rem;
+		height: 1rem;
 	}
 
 	/* Content */
