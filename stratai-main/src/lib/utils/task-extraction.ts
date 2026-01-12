@@ -5,6 +5,8 @@
  * Looks for numbered lists in various formats.
  */
 
+import { generateUUID } from '$lib/utils/uuid';
+
 export interface ExtractedTaskItem {
 	id: string;
 	text: string;
@@ -42,7 +44,7 @@ export function extractTasksFromContent(content: string): ExtractedTaskItem[] {
 
 			if (cleanedText) {
 				tasks.push({
-					id: crypto.randomUUID(),
+					id: generateUUID(),
 					text: cleanedText
 				});
 			}

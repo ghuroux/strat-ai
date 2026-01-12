@@ -6,6 +6,7 @@
  */
 
 import type { ProposedSubtask, SubtaskType } from '$lib/types/tasks';
+import { generateUUID } from '$lib/utils/uuid';
 
 /**
  * Pattern to match numbered list items (subtask proposals)
@@ -127,7 +128,7 @@ function extractFromPattern(
 		seenTitles.add(titleKey);
 
 		subtasks.push({
-			id: crypto.randomUUID(),
+			id: generateUUID(),
 			title: cleanedTitle,
 			type: inferSubtaskType(cleanedTitle),
 			confirmed: true, // Default to confirmed, user can uncheck

@@ -7,6 +7,8 @@
  * See: docs/GUIDED_CREATION.md Section 4
  */
 
+import { generateUUID } from '$lib/utils/uuid';
+
 // ============================================================================
 // ATTENDEE TYPES
 // ============================================================================
@@ -154,7 +156,7 @@ export function createEmptyMeetingNotesData(): MeetingNotesData {
  */
 export function createMeetingDecision(text: string, ownerId?: string): MeetingDecision {
 	return {
-		id: crypto.randomUUID(),
+		id: generateUUID(),
 		text,
 		ownerId,
 		rationale: undefined
@@ -166,7 +168,7 @@ export function createMeetingDecision(text: string, ownerId?: string): MeetingDe
  */
 export function createMeetingActionItem(text: string, createTask = true): MeetingActionItem {
 	return {
-		id: crypto.randomUUID(),
+		id: generateUUID(),
 		text,
 		assigneeId: undefined,
 		dueDate: undefined,

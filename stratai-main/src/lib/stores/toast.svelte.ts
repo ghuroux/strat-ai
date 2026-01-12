@@ -1,3 +1,5 @@
+import { generateUUID } from '$lib/utils/uuid';
+
 export interface Toast {
 	id: string;
 	type: 'success' | 'error' | 'info' | 'warning' | 'discovery';
@@ -10,7 +12,7 @@ class ToastStore {
 	toasts = $state<Toast[]>([]);
 
 	add(toast: Omit<Toast, 'id'>): string {
-		const id = crypto.randomUUID();
+		const id = generateUUID();
 		const fullToast: Toast = { ...toast, id };
 
 		this.toasts.push(fullToast);

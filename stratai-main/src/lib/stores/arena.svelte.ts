@@ -11,12 +11,13 @@
 import { SvelteMap } from 'svelte/reactivity';
 import type { ModelRanking } from '$lib/server/persistence/types';
 import type { TemplateCategory } from '$lib/config/battle-templates';
+import { generateUUID } from '$lib/utils/uuid';
 
 const STORAGE_KEY = 'strathost-arena-battles';
 const MAX_BATTLES = 50; // Increased limit since we have DB storage
 
 function generateId(): string {
-	return crypto.randomUUID();
+	return generateUUID();
 }
 
 // Debounce utility for persistence

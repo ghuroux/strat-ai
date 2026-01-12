@@ -15,6 +15,7 @@
 	import { slide, fly } from 'svelte/transition';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import MarkdownRenderer from '$lib/components/chat/MarkdownRenderer.svelte';
+	import { generateUUID } from '$lib/utils/uuid';
 
 	// Props
 	interface Props {
@@ -122,7 +123,7 @@
 
 		// Add user message to local state
 		const userMessage: Message = {
-			id: crypto.randomUUID(),
+			id: generateUUID(),
 			role: 'user',
 			content,
 			timestamp: Date.now()
@@ -132,7 +133,7 @@
 
 		// Add placeholder assistant message
 		const assistantMessage: Message = {
-			id: crypto.randomUUID(),
+			id: generateUUID(),
 			role: 'assistant',
 			content: '',
 			timestamp: Date.now()

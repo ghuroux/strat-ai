@@ -12,13 +12,14 @@ import { SvelteMap } from 'svelte/reactivity';
 import type { Message, Conversation, StructuredSummary } from '$lib/types/chat';
 import type { AssistState } from '$lib/types/assists';
 import { ASSISTS } from '$lib/config/assists';
+import { generateUUID } from '$lib/utils/uuid';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
 const MIN_CONVERSATIONS_ON_QUOTA = 10; // Minimum to keep when quota exceeded
 
 function generateId(): string {
-	return crypto.randomUUID();
+	return generateUUID();
 }
 
 // Debounce utility for persistence
