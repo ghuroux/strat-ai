@@ -8,7 +8,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
+import { createEntitiesFromGuidedCreation } from '$lib/services/template-renderers';
 import type { CreatePageInput, PageType, PageVisibility } from '$lib/types/page';
+import type { EntityCreationResult } from '$lib/types/guided-creation';
+import type { EntityToCreate } from '$lib/services/template-renderers';
 
 /**
  * GET /api/pages
@@ -74,6 +78,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
  * - visibility: Visibility level (default: 'private')
  * - taskId: Optional task to link to
  * - sourceConversationId: Optional source conversation
+ * - guidedData: Optional guided creation data (for audit trail)
+ * - entitiesToCreate: Optional entities to create (tasks from action items)
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.session) {
@@ -106,7 +112,34 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		const page = await postgresPageRepository.create(input, userId);
 
-		return json({ page }, { status: 201 });
+		// Handle entity creation from guided creation
+		let entitiesCreated: EntityCreationResult[] = [];
+
+		if (body.entitiesToCreate && Array.isArray(body.entitiesToCreate) && body.entitiesToCreate.length > 0) {
+			try {
+				// Get space ID from area
+				const area = await postgresAreaRepository.findById(body.areaId, userId);
+				const spaceId = area?.spaceId || '';
+
+				entitiesCreated = await createEntitiesFromGuidedCreation(
+					body.entitiesToCreate as EntityToCreate[],
+					{
+						spaceId,
+						areaId: body.areaId,
+						sourceDocumentId: page.id,
+						userId
+					}
+				);
+			} catch (entityError) {
+				// Log error but don't fail the page creation
+				console.error('Failed to create entities from guided creation:', entityError);
+			}
+		}
+
+		return json({
+			page,
+			entitiesCreated: entitiesCreated.length > 0 ? entitiesCreated : undefined
+		}, { status: 201 });
 	} catch (error) {
 		console.error('Failed to create page:', error);
 		return json(

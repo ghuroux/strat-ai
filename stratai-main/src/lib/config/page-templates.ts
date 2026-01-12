@@ -6,6 +6,7 @@
  */
 
 import type { PageType, TipTapContent } from '$lib/types/page';
+import type { TemplateSchema } from '$lib/types/guided-creation';
 
 /**
  * Guided question for template-based creation
@@ -943,4 +944,172 @@ export function getDefaultTitle(type: PageType): string {
 		default:
 			return 'Untitled Page';
 	}
+}
+
+// ============================================================================
+// GUIDED CREATION SCHEMA REGISTRY
+// ============================================================================
+
+/**
+ * Meeting Notes Schema for Guided Creation
+ *
+ * Defines the step-by-step flow for creating meeting notes.
+ * See: docs/GUIDED_CREATION.md Section 4
+ */
+export const MEETING_NOTES_SCHEMA: TemplateSchema = {
+	type: 'meeting_notes',
+	version: 1,
+	steps: [
+		{
+			id: 'basics',
+			title: 'Meeting Details',
+			description: 'Start with the basics',
+			fields: [
+				{
+					id: 'title',
+					type: 'text',
+					label: "What's this meeting about?",
+					placeholder: 'Q1 Planning Meeting',
+					required: true
+				},
+				{
+					id: 'datetime',
+					type: 'datetime',
+					label: 'When did it happen?',
+					required: true,
+					defaultValue: () => new Date().toISOString()
+				}
+			]
+		},
+		{
+			id: 'attendees',
+			title: 'Attendees',
+			description: 'Who was there?',
+			optional: true,
+			fields: [
+				{
+					id: 'attendees',
+					type: 'attendees',
+					label: 'Who attended?',
+					hint: 'Select team members and add external participants',
+					defaultValue: { internal: [], external: [] }
+				}
+			]
+		},
+		{
+			id: 'context',
+			title: 'Context',
+			description: 'Set the scene',
+			fields: [
+				{
+					id: 'purpose',
+					type: 'textarea',
+					label: 'What was the purpose of this meeting?',
+					placeholder: 'Discuss and finalize...',
+					required: true
+				},
+				{
+					id: 'includeAreaContext',
+					type: 'toggle',
+					label: 'Include Area context in document',
+					hint: 'Adds relevant Area context to the rendered document',
+					defaultValue: true
+				},
+				{
+					id: 'agendaItems',
+					type: 'list',
+					label: 'Agenda items',
+					placeholder: 'Add agenda item...',
+					hint: 'Optional - outline what was planned to discuss',
+					defaultValue: []
+				}
+			]
+		},
+		{
+			id: 'outcomes',
+			title: 'Outcomes & Decisions',
+			description: 'What happened and what was decided?',
+			optional: true,
+			fields: [
+				{
+					id: 'discussionNotes',
+					type: 'textarea',
+					label: 'Discussion notes',
+					placeholder: 'Key points discussed...',
+					hint: 'Optional summary of the discussion'
+				},
+				{
+					id: 'outcomes',
+					type: 'list',
+					label: 'Key outcomes',
+					placeholder: 'Add outcome...',
+					defaultValue: []
+				},
+				{
+					id: 'decisions',
+					type: 'decisions',
+					label: 'Decisions made',
+					hint: 'Capture decisions with owners for organizational memory',
+					defaultValue: []
+				}
+			]
+		},
+		{
+			id: 'actions',
+			title: 'Action Items',
+			description: 'What needs to happen next?',
+			optional: true,
+			fields: [
+				{
+					id: 'actionItems',
+					type: 'action-items',
+					label: 'Follow-up actions',
+					hint: 'Items marked "Create as Task" will be added to this Area',
+					defaultValue: []
+				}
+			]
+		}
+	],
+	entityCreation: [
+		{
+			type: 'task',
+			sourceField: 'actionItems',
+			condition: 'item.createTask === true',
+			mapping: {
+				title: 'text',
+				assigneeId: 'assigneeId',
+				dueDate: 'dueDate'
+			}
+		}
+	]
+};
+
+/**
+ * Registry of template schemas that support guided creation
+ *
+ * Not all page types have guided creation - only those with
+ * structured data capture needs.
+ */
+const TEMPLATE_SCHEMAS: Partial<Record<PageType, TemplateSchema>> = {
+	meeting_notes: MEETING_NOTES_SCHEMA
+};
+
+/**
+ * Check if a page type supports guided creation
+ *
+ * @param type - The page type to check
+ * @returns true if this type has a guided creation schema
+ */
+export function hasGuidedCreation(type: PageType): boolean {
+	return type in TEMPLATE_SCHEMAS;
+}
+
+/**
+ * Get the template schema for a page type
+ *
+ * @param type - The page type to get schema for
+ * @returns The TemplateSchema or null if not supported
+ */
+export function getTemplateSchema(type: PageType): TemplateSchema | null {
+	return TEMPLATE_SCHEMAS[type] ?? null;
 }

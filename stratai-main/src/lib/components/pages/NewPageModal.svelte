@@ -2,39 +2,55 @@
 	/**
 	 * NewPageModal.svelte - Modal for creating a new page
 	 *
-	 * Two-step flow:
+	 * Three-step flow:
 	 * 1. Select template
-	 * 2. Enter title
+	 * 2a. Enter title (for non-guided templates)
+	 * 2b. Guided creation flow (for guided templates like meeting_notes)
 	 *
-	 * Based on DOCUMENT_SYSTEM.md Phase 4 specification.
+	 * Based on DOCUMENT_SYSTEM.md Phase 4 and GUIDED_CREATION.md Phase 6.
 	 */
 
 	import type { PageType, TipTapContent } from '$lib/types/page';
-	import { getPageTypeInfo, getDefaultTitle, getTemplateContent } from '$lib/config/page-templates';
+	import type { GuidedCreationData } from '$lib/types/guided-creation';
+	import { getPageTypeInfo, getDefaultTitle, getTemplateContent, hasGuidedCreation, getTemplateSchema } from '$lib/config/page-templates';
+	import { renderTemplate } from '$lib/services/template-renderers';
 	import TemplateSelector from './TemplateSelector.svelte';
+	import GuidedCreationFlow from '../guided-creation/GuidedCreationFlow.svelte';
 
 	// Props
 	interface Props {
 		isOpen: boolean;
+		spaceId: string;
+		areaId: string | null;
+		areaContext?: string;
 		onClose: () => void;
-		onCreate: (data: { title: string; pageType: PageType; template: TipTapContent | null }) => void;
+		onCreate: (data: {
+			title: string;
+			pageType: PageType;
+			template: TipTapContent | null;
+			guidedData?: GuidedCreationData;
+		}) => void;
 	}
 
-	let { isOpen, onClose, onCreate }: Props = $props();
+	let { isOpen, spaceId, areaId, areaContext, onClose, onCreate }: Props = $props();
 
 	// State
-	let step = $state<1 | 2>(1);
+	type StepMode = 'template-select' | 'title-input' | 'guided-flow';
+	let step = $state<StepMode>('template-select');
 	let selectedType = $state<PageType | null>(null);
 	let title = $state('');
 
 	// Derived
 	let selectedTypeInfo = $derived(selectedType ? getPageTypeInfo(selectedType) : null);
-	let canProceed = $derived(step === 1 ? selectedType !== null : title.trim().length > 0);
+	let selectedSchema = $derived(selectedType ? getTemplateSchema(selectedType) : null);
+	let canProceed = $derived(
+		step === 'template-select' ? selectedType !== null : title.trim().length > 0
+	);
 
 	// Reset state when modal opens
 	$effect(() => {
 		if (isOpen) {
-			step = 1;
+			step = 'template-select';
 			selectedType = null;
 			title = '';
 		}
@@ -45,15 +61,19 @@
 	}
 
 	function handleNext() {
-		if (step === 1 && selectedType) {
-			step = 2;
-			title = getDefaultTitle(selectedType);
+		if (step === 'template-select' && selectedType) {
+			if (hasGuidedCreation(selectedType)) {
+				step = 'guided-flow';
+			} else {
+				step = 'title-input';
+				title = getDefaultTitle(selectedType);
+			}
 		}
 	}
 
 	function handleBack() {
-		if (step === 2) {
-			step = 1;
+		if (step === 'title-input' || step === 'guided-flow') {
+			step = 'template-select';
 		}
 	}
 
@@ -68,14 +88,29 @@
 		});
 	}
 
+	function handleGuidedComplete(data: GuidedCreationData) {
+		if (!selectedType) return;
+
+		const result = renderTemplate(data, areaContext);
+		onCreate({
+			title: (data.data.title as string) || 'Untitled',
+			pageType: selectedType,
+			template: result.content,
+			guidedData: data
+		});
+	}
+
 	function handleKeydown(event: KeyboardEvent) {
+		// Don't handle keyboard in guided flow - it has its own handlers
+		if (step === 'guided-flow') return;
+
 		if (event.key === 'Escape') {
 			onClose();
 		} else if (event.key === 'Enter' && !event.shiftKey) {
-			if (step === 1 && canProceed) {
+			if (step === 'template-select' && canProceed) {
 				event.preventDefault();
 				handleNext();
-			} else if (step === 2 && canProceed) {
+			} else if (step === 'title-input' && canProceed) {
 				event.preventDefault();
 				handleCreate();
 			}
@@ -103,6 +138,20 @@
 				return 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6';
 		}
 	}
+
+	// Get modal title based on step
+	function getModalTitle(): string {
+		switch (step) {
+			case 'template-select':
+				return 'Choose a template';
+			case 'title-input':
+				return 'Name your page';
+			case 'guided-flow':
+				return ''; // GuidedCreationFlow has its own header
+			default:
+				return 'New Page';
+		}
+	}
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -111,94 +160,107 @@
 	<div class="modal-backdrop" onclick={onClose} role="presentation">
 		<div
 			class="modal"
+			class:modal-guided={step === 'guided-flow'}
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="modal-title"
 			tabindex="-1"
 		>
-			<!-- Header -->
-			<div class="modal-header">
-				<div class="header-content">
-					{#if step === 2}
-						<button type="button" class="back-button" onclick={handleBack} title="Back to templates">
-							<svg viewBox="0 0 20 20" fill="currentColor">
-								<path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/>
-							</svg>
+			{#if step === 'guided-flow' && selectedSchema}
+				<!-- Guided Creation Flow (full takeover) -->
+				<GuidedCreationFlow
+					schema={selectedSchema}
+					{spaceId}
+					{areaId}
+					onComplete={handleGuidedComplete}
+					onCancel={onClose}
+				/>
+			{:else}
+				<!-- Standard modal layout -->
+				<!-- Header -->
+				<div class="modal-header">
+					<div class="header-content">
+						{#if step === 'title-input'}
+							<button type="button" class="back-button" onclick={handleBack} title="Back to templates">
+								<svg viewBox="0 0 20 20" fill="currentColor">
+									<path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"/>
+								</svg>
+							</button>
+						{/if}
+						<h2 id="modal-title">
+							{getModalTitle()}
+						</h2>
+					</div>
+					<button type="button" class="close-button" onclick={onClose} title="Close">
+						<svg viewBox="0 0 20 20" fill="currentColor">
+							<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+						</svg>
+					</button>
+				</div>
+
+				<!-- Content -->
+				<div class="modal-content">
+					{#if step === 'template-select'}
+						<!-- Step 1: Template selection -->
+						<TemplateSelector selected={selectedType} onSelect={handleTemplateSelect} />
+					{:else if step === 'title-input'}
+						<!-- Step 2a: Title input -->
+						<div class="title-step">
+							{#if selectedTypeInfo}
+								<div class="selected-type">
+									<div class="type-icon">
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+											<path d={getIcon(selectedTypeInfo.icon)} />
+										</svg>
+									</div>
+									<div class="type-info">
+										<span class="type-label">{selectedTypeInfo.label}</span>
+										<span class="type-description">{selectedTypeInfo.description}</span>
+									</div>
+								</div>
+							{/if}
+
+							<div class="title-input-wrapper">
+								<label for="page-title">Page title</label>
+								<input
+									id="page-title"
+									type="text"
+									bind:value={title}
+									placeholder="Enter a title for your page"
+									autofocus
+								/>
+							</div>
+						</div>
+					{/if}
+				</div>
+
+				<!-- Footer -->
+				<div class="modal-footer">
+					<button type="button" class="cancel-button" onclick={onClose}>
+						Cancel
+					</button>
+					{#if step === 'template-select'}
+						<button
+							type="button"
+							class="primary-button"
+							onclick={handleNext}
+							disabled={!canProceed}
+						>
+							Next
+						</button>
+					{:else if step === 'title-input'}
+						<button
+							type="button"
+							class="primary-button"
+							onclick={handleCreate}
+							disabled={!canProceed}
+						>
+							Create Page
 						</button>
 					{/if}
-					<h2 id="modal-title">
-						{step === 1 ? 'Choose a template' : 'Name your page'}
-					</h2>
 				</div>
-				<button type="button" class="close-button" onclick={onClose} title="Close">
-					<svg viewBox="0 0 20 20" fill="currentColor">
-						<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
-					</svg>
-				</button>
-			</div>
-
-			<!-- Content -->
-			<div class="modal-content">
-				{#if step === 1}
-					<!-- Step 1: Template selection -->
-					<TemplateSelector selected={selectedType} onSelect={handleTemplateSelect} />
-				{:else}
-					<!-- Step 2: Title input -->
-					<div class="title-step">
-						{#if selectedTypeInfo}
-							<div class="selected-type">
-								<div class="type-icon">
-									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-										<path d={getIcon(selectedTypeInfo.icon)} />
-									</svg>
-								</div>
-								<div class="type-info">
-									<span class="type-label">{selectedTypeInfo.label}</span>
-									<span class="type-description">{selectedTypeInfo.description}</span>
-								</div>
-							</div>
-						{/if}
-
-						<div class="title-input-wrapper">
-							<label for="page-title">Page title</label>
-							<input
-								id="page-title"
-								type="text"
-								bind:value={title}
-								placeholder="Enter a title for your page"
-								autofocus
-							/>
-						</div>
-					</div>
-				{/if}
-			</div>
-
-			<!-- Footer -->
-			<div class="modal-footer">
-				<button type="button" class="cancel-button" onclick={onClose}>
-					Cancel
-				</button>
-				{#if step === 1}
-					<button
-						type="button"
-						class="primary-button"
-						onclick={handleNext}
-						disabled={!canProceed}
-					>
-						Next
-					</button>
-				{:else}
-					<button
-						type="button"
-						class="primary-button"
-						onclick={handleCreate}
-						disabled={!canProceed}
-					>
-						Create Page
-					</button>
-				{/if}
-			</div>
+			{/if}
 		</div>
 	</div>
 {/if}
@@ -227,6 +289,11 @@
 		border-radius: 16px;
 		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
 		overflow: hidden;
+	}
+
+	/* Wider modal for guided flow */
+	.modal-guided {
+		max-width: 800px;
 	}
 
 	.modal-header {

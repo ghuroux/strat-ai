@@ -14,8 +14,11 @@
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Page as PageType, PageType as PageTypeEnum, TipTapContent } from '$lib/types/page';
+	import type { GuidedCreationData } from '$lib/types/guided-creation';
+	import type { EntityToCreate } from '$lib/services/template-renderers';
 	import type { Area } from '$lib/types/areas';
 	import type { Space, SystemSpaceSlug } from '$lib/types/spaces';
+	import { renderTemplate } from '$lib/services/template-renderers';
 	import { isSystemSpace as checkIsSystemSpace } from '$lib/types/spaces';
 	import { SPACES, isValidSpace } from '$lib/config/spaces';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
@@ -169,25 +172,62 @@
 		isNewPageModalOpen = false;
 	}
 
-	async function handleCreatePage(data: { title: string; pageType: PageTypeEnum; template: TipTapContent | null }) {
+	async function handleCreatePage(data: {
+		title: string;
+		pageType: PageTypeEnum;
+		template: TipTapContent | null;
+		guidedData?: GuidedCreationData;
+	}) {
 		if (!area?.id || isCreating) return;
 
 		isCreating = true;
 		try {
-			// Create page with template content
-			const newPage = await pageStore.createPage({
-				areaId: area.id,
-				title: data.title,
-				content: data.template || undefined,
-				pageType: data.pageType,
-				visibility: 'private'
+			// If guided data, extract entities to create
+			let entitiesToCreate: EntityToCreate[] = [];
+			if (data.guidedData) {
+				const renderResult = renderTemplate(data.guidedData, area.context);
+				entitiesToCreate = renderResult.entitiesToCreate;
+			}
+
+			// Call API directly to handle entity creation
+			const response = await fetch('/api/pages', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					areaId: area.id,
+					title: data.title,
+					content: data.template,
+					pageType: data.pageType,
+					visibility: 'private',
+					guidedData: data.guidedData,
+					entitiesToCreate
+				})
 			});
 
-			if (newPage) {
+			const result = await response.json();
+
+			if (response.ok && result.page) {
 				isNewPageModalOpen = false;
-				toastStore.success('Page created');
+
+				// Enhanced success message with task count
+				if (result.entitiesCreated?.length > 0) {
+					const taskCount = result.entitiesCreated.filter((e: { success: boolean }) => e.success).length;
+					if (taskCount > 0) {
+						toastStore.success(`Page created with ${taskCount} task${taskCount !== 1 ? 's' : ''}`);
+					} else {
+						toastStore.success('Page created');
+					}
+				} else {
+					toastStore.success('Page created');
+				}
+
+				// Refresh page store cache
+				await pageStore.loadPages(area.id);
+
 				// Navigate to the new page
-				goto(`/spaces/${spaceParam}/${areaParam}/pages/${newPage.id}`);
+				goto(`/spaces/${spaceParam}/${areaParam}/pages/${result.page.id}`);
+			} else {
+				toastStore.error(result.error || 'Failed to create page');
 			}
 		} catch (err) {
 			console.error('Failed to create page:', err);
@@ -298,6 +338,9 @@
 <!-- New Page Modal -->
 <NewPageModal
 	isOpen={isNewPageModalOpen}
+	spaceId={properSpaceId}
+	areaId={area?.id ?? null}
+	areaContext={area?.context}
 	onClose={handleCloseModal}
 	onCreate={handleCreatePage}
 />
