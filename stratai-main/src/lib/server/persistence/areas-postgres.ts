@@ -179,7 +179,9 @@ export const postgresAreaRepository: AreaRepository = {
 			return existing;
 		}
 
-		const id = `${spaceId}-general`;
+		// Include userId in ID to avoid conflicts between users
+		// Format matches migration 004: space_id-user_id-general
+		const id = `${spaceId}-${userId}-general`;
 		const now = new Date();
 
 		await sql`
