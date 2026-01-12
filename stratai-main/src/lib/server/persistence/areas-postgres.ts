@@ -184,29 +184,37 @@ export const postgresAreaRepository: AreaRepository = {
 		const id = `${spaceId}-${userId}-general`;
 		const now = new Date();
 
-		await sql`
-			INSERT INTO areas (
-				id, space_id, name, slug, is_general,
-				context, context_document_ids,
-				color, icon, order_index,
-				user_id, created_at, updated_at
-			) VALUES (
-				${id},
-				${spaceId},
-				'General',
-				'general',
-				true,
-				NULL,
-				NULL,
-				NULL,
-				NULL,
-				0,
-				${userId},
-				${now},
-				${now}
-			)
-			ON CONFLICT (space_id, slug, user_id) DO NOTHING
-		`;
+		try {
+			await sql`
+				INSERT INTO areas (
+					id, space_id, name, slug, is_general,
+					context, context_document_ids,
+					color, icon, order_index,
+					user_id, created_at, updated_at
+				) VALUES (
+					${id},
+					${spaceId},
+					'General',
+					'general',
+					true,
+					NULL,
+					NULL,
+					NULL,
+					NULL,
+					0,
+					${userId},
+					${now},
+					${now}
+				)
+				ON CONFLICT (space_id, slug, user_id) WHERE deleted_at IS NULL DO NOTHING
+			`;
+		} catch (e) {
+			// If ON CONFLICT inference fails or other error, check if area exists
+			console.error('[createGeneral] INSERT failed, checking if area exists:', e);
+			const fallback = await this.findGeneral(spaceId, userId);
+			if (fallback) return fallback;
+			throw e;
+		}
 
 		const area = await this.findById(id, userId);
 		if (!area) {
