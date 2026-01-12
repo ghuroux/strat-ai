@@ -97,16 +97,35 @@ export function getSessionCookie(cookies: Cookies): string | undefined {
 
 /**
  * Clear the session cookie
+ * IMPORTANT: Must use the same options as setSessionCookie for the delete to work
  */
 export function clearSessionCookie(cookies: Cookies): void {
 	console.log('[SESSION] clearSessionCookie called');
-	console.log('[SESSION] Cookie name to delete:', SESSION_COOKIE_NAME);
-	console.log('[SESSION] Delete options: { path: "/" }');
+	console.log('[SESSION] dev mode:', dev);
+	console.log('[SESSION] secure:', !dev);
+
+	// Must match the options used in setSessionCookie
+	const cookieOptions = {
+		path: '/',
+		httpOnly: true,
+		sameSite: 'lax' as const,
+		secure: !dev
+	};
+
+	console.log('[SESSION] Delete options:', JSON.stringify(cookieOptions));
 
 	try {
-		cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+		cookies.delete(SESSION_COOKIE_NAME, cookieOptions);
 		console.log('[SESSION] ✓ Cookie delete called successfully');
+
+		// Double-check: also try setting to empty with immediate expiry
+		// This is a fallback in case delete doesn't work properly
+		cookies.set(SESSION_COOKIE_NAME, '', {
+			...cookieOptions,
+			maxAge: 0
+		});
+		console.log('[SESSION] ✓ Cookie also set to empty with maxAge=0');
 	} catch (e) {
-		console.error('[SESSION] ✗ Cookie delete failed:', e);
+		console.error('[SESSION] ✗ Cookie clear failed:', e);
 	}
 }
