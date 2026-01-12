@@ -59,9 +59,13 @@
 	let showBringToContextModal = $state(false);
 	let bringToContextConversation = $state<Conversation | null>(null);
 
-	// Apply saved theme on mount
+	// Apply saved theme on mount and sync conversations from API
 	onMount(() => {
 		applyTheme(settingsStore.theme);
+
+		// Sync conversations from API (ensures data is loaded after login)
+		// This is safe to call even if data already exists - syncFromApi merges
+		chatStore.refresh();
 
 		// Listen for system theme changes
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');

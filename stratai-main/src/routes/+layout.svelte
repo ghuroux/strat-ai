@@ -6,6 +6,7 @@
 	import KeyboardShortcutsModal from '$lib/components/KeyboardShortcutsModal.svelte';
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import { commandPaletteStore } from '$lib/stores/commandPalette.svelte';
+	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { userStore } from '$lib/stores/user.svelte';
 	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
@@ -40,11 +41,18 @@
 
 	/**
 	 * Apply theme on initial page load and when it changes
+	 * Also sync conversations from API to ensure data is loaded after login
 	 */
 	onMount(() => {
 		// Use database theme if available, otherwise use localStorage theme
 		const theme = data.user?.preferences?.theme ?? settingsStore.theme;
 		applyTheme(theme);
+
+		// Sync conversations from API (ensures data is loaded after login/page refresh)
+		// This is safe to call on every mount - syncFromApi merges with existing data
+		if (data.user) {
+			chatStore.refresh();
+		}
 
 		// Listen for system theme changes when using 'system' preference
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
