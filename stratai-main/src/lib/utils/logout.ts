@@ -46,8 +46,8 @@ export function clearClientState(): void {
 	}
 
 	try {
-		chatStore.clearAll();
-		console.log('[LOGOUT] ✓ chatStore cleared');
+		chatStore.clearCache(); // CRITICAL: Use clearCache(), NOT clearAll() which deletes from DB!
+		console.log('[LOGOUT] ✓ chatStore cache cleared');
 	} catch (e) {
 		console.warn('[LOGOUT] ✗ Failed to clear chatStore:', e);
 	}

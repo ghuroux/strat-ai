@@ -982,6 +982,31 @@ class ChatStore {
 	}
 
 	/**
+	 * Clear local cache only (for logout)
+	 * Does NOT delete from database - just clears client-side state
+	 * Use this when switching users or logging out
+	 */
+	clearCache(): void {
+		this.conversations = new SvelteMap();
+		this.activeConversationId = null;
+		this.isStreaming = false;
+		this.abortController = null;
+		this._version = 0;
+		this.activeSpaceId = null;
+		this.selectedAreaId = null;
+		this.focusedTaskId = null;
+		this.routedModel = null;
+		this.routingDecision = null;
+		this.secondOpinion = null;
+		this.assistState = null;
+
+		// Clear localStorage cache
+		if (typeof window !== 'undefined') {
+			localStorage.removeItem(STORAGE_KEY);
+		}
+	}
+
+	/**
 	 * Clear only main nav conversations (those without a spaceId)
 	 * Preserves all space/area conversations
 	 */
