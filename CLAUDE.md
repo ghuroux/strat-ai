@@ -36,6 +36,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/PRODUCT_VISION.md` - Product vision and roadmap
 - `stratai-main/BACKLOG.md` - Feature backlog and priorities
 - `stratai-main/docs/enterprise-roadmap.md` - Implementation phases and timeline
+- `stratai-main/docs/SENDGRID_EMAIL_INTEGRATION.md` - **Email system** (SendGrid, password reset, future notifications)
 
 ---
 
