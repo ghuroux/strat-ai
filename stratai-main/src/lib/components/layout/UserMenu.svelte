@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
 	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { performLogout } from '$lib/utils/logout';
 
 	type Theme = 'dark' | 'light' | 'system';
 
@@ -179,19 +180,24 @@
 
 			<div class="dropdown-divider"></div>
 
-			<form action="/logout" method="GET" class="logout-form">
-				<button type="submit" class="dropdown-item danger">
-					<svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-						/>
-					</svg>
-					Logout
-				</button>
-			</form>
+			<button
+				type="button"
+				class="dropdown-item danger"
+				onclick={() => {
+					isOpen = false;
+					performLogout();
+				}}
+			>
+				<svg class="item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+					/>
+				</svg>
+				Logout
+			</button>
 		</div>
 	{/if}
 </div>
@@ -289,10 +295,6 @@
 		height: 1px;
 		background: #3f3f46;
 		margin: 0.375rem 0;
-	}
-
-	.logout-form {
-		display: contents;
 	}
 
 	/* Theme section - inline style */
