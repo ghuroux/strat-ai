@@ -39,6 +39,22 @@
 
 	--color-warning-400: #fbbf24;
 
+	/* Area Role Colors (Dark Mode - default) */
+	--role-owner: #9333ea;
+	--role-owner-bg: rgba(147, 51, 234, 0.15);
+
+	--role-admin: #3b82f6;
+	--role-admin-bg: rgba(59, 130, 246, 0.15);
+
+	--role-member: #10b981;
+	--role-member-bg: rgba(16, 185, 129, 0.15);
+
+	--role-viewer: #6b7280;
+	--role-viewer-bg: rgba(107, 114, 128, 0.15);
+
+	--role-inherited: #0ea5e9;
+	--role-inherited-bg: rgba(14, 165, 233, 0.15);
+
 	/* Page Editor Variables (Dark Mode - default) */
 	/* Based on DOCUMENT_SYSTEM.md Section 5.1 */
 	--editor-bg: #1e1e1e;
@@ -96,6 +112,13 @@
 		--color-surface-800: #e4e4e7;
 		--color-surface-900: #f4f4f5;
 		--color-surface-950: #fafafa;
+
+		/* Area Role Colors (Light Mode - lighter backgrounds) */
+		--role-owner-bg: rgba(147, 51, 234, 0.1);
+		--role-admin-bg: rgba(59, 130, 246, 0.1);
+		--role-member-bg: rgba(16, 185, 129, 0.1);
+		--role-viewer-bg: rgba(107, 114, 128, 0.1);
+		--role-inherited-bg: rgba(14, 165, 233, 0.1);
 	}
 
 	/* Light theme overrides for Tailwind surface colors */

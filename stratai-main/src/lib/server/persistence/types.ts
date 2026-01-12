@@ -286,6 +286,7 @@ export interface DocumentSharingRepository {
  */
 export interface AreaRepository {
 	findAll(userId: string, spaceId?: string): Promise<Area[]>;
+	findAllAccessible(userId: string, spaceId: string): Promise<Area[]>;
 	findById(id: string, userId: string): Promise<Area | null>;
 	findByName(spaceId: string, name: string, userId: string): Promise<Area | null>;
 	findBySlug(spaceId: string, slug: string, userId: string): Promise<Area | null>;
@@ -427,6 +428,8 @@ export interface UserRepository {
 	getPreferences(id: string): Promise<Record<string, unknown>>;
 	updatePreferences(id: string, preferences: Record<string, unknown>): Promise<Record<string, unknown>>;
 	getPasswordHash(id: string): Promise<string | null>;
+	findByEmailGlobal(email: string): Promise<User | null>;
+	updatePassword(id: string, passwordHash: string): Promise<boolean>;
 }
 
 // =====================================================

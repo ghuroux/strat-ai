@@ -244,11 +244,11 @@ export const postgresGroupsRepository = {
 	async getMembers(groupId: string): Promise<GroupMemberWithUser[]> {
 		const rows = await sql<GroupMemberWithUserRow[]>`
 			SELECT gm.group_id, gm.user_id, gm.role, gm.joined_at,
-				   u.name as user_name, u.email as user_email
+				   u.display_name as user_name, u.email as user_email
 			FROM group_memberships gm
 			JOIN users u ON gm.user_id = u.id
 			WHERE gm.group_id = ${groupId}
-			ORDER BY gm.role ASC, u.name ASC
+			ORDER BY gm.role ASC, u.display_name ASC
 		`;
 		return rows.map(rowToGroupMemberWithUser);
 	},

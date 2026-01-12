@@ -97,6 +97,20 @@ export const postgresUserRepository: UserRepository = {
 	},
 
 	/**
+	 * Find user by email across all organizations
+	 * Used for password reset where we don't know the org
+	 */
+	async findByEmailGlobal(email: string): Promise<User | null> {
+		const rows = await sql<UserRow[]>`
+			SELECT * FROM users
+			WHERE email = ${email}
+			  AND deleted_at IS NULL
+			LIMIT 1
+		`;
+		return rows.length > 0 ? rowToUser(rows[0]) : null;
+	},
+
+	/**
 	 * Create a new user
 	 */
 	async create(input: {
@@ -231,5 +245,18 @@ export const postgresUserRepository: UserRepository = {
 			  AND deleted_at IS NULL
 		`;
 		return rows.length > 0 ? rows[0].passwordHash : null;
+	},
+
+	/**
+	 * Update user's password hash
+	 * Convenience method for password reset
+	 */
+	async updatePassword(id: string, passwordHash: string): Promise<boolean> {
+		const result = await sql`
+			UPDATE users
+			SET password_hash = ${passwordHash}, updated_at = NOW()
+			WHERE id = ${id} AND deleted_at IS NULL
+		`;
+		return result.count > 0;
 	}
 };

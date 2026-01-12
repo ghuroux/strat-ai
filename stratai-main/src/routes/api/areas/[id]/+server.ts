@@ -11,12 +11,13 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
+import { postgresAreaMembershipsRepository } from '$lib/server/persistence/area-memberships-postgres';
 import { postgresDocumentSharingRepository } from '$lib/server/persistence/document-sharing-postgres';
 import type { UpdateAreaInput } from '$lib/types/areas';
 
 /**
  * GET /api/areas/[id]
- * Returns area with task and conversation counts
+ * Returns area with task and conversation counts, plus user's access info
  */
 export const GET: RequestHandler = async ({ params, locals }) => {
 	try {
@@ -25,6 +26,13 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		}
 
 		const userId = locals.session.userId;
+
+		// Check access first
+		const access = await postgresAreaMembershipsRepository.canAccessArea(userId, params.id);
+		if (!access.hasAccess) {
+			return json({ error: 'Access denied' }, { status: 403 });
+		}
+
 		const area = await postgresAreaRepository.findById(params.id, userId);
 
 		if (!area) {
@@ -43,7 +51,9 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 				...area,
 				taskCount,
 				conversationCount
-			}
+			},
+			userRole: access.role,
+			accessSource: access.source
 		});
 	} catch (error) {
 		console.error('Failed to fetch area:', error);
@@ -58,6 +68,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
  * PATCH /api/areas/[id]
  * Body: { name?, context?, contextDocumentIds?, color?, icon?, orderIndex? }
  * Note: General areas cannot have their name changed
+ * Requires: owner or admin access
  */
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	try {
@@ -66,6 +77,16 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		}
 
 		const userId = locals.session.userId;
+
+		// Check access - require owner or admin
+		const access = await postgresAreaMembershipsRepository.canAccessArea(userId, params.id);
+		if (!access.hasAccess) {
+			return json({ error: 'Access denied' }, { status: 403 });
+		}
+		if (!['owner', 'admin'].includes(access.role)) {
+			return json({ error: 'Insufficient permissions. Owner or admin access required.' }, { status: 403 });
+		}
+
 		const body = await request.json();
 
 		// Validate name if provided
@@ -151,6 +172,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 /**
  * DELETE /api/areas/[id]
  * Soft deletes the area. General areas cannot be deleted.
+ * Requires: owner access
  *
  * Query params:
  * - deleteContent=true: Delete all conversations and tasks in this area
@@ -163,6 +185,15 @@ export const DELETE: RequestHandler = async ({ params, url, locals }) => {
 		}
 
 		const userId = locals.session.userId;
+
+		// Check access - require owner
+		const access = await postgresAreaMembershipsRepository.canAccessArea(userId, params.id);
+		if (!access.hasAccess) {
+			return json({ error: 'Access denied' }, { status: 403 });
+		}
+		if (access.role !== 'owner') {
+			return json({ error: 'Insufficient permissions. Owner access required.' }, { status: 403 });
+		}
 
 		// Parse deleteContent option from query string
 		const deleteContent = url.searchParams.get('deleteContent') === 'true';

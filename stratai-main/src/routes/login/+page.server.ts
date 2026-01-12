@@ -8,6 +8,7 @@ import {
 	postgresUserRepository
 } from '$lib/server/persistence';
 import { sql } from '$lib/server/persistence/db';
+import { getHomePageUrl, type UserPreferences } from '$lib/types/user';
 
 /**
  * User authentication - supports both env var passwords and database passwords
@@ -97,6 +98,18 @@ export const actions: Actions = {
 		const token = createSession(authResult.userId, authResult.organizationId);
 		setSessionCookie(cookies, token);
 
-		throw redirect(303, '/');
+		// Load user preferences to determine redirect destination
+		let redirectUrl = '/';
+		try {
+			const preferences = (await postgresUserRepository.getPreferences(
+				authResult.userId
+			)) as UserPreferences;
+			redirectUrl = getHomePageUrl(preferences.homePage);
+		} catch (error) {
+			console.error('Failed to load preferences for redirect, using default:', error);
+			// Fall back to '/' if preferences can't be loaded
+		}
+
+		throw redirect(303, redirectUrl);
 	}
 };

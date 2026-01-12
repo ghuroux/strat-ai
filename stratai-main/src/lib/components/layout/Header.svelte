@@ -56,6 +56,11 @@
 		return $page.url.pathname.startsWith('/arena');
 	});
 
+	// Detect if we're on main chat (/)
+	let isMainChat = $derived.by(() => {
+		return $page.url.pathname === '/';
+	});
+
 	// Get user data from page data (set by +layout.server.ts)
 	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
 
@@ -256,6 +261,18 @@
 				</button>
 			{/if}
 
+			<!-- Main Chat Button -->
+			<a
+				href="/"
+				class="space-nav-chat"
+				class:active={isMainChat}
+				title="Main Chat"
+			>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+				</svg>
+			</a>
+
 			<!-- All Spaces Link -->
 			<a
 				href="/spaces"
@@ -268,10 +285,31 @@
 			</a>
 		</nav>
 
+		<!-- Mobile Chat Button -->
+		<a
+			href="/"
+			class="flex md:hidden items-center gap-1.5 px-3 py-1.5 ml-2 rounded-lg text-sm font-medium
+				   border transition-all"
+			class:bg-primary-500={isMainChat}
+			class:text-white={isMainChat}
+			class:border-primary-500={isMainChat}
+			class:bg-surface-800={!isMainChat}
+			class:text-surface-300={!isMainChat}
+			class:hover:bg-surface-700={!isMainChat}
+			class:hover:text-surface-100={!isMainChat}
+			class:border-surface-700={!isMainChat}
+			class:hover:border-surface-600={!isMainChat}
+		>
+			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+			</svg>
+			<span class="hidden sm:inline">Chat</span>
+		</a>
+
 		<!-- Mobile Spaces Link -->
 		<a
 			href="/spaces"
-			class="flex md:hidden items-center gap-1.5 px-3 py-1.5 ml-2 rounded-lg text-sm font-medium
+			class="flex md:hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
 				   bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-surface-100
 				   border border-surface-700 hover:border-surface-600 transition-all"
 		>
@@ -421,6 +459,27 @@
 	.space-nav-all:hover {
 		color: rgba(255, 255, 255, 0.8);
 		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.space-nav-chat {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		color: rgba(255, 255, 255, 0.4);
+		border-radius: 0.375rem;
+		transition: all 0.15s ease;
+	}
+
+	.space-nav-chat:hover {
+		color: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.space-nav-chat.active {
+		color: #3b82f6;
+		background: color-mix(in srgb, #3b82f6 15%, transparent);
 	}
 
 	.space-nav-edit {

@@ -13,6 +13,13 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import type { Area, CreateAreaInput, UpdateAreaInput, AreaWithStats } from '$lib/types/areas';
+import type {
+	AreaMemberWithDetails,
+	AreaMemberRole,
+	AddMemberInput,
+	AreaAccessResult,
+	AreaAccessSource
+} from '$lib/types/area-memberships';
 
 class AreaStore {
 	// Area cache by ID
@@ -24,6 +31,12 @@ class AreaStore {
 	// Currently selected area per space: spaceId -> areaId | null
 	selectedArea = new SvelteMap<string, string | null>();
 
+	// Member cache by area: areaId -> members[]
+	membersByArea = new SvelteMap<string, AreaMemberWithDetails[]>();
+
+	// User access info by area: areaId -> { userRole, accessSource }
+	accessByArea = new SvelteMap<string, { userRole: AreaMemberRole | 'inherited'; accessSource: AreaAccessSource }>();
+
 	// Loading and error states
 	isLoading = $state(false);
 	error = $state<string | null>(null);
@@ -33,6 +46,9 @@ class AreaStore {
 
 	// Track which spaces have been loaded
 	private loadedSpaces = new Set<string>();
+
+	// Track which area members have been loaded
+	private loadedAreaMembers = new Set<string>();
 
 	/**
 	 * Load all areas for a space
@@ -347,6 +363,208 @@ class AreaStore {
 		void this._version;
 		const areas = this.areasBySpace.get(spaceId) ?? [];
 		return areas.filter((a) => !a.isGeneral);
+	}
+
+	// ==========================================
+	// Area Membership Methods
+	// ==========================================
+
+	/**
+	 * Load members for an area
+	 */
+	async loadMembers(areaId: string, forceReload = false): Promise<AreaMemberWithDetails[]> {
+		if (!forceReload && this.loadedAreaMembers.has(areaId)) {
+			return this.membersByArea.get(areaId) ?? [];
+		}
+
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch(`/api/areas/${areaId}/members`);
+
+			if (!response.ok) {
+				if (response.status === 401) return [];
+				if (response.status === 403) {
+					this.error = 'Access denied';
+					return [];
+				}
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+
+			// Store members
+			const members: AreaMemberWithDetails[] = data.members?.map((m: AreaMemberWithDetails) => ({
+				...m,
+				createdAt: new Date(m.createdAt)
+			})) ?? [];
+
+			this.membersByArea.set(areaId, members);
+
+			// Store access info
+			if (data.userRole && data.accessSource) {
+				this.accessByArea.set(areaId, {
+					userRole: data.userRole,
+					accessSource: data.accessSource
+				});
+			}
+
+			this.loadedAreaMembers.add(areaId);
+			this._version++;
+
+			return members;
+		} catch (e) {
+			console.error('Failed to load area members:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to load members';
+			return [];
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Add a member (user or group) to an area
+	 */
+	async addMember(areaId: string, input: AddMemberInput): Promise<boolean> {
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch(`/api/areas/${areaId}/members`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || `Failed to add member: ${response.status}`);
+			}
+
+			// Reload members to get the updated list
+			await this.loadMembers(areaId, true);
+			return true;
+		} catch (e) {
+			console.error('Failed to add area member:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to add member';
+			return false;
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Remove a member from an area
+	 */
+	async removeMember(areaId: string, memberId: string): Promise<boolean> {
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch(`/api/areas/${areaId}/members/${memberId}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || `Failed to remove member: ${response.status}`);
+			}
+
+			// Remove from cache
+			const members = this.membersByArea.get(areaId);
+			if (members) {
+				this.membersByArea.set(areaId, members.filter((m) => m.id !== memberId));
+			}
+
+			this._version++;
+			return true;
+		} catch (e) {
+			console.error('Failed to remove area member:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to remove member';
+			return false;
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Update a member's role
+	 */
+	async updateMemberRole(areaId: string, memberId: string, role: AreaMemberRole): Promise<boolean> {
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch(`/api/areas/${areaId}/members/${memberId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ role })
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || `Failed to update role: ${response.status}`);
+			}
+
+			// Update in cache
+			const members = this.membersByArea.get(areaId);
+			if (members) {
+				const index = members.findIndex((m) => m.id === memberId);
+				if (index !== -1) {
+					members[index] = { ...members[index], role };
+					this.membersByArea.set(areaId, [...members]);
+				}
+			}
+
+			this._version++;
+			return true;
+		} catch (e) {
+			console.error('Failed to update member role:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to update role';
+			return false;
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Get members for an area (reactive)
+	 */
+	getMembersForArea(areaId: string): AreaMemberWithDetails[] {
+		void this._version;
+		return this.membersByArea.get(areaId) ?? [];
+	}
+
+	/**
+	 * Get user's access info for an area (reactive)
+	 */
+	getAccessInfo(areaId: string): { userRole: AreaMemberRole | 'inherited'; accessSource: AreaAccessSource } | null {
+		void this._version;
+		return this.accessByArea.get(areaId) ?? null;
+	}
+
+	/**
+	 * Check if members have been loaded for an area
+	 */
+	areMembersLoaded(areaId: string): boolean {
+		return this.loadedAreaMembers.has(areaId);
+	}
+
+	/**
+	 * Clear member cache for an area
+	 */
+	clearMemberCache(areaId?: string): void {
+		if (areaId) {
+			this.loadedAreaMembers.delete(areaId);
+			this.membersByArea.delete(areaId);
+			this.accessByArea.delete(areaId);
+		} else {
+			this.loadedAreaMembers.clear();
+			this.membersByArea.clear();
+			this.accessByArea.clear();
+		}
+		this._version++;
 	}
 
 	// ==========================================

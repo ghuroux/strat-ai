@@ -20,6 +20,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 
 	return {
 		user: {
+			id: locals.session.userId,
 			displayName: locals.session.displayName,
 			email: locals.session.email,
 			role: locals.session.role,

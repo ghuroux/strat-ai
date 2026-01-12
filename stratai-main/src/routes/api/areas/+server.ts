@@ -17,6 +17,9 @@ import type { CreateAreaInput } from '$lib/types/areas';
  * GET /api/areas
  * Query params:
  * - spaceId: Filter by space ID or slug (resolved to proper ID)
+ *
+ * When spaceId is provided, returns all areas the user can access (including shared areas).
+ * When no spaceId, returns only areas the user owns (legacy behavior).
  */
 export const GET: RequestHandler = async ({ url, locals }) => {
 	try {
@@ -37,7 +40,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			resolvedSpaceId = resolved;
 		}
 
-		const areas = await postgresAreaRepository.findAll(userId, resolvedSpaceId);
+		// Use findAllAccessible when filtering by space (includes shared areas)
+		// Use findAll when no spaceId filter (user's own areas only)
+		const areas = resolvedSpaceId
+			? await postgresAreaRepository.findAllAccessible(userId, resolvedSpaceId)
+			: await postgresAreaRepository.findAll(userId);
 
 		return json({ areas });
 	} catch (error) {

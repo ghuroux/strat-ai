@@ -13,6 +13,10 @@ export * from './users-postgres';
 export * from './org-memberships-postgres';
 export * from './user-id-mappings-postgres';
 
+// Email system (Phase 2 - Password Reset)
+export { postgresPasswordResetTokenRepository } from './password-reset-tokens-postgres';
+export { postgresEmailLogRepository } from './email-logs-postgres';
+
 export { sql, testConnection, closeConnection } from './db';
 
 // Backwards compatibility - re-export areas as focusAreas

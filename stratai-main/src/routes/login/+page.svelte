@@ -66,6 +66,12 @@
 			<button type="submit" class="w-full btn-primary" disabled={loading}>
 				{loading ? 'Signing in...' : 'Sign In'}
 			</button>
+
+			<div class="flex justify-between items-center mt-4 text-sm">
+				<a href="/forgot-password" class="text-blue-400 hover:text-blue-300">
+					Forgot password?
+				</a>
+			</div>
 		</form>
 	</div>
 </div>

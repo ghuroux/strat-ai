@@ -30,6 +30,7 @@
 	import PageSuggestion from '$lib/components/chat/PageSuggestion.svelte';
 	import { shouldSuggestPage, type PageSuggestion as PageSuggestionType } from '$lib/utils/page-detection';
 	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
+	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
 	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
@@ -40,6 +41,7 @@
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { userStore } from '$lib/stores/user.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import { modelSupportsVision } from '$lib/config/model-capabilities';
 	import { SPACES, isValidSpace } from '$lib/config/spaces';
@@ -114,6 +116,25 @@
 	// Derive colors
 	let spaceColor = $derived(space?.color || '#3b82f6');
 	let areaColor = $derived(area?.color || spaceColor);
+
+	// Permission check for sharing
+	// Show Share button if user is the area owner or creator
+	// Full access info will be loaded when modal opens
+	let canShare = $derived.by(() => {
+		if (!area?.id || !userStore.id) return false;
+
+		// Check if user is the area owner or creator
+		const isOwner = area.userId === userStore.id || area.createdBy === userStore.id;
+
+		// Also check accessInfo if available (after members loaded)
+		const accessInfo = areaStore.getAccessInfo(area.id);
+		if (accessInfo) {
+			return ['owner', 'admin', 'member'].includes(accessInfo.userRole);
+		}
+
+		// Default: show if owner/creator
+		return isOwner;
+	});
 
 	// Chat state
 	let messagesContainer: HTMLElement | undefined = $state();
@@ -203,6 +224,9 @@
 	// Create Page modal state
 	let createPageModalOpen = $state(false);
 	let createPageFromMessageId = $state<string | null>(null);
+
+	// Share Area modal state
+	let showShareModal = $state(false);
 
 	// Page suggestion state (P6-IN-02: dismissed state persists in session)
 	let dismissedPageSuggestions = $state<Set<string>>(new Set());
@@ -1446,6 +1470,24 @@
 				{:else}
 					<ModelBadge model={effectiveModel} />
 				{/if}
+				{#if canShare}
+					<button
+						type="button"
+						class="share-button"
+						onclick={() => (showShareModal = true)}
+						title="Share this area"
+						aria-label="Share this area"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+							/>
+						</svg>
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="new-chat-button"
@@ -1679,6 +1721,9 @@
 				onCreated={handlePageCreated}
 			/>
 		{/if}
+
+		<!-- Share Area Modal -->
+		<ShareAreaModal open={showShareModal} {area} onClose={() => (showShareModal = false)} />
 	</div>
 {:else}
 	<div class="error-container">
@@ -1844,6 +1889,7 @@
 		gap: 0.5rem;
 	}
 
+	.share-button,
 	.new-chat-button,
 	.settings-button {
 		display: flex;
@@ -1858,6 +1904,7 @@
 		transition: all 0.15s ease;
 	}
 
+	.share-button:hover,
 	.new-chat-button:hover,
 	.settings-button:hover {
 		color: rgba(255, 255, 255, 0.9);
@@ -1865,6 +1912,7 @@
 		border-color: rgba(255, 255, 255, 0.2);
 	}
 
+	.share-button svg,
 	.new-chat-button svg,
 	.settings-button svg {
 		width: 1rem;

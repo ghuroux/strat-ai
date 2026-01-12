@@ -3,7 +3,7 @@ import { redirect } from '@sveltejs/kit';
 import { getSessionCookie, verifySession } from '$lib/server/session';
 import { postgresUserRepository, postgresOrgMembershipRepository } from '$lib/server/persistence';
 
-const PUBLIC_ROUTES = ['/login', '/logout'];
+const PUBLIC_ROUTES = ['/login', '/logout', '/forgot-password', '/reset-password'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Debug logging for logout flow

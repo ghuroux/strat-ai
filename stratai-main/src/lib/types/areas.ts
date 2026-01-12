@@ -19,6 +19,10 @@ export interface Area {
 	// General area flag
 	isGeneral: boolean; // True for the default "General" area (undeletable)
 
+	// Access control (area sharing)
+	isRestricted?: boolean; // If true, requires explicit membership (default: false = space access grants area access)
+	createdBy?: string; // Original creator (has implicit owner access)
+
 	// Context content
 	context?: string; // Markdown text context
 	contextDocumentIds?: string[]; // Array of document IDs for context
@@ -49,6 +53,8 @@ export interface AreaRow {
 	name: string;
 	slug: string;
 	isGeneral: boolean;
+	isRestricted: boolean | null;
+	createdBy: string | null;
 	context: string | null;
 	contextDocumentIds: string[] | null;
 	color: string | null;
@@ -82,6 +88,7 @@ export interface UpdateAreaInput {
 	color?: string;
 	icon?: string;
 	orderIndex?: number;
+	isRestricted?: boolean; // Phase 3: Access control toggle
 }
 
 /**
@@ -104,6 +111,8 @@ export function rowToArea(row: AreaRow): Area {
 		name: row.name,
 		slug: row.slug,
 		isGeneral: row.isGeneral ?? false,
+		isRestricted: row.isRestricted ?? undefined,
+		createdBy: row.createdBy ?? undefined,
 		context: row.context ?? undefined,
 		contextDocumentIds: row.contextDocumentIds ?? undefined,
 		color: row.color ?? undefined,

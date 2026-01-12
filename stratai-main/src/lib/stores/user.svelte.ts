@@ -16,6 +16,7 @@ import {
 export type { UserRole };
 
 interface UserState {
+	id?: string | null;
 	displayName: string | null;
 	email?: string | null;
 	role: UserRole | null;
@@ -23,12 +24,16 @@ interface UserState {
 }
 
 function createUserStore() {
+	let id = $state<string | null>(null);
 	let displayName = $state<string | null>(null);
 	let email = $state<string | null>(null);
 	let role = $state<UserRole | null>(null);
 	let preferences = $state<UserPreferences>({});
 
 	return {
+		get id() {
+			return id;
+		},
 		get displayName() {
 			return displayName;
 		},
@@ -47,7 +52,7 @@ function createUserStore() {
 		 */
 		get user(): UserState | null {
 			if (!role) return null;
-			return { displayName, email, role, preferences };
+			return { id, displayName, email, role, preferences };
 		},
 
 		/**
@@ -83,11 +88,13 @@ function createUserStore() {
 		 */
 		setUser(user: UserState | null) {
 			if (user) {
+				id = user.id ?? null;
 				displayName = user.displayName;
 				email = user.email ?? null;
 				role = user.role as UserRole;
 				preferences = user.preferences ?? {};
 			} else {
+				id = null;
 				displayName = null;
 				email = null;
 				role = null;
@@ -113,6 +120,7 @@ function createUserStore() {
 		 * Clear user data (on logout)
 		 */
 		clear() {
+			id = null;
 			displayName = null;
 			email = null;
 			role = null;

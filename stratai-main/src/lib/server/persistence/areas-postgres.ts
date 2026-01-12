@@ -11,6 +11,7 @@ import { sql } from './db';
 import type { Area, AreaRow, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
 import { rowToArea, isValidSpaceId, generateSlug } from '$lib/types/areas';
 import type { AreaRepository } from './types';
+import { postgresAreaMembershipsRepository } from './area-memberships-postgres';
 
 /**
  * Generate a unique area ID
@@ -22,6 +23,7 @@ function generateAreaId(): string {
 export const postgresAreaRepository: AreaRepository = {
 	/**
 	 * Find all areas for a user, optionally filtered by space
+	 * NOTE: This is the legacy method - use findAllAccessible for sharing support
 	 */
 	async findAll(userId: string, spaceId?: string): Promise<Area[]> {
 		const rows = spaceId
@@ -45,6 +47,75 @@ export const postgresAreaRepository: AreaRepository = {
 				  order_index ASC,
 				  created_at ASC
 			`;
+		return rows.map(rowToArea);
+	},
+
+	/**
+	 * Find all areas a user can access in a space
+	 * Includes: owned, created, membership (user or group), and non-restricted space areas
+	 *
+	 * This is the preferred method for listing areas with sharing support.
+	 */
+	async findAllAccessible(userId: string, spaceId: string): Promise<Area[]> {
+		const rows = await sql<AreaRow[]>`
+			WITH accessible_areas AS (
+				-- Areas user owns (legacy user_id)
+				SELECT DISTINCT a.id
+				FROM areas a
+				WHERE a.space_id = ${spaceId}
+				  AND a.user_id = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas user created
+				SELECT DISTINCT a.id
+				FROM areas a
+				WHERE a.space_id = ${spaceId}
+				  AND a.created_by = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas with direct user membership
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN area_memberships am ON a.id = am.area_id
+				WHERE a.space_id = ${spaceId}
+				  AND am.user_id = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas with group membership
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN area_memberships am ON a.id = am.area_id
+				JOIN group_memberships gm ON am.group_id = gm.group_id
+				WHERE a.space_id = ${spaceId}
+				  AND gm.user_id = ${userId}::uuid
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Non-restricted areas in spaces user owns
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN spaces s ON a.space_id = s.id
+				WHERE a.space_id = ${spaceId}
+				  AND s.user_id = ${userId}
+				  AND s.deleted_at IS NULL
+				  AND a.deleted_at IS NULL
+				  AND COALESCE(a.is_restricted, false) = false
+			)
+			SELECT a.*
+			FROM areas a
+			JOIN accessible_areas aa ON a.id = aa.id
+			ORDER BY
+				CASE WHEN a.is_general THEN 0 ELSE 1 END,
+				a.order_index ASC,
+				a.created_at ASC
+		`;
 		return rows.map(rowToArea);
 	},
 
@@ -145,7 +216,7 @@ export const postgresAreaRepository: AreaRepository = {
 				id, space_id, name, slug, is_general,
 				context, context_document_ids,
 				color, icon, order_index,
-				user_id, created_at, updated_at
+				user_id, created_by, created_at, updated_at
 			) VALUES (
 				${id},
 				${input.spaceId},
@@ -158,10 +229,14 @@ export const postgresAreaRepository: AreaRepository = {
 				${input.icon ?? null},
 				${nextOrder},
 				${userId},
+				${userId},
 				${now},
 				${now}
 			)
 		`;
+
+		// Auto-add owner membership for the creator
+		await postgresAreaMembershipsRepository.addUserMember(id, userId, 'owner');
 
 		const area = await this.findById(id, userId);
 		if (!area) throw new Error('Failed to create area');
@@ -183,14 +258,15 @@ export const postgresAreaRepository: AreaRepository = {
 		// Format matches migration 004: space_id-user_id-general
 		const id = `${spaceId}-${userId}-general`;
 		const now = new Date();
+		let wasInserted = false;
 
 		try {
-			await sql`
+			const result = await sql`
 				INSERT INTO areas (
 					id, space_id, name, slug, is_general,
 					context, context_document_ids,
 					color, icon, order_index,
-					user_id, created_at, updated_at
+					user_id, created_by, created_at, updated_at
 				) VALUES (
 					${id},
 					${spaceId},
@@ -203,17 +279,25 @@ export const postgresAreaRepository: AreaRepository = {
 					NULL,
 					0,
 					${userId},
+					${userId},
 					${now},
 					${now}
 				)
 				ON CONFLICT (space_id, slug, user_id) WHERE deleted_at IS NULL DO NOTHING
+				RETURNING id
 			`;
+			wasInserted = result.length > 0;
 		} catch (e) {
 			// If ON CONFLICT inference fails or other error, check if area exists
 			console.error('[createGeneral] INSERT failed, checking if area exists:', e);
 			const fallback = await this.findGeneral(spaceId, userId);
 			if (fallback) return fallback;
 			throw e;
+		}
+
+		// Auto-add owner membership if this was a new insert
+		if (wasInserted) {
+			await postgresAreaMembershipsRepository.addUserMember(id, userId, 'owner');
 		}
 
 		const area = await this.findById(id, userId);
