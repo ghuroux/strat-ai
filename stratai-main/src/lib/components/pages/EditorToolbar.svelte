@@ -17,13 +17,38 @@
 	// Props
 	interface Props {
 		editor: Editor;
+		editorTick?: number; // Increments on each transaction to trigger reactivity
 	}
 
-	let { editor }: Props = $props();
+	let { editor, editorTick = 0 }: Props = $props();
 
 	// Link modal state
 	let showLinkModal = $state(false);
 	let linkUrl = $state('');
+	let selectedText = $state('');
+
+	// Reactive format states - depend on editorTick to re-evaluate on cursor changes
+	// The `editorTick >= 0` check ensures Svelte tracks editorTick as a dependency
+	let canUndo = $derived(editorTick >= 0 && editor.can().undo());
+	let canRedo = $derived(editorTick >= 0 && editor.can().redo());
+	let isBoldActive = $derived(editorTick >= 0 && editor.isActive('bold'));
+	let isItalicActive = $derived(editorTick >= 0 && editor.isActive('italic'));
+	let isUnderlineActive = $derived(editorTick >= 0 && editor.isActive('underline'));
+	let isStrikeActive = $derived(editorTick >= 0 && editor.isActive('strike'));
+	let isParagraphActive = $derived(
+		editorTick >= 0 &&
+		editor.isActive('paragraph') &&
+		!editor.isActive('heading')
+	);
+	let isH1Active = $derived(editorTick >= 0 && editor.isActive('heading', { level: 1 }));
+	let isH2Active = $derived(editorTick >= 0 && editor.isActive('heading', { level: 2 }));
+	let isH3Active = $derived(editorTick >= 0 && editor.isActive('heading', { level: 3 }));
+	let isBulletListActive = $derived(editorTick >= 0 && editor.isActive('bulletList'));
+	let isOrderedListActive = $derived(editorTick >= 0 && editor.isActive('orderedList'));
+	let isTaskListActive = $derived(editorTick >= 0 && editor.isActive('taskList'));
+	let isBlockquoteActive = $derived(editorTick >= 0 && editor.isActive('blockquote'));
+	let isCodeBlockActive = $derived(editorTick >= 0 && editor.isActive('codeBlock'));
+	let isLinkActive = $derived(editorTick >= 0 && editor.isActive('link'));
 
 	// Check if OS is Mac for shortcut display
 	const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -44,7 +69,19 @@
 		// Get existing link URL if any
 		const previousUrl = editor.getAttributes('link').href;
 		linkUrl = previousUrl || '';
+
+		// Get selected text for display
+		const { from, to } = editor.state.selection;
+		selectedText = editor.state.doc.textBetween(from, to, ' ');
+
 		showLinkModal = true;
+
+		// Auto-focus input after modal renders
+		setTimeout(() => {
+			const input = document.querySelector('.link-input') as HTMLInputElement;
+			input?.focus();
+			input?.select();
+		}, 50);
 	}
 
 	function handleLinkKeydown(e: KeyboardEvent) {
@@ -59,12 +96,43 @@
 </script>
 
 <div class="editor-toolbar">
+	<!-- Group 0: History (Undo/Redo) -->
+	<div class="toolbar-group">
+		<button
+			type="button"
+			class="toolbar-btn"
+			onclick={() => editor.chain().focus().undo().run()}
+			disabled={!canUndo}
+			title="Undo ({modKey}+Z)"
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M3 7v6h6" />
+				<path d="M3 13c0-4.97 4.03-9 9-9a9 9 0 0 1 9 9 9 9 0 0 1-9 9 9 9 0 0 1-7.5-4" />
+			</svg>
+		</button>
+
+		<button
+			type="button"
+			class="toolbar-btn"
+			onclick={() => editor.chain().focus().redo().run()}
+			disabled={!canRedo}
+			title="Redo ({modKey}+Shift+Z)"
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M21 7v6h-6" />
+				<path d="M21 13c0-4.97-4.03-9-9-9a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 7.5-4" />
+			</svg>
+		</button>
+	</div>
+
+	<div class="toolbar-divider"></div>
+
 	<!-- Group 1: Text Formatting -->
 	<div class="toolbar-group">
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('bold')}
+			class:active={isBoldActive}
 			onclick={() => editor.chain().focus().toggleBold().run()}
 			title="Bold ({modKey}+B)"
 		>
@@ -77,7 +145,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('italic')}
+			class:active={isItalicActive}
 			onclick={() => editor.chain().focus().toggleItalic().run()}
 			title="Italic ({modKey}+I)"
 		>
@@ -91,7 +159,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('underline')}
+			class:active={isUnderlineActive}
 			onclick={() => editor.chain().focus().toggleUnderline().run()}
 			title="Underline ({modKey}+U)"
 		>
@@ -104,7 +172,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('strike')}
+			class:active={isStrikeActive}
 			onclick={() => editor.chain().focus().toggleStrike().run()}
 			title="Strikethrough"
 		>
@@ -112,6 +180,23 @@
 				<path d="M16 4H9a3 3 0 0 0-2.83 4" />
 				<path d="M14 12a4 4 0 0 1 0 8H6" />
 				<line x1="4" y1="12" x2="20" y2="12" />
+			</svg>
+		</button>
+
+		<button
+			type="button"
+			class="toolbar-btn"
+			onclick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
+			title="Clear formatting"
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<path d="M4 7h16" />
+				<path d="M10 11l-6 6" />
+				<path d="M14 4l-9 9" />
+				<path d="M14 4l3 3" />
+				<path d="M14 11h6" />
+				<path d="M14 15h6" />
+				<path d="M14 19h6" />
 			</svg>
 		</button>
 	</div>
@@ -123,7 +208,17 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('heading', { level: 1 })}
+			class:active={isParagraphActive}
+			onclick={() => editor.chain().focus().setParagraph().run()}
+			title="Normal text ({modKey}+Alt+0)"
+		>
+			<span class="text-label">P</span>
+		</button>
+
+		<button
+			type="button"
+			class="toolbar-btn"
+			class:active={isH1Active}
 			onclick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
 			title="Heading 1 ({modKey}+Alt+1)"
 		>
@@ -133,7 +228,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('heading', { level: 2 })}
+			class:active={isH2Active}
 			onclick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
 			title="Heading 2 ({modKey}+Alt+2)"
 		>
@@ -143,7 +238,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('heading', { level: 3 })}
+			class:active={isH3Active}
 			onclick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
 			title="Heading 3 ({modKey}+Alt+3)"
 		>
@@ -158,7 +253,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('bulletList')}
+			class:active={isBulletListActive}
 			onclick={() => editor.chain().focus().toggleBulletList().run()}
 			title="Bullet List ({modKey}+Shift+8)"
 		>
@@ -175,7 +270,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('orderedList')}
+			class:active={isOrderedListActive}
 			onclick={() => editor.chain().focus().toggleOrderedList().run()}
 			title="Numbered List ({modKey}+Shift+7)"
 		>
@@ -192,7 +287,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('taskList')}
+			class:active={isTaskListActive}
 			onclick={() => editor.chain().focus().toggleTaskList().run()}
 			title="Checklist"
 		>
@@ -213,7 +308,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('blockquote')}
+			class:active={isBlockquoteActive}
 			onclick={() => editor.chain().focus().toggleBlockquote().run()}
 			title="Quote ({modKey}+Shift+B)"
 		>
@@ -226,7 +321,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('codeBlock')}
+			class:active={isCodeBlockActive}
 			onclick={() => editor.chain().focus().toggleCodeBlock().run()}
 			title="Code Block ({modKey}+Alt+C)"
 		>
@@ -244,7 +339,7 @@
 		<button
 			type="button"
 			class="toolbar-btn"
-			class:active={editor.isActive('link')}
+			class:active={isLinkActive}
 			onclick={openLinkModal}
 			title="Link ({modKey}+K)"
 		>
@@ -283,6 +378,12 @@
 				</button>
 			</div>
 			<div class="link-modal-body">
+				{#if selectedText}
+					<div class="link-selected-text">
+						<span class="link-selected-label">Link text:</span>
+						<span class="link-selected-value">{selectedText}</span>
+					</div>
+				{/if}
 				<input
 					type="url"
 					bind:value={linkUrl}
@@ -292,8 +393,24 @@
 				/>
 			</div>
 			<div class="link-modal-footer">
-				<button type="button" class="btn-cancel" onclick={() => (showLinkModal = false)}>Cancel</button>
-				<button type="button" class="btn-apply" onclick={handleSetLink}>Apply</button>
+				{#if isLinkActive}
+					<button
+						type="button"
+						class="btn-remove"
+						onclick={() => {
+							editor.chain().focus().unsetLink().run();
+							showLinkModal = false;
+							linkUrl = '';
+							selectedText = '';
+						}}
+					>
+						Remove link
+					</button>
+				{/if}
+				<div class="link-modal-actions">
+					<button type="button" class="btn-cancel" onclick={() => (showLinkModal = false)}>Cancel</button>
+					<button type="button" class="btn-apply" onclick={handleSetLink}>Apply</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -339,6 +456,16 @@
 	.toolbar-btn.active {
 		background: var(--toolbar-button-active);
 		color: var(--editor-text);
+	}
+
+	.toolbar-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.toolbar-btn:disabled:hover {
+		background: transparent;
+		color: var(--editor-text-secondary);
 	}
 
 	.toolbar-divider {
@@ -415,6 +542,25 @@
 		padding: 1rem;
 	}
 
+	/* Selected text display */
+	.link-selected-text {
+		margin-bottom: 0.75rem;
+		padding: 0.5rem 0.75rem;
+		background: var(--toolbar-button-hover);
+		border-radius: 4px;
+		font-size: 0.8125rem;
+	}
+
+	.link-selected-label {
+		color: var(--editor-text-secondary);
+		margin-right: 0.5rem;
+	}
+
+	.link-selected-value {
+		color: var(--editor-text);
+		font-weight: 500;
+	}
+
 	.link-input {
 		width: 100%;
 		padding: 0.75rem;
@@ -432,10 +578,34 @@
 
 	.link-modal-footer {
 		display: flex;
-		justify-content: flex-end;
+		justify-content: space-between;
+		align-items: center;
 		gap: 0.5rem;
 		padding: 1rem;
 		border-top: 1px solid var(--editor-border);
+	}
+
+	.link-modal-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-left: auto;
+	}
+
+	/* Remove link button */
+	.btn-remove {
+		padding: 0.5rem 1rem;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		background: rgba(239, 68, 68, 0.1);
+		color: #ef4444;
+		transition: background-color 100ms ease;
+	}
+
+	.btn-remove:hover {
+		background: rgba(239, 68, 68, 0.2);
 	}
 
 	.btn-cancel,

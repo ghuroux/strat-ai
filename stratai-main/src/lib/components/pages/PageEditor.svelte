@@ -24,7 +24,7 @@
 	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 	import { common, createLowlight } from 'lowlight';
 	import type { Page, TipTapContent, PageType, PageVisibility } from '$lib/types/page';
-	import { EMPTY_TIPTAP_CONTENT, countWords } from '$lib/types/page';
+	import { EMPTY_TIPTAP_CONTENT, countWords, extractTextFromContent } from '$lib/types/page';
 	import EditorToolbar from './EditorToolbar.svelte';
 	import PageHeader from './PageHeader.svelte';
 	import EditorChatPanel from './EditorChatPanel.svelte';
@@ -67,6 +67,7 @@
 	let lastSavedAt = $state<Date | null>(null);
 	let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 	let chatPanelOpen = $state(false);
+	let editorTick = $state(0); // Increments on each transaction to force toolbar reactivity
 
 	// Sync state with props when page or initial values change
 	$effect(() => {
@@ -90,6 +91,12 @@
 
 	// Word count derived from content
 	let wordCount = $derived(countWords(content));
+
+	// Character count derived from content
+	let charCount = $derived.by(() => {
+		const text = extractTextFromContent(content);
+		return text.length;
+	});
 
 	// Initialize TipTap editor
 	onMount(() => {
@@ -125,6 +132,10 @@
 				isDirty = true;
 				saveStatus = 'idle';
 				scheduleAutoSave();
+			},
+			onTransaction: () => {
+				// Increment tick to trigger toolbar reactivity on cursor/selection changes
+				editorTick++;
 			},
 			editorProps: {
 				attributes: {
@@ -320,7 +331,7 @@
 		<div class="editor-main" class:chat-open={chatPanelOpen}>
 			<!-- Toolbar -->
 			{#if editor}
-				<EditorToolbar {editor} />
+				<EditorToolbar {editor} {editorTick} />
 			{/if}
 
 			<!-- Editor body -->
@@ -343,10 +354,34 @@
 
 	<!-- Footer -->
 	<div class="editor-footer">
-		<span class="word-count">{wordCount} words</span>
-		{#if lastSavedAt}
-			<span class="last-saved">Last saved {formatLastSaved(lastSavedAt)}</span>
-		{/if}
+		<span class="word-count">{wordCount} words · {charCount} chars</span>
+
+		<!-- Auto-save indicator -->
+		<div class="save-indicator">
+			{#if saveStatus === 'saving'}
+				<span class="save-status saving">
+					<svg class="save-icon spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8" />
+					</svg>
+					Saving...
+				</span>
+			{:else if isDirty}
+				<span class="save-status unsaved">
+					<span class="unsaved-dot"></span>
+					Unsaved changes
+				</span>
+			{:else if saveStatus === 'saved'}
+				<span class="save-status saved">
+					<svg class="save-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="20 6 9 17 4 12" />
+					</svg>
+					Saved
+				</span>
+			{:else if lastSavedAt}
+				<span class="save-status last-saved">Last saved {formatLastSaved(lastSavedAt)}</span>
+			{/if}
+		</div>
+
 		<span class="visibility-badge">{page?.visibility ?? 'private'}</span>
 	</div>
 </div>
@@ -420,8 +455,69 @@
 		font-weight: 500;
 	}
 
-	.last-saved {
+	/* Auto-save indicator */
+	.save-indicator {
+		display: flex;
+		align-items: center;
+	}
+
+	.save-status {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.8125rem;
+	}
+
+	.save-status.unsaved {
+		color: var(--editor-text-secondary);
+	}
+
+	.unsaved-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: #f59e0b;
+		animation: pulse-dot 2s ease-in-out infinite;
+	}
+
+	@keyframes pulse-dot {
+		0%, 100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
+	}
+
+	.save-status.saving {
+		color: var(--editor-border-focus);
+	}
+
+	.save-status.saved {
+		color: #16a34a;
+	}
+
+	.save-status.last-saved {
+		color: var(--editor-text-secondary);
 		opacity: 0.7;
+	}
+
+	.save-icon {
+		width: 14px;
+		height: 14px;
+	}
+
+	.save-icon.spin {
+		animation: spin 1s linear infinite;
+	}
+
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.visibility-badge {

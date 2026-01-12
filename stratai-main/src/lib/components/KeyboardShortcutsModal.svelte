@@ -47,6 +47,21 @@
 			]
 		},
 		{
+			category: 'Editor',
+			items: [
+				{ keys: ['⌘', 'S'], description: 'Save page' },
+				{ keys: ['⌘', 'B'], description: 'Bold' },
+				{ keys: ['⌘', 'I'], description: 'Italic' },
+				{ keys: ['⌘', 'U'], description: 'Underline' },
+				{ keys: ['⌘', 'K'], description: 'Insert link' },
+				{ keys: ['⌘', 'Z'], description: 'Undo' },
+				{ keys: ['⌘', '⇧', 'Z'], description: 'Redo' },
+				{ keys: ['⌘', '⌥', '1'], description: 'Heading 1' },
+				{ keys: ['⌘', '⌥', '2'], description: 'Heading 2' },
+				{ keys: ['⌘', '⌥', '3'], description: 'Heading 3' }
+			]
+		},
+		{
 			category: 'Secrets',
 			items: [
 				{ keys: ['↑↑↓↓←→←→', 'B', 'A'], description: '???' },

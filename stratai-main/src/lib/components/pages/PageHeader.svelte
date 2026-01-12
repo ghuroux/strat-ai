@@ -47,11 +47,24 @@
 	// Local state for title editing
 	let isEditingTitle = $state(false);
 	let editedTitle = $state('');
+	let titleInputRef: HTMLInputElement | null = $state(null);
+
+	// Visibility confirmation modal state
+	let showVisibilityModal = $state(false);
+	let pendingVisibility = $state<PageVisibility | null>(null);
 
 	// Sync editedTitle with title prop when it changes (and not currently editing)
 	$effect(() => {
 		if (!isEditingTitle) {
 			editedTitle = title;
+		}
+	});
+
+	// Auto-focus and select title input when editing starts
+	$effect(() => {
+		if (isEditingTitle && titleInputRef) {
+			titleInputRef.focus();
+			titleInputRef.select();
 		}
 	});
 
@@ -96,11 +109,32 @@
 	/**
 	 * Handle visibility change
 	 * P9-VT-03: Clicking updates visibility
+	 * P2-VC-01: Show confirmation when changing to shared
 	 */
 	function handleVisibilityChange(newVisibility: PageVisibility) {
-		if (onVisibilityChange && newVisibility !== visibility) {
+		if (!onVisibilityChange || newVisibility === visibility) return;
+
+		// Confirmation only needed when making public (private → shared)
+		if (newVisibility === 'shared' && visibility === 'private') {
+			pendingVisibility = newVisibility;
+			showVisibilityModal = true;
+		} else {
+			// No confirmation needed for shared → private (reducing access)
 			onVisibilityChange(newVisibility);
 		}
+	}
+
+	function confirmVisibilityChange() {
+		if (pendingVisibility && onVisibilityChange) {
+			onVisibilityChange(pendingVisibility);
+		}
+		showVisibilityModal = false;
+		pendingVisibility = null;
+	}
+
+	function cancelVisibilityChange() {
+		showVisibilityModal = false;
+		pendingVisibility = null;
 	}
 
 	// Get type label
@@ -121,6 +155,7 @@
 				<input
 					type="text"
 					class="title-input"
+					bind:this={titleInputRef}
 					bind:value={editedTitle}
 					onblur={handleTitleBlur}
 					onkeydown={handleTitleKeydown}
@@ -207,6 +242,33 @@
 		{/if}
 	</div>
 </header>
+
+<!-- Visibility Confirmation Modal -->
+{#if showVisibilityModal}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div class="visibility-modal-overlay" onclick={cancelVisibilityChange}>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div class="visibility-modal" onclick={(e) => e.stopPropagation()}>
+			<div class="visibility-modal-header">
+				<svg class="visibility-modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+					<circle cx="9" cy="7" r="4" />
+					<path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+					<path d="M16 3.13a4 4 0 0 1 0 7.75" />
+				</svg>
+				<span>Share this page?</span>
+			</div>
+			<div class="visibility-modal-body">
+				<p>This will make the page visible to <strong>all members of this Area</strong>.</p>
+				<p class="visibility-modal-hint">You can change it back to private at any time.</p>
+			</div>
+			<div class="visibility-modal-footer">
+				<button type="button" class="btn-cancel" onclick={cancelVisibilityChange}>Cancel</button>
+				<button type="button" class="btn-confirm" onclick={confirmVisibilityChange}>Share Page</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.page-header {
@@ -421,5 +483,101 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+
+	/* Visibility Confirmation Modal */
+	.visibility-modal-overlay {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 100;
+	}
+
+	.visibility-modal {
+		background: var(--editor-bg);
+		border: 1px solid var(--editor-border);
+		border-radius: 12px;
+		width: 100%;
+		max-width: 400px;
+		box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+	}
+
+	.visibility-modal-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 1.25rem 1.5rem;
+		border-bottom: 1px solid var(--editor-border);
+		font-weight: 600;
+		font-size: 1rem;
+	}
+
+	.visibility-modal-icon {
+		width: 24px;
+		height: 24px;
+		color: var(--editor-border-focus);
+	}
+
+	.visibility-modal-body {
+		padding: 1.25rem 1.5rem;
+	}
+
+	.visibility-modal-body p {
+		margin: 0;
+		color: var(--editor-text);
+		font-size: 0.9375rem;
+		line-height: 1.5;
+	}
+
+	.visibility-modal-body p + p {
+		margin-top: 0.75rem;
+	}
+
+	.visibility-modal-hint {
+		color: var(--editor-text-secondary);
+		font-size: 0.8125rem;
+	}
+
+	.visibility-modal-footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		padding: 1rem 1.5rem;
+		border-top: 1px solid var(--editor-border);
+	}
+
+	.visibility-modal-footer .btn-cancel {
+		padding: 0.5rem 1rem;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		background: transparent;
+		color: var(--editor-text-secondary);
+		transition: background-color 100ms ease;
+	}
+
+	.visibility-modal-footer .btn-cancel:hover {
+		background: var(--toolbar-button-hover);
+	}
+
+	.visibility-modal-footer .btn-confirm {
+		padding: 0.5rem 1rem;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		background: var(--editor-border-focus);
+		color: white;
+		transition: filter 100ms ease;
+	}
+
+	.visibility-modal-footer .btn-confirm:hover {
+		filter: brightness(1.1);
 	}
 </style>
