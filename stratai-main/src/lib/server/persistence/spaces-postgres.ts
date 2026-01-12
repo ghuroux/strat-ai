@@ -310,6 +310,24 @@ export const postgresSpaceRepository: SpaceRepository = {
 				console.error('Failed to create General area for system space:', spaceId, e);
 			}
 		}
+
+		// Also ensure existing system spaces have General areas (handles legacy spaces)
+		if (existing.length > 0) {
+			const existingSpaces = await sql<{ id: string }[]>`
+				SELECT id FROM spaces
+				WHERE user_id = ${userId}
+				  AND type = 'system'
+				  AND deleted_at IS NULL
+			`;
+			for (const space of existingSpaces) {
+				try {
+					// createGeneral is idempotent - returns existing if found
+					await postgresAreaRepository.createGeneral(space.id, userId);
+				} catch (e) {
+					console.error('Failed to ensure General area for space:', space.id, e);
+				}
+			}
+		}
 	},
 
 	/**
