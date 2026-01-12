@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import type { Cookies } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 
 const SESSION_COOKIE_NAME = 'session';
 const DEFAULT_MAX_AGE = 86400; // 24 hours
@@ -74,13 +75,15 @@ export function verifySession(token: string): SessionData | null {
 
 /**
  * Set the session cookie
+ * - secure: true in production (HTTPS), false in development
+ * - sameSite: 'lax' allows redirects to work properly with cookies
  */
 export function setSessionCookie(cookies: Cookies, token: string): void {
 	cookies.set(SESSION_COOKIE_NAME, token, {
 		path: '/',
 		httpOnly: true,
-		sameSite: 'strict',
-		secure: false, // Set to true in production with HTTPS
+		sameSite: 'lax',
+		secure: !dev,
 		maxAge: getSessionMaxAge()
 	});
 }
