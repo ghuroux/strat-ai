@@ -8,6 +8,7 @@
 	 * See: docs/GUIDED_CREATION.md Phase 2
 	 */
 
+	import { onMount } from 'svelte';
 	import type { TemplateSchema, GuidedCreationData } from '$lib/types/guided-creation';
 	import { guidedCreationFlowStore } from '$lib/stores/guidedCreationFlow.svelte';
 	import ProgressIndicator from './ProgressIndicator.svelte';
@@ -15,6 +16,13 @@
 	import FieldRenderer from './FieldRenderer.svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { ChevronLeft, ChevronRight, X, SkipForward } from 'lucide-svelte';
+
+	/** User info for attendees field */
+	export interface UserInfo {
+		id: string;
+		name: string;
+		email?: string;
+	}
 
 	interface Props {
 		schema: TemplateSchema;
@@ -25,6 +33,22 @@
 	}
 
 	let { schema, spaceId, areaId, onComplete, onCancel }: Props = $props();
+
+	// Available users for attendees field
+	let availableUsers = $state<UserInfo[]>([]);
+
+	// Load users on mount
+	onMount(async () => {
+		try {
+			const response = await fetch('/api/users');
+			if (response.ok) {
+				const data = await response.json();
+				availableUsers = data.users || [];
+			}
+		} catch (error) {
+			console.error('Failed to load users:', error);
+		}
+	});
 
 	// Initialize store on mount
 	$effect(() => {
@@ -96,6 +120,7 @@
 								{field}
 								value={guidedCreationFlowStore.getFieldValue(field.id)}
 								onUpdate={(value) => handleFieldUpdate(field.id, value)}
+								users={availableUsers}
 							/>
 						{/each}
 					</StepCard>

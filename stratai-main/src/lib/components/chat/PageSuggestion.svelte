@@ -51,7 +51,8 @@
 		}
 	});
 
-	let pageTypeLabel = $derived(PAGE_TYPE_LABELS[pageType] || 'Page');
+	// Use "Page" for general type, specific label for others
+	let pageTypeLabel = $derived(pageType === 'general' ? 'Page' : (PAGE_TYPE_LABELS[pageType] || 'Page'));
 </script>
 
 <div

@@ -17,14 +17,22 @@
 	import DecisionsField from './fields/DecisionsField.svelte';
 	import ActionItemsField from './fields/ActionItemsField.svelte';
 
+	/** User info for attendees/assignee fields */
+	interface UserInfo {
+		id: string;
+		name: string;
+		email?: string;
+	}
+
 	interface Props {
 		field: FieldDefinition;
 		value: unknown;
 		onUpdate: (value: unknown) => void;
 		disabled?: boolean;
+		users?: UserInfo[];
 	}
 
-	let { field, value, onUpdate, disabled = false }: Props = $props();
+	let { field, value, onUpdate, disabled = false, users = [] }: Props = $props();
 </script>
 
 {#if field.type === 'text'}
@@ -38,7 +46,7 @@
 {:else if field.type === 'list'}
 	<ListField {field} value={value as string[]} {onUpdate} {disabled} />
 {:else if field.type === 'attendees'}
-	<AttendeesField {field} value={value as MeetingAttendees} {onUpdate} {disabled} />
+	<AttendeesField {field} value={value as MeetingAttendees} {onUpdate} {disabled} {users} />
 {:else if field.type === 'decisions'}
 	<DecisionsField {field} value={value as MeetingDecision[]} {onUpdate} {disabled} />
 {:else if field.type === 'action-items'}

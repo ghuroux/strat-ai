@@ -9,18 +9,27 @@
 	import type { MeetingAttendees, ExternalAttendee } from '$lib/types/meeting-notes-data';
 	import { Plus, X, User, Building } from 'lucide-svelte';
 
+	/** User info from the system */
+	interface UserInfo {
+		id: string;
+		name: string;
+		email?: string;
+	}
+
 	interface Props {
 		field: FieldDefinition;
 		value: MeetingAttendees;
 		onUpdate: (value: MeetingAttendees) => void;
 		disabled?: boolean;
+		users?: UserInfo[];
 	}
 
 	let {
 		field,
 		value = { internal: [], external: [] },
 		onUpdate,
-		disabled = false
+		disabled = false,
+		users = []
 	}: Props = $props();
 
 	// External attendee form state
@@ -29,12 +38,8 @@
 	let externalOrg = $state('');
 	let externalEmail = $state('');
 
-	// TODO: In Phase 6, load real users from Space/Area members
-	const availableUsers = [
-		{ id: 'user-1', name: 'John Doe' },
-		{ id: 'user-2', name: 'Jane Smith' },
-		{ id: 'user-3', name: 'Bob Wilson' }
-	];
+	// Use provided users or empty array
+	let availableUsers = $derived(users);
 
 	function toggleInternalUser(userId: string) {
 		const current = value.internal;
@@ -88,19 +93,23 @@
 			<User class="w-4 h-4" />
 			Team Members
 		</span>
-		<div class="user-checkboxes">
-			{#each availableUsers as user (user.id)}
-				<label class="user-checkbox">
-					<input
-						type="checkbox"
-						checked={value.internal.includes(user.id)}
-						onchange={() => toggleInternalUser(user.id)}
-						{disabled}
-					/>
-					<span>{user.name}</span>
-				</label>
-			{/each}
-		</div>
+		{#if availableUsers.length > 0}
+			<div class="user-checkboxes">
+				{#each availableUsers as user (user.id)}
+					<label class="user-checkbox">
+						<input
+							type="checkbox"
+							checked={value.internal.includes(user.id)}
+							onchange={() => toggleInternalUser(user.id)}
+							{disabled}
+						/>
+						<span>{user.name}</span>
+					</label>
+				{/each}
+			</div>
+		{:else}
+			<p class="no-users-hint">No team members found. Add external attendees below.</p>
+		{/if}
 	</div>
 
 	<!-- External Attendees Section -->
@@ -412,6 +421,13 @@
 	.field-helper {
 		font-size: 0.75rem;
 		color: #71717a;
+		margin: 0;
+	}
+
+	.no-users-hint {
+		font-size: 0.8125rem;
+		color: #71717a;
+		font-style: italic;
 		margin: 0;
 	}
 </style>

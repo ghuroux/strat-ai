@@ -370,13 +370,14 @@ export function shouldSuggestPage(message: Message): PageSuggestion {
 		};
 	}
 
-	// P6-DL-03: Action items -> meeting_notes
+	// P6-DL-03: Action items -> general (don't assume meeting notes)
+	// The page type should be determined by context, not just action items
 	if (hasActionItems(content)) {
 		const baseConfidence = 0.75;
 		const lengthBonus = Math.min((wordCount - 100) / 500, 0.15);
 		return {
 			shouldSuggest: true,
-			pageType: 'meeting_notes',
+			pageType: 'general',
 			confidence: Math.round((baseConfidence + lengthBonus) * 100) / 100,
 			reason: 'action_items_detected'
 		};
