@@ -11,14 +11,22 @@ import { spacesStore } from '$lib/stores/spaces.svelte';
 import { areaStore } from '$lib/stores/areas.svelte';
 import { taskStore } from '$lib/stores/tasks.svelte';
 import { documentStore } from '$lib/stores/documents.svelte';
+import { arenaStore } from '$lib/stores/arena.svelte';
+import { pageStore } from '$lib/stores/pages.svelte';
 
 // localStorage keys used by the app
+// These are cleared to prevent data leakage between user sessions
 const LOCAL_STORAGE_KEYS = [
-	'strathost-conversations',
-	'strathost-settings',
-	// Add any other localStorage keys your app uses
-	'strathost-arena-history',
-	'strathost-planning-model-preference'
+	// Core stores
+	'strathost-conversations', // chatStore
+	'strathost-settings', // settingsStore
+	'strathost-arena-battles', // arenaStore
+	// User preferences
+	'stratai-task-planning-model', // TaskPlanningModelModal
+	'stratai-task-planning-skip-modal', // TaskPlanningModelModal
+	'stratai-tasks-lastVisit', // temporal-context
+	// Optional (non-sensitive but good to clear)
+	'stratai-easter-eggs' // easter-eggs store
 ];
 
 /**
@@ -61,6 +69,18 @@ export function clearClientState(): void {
 		documentStore.clearAll();
 	} catch (e) {
 		console.warn('Failed to clear documentStore:', e);
+	}
+
+	try {
+		arenaStore.clearAll();
+	} catch (e) {
+		console.warn('Failed to clear arenaStore:', e);
+	}
+
+	try {
+		pageStore.clearAll();
+	} catch (e) {
+		console.warn('Failed to clear pageStore:', e);
 	}
 
 	// Clear localStorage
