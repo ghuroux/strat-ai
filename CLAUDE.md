@@ -150,7 +150,74 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-12 (Document Sharing Architecture & ENTITY_MODEL Reconciliation)
+### Latest: 2026-01-12 (SendGrid Email Integration + Area Sharing + UX Improvements)
+
+**Completed:**
+
+*SendGrid Email Integration (All 10 Phases):*
+- Secure password reset flow with SHA256 token hashing
+- Rate limiting: 5 attempts/email, 10 attempts/IP per 15min
+- Email service with SendGrid API integration
+- Beautiful HTML email templates (password reset, future extensible)
+- Email audit logging with deliverability tracking
+- Timing attack and email enumeration prevention
+- Forgot-password and reset-password UI flows
+- Database migrations: email_logs, password_reset_tokens tables
+- Successfully tested end-to-end (email sent to gabriel@stratech.co.za)
+
+*Area Sharing Implementation (Phases 0-5):*
+- Database schema: area_memberships table, is_restricted flag on focus_areas
+- Repository layer with full access control (CanAccessArea, AddMember, RemoveMember, UpdateRole)
+- Complete component suite: AreaAccessToggle, AreaMemberList, ShareAreaModal
+- Search with debounce for adding members
+- API endpoints with authorization: /api/areas/[id]/members (GET/POST/PATCH/DELETE)
+- UX integration: Area header toggle, sliding member panel
+- Rate limiting and error handling
+
+*UX Improvements:*
+- Main chat navigation button in header (desktop + mobile) with active state
+- Login redirects to user's preferred home URL (main-chat, space, area, task-dashboard)
+
+*Bug Fixes:*
+- Fixed groups-postgres.ts column name mismatch (u.name → u.display_name)
+
+**Files Created (29 new files):**
+- Database: migrations/027-area-sharing.sql, 028-email-system.sql
+- Types: area-memberships.ts, email.ts
+- Repositories: area-memberships-postgres.ts, email-logs-postgres.ts, password-reset-tokens-postgres.ts
+- Email Service: src/lib/server/email/ (sendgrid.ts, templates.ts, index.ts)
+- Components: src/lib/components/areas/ (9 components)
+- API Endpoints: api/auth/forgot-password, api/auth/reset-password, api/areas/[id]/members
+- UI Pages: forgot-password/+page.svelte, reset-password/+page.svelte
+- Utils: debounce.ts
+- Documentation: area-sharing-ux.md, run-migration.ts
+
+**Files Modified (19 files):**
+- users-postgres.ts - Added findByEmailGlobal(), updatePassword()
+- areas-postgres.ts - Added findByIdWithMemberships(), updateIsRestricted()
+- persistence/types.ts - Updated UserRepository interface
+- persistence/index.ts - Exported new repositories
+- hooks.server.ts - Added password reset routes to PUBLIC_ROUTES
+- Header.svelte - Added main chat navigation button
+- login/+page.server.ts - Respects home URL preference
+- login/+page.svelte - Added "Forgot password?" link
+- areas.svelte.ts - Added member management state
+- user.svelte.ts - Updated homeUrl handling
+- .env.example - Added SendGrid configuration section
+- docs/SENDGRID_EMAIL_INTEGRATION.md - Complete roadmap with 17 email types prioritized
+
+**Key Decisions:**
+- Area-level sharing (not Space-level) for collaboration precision
+- Email templates built extensible for 17 future notification types
+- Rate limiting at both email and IP level for abuse prevention
+- Member search debounce (300ms) for UX performance
+
+**Next Steps:**
+- Document sharing implementation (upload, activate, share flows)
+- Admin portal enhancements (group management, usage analytics)
+- Email notification system expansion (invites, activity digests)
+
+### Previous: 2026-01-12 (Document Sharing Architecture & ENTITY_MODEL Reconciliation)
 
 **Completed:**
 
