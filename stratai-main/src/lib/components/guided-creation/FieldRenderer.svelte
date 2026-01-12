@@ -48,9 +48,9 @@
 {:else if field.type === 'attendees'}
 	<AttendeesField {field} value={value as MeetingAttendees} {onUpdate} {disabled} {users} />
 {:else if field.type === 'decisions'}
-	<DecisionsField {field} value={value as MeetingDecision[]} {onUpdate} {disabled} />
+	<DecisionsField {field} value={value as MeetingDecision[]} {onUpdate} {disabled} {users} />
 {:else if field.type === 'action-items'}
-	<ActionItemsField {field} value={value as MeetingActionItem[]} {onUpdate} {disabled} />
+	<ActionItemsField {field} value={value as MeetingActionItem[]} {onUpdate} {disabled} {users} />
 {:else}
 	<!-- Fallback for unsupported field types -->
 	<div class="unsupported-field">

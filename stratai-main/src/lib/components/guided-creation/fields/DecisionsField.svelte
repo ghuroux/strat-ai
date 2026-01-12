@@ -10,24 +10,28 @@
 	import { createMeetingDecision } from '$lib/types/meeting-notes-data';
 	import { Plus, X, ChevronDown, ChevronUp } from 'lucide-svelte';
 
+	/** User info from the system */
+	interface UserInfo {
+		id: string;
+		name: string;
+		email?: string;
+	}
+
 	interface Props {
 		field: FieldDefinition;
 		value: MeetingDecision[];
 		onUpdate: (value: MeetingDecision[]) => void;
 		disabled?: boolean;
+		users?: UserInfo[];
 	}
 
-	let { field, value = [], onUpdate, disabled = false }: Props = $props();
+	let { field, value = [], onUpdate, disabled = false, users = [] }: Props = $props();
 
 	// Track which decisions have expanded rationale
 	let expandedRationale = $state<Set<string>>(new Set());
 
-	// TODO: In Phase 6, get from Space/Area members
-	const availableOwners = [
-		{ id: 'user-1', name: 'John Doe' },
-		{ id: 'user-2', name: 'Jane Smith' },
-		{ id: 'user-3', name: 'Bob Wilson' }
-	];
+	// Use provided users for owner selection
+	let availableOwners = $derived(users);
 
 	function addDecision() {
 		const newDecision = createMeetingDecision('');

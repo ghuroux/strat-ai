@@ -10,21 +10,25 @@
 	import { createMeetingActionItem } from '$lib/types/meeting-notes-data';
 	import { Plus, X, CheckSquare } from 'lucide-svelte';
 
+	/** User info from the system */
+	interface UserInfo {
+		id: string;
+		name: string;
+		email?: string;
+	}
+
 	interface Props {
 		field: FieldDefinition;
 		value: MeetingActionItem[];
 		onUpdate: (value: MeetingActionItem[]) => void;
 		disabled?: boolean;
+		users?: UserInfo[];
 	}
 
-	let { field, value = [], onUpdate, disabled = false }: Props = $props();
+	let { field, value = [], onUpdate, disabled = false, users = [] }: Props = $props();
 
-	// TODO: In Phase 6, get from Space/Area members
-	const availableAssignees = [
-		{ id: 'user-1', name: 'John Doe' },
-		{ id: 'user-2', name: 'Jane Smith' },
-		{ id: 'user-3', name: 'Bob Wilson' }
-	];
+	// Use provided users for assignee selection
+	let availableAssignees = $derived(users);
 
 	function addActionItem() {
 		const newItem = createMeetingActionItem('', true);
