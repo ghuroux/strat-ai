@@ -184,7 +184,9 @@
 				type="button"
 				class="dropdown-item danger"
 				onclick={() => {
+					console.log('[LOGOUT] Step 1: Logout button clicked');
 					isOpen = false;
+					console.log('[LOGOUT] Step 2: Calling performLogout()');
 					performLogout();
 				}}
 			>

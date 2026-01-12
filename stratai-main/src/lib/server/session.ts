@@ -99,5 +99,14 @@ export function getSessionCookie(cookies: Cookies): string | undefined {
  * Clear the session cookie
  */
 export function clearSessionCookie(cookies: Cookies): void {
-	cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+	console.log('[SESSION] clearSessionCookie called');
+	console.log('[SESSION] Cookie name to delete:', SESSION_COOKIE_NAME);
+	console.log('[SESSION] Delete options: { path: "/" }');
+
+	try {
+		cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
+		console.log('[SESSION] ✓ Cookie delete called successfully');
+	} catch (e) {
+		console.error('[SESSION] ✗ Cookie delete failed:', e);
+	}
 }

@@ -34,75 +34,104 @@ const LOCAL_STORAGE_KEYS = [
  * Call this before navigating to /logout
  */
 export function clearClientState(): void {
+	console.log('[LOGOUT] Step 3: clearClientState() called');
+	console.log('[LOGOUT] Clearing Svelte stores...');
+
 	// Clear Svelte stores
 	try {
 		userStore.clear();
+		console.log('[LOGOUT] ✓ userStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear userStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear userStore:', e);
 	}
 
 	try {
 		chatStore.clearAll();
+		console.log('[LOGOUT] ✓ chatStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear chatStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear chatStore:', e);
 	}
 
 	try {
 		spacesStore.clearCache();
+		console.log('[LOGOUT] ✓ spacesStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear spacesStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear spacesStore:', e);
 	}
 
 	try {
 		areaStore.clearCache();
+		console.log('[LOGOUT] ✓ areaStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear areaStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear areaStore:', e);
 	}
 
 	try {
 		taskStore.clearAll();
+		console.log('[LOGOUT] ✓ taskStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear taskStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear taskStore:', e);
 	}
 
 	try {
 		documentStore.clearAll();
+		console.log('[LOGOUT] ✓ documentStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear documentStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear documentStore:', e);
 	}
 
 	try {
 		arenaStore.clearAll();
+		console.log('[LOGOUT] ✓ arenaStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear arenaStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear arenaStore:', e);
 	}
 
 	try {
 		pageStore.clearAll();
+		console.log('[LOGOUT] ✓ pageStore cleared');
 	} catch (e) {
-		console.warn('Failed to clear pageStore:', e);
+		console.warn('[LOGOUT] ✗ Failed to clear pageStore:', e);
 	}
 
 	// Clear localStorage
+	console.log('[LOGOUT] Clearing localStorage keys...');
 	if (typeof window !== 'undefined') {
 		for (const key of LOCAL_STORAGE_KEYS) {
 			try {
 				localStorage.removeItem(key);
+				console.log(`[LOGOUT] ✓ localStorage key "${key}" removed`);
 			} catch (e) {
-				console.warn(`Failed to remove localStorage key ${key}:`, e);
+				console.warn(`[LOGOUT] ✗ Failed to remove localStorage key ${key}:`, e);
 			}
 		}
+	} else {
+		console.warn('[LOGOUT] ✗ window is undefined, cannot clear localStorage');
 	}
+
+	console.log('[LOGOUT] Step 3 complete: Client state cleared');
 }
 
 /**
  * Perform full logout: clear client state and navigate to server logout
  */
 export function performLogout(): void {
+	console.log('[LOGOUT] performLogout() called');
+
 	clearClientState();
 
 	// Navigate to server logout endpoint
+	console.log('[LOGOUT] Step 4: Navigating to /logout');
 	if (typeof window !== 'undefined') {
+		console.log('[LOGOUT] Current location:', window.location.href);
+		console.log('[LOGOUT] Setting window.location.href = "/logout"');
+
+		// Log cookies before navigation (for debugging)
+		console.log('[LOGOUT] Current cookies:', document.cookie || '(none visible to JS - httpOnly)');
+
 		window.location.href = '/logout';
+		console.log('[LOGOUT] Navigation initiated - browser should redirect now');
+	} else {
+		console.error('[LOGOUT] ✗ window is undefined, cannot navigate');
 	}
 }
