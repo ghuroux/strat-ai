@@ -3,6 +3,7 @@
 	import SettingsGeneral from '$lib/components/settings/SettingsGeneral.svelte';
 	import SettingsAppearance from '$lib/components/settings/SettingsAppearance.svelte';
 	import SettingsProfile from '$lib/components/settings/SettingsProfile.svelte';
+	import SettingsPassword from '$lib/components/settings/SettingsPassword.svelte';
 	import SettingsAIPreferences from '$lib/components/settings/SettingsAIPreferences.svelte';
 	import SettingsShortcuts from '$lib/components/settings/SettingsShortcuts.svelte';
 	import SettingsPrivacy from '$lib/components/settings/SettingsPrivacy.svelte';
@@ -29,6 +30,8 @@
 		<SettingsAppearance />
 	{:else if activeSection === 'profile'}
 		<SettingsProfile />
+	{:else if activeSection === 'password'}
+		<SettingsPassword />
 	{:else if activeSection === 'ai-preferences'}
 		<SettingsAIPreferences />
 	{:else if activeSection === 'shortcuts'}

@@ -17,7 +17,10 @@
 		},
 		{
 			label: 'ACCOUNT',
-			items: [{ id: 'profile', label: 'Profile', icon: 'user' }]
+			items: [
+				{ id: 'profile', label: 'Profile', icon: 'user' },
+				{ id: 'password', label: 'Password', icon: 'lock' }
+			]
 		},
 		{
 			label: 'AI',
@@ -39,6 +42,7 @@
 		'color-swatch':
 			'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01',
 		user: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
+		lock: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
 		sparkles:
 			'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
 		command:

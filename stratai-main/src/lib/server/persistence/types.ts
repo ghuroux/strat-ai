@@ -426,6 +426,7 @@ export interface UserRepository {
 	delete(id: string): Promise<boolean>;
 	getPreferences(id: string): Promise<Record<string, unknown>>;
 	updatePreferences(id: string, preferences: Record<string, unknown>): Promise<Record<string, unknown>>;
+	getPasswordHash(id: string): Promise<string | null>;
 }
 
 // =====================================================

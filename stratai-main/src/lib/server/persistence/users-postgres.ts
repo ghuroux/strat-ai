@@ -218,5 +218,18 @@ export const postgresUserRepository: UserRepository = {
 			throw new Error('User not found');
 		}
 		return rows[0].preferences;
+	},
+
+	/**
+	 * Get password hash for verification (used for password change)
+	 */
+	async getPasswordHash(id: string): Promise<string | null> {
+		const rows = await sql<{ passwordHash: string | null }[]>`
+			SELECT password_hash as "passwordHash"
+			FROM users
+			WHERE id = ${id}
+			  AND deleted_at IS NULL
+		`;
+		return rows.length > 0 ? rows[0].passwordHash : null;
 	}
 };
