@@ -5,6 +5,7 @@ import {
 	modelSupportsVision,
 	getModelCapabilities,
 	MODEL_CAPABILITIES,
+	getConstrainedTemperature,
 	type ModelCapabilities
 } from '$lib/config/model-capabilities';
 
@@ -184,7 +185,11 @@ export async function createChatCompletion(request: ChatCompletionRequest): Prom
 
 	// Only add temperature for non-reasoning models (OpenAI reasoning models don't support it)
 	if (!isReasoningModel) {
-		body.temperature = request.temperature;
+		// Apply model-specific constraints (e.g., instant models require temp=1)
+		const constrainedTemp = getConstrainedTemperature(request.model, request.temperature);
+		if (constrainedTemp !== undefined) {
+			body.temperature = constrainedTemp;
+		}
 	}
 
 	const thinkingEnabled = request.thinking && request.thinking.type === 'enabled';
@@ -309,7 +314,11 @@ export async function createChatCompletionWithTools(request: ChatCompletionReque
 
 	// Only add temperature for non-reasoning models (OpenAI reasoning models don't support it)
 	if (!isReasoningModel) {
-		body.temperature = request.temperature;
+		// Apply model-specific constraints (e.g., instant models require temp=1)
+		const constrainedTemp = getConstrainedTemperature(request.model, request.temperature);
+		if (constrainedTemp !== undefined) {
+			body.temperature = constrainedTemp;
+		}
 	}
 
 	// Build headers

@@ -37,6 +37,34 @@ export interface TaskPlanningCapabilities {
 	planningNote?: string;
 }
 
+/**
+ * Constraint for a single API parameter.
+ * Used to handle model-specific quirks like temperature restrictions.
+ */
+export interface ParameterConstraint {
+	/** If false, parameter is omitted from API request */
+	supported?: boolean;
+	/** If set, parameter MUST be exactly this value (user choice ignored) */
+	fixed?: number;
+	/** Minimum allowed value */
+	min?: number;
+	/** Maximum allowed value */
+	max?: number;
+	/** Default value when user doesn't specify */
+	default?: number;
+}
+
+/**
+ * Parameter constraints for a model.
+ * Used to enforce model-specific API requirements.
+ */
+export interface ParameterConstraints {
+	temperature?: ParameterConstraint;
+	maxTokens?: ParameterConstraint;
+	topP?: ParameterConstraint;
+	topK?: ParameterConstraint;
+}
+
 export interface ModelCapabilities {
 	/** Display name for the model */
 	displayName: string;
@@ -63,6 +91,8 @@ export interface ModelCapabilities {
 	};
 	/** Optional: Task planning capabilities for "Help me plan this" feature */
 	taskPlanning?: TaskPlanningCapabilities;
+	/** Optional: Parameter constraints (e.g., fixed temperature for instant models) */
+	parameterConstraints?: ParameterConstraints;
 }
 
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
@@ -221,7 +251,11 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false, // Instant/speed-optimized
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Speed-optimized for routine queries'
+		description: 'Speed-optimized for routine queries',
+		// OpenAI requires temperature=1 for instant models
+		parameterConstraints: {
+			temperature: { fixed: 1 }
+		}
 	},
 
 	// ============================================
@@ -255,7 +289,11 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false, // Instant version
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Instant version with smaller context'
+		description: 'Instant version with smaller context',
+		// OpenAI requires temperature=1 for instant models
+		parameterConstraints: {
+			temperature: { fixed: 1 }
+		}
 	},
 
 	'gpt-5.1-codex-max': {
@@ -686,4 +724,57 @@ export function getModelsGroupedByTaskPlanningTier(): {
 		capable: getModelsByTaskPlanningTier('capable'),
 		experimental: getModelsByTaskPlanningTier('experimental')
 	};
+}
+
+// ============================================
+// PARAMETER CONSTRAINT HELPERS
+// ============================================
+
+/**
+ * Get the effective temperature for a model, applying any constraints.
+ * Returns the constrained value and logs if a constraint was applied.
+ *
+ * @param modelId - The model ID
+ * @param requestedTemp - The temperature requested by the user
+ * @returns The effective temperature to use, or undefined to omit
+ */
+export function getConstrainedTemperature(
+	modelId: string,
+	requestedTemp: number | undefined
+): number | undefined {
+	const capabilities = MODEL_CAPABILITIES[modelId];
+	const constraint = capabilities?.parameterConstraints?.temperature;
+
+	if (!constraint) {
+		return requestedTemp;
+	}
+
+	// Not supported - omit from request
+	if (constraint.supported === false) {
+		console.log(`[Constraint] ${modelId}: temperature not supported, omitting`);
+		return undefined;
+	}
+
+	// Fixed value - override user choice
+	if (constraint.fixed !== undefined) {
+		if (requestedTemp !== undefined && requestedTemp !== constraint.fixed) {
+			console.log(`[Constraint] ${modelId}: temperature forced to ${constraint.fixed} (was ${requestedTemp})`);
+		}
+		return constraint.fixed;
+	}
+
+	// Apply min/max clamping
+	let result = requestedTemp ?? constraint.default;
+	if (result !== undefined) {
+		if (constraint.min !== undefined && result < constraint.min) {
+			console.log(`[Constraint] ${modelId}: temperature clamped to min ${constraint.min} (was ${result})`);
+			result = constraint.min;
+		}
+		if (constraint.max !== undefined && result > constraint.max) {
+			console.log(`[Constraint] ${modelId}: temperature clamped to max ${constraint.max} (was ${result})`);
+			result = constraint.max;
+		}
+	}
+
+	return result;
 }
