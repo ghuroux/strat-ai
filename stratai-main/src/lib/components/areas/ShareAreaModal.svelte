@@ -13,6 +13,7 @@
 	 * - Empty state for areas with no additional members
 	 */
 
+	import { onMount } from 'svelte';
 	import { fade, fly } from 'svelte/transition';
 	import { X, Loader2, AlertCircle, Lock as LockIcon } from 'lucide-svelte';
 	import type { Area } from '$lib/types/areas';
@@ -63,6 +64,9 @@
 	let removingMemberId = $state<string | null>(null);
 	let isAddingMember = $state(false);
 
+	// Phase 4: Mobile detection
+	let isMobile = $state(false);
+
 	// Derived
 	let currentUserId = $derived(userStore.id ?? null);
 	let userAccessInfo = $derived(area?.id ? areaStore.getAccessInfo(area.id) : null);
@@ -79,6 +83,16 @@
 		if (open && area?.id) {
 			loadMembers();
 		}
+	});
+
+	// Phase 4: Mobile detection
+	onMount(() => {
+		const checkMobile = () => {
+			isMobile = window.innerWidth < 768;
+		};
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+		return () => window.removeEventListener('resize', checkMobile);
 	});
 
 	async function loadMembers() {
@@ -260,7 +274,13 @@
 		onclick={handleBackdropClick}
 		role="presentation"
 	>
-		<div class="modal" transition:fly={{ y: 20, duration: 200 }} role="dialog" aria-labelledby="modal-title">
+		<div
+			class="modal"
+			class:mobile-fullscreen={isMobile}
+			transition:fly={{ y: isMobile ? window.innerHeight : 20, duration: 200 }}
+			role="dialog"
+			aria-labelledby="modal-title"
+		>
 			<!-- Header -->
 			<div class="modal-header">
 				<div class="modal-title-row">
@@ -621,5 +641,57 @@
 
 	:global(html.light) .modal-footer {
 		background: rgba(0, 0, 0, 0.02);
+	}
+
+	/* Phase 4: Mobile full-screen optimization */
+	@media (max-width: 768px) {
+		.modal.mobile-fullscreen {
+			max-width: 100%;
+			max-height: 100%;
+			height: 100vh;
+			border-radius: 0;
+			margin: 0;
+		}
+
+		.modal.mobile-fullscreen .modal-header {
+			position: sticky;
+			top: 0;
+			background: rgb(23, 23, 23);
+			z-index: 10;
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		}
+
+		.modal.mobile-fullscreen .add-member-section {
+			position: sticky;
+			top: 3.75rem;
+			background: rgb(23, 23, 23);
+			z-index: 9;
+			margin-bottom: 0;
+			padding-bottom: 1rem;
+			box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+		}
+
+		.modal.mobile-fullscreen .modal-content {
+			padding: 1rem;
+			overflow-y: auto;
+			-webkit-overflow-scrolling: touch;
+		}
+
+		.modal.mobile-fullscreen :global(.remove-button),
+		.modal.mobile-fullscreen :global(.role-trigger) {
+			min-width: 44px;
+			min-height: 44px;
+		}
+	}
+
+	/* Light mode mobile */
+	@media (max-width: 768px) {
+		:global(html.light) .modal.mobile-fullscreen .modal-header {
+			background: #ffffff;
+		}
+
+		:global(html.light) .modal.mobile-fullscreen .add-member-section {
+			background: #ffffff;
+		}
 	}
 </style>

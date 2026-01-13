@@ -31,6 +31,7 @@
 	import { shouldSuggestPage, type PageSuggestion as PageSuggestionType } from '$lib/utils/page-detection';
 	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
 	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
+	import AreaAvatarStack from '$lib/components/areas/AreaAvatarStack.svelte';
 	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
@@ -134,6 +135,12 @@
 
 		// Default: show if owner/creator
 		return isOwner;
+	});
+
+	// Phase 4: Member count for avatar stack
+	let memberCount = $derived.by(() => {
+		if (!area?.id) return 0;
+		return areaStore.getMembersForArea(area.id).length;
 	});
 
 	// Chat state
@@ -1401,6 +1408,11 @@
 						{area.name}
 					</button>
 				</div>
+
+				<!-- Phase 4: Avatar stack showing members -->
+				{#if area?.id && memberCount > 1}
+					<AreaAvatarStack areaId={area.id} maxDisplay={3} onClick={() => (showShareModal = true)} />
+				{/if}
 			</div>
 
 			<!-- Tools cluster (Chats/Tasks/Docs panel toggles) -->

@@ -5182,3 +5182,23 @@ html.light .editor-body pre code .hljs-type {
 html.light .editor-body pre code .hljs-variable {
 	color: #953800;
 }
+
+/* Phase 4: Accessibility - Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+
+	/* Preserve loading spinners (functional, not decorative) */
+	.spinner,
+	.loading-spinner,
+	[class*="spin"],
+	[class*="Spin"] {
+		animation-duration: 0.8s !important;
+	}
+}

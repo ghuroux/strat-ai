@@ -6,6 +6,7 @@
 	 * Highlights current user and indicates immutable roles (owner).
 	 */
 
+	import { fade } from 'svelte/transition';
 	import { Lock, Users as GroupIcon, X, Loader2 } from 'lucide-svelte';
 	import type { AreaMemberWithDetails, AreaMemberRole } from '$lib/types/area-memberships';
 	import AreaRoleBadge from './AreaRoleBadge.svelte';
@@ -41,14 +42,20 @@
 
 		return membersCopy;
 	});
+
+	// Phase 4: Staggered animation delay
+	function getDelay(index: number): number {
+		return Math.min(index * 50, 500); // Max 500ms delay
+	}
 </script>
 
 <ul class="member-list" role="list">
-	{#each sortedMembers as member (member.id)}
+	{#each sortedMembers as member, i (member.id)}
 		<li
 			class="member-item"
 			class:current-user={member.userId === currentUserId}
 			role="listitem"
+			transition:fade={{ duration: 200, delay: getDelay(i) }}
 		>
 			<!-- Avatar/Icon -->
 			<div class="member-avatar">
@@ -321,5 +328,12 @@
 
 	:global(html.light) .remove-button.removing {
 		color: rgba(0, 0, 0, 0.6);
+	}
+
+	/* Phase 4: Accessibility - Respect user's motion preferences */
+	@media (prefers-reduced-motion: reduce) {
+		.member-item {
+			transition: none !important;
+		}
 	}
 </style>

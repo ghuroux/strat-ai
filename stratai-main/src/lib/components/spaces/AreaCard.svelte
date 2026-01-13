@@ -10,15 +10,18 @@
 	 * - Context menu for edit/delete
 	 */
 	import type { Area } from '$lib/types/areas';
+	import AreaSharedIndicator from '$lib/components/areas/AreaSharedIndicator.svelte';
 
 	interface Props {
 		area: Area;
 		conversationCount?: number;
 		lastActivity?: Date | null;
 		spaceColor?: string;
+		memberCount?: number; // Phase 4
 		onclick: () => void;
 		onEdit?: (area: Area) => void;
 		onDelete?: (area: Area) => void;
+		onShare?: (area: Area) => void; // Phase 4
 	}
 
 	let {
@@ -26,9 +29,11 @@
 		conversationCount = 0,
 		lastActivity = null,
 		spaceColor = '#3b82f6',
+		memberCount,
 		onclick,
 		onEdit,
-		onDelete
+		onDelete,
+		onShare
 	}: Props = $props();
 
 	// Menu state
@@ -49,6 +54,12 @@
 		e.stopPropagation();
 		showMenu = false;
 		onDelete?.(area);
+	}
+
+	function handleShare(e: Event) {
+		e.stopPropagation();
+		showMenu = false;
+		onShare?.(area);
 	}
 
 	function closeMenu() {
@@ -122,6 +133,14 @@
 						Edit
 					</button>
 				{/if}
+				{#if onShare}
+					<button type="button" class="menu-item" onclick={handleShare}>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+						</svg>
+						Share
+					</button>
+				{/if}
 				{#if onDelete && !area.isGeneral}
 					<button type="button" class="menu-item danger" onclick={handleDelete}>
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -154,6 +173,16 @@
 			<h3 class="title">{area.name}</h3>
 			{#if area.isGeneral}
 				<span class="badge">Default</span>
+			{/if}
+			{#if memberCount && memberCount > 1}
+				<AreaSharedIndicator
+					{memberCount}
+					isRestricted={area.isRestricted ?? false}
+					onClick={(e: MouseEvent) => {
+						e.stopPropagation();
+						onShare?.(area);
+					}}
+				/>
 			{/if}
 		</div>
 	</div>

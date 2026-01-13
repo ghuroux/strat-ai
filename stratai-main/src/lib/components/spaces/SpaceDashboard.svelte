@@ -17,7 +17,9 @@
 	import TaskPanel from './TaskPanel.svelte';
 	import DeleteConfirmModal from './DeleteConfirmModal.svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
+	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { areaStore } from '$lib/stores/areas.svelte';
 	import type { Area } from '$lib/types/areas';
 	import type { Space } from '$lib/types/spaces';
 	import type { Conversation } from '$lib/types/chat';
@@ -63,8 +65,20 @@
 	let showDeleteModal = $state(false);
 	let deletingTask = $state<Task | null>(null);
 
+	// Phase 4: Share modal state
+	let showShareModal = $state(false);
+	let sharingArea = $state<Area | null>(null);
+
 	// Derive space color
 	let spaceColor = $derived(space.color || '#3b82f6');
+
+	// Phase 4: Areas with member counts
+	let areasWithCounts = $derived.by(() => {
+		return areas.map((area) => ({
+			...area,
+			memberCount: areaStore.getMembersForArea(area.id).length
+		}));
+	});
 
 	// Recent conversations only (for quick resume) - includes area chats and subtask chats
 	// Show 10 items initially, with option to show more
@@ -103,6 +117,12 @@
 
 	function handleAreaClick(area: Area) {
 		goto(`/spaces/${spaceSlug}/${area.slug}`);
+	}
+
+	// Phase 4: Handle share area
+	function handleShareArea(area: Area) {
+		sharingArea = area;
+		showShareModal = true;
 	}
 
 	function handleActivityClick(item: { type: string; id: string; areaId?: string; taskId?: string }) {
@@ -228,15 +248,17 @@
 				</header>
 
 				<div class="areas-grid">
-					{#each areas as area (area.id)}
+					{#each areasWithCounts as area (area.id)}
 						<AreaCard
 							{area}
 							conversationCount={area.conversationCount ?? 0}
 							lastActivity={area.lastActivity ?? null}
 							{spaceColor}
+							memberCount={area.memberCount}
 							onclick={() => handleAreaClick(area)}
 							onEdit={onEditArea}
 							onDelete={onDeleteArea}
+							onShare={handleShareArea}
 						/>
 					{/each}
 					<CreateAreaCard {spaceColor} onclick={onCreateArea} />
@@ -314,6 +336,16 @@
 	{spaceColor}
 	onClose={handleCloseDeleteModal}
 	onConfirm={handleConfirmDelete}
+/>
+
+<!-- Phase 4: Share Area Modal -->
+<ShareAreaModal
+	open={showShareModal}
+	area={sharingArea}
+	onClose={() => {
+		showShareModal = false;
+		sharingArea = null;
+	}}
 />
 
 <style>
