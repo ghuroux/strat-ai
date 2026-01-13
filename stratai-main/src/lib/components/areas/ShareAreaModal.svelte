@@ -64,6 +64,18 @@
 	let removingMemberId = $state<string | null>(null);
 	let isAddingMember = $state(false);
 
+	// Phase 5: Space membership required prompt
+	let notSpaceMemberPrompt = $state<{
+		show: boolean;
+		userId?: string;
+		groupId?: string;
+		entityName: string;
+		role: AreaMemberRole;
+		spaceName: string;
+		spaceId: string;
+	} | null>(null);
+	let isInvitingToSpace = $state(false);
+
 	// Phase 4: Mobile detection
 	let isMobile = $state(false);
 
@@ -161,8 +173,21 @@
 				// Members list updates automatically via store reactivity
 				members = areaStore.getMembersForArea(area.id);
 			} else {
-				error = areaStore.error || 'Failed to add member';
-				toastStore.error(error);
+				// Phase 5: Check for NOT_SPACE_MEMBER error
+				if (areaStore.lastErrorData?.code === 'NOT_SPACE_MEMBER') {
+					notSpaceMemberPrompt = {
+						show: true,
+						userId: input.userId,
+						groupId: input.groupId,
+						entityName,
+						role,
+						spaceName: areaStore.lastErrorData.spaceName || 'this space',
+						spaceId: areaStore.lastErrorData.spaceId || ''
+					};
+				} else {
+					error = areaStore.error || 'Failed to add member';
+					toastStore.error(error);
+				}
 			}
 		} catch (e) {
 			error = 'Failed to add member';
@@ -170,6 +195,57 @@
 			console.error('Add member error:', e);
 		} finally {
 			isAddingMember = false;
+		}
+	}
+
+	// Phase 5: Handle "Add to Space + Share Area" combo action
+	async function handleInviteToSpaceAndShare() {
+		if (!notSpaceMemberPrompt || !area?.id) return;
+
+		isInvitingToSpace = true;
+		error = null;
+
+		try {
+			// 1. Add user/group to space as guest
+			const response = await fetch(`/api/spaces/${notSpaceMemberPrompt.spaceId}/members`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					userId: notSpaceMemberPrompt.userId,
+					groupId: notSpaceMemberPrompt.groupId,
+					role: 'guest' // Default to guest for external sharing
+				})
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json();
+				throw new Error(errorData.error || 'Failed to add to space');
+			}
+
+			// 2. Now add to area (will succeed since they're a space member)
+			const areaSuccess = await areaStore.addMember(area.id, {
+				userId: notSpaceMemberPrompt.userId,
+				groupId: notSpaceMemberPrompt.groupId,
+				role: notSpaceMemberPrompt.role
+			});
+
+			if (areaSuccess) {
+				toastStore.success(
+					`Added ${notSpaceMemberPrompt.entityName} as guest to space and ${notSpaceMemberPrompt.role} to area`
+				);
+				members = areaStore.getMembersForArea(area.id);
+				notSpaceMemberPrompt = null;
+			} else {
+				error = areaStore.error || 'Failed to add to area';
+				toastStore.error(error);
+			}
+		} catch (e) {
+			const errorMsg = e instanceof Error ? e.message : 'Failed to invite to space';
+			error = errorMsg;
+			toastStore.error(errorMsg);
+			console.error('Invite to space error:', e);
+		} finally {
+			isInvitingToSpace = false;
 		}
 	}
 
@@ -352,6 +428,44 @@
 								disabled={userAccessInfo?.userRole !== 'owner'}
 							/>
 						</section>
+					{/if}
+
+					<!-- Phase 5: Space membership required prompt -->
+					{#if notSpaceMemberPrompt?.show}
+						<div class="space-member-prompt" transition:fade={{ duration: 150 }}>
+							<div class="prompt-content">
+								<AlertCircle size={20} class="prompt-icon" />
+								<div class="prompt-text">
+									<p class="prompt-title">
+										<strong>{notSpaceMemberPrompt.entityName}</strong> is not a member of "{notSpaceMemberPrompt.spaceName}".
+									</p>
+									<p class="prompt-hint">
+										Add them to the space as a guest first to share this area.
+									</p>
+								</div>
+							</div>
+							<div class="prompt-actions">
+								<button
+									class="btn-secondary"
+									onclick={() => (notSpaceMemberPrompt = null)}
+									disabled={isInvitingToSpace}
+								>
+									Cancel
+								</button>
+								<button
+									class="btn-primary"
+									onclick={handleInviteToSpaceAndShare}
+									disabled={isInvitingToSpace}
+								>
+									{#if isInvitingToSpace}
+										<Loader2 size={16} class="spinner" />
+										Adding...
+									{:else}
+										Add as Guest & Share
+									{/if}
+								</button>
+							</div>
+						</div>
 					{/if}
 				{/if}
 			</div>
@@ -579,6 +693,78 @@
 		cursor: not-allowed;
 	}
 
+	/* Phase 5: Space membership prompt */
+	.space-member-prompt {
+		margin-top: 1.5rem;
+		padding: 1rem;
+		background: rgba(251, 191, 36, 0.1);
+		border: 1px solid rgba(251, 191, 36, 0.3);
+		border-radius: 0.5rem;
+	}
+
+	.prompt-content {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+	}
+
+	.prompt-content :global(.prompt-icon) {
+		color: #fbbf24;
+		flex-shrink: 0;
+		margin-top: 0.125rem;
+	}
+
+	.prompt-text {
+		flex: 1;
+	}
+
+	.prompt-title {
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.95);
+		margin: 0 0 0.25rem 0;
+	}
+
+	.prompt-hint {
+		font-size: 0.813rem;
+		color: rgba(255, 255, 255, 0.6);
+		margin: 0;
+	}
+
+	.prompt-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+	}
+
+	.btn-primary {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.5rem 1rem;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: white;
+		background: #6366f1;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.btn-primary:hover:not(:disabled) {
+		background: #4f46e5;
+	}
+
+	.btn-primary:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-primary :global(.spinner) {
+		animation: spin 1s linear infinite;
+	}
+
 	/* Light mode */
 	:global(html.light) .modal {
 		background: #ffffff;
@@ -641,6 +827,19 @@
 
 	:global(html.light) .modal-footer {
 		background: rgba(0, 0, 0, 0.02);
+	}
+
+	:global(html.light) .space-member-prompt {
+		background: rgba(251, 191, 36, 0.08);
+		border-color: rgba(217, 119, 6, 0.3);
+	}
+
+	:global(html.light) .prompt-title {
+		color: rgba(0, 0, 0, 0.95);
+	}
+
+	:global(html.light) .prompt-hint {
+		color: rgba(0, 0, 0, 0.6);
 	}
 
 	/* Phase 4: Mobile full-screen optimization */

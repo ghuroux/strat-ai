@@ -78,6 +78,12 @@
 			.slice(0, 10);
 	});
 
+	// Phase 6: Get shared areas (only for org spaces)
+	let sharedAreas = $derived.by(() => {
+		if (!spaceFromStore || spaceFromStore.spaceType !== 'organization') return [];
+		return areaStore.getSharedAreas();
+	});
+
 	// UI state
 	let showAreaModal = $state(false);
 	let showAreaEditPanel = $state(false);
@@ -132,11 +138,18 @@
 			isLoading = true;
 
 			// Load data in parallel using proper space ID
-			await Promise.all([
+			const loadPromises = [
 				areaStore.loadAreas(space.id),
 				chatStore.refresh(),
 				taskStore.loadTasks(space.id)
-			]);
+			];
+
+			// Phase 6: Load shared areas for org spaces
+			if (space.spaceType === 'organization') {
+				loadPromises.push(areaStore.loadSharedAreas());
+			}
+
+			await Promise.all(loadPromises);
 
 			loadedSpaceId = space.id;
 			isLoading = false;
@@ -276,6 +289,7 @@
 		areas={areasWithStats}
 		{recentConversations}
 		{activeTasks}
+		{sharedAreas}
 		spaceSlug={spaceParam || ''}
 		onCreateArea={handleCreateArea}
 		onEditArea={handleEditArea}

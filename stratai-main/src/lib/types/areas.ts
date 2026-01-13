@@ -162,3 +162,25 @@ export function isValidSpaceId(id: string): boolean {
 	const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 	return uuidRegex.test(id);
 }
+
+/**
+ * Shared area info for "Shared with Me" section
+ * Contains area info with space context and who shared it
+ *
+ * Implements SPACE_MEMBERSHIPS.md Phase 6
+ */
+export interface SharedAreaInfo {
+	id: string;
+	name: string;
+	slug: string;
+	color?: string;
+	icon?: string;
+	spaceId: string;
+	spaceName: string;
+	spaceSlug: string;
+	userRole: 'owner' | 'admin' | 'member' | 'viewer';
+	sharedBy: {
+		id: string;
+		name: string;
+	};
+}

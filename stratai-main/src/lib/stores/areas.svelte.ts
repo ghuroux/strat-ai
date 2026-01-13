@@ -12,7 +12,7 @@
  */
 
 import { SvelteMap } from 'svelte/reactivity';
-import type { Area, CreateAreaInput, UpdateAreaInput, AreaWithStats } from '$lib/types/areas';
+import type { Area, CreateAreaInput, UpdateAreaInput, AreaWithStats, SharedAreaInfo } from '$lib/types/areas';
 import type {
 	AreaMemberWithDetails,
 	AreaMemberRole,
@@ -40,9 +40,21 @@ class AreaStore {
 	// Loading and error states
 	isLoading = $state(false);
 	error = $state<string | null>(null);
+	// Structured error data (for special handling like NOT_SPACE_MEMBER)
+	lastErrorData = $state<{
+		code?: string;
+		error?: string;
+		details?: string;
+		spaceId?: string;
+		spaceName?: string;
+	} | null>(null);
 
 	// Version counter for fine-grained reactivity
 	_version = $state(0);
+
+	// Phase 6: Shared areas (areas from other spaces shared with user)
+	sharedAreas = $state<SharedAreaInfo[]>([]);
+	sharedAreasLoaded = $state(false);
 
 	// Track which spaces have been loaded
 	private loadedSpaces = new Set<string>();
@@ -429,6 +441,7 @@ class AreaStore {
 	async addMember(areaId: string, input: AddMemberInput): Promise<boolean> {
 		this.isLoading = true;
 		this.error = null;
+		this.lastErrorData = null;
 
 		try {
 			const response = await fetch(`/api/areas/${areaId}/members`, {
@@ -439,6 +452,10 @@ class AreaStore {
 
 			if (!response.ok) {
 				const errorData = await response.json();
+				// Store structured error data for special handling (e.g., NOT_SPACE_MEMBER)
+				if (errorData.code) {
+					this.lastErrorData = errorData;
+				}
 				throw new Error(errorData.error || `Failed to add member: ${response.status}`);
 			}
 
@@ -564,6 +581,57 @@ class AreaStore {
 			this.membersByArea.clear();
 			this.accessByArea.clear();
 		}
+		this._version++;
+	}
+
+	// ==========================================
+	// Phase 6: Shared Areas ("Shared with Me" section)
+	// ==========================================
+
+	/**
+	 * Load areas shared with the current user
+	 * Returns areas where user has explicit membership but didn't create
+	 */
+	async loadSharedAreas(forceReload = false): Promise<void> {
+		if (!forceReload && this.sharedAreasLoaded) return;
+
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch('/api/areas/shared-with-me');
+
+			if (!response.ok) {
+				if (response.status === 401) return;
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			this.sharedAreas = data.areas ?? [];
+			this.sharedAreasLoaded = true;
+			this._version++;
+		} catch (e) {
+			console.error('Failed to load shared areas:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to load shared areas';
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
+	 * Get shared areas (reactive)
+	 */
+	getSharedAreas(): SharedAreaInfo[] {
+		void this._version;
+		return this.sharedAreas;
+	}
+
+	/**
+	 * Clear shared areas cache
+	 */
+	clearSharedAreasCache(): void {
+		this.sharedAreasLoaded = false;
+		this.sharedAreas = [];
 		this._version++;
 	}
 

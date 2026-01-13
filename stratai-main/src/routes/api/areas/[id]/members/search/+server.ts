@@ -4,8 +4,11 @@
  * GET /api/areas/[id]/members/search?q=<query>
  *
  * Search for users and groups to add to an area.
+ * Only returns users/groups who are members of the area's space.
  * Excludes users/groups already in the area.
  * Requires access to the area (owner/admin/member can invite).
+ *
+ * Phase 5: Space membership is required before area membership.
  */
 
 import { json } from '@sveltejs/kit';
@@ -31,13 +34,25 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 
 		// Viewers cannot invite members
 		if (access.role === 'viewer') {
-			return json({ error: 'Insufficient permissions. Viewers cannot invite members.' }, { status: 403 });
+			return json(
+				{ error: 'Insufficient permissions. Viewers cannot invite members.' },
+				{ status: 403 }
+			);
 		}
 
-		// Search users and groups, excluding current members
+		// Get the area's space ID
+		const areaRows = await sql<{ spaceId: string }[]>`
+			SELECT space_id FROM areas WHERE id = ${areaId} AND deleted_at IS NULL
+		`;
+		if (areaRows.length === 0) {
+			return json({ error: 'Area not found' }, { status: 404 });
+		}
+		const spaceId = areaRows[0].spaceId;
+
+		// Search users and groups, filtering by space membership
 		const [users, groups] = await Promise.all([
-			searchUsers(query, areaId),
-			searchGroups(query, areaId)
+			searchSpaceMembers(query, areaId, spaceId),
+			searchSpaceGroups(query, areaId, spaceId)
 		]);
 
 		return json({ users, groups });
@@ -51,10 +66,11 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 };
 
 /**
- * Search users by name, username, or email
+ * Search users who are space members
+ * Must be: space owner, direct space member, or member via group
  * Excludes users already in the area
  */
-async function searchUsers(query: string, areaId: string) {
+async function searchSpaceMembers(query: string, areaId: string, spaceId: string) {
 	if (query.length < 2) return [];
 
 	const pattern = `%${query}%`;
@@ -66,6 +82,23 @@ async function searchUsers(query: string, areaId: string) {
 			OR u.username ILIKE ${pattern}
 			OR u.email ILIKE ${pattern}
 		)
+		-- Must be a space member (owner, direct, or via group)
+		AND (
+			-- Space owner
+			u.id = (SELECT user_id FROM spaces WHERE id = ${spaceId})
+			-- Direct space membership
+			OR EXISTS (
+				SELECT 1 FROM space_memberships sm
+				WHERE sm.space_id = ${spaceId} AND sm.user_id = u.id
+			)
+			-- Group-based space membership
+			OR EXISTS (
+				SELECT 1 FROM space_memberships sm
+				JOIN group_memberships gm ON sm.group_id = gm.group_id
+				WHERE sm.space_id = ${spaceId} AND gm.user_id = u.id
+			)
+		)
+		-- Not already an area member
 		AND u.id::text NOT IN (
 			SELECT user_id FROM area_memberships
 			WHERE area_id = ${areaId} AND user_id IS NOT NULL
@@ -83,10 +116,11 @@ async function searchUsers(query: string, areaId: string) {
 }
 
 /**
- * Search groups by name
+ * Search groups that are space members
+ * Only returns groups that have been added to the space
  * Excludes groups already in the area
  */
-async function searchGroups(query: string, areaId: string) {
+async function searchSpaceGroups(query: string, areaId: string, spaceId: string) {
 	if (query.length < 2) return [];
 
 	const pattern = `%${query}%`;
@@ -95,6 +129,12 @@ async function searchGroups(query: string, areaId: string) {
 		FROM groups g
 		LEFT JOIN group_memberships gm ON g.id = gm.group_id
 		WHERE g.name ILIKE ${pattern}
+		-- Group must be a space member
+		AND EXISTS (
+			SELECT 1 FROM space_memberships sm
+			WHERE sm.space_id = ${spaceId} AND sm.group_id = g.id
+		)
+		-- Not already an area member
 		AND g.id::text NOT IN (
 			SELECT group_id::text FROM area_memberships
 			WHERE area_id = ${areaId} AND group_id IS NOT NULL

@@ -369,6 +369,7 @@ export interface OrganizationRepository {
 		name: string;
 		slug: string;
 		settings?: Record<string, unknown>;
+		creatorUserId?: string; // If provided, auto-creates org space and adds creator as admin
 	}): Promise<Organization>;
 	update(
 		id: string,

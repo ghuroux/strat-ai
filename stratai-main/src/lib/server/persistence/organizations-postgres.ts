@@ -3,10 +3,14 @@
  *
  * Handles CRUD operations for organizations (multi-tenant root entity).
  * Uses UUID primary keys for enterprise-grade identity management.
+ *
+ * Phase 4: Auto-creates organization space when creatorUserId is provided.
  */
 
 import { sql } from './db';
 import type { OrganizationRepository, Organization } from './types';
+import { postgresAreaRepository } from './areas-postgres';
+import type { SpaceRole } from '$lib/types/space-memberships';
 
 /**
  * Database row type for organizations table
@@ -74,18 +78,32 @@ export const postgresOrganizationRepository: OrganizationRepository = {
 
 	/**
 	 * Create a new organization
+	 * If creatorUserId is provided, auto-creates an organization space and adds creator as admin
 	 */
 	async create(input: {
 		name: string;
 		slug: string;
 		settings?: Record<string, unknown>;
+		creatorUserId?: string;
 	}): Promise<Organization> {
 		const rows = await sql<OrganizationRow[]>`
 			INSERT INTO organizations (name, slug, settings)
 			VALUES (${input.name}, ${input.slug}, ${JSON.stringify(input.settings || {})})
 			RETURNING *
 		`;
-		return rowToOrganization(rows[0]);
+		const org = rowToOrganization(rows[0]);
+
+		// Auto-create organization space if creatorUserId is provided
+		if (input.creatorUserId) {
+			try {
+				await createOrgSpace(org.id, org.name, org.slug, input.creatorUserId);
+			} catch (error) {
+				console.error('Failed to create org space:', error);
+				// Don't fail org creation, the backfill migration will catch this
+			}
+		}
+
+		return org;
 	},
 
 	/**
@@ -146,3 +164,108 @@ export const postgresOrganizationRepository: OrganizationRepository = {
 		return result.count > 0;
 	}
 };
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Generate a unique space ID
+ */
+function generateSpaceId(): string {
+	return `sp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Generate a unique membership ID
+ */
+function generateMembershipId(): string {
+	return `sm_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Create an organization space with the creator as admin
+ * Also creates a General area for the space
+ */
+async function createOrgSpace(
+	orgId: string,
+	orgName: string,
+	orgSlug: string,
+	creatorUserId: string
+): Promise<string> {
+	const spaceId = generateSpaceId();
+	const now = new Date();
+
+	// Create the organization space
+	await sql`
+		INSERT INTO spaces (
+			id, user_id, name, type, slug, space_type, organization_id,
+			color, icon, order_index, created_at, updated_at
+		) VALUES (
+			${spaceId},
+			${creatorUserId},
+			${orgName},
+			'custom',
+			${orgSlug},
+			'organization',
+			${orgId},
+			'#6366f1',
+			'building',
+			0,
+			${now},
+			${now}
+		)
+	`;
+
+	// Add creator as admin in space_memberships
+	await sql`
+		INSERT INTO space_memberships (id, space_id, user_id, role, invited_by, created_at, updated_at)
+		VALUES (
+			${generateMembershipId()},
+			${spaceId},
+			${creatorUserId}::uuid,
+			'admin',
+			${creatorUserId}::uuid,
+			${now},
+			${now}
+		)
+	`;
+
+	// Create General area for the org space
+	try {
+		await postgresAreaRepository.createGeneral(spaceId, creatorUserId);
+	} catch (e) {
+		console.error('Failed to create General area for org space:', e);
+		// Don't fail - area can be created later
+	}
+
+	return spaceId;
+}
+
+/**
+ * Map organization role to space role
+ */
+export function mapOrgRoleToSpaceRole(orgRole: string): SpaceRole {
+	switch (orgRole) {
+		case 'owner':
+		case 'admin':
+			return 'admin';
+		case 'member':
+		default:
+			return 'member';
+	}
+}
+
+/**
+ * Find the organization space for an org
+ */
+export async function findOrgSpace(organizationId: string): Promise<string | null> {
+	const rows = await sql<{ id: string }[]>`
+		SELECT id FROM spaces
+		WHERE organization_id = ${organizationId}
+			AND space_type = 'organization'
+			AND deleted_at IS NULL
+		LIMIT 1
+	`;
+	return rows.length > 0 ? rows[0].id : null;
+}

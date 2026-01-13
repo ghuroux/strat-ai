@@ -1,33 +1,55 @@
 /**
  * Spaces API - Individual Operations
  *
- * GET /api/spaces/[id] - Get a specific space
- * PATCH /api/spaces/[id] - Update a space
- * DELETE /api/spaces/[id] - Delete a custom space
+ * GET /api/spaces/[id] - Get a specific space (owner or member)
+ * PATCH /api/spaces/[id] - Update a space (admin+ required)
+ * DELETE /api/spaces/[id] - Delete a custom space (owner only)
  */
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres';
-import type { UpdateSpaceInput } from '$lib/types/spaces';
+import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
+import { sql } from '$lib/server/persistence/db';
+import { rowToSpace, type UpdateSpaceInput, type SpaceRow } from '$lib/types/spaces';
+import { canEditSpaceSettings, canDeleteSpace } from '$lib/types/space-memberships';
 
 /**
  * GET /api/spaces/[id]
- * Returns the space
+ * Returns the space if user has access (owner or membership)
+ * Includes userRole in response
  */
 export const GET: RequestHandler = async ({ params, locals }) => {
 	if (!locals.session) {
 		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
 	}
 
-	try {
-		const space = await postgresSpaceRepository.findById(params.id, locals.session.userId);
+	const userId = locals.session.userId;
+	const spaceId = params.id;
 
-		if (!space) {
+	try {
+		// Check access via membership system
+		const access = await postgresSpaceMembershipsRepository.canAccessSpace(userId, spaceId);
+
+		if (!access.hasAccess) {
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
-		return json({ space });
+		// Try to fetch via owner lookup first (uses existing caching/indexing)
+		let space = await postgresSpaceRepository.findById(spaceId, userId);
+
+		// If not owner, fetch space directly (user has access via membership)
+		if (!space) {
+			const rows = await sql<SpaceRow[]>`
+				SELECT * FROM spaces WHERE id = ${spaceId} AND deleted_at IS NULL
+			`;
+			if (rows.length === 0) {
+				return json({ error: 'Space not found' }, { status: 404 });
+			}
+			space = rowToSpace(rows[0]);
+		}
+
+		return json({ space: { ...space, userRole: access.role } });
 	} catch (error) {
 		console.error('Failed to fetch space:', error);
 		return json(
@@ -44,14 +66,31 @@ export const GET: RequestHandler = async ({ params, locals }) => {
  * PATCH /api/spaces/[id]
  * Body: { name?, context?, contextDocumentIds?, color?, icon?, orderIndex? }
  *
- * Note: System spaces only allow context and contextDocumentIds updates
+ * Requires admin+ role. System spaces only allow context and contextDocumentIds updates.
  */
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	if (!locals.session) {
 		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
 	}
 
+	const userId = locals.session.userId;
+	const spaceId = params.id;
+
 	try {
+		// Check access and permission
+		const access = await postgresSpaceMembershipsRepository.canAccessSpace(userId, spaceId);
+
+		if (!access.hasAccess) {
+			return json({ error: 'Space not found' }, { status: 404 });
+		}
+
+		if (!canEditSpaceSettings(access.role)) {
+			return json(
+				{ error: 'Insufficient permissions. Admin access required.' },
+				{ status: 403 }
+			);
+		}
+
 		const body = await request.json();
 
 		// Validate name if provided
@@ -68,13 +107,43 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		if (body.icon !== undefined) updates.icon = body.icon;
 		if (body.orderIndex !== undefined) updates.orderIndex = body.orderIndex;
 
-		const space = await postgresSpaceRepository.update(params.id, updates, locals.session.userId);
+		// Note: postgresSpaceRepository.update checks ownership, but we've already
+		// verified admin+ access. For non-owners with admin role via membership,
+		// we need to use a direct update approach.
+		// For now, owners can update directly. Admin members need the update to work
+		// regardless of ownership - the repository handles this if access.source is 'owner'.
+		const space = await postgresSpaceRepository.update(spaceId, updates, userId);
 
 		if (!space) {
+			// User is admin via membership but not owner - update directly
+			if (access.source !== 'owner') {
+				// For membership-based admin access, update directly
+				await sql`
+					UPDATE spaces
+					SET
+						name = COALESCE(${updates.name ?? null}, name),
+						context = ${updates.context === undefined ? sql`context` : updates.context ?? null},
+						context_document_ids = ${updates.contextDocumentIds === undefined ? sql`context_document_ids` : updates.contextDocumentIds ?? []},
+						color = ${updates.color === undefined ? sql`color` : updates.color ?? null},
+						icon = ${updates.icon === undefined ? sql`icon` : updates.icon ?? null},
+						order_index = COALESCE(${updates.orderIndex ?? null}, order_index),
+						updated_at = NOW()
+					WHERE id = ${spaceId}
+						AND deleted_at IS NULL
+				`;
+
+				// Fetch updated space
+				const rows = await sql<SpaceRow[]>`
+					SELECT * FROM spaces WHERE id = ${spaceId} AND deleted_at IS NULL
+				`;
+				if (rows.length > 0) {
+					return json({ space: { ...rowToSpace(rows[0]), userRole: access.role } });
+				}
+			}
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
-		return json({ space });
+		return json({ space: { ...space, userRole: access.role } });
 	} catch (error) {
 		console.error('Failed to update space:', error);
 
@@ -103,15 +172,32 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 /**
  * DELETE /api/spaces/[id]
- * Soft deletes a custom space. System spaces cannot be deleted.
+ * Soft deletes a custom space. Only owners can delete. System spaces cannot be deleted.
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	if (!locals.session) {
 		return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
 	}
 
+	const userId = locals.session.userId;
+	const spaceId = params.id;
+
 	try {
-		const deleted = await postgresSpaceRepository.delete(params.id, locals.session.userId);
+		// Check access and permission
+		const access = await postgresSpaceMembershipsRepository.canAccessSpace(userId, spaceId);
+
+		if (!access.hasAccess) {
+			return json({ error: 'Space not found' }, { status: 404 });
+		}
+
+		if (!canDeleteSpace(access.role)) {
+			return json(
+				{ error: 'Insufficient permissions. Only owners can delete spaces.' },
+				{ status: 403 }
+			);
+		}
+
+		const deleted = await postgresSpaceRepository.delete(spaceId, userId);
 
 		if (!deleted) {
 			return json({ error: 'Space not found' }, { status: 404 });

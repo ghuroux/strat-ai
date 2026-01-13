@@ -1,7 +1,7 @@
 /**
  * Spaces API - List and Create
  *
- * GET /api/spaces - List all spaces (system + custom)
+ * GET /api/spaces - List all spaces (owned + membership)
  * POST /api/spaces - Create a new custom space
  */
 
@@ -12,7 +12,8 @@ import type { CreateSpaceInput } from '$lib/types/spaces';
 
 /**
  * GET /api/spaces
- * Returns all spaces (system + custom) for the user
+ * Returns all spaces accessible to the user (owned + membership via user or group)
+ * Each space includes userRole indicating the user's permission level
  */
 export const GET: RequestHandler = async ({ locals }) => {
 	// Require authentication
@@ -21,7 +22,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const spaces = await postgresSpaceRepository.findAll(locals.session.userId);
+		const spaces = await postgresSpaceRepository.findAllAccessible(locals.session.userId);
 		return json({ spaces });
 	} catch (error) {
 		console.error('Failed to fetch spaces:', error);
