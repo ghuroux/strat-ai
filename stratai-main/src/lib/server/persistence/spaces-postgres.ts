@@ -525,7 +525,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 				SELECT 'owner'::text as role, 1 as priority
 				FROM spaces
 				WHERE slug = ${slug}
-					AND user_id = ${userId}
+					AND user_id = ${userId}::uuid
 					AND deleted_at IS NULL
 
 				UNION ALL

@@ -43,9 +43,9 @@ export interface SpaceAccessResult {
 async function canAccessSpace(userId: string, spaceId: string): Promise<SpaceAccessResult> {
 	const result = await sql<
 		{
-			is_owner: boolean;
-			membership_role: SpaceRole | null;
-			group_role: SpaceRole | null;
+			isOwner: boolean;
+			membershipRole: SpaceRole | null;
+			groupRole: SpaceRole | null;
 		}[]
 	>`
 		WITH space_info AS (
@@ -88,21 +88,22 @@ async function canAccessSpace(userId: string, spaceId: string): Promise<SpaceAcc
 		return { hasAccess: false, role: null, source: null };
 	}
 
-	const { is_owner, membership_role, group_role } = result[0];
+	// postgres.js converts snake_case to camelCase
+	const { isOwner, membershipRole, groupRole } = result[0];
 
 	// 1. Space owner check
-	if (is_owner) {
+	if (isOwner) {
 		return { hasAccess: true, role: 'owner', source: 'owner' };
 	}
 
 	// 2. Direct membership
-	if (membership_role) {
-		return { hasAccess: true, role: membership_role, source: 'membership' };
+	if (membershipRole) {
+		return { hasAccess: true, role: membershipRole, source: 'membership' };
 	}
 
 	// 3. Group membership
-	if (group_role) {
-		return { hasAccess: true, role: group_role, source: 'group' };
+	if (groupRole) {
+		return { hasAccess: true, role: groupRole, source: 'group' };
 	}
 
 	return { hasAccess: false, role: null, source: null };
