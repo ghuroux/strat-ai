@@ -38,6 +38,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/enterprise-roadmap.md` - Implementation phases and timeline
 - `stratai-main/docs/SENDGRID_EMAIL_INTEGRATION.md` - **Email system** (SendGrid, password reset, future notifications)
 - `stratai-main/docs/MODEL_CONFIGURATION_SYSTEM.md` - **Model configuration** (parameter constraints, runtime overrides, Admin UI)
+- `stratai-main/docs/SPACE_MEMBERSHIPS.md` - **Space memberships & Org Spaces** (collaboration model, Guest role, "Shared with Me")
 
 ---
 
@@ -119,6 +120,11 @@ Don't revisit without good reason:
 | Guided creation progressive disclosure | Card-based interview (not wizard forms), skip always available, context does heavy lifting |
 | Decisions feed context hierarchy | Structured decisions from meetings bubble up to Area memory (CONTEXT_STRATEGY.md integration) |
 | Model config: hybrid code + DB | Code provides type-safe defaults; DB enables runtime fixes without deployment; Admin UI for quick tweaks |
+| Space membership = gateway | Must be Space member to access ANY areas; prevents orphan content, maintains context chain |
+| Guest role for externals | Limited Space role (only sees shared areas); enables collaboration without full org access |
+| Org Space name = editable | Defaults to org name; admins can customize in settings |
+| "Shared with Me" in Org Space | Convenience view, not separate container; areas link to actual Space/Area URL |
+| No cross-Space area visibility | Would break context hierarchy; sharing requires Space membership first |
 
 ---
 
