@@ -11,7 +11,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
-import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
+import { resolveSpaceId, resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import type { CreateAreaInput } from '$lib/types/areas';
 
 /**
@@ -83,14 +83,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Resolve space identifier to proper ID
-		const resolvedSpaceId = await resolveSpaceId(body.spaceId, userId);
+		// Use accessible resolver to support both owned and shared spaces
+		const resolvedSpaceId = await resolveSpaceIdAccessible(body.spaceId, userId);
 		if (!resolvedSpaceId) {
-			return json({ error: `Space not found: ${body.spaceId}` }, { status: 404 });
+			return json({ error: `Space not found or access denied: ${body.spaceId}` }, { status: 404 });
 		}
 
-		// Phase 7: Check if user can create areas in this space
+		// Phase 7: Check user's role in the space (ownership or membership)
 		const spaceAccess = await postgresSpaceMembershipsRepository.canAccessSpace(userId, resolvedSpaceId);
 		if (!spaceAccess.hasAccess) {
+			// This shouldn't happen if resolveSpaceIdAccessible worked, but safety check
 			return json({ error: 'Access denied to this space' }, { status: 403 });
 		}
 

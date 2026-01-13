@@ -35,6 +35,7 @@ function generateSpaceId(): string {
 /**
  * Resolve a space identifier (slug or ID) to the proper space ID.
  * This handles the legacy case where slugs were used as IDs.
+ * NOTE: This checks OWNERSHIP only. Use resolveSpaceIdAccessible for membership check.
  *
  * @param identifier - Either a space slug (e.g., 'work') or a proper ID (e.g., 'sp_...')
  * @param userId - The user ID to scope the lookup
@@ -52,6 +53,33 @@ export async function resolveSpaceId(identifier: string, userId: string): Promis
 	return space?.id ?? null;
 }
 
+/**
+ * Resolve a space identifier checking both ownership AND membership.
+ * Use this when the user might not own the space but has access via membership.
+ *
+ * @param identifier - Either a space slug (e.g., 'work') or a proper ID (e.g., 'sp_...')
+ * @param userId - The user ID to scope the lookup
+ * @returns The proper space ID, or null if not found/no access
+ */
+export async function resolveSpaceIdAccessible(identifier: string, userId: string): Promise<string | null> {
+	// If it looks like a proper ID, verify user has access
+	if (identifier.startsWith('sp_')) {
+		const space = await postgresSpaceRepository.findByIdAccessible(identifier, userId);
+		return space?.id ?? null;
+	}
+
+	// Otherwise, treat as a slug - for slugs, always prefer the user's OWN space first
+	// This prevents slug collision issues when a user has access to multiple spaces with same slug
+	const ownedSpace = await postgresSpaceRepository.findBySlug(identifier, userId);
+	if (ownedSpace) {
+		return ownedSpace.id;
+	}
+
+	// Fall back to accessible space (shared via membership)
+	const accessibleSpace = await postgresSpaceRepository.findBySlugAccessible(identifier, userId);
+	return accessibleSpace?.id ?? null;
+}
+
 export const postgresSpaceRepository: SpaceRepository = {
 	/**
 	 * Find all spaces for a user (system + custom)
@@ -63,7 +91,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 		const rows = await sql<SpaceRow[]>`
 			SELECT * FROM spaces
-			WHERE user_id = ${userId}
+			WHERE user_id = ${userId}::uuid
 			  AND deleted_at IS NULL
 			ORDER BY type ASC, order_index ASC, created_at ASC
 		`;
@@ -71,7 +99,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 	},
 
 	/**
-	 * Find a space by slug
+	 * Find a space by slug (ownership check only)
 	 */
 	async findBySlug(slug: string, userId: string): Promise<Space | null> {
 		// Ensure system spaces exist before lookup
@@ -82,20 +110,20 @@ export const postgresSpaceRepository: SpaceRepository = {
 		const rows = await sql<SpaceRow[]>`
 			SELECT * FROM spaces
 			WHERE slug = ${slug}
-			  AND user_id = ${userId}
+			  AND user_id = ${userId}::uuid
 			  AND deleted_at IS NULL
 		`;
 		return rows.length > 0 ? rowToSpace(rows[0]) : null;
 	},
 
 	/**
-	 * Find a space by ID
+	 * Find a space by ID (ownership check only)
 	 */
 	async findById(id: string, userId: string): Promise<Space | null> {
 		const rows = await sql<SpaceRow[]>`
 			SELECT * FROM spaces
 			WHERE id = ${id}
-			  AND user_id = ${userId}
+			  AND user_id = ${userId}::uuid
 			  AND deleted_at IS NULL
 		`;
 		return rows.length > 0 ? rowToSpace(rows[0]) : null;
@@ -422,6 +450,60 @@ export const postgresSpaceRepository: SpaceRepository = {
 			...rowToSpace(row),
 			userRole: row.user_role as SpaceRole
 		}));
+	},
+
+	/**
+	 * Find space by ID with membership access check
+	 * Returns space if user owns it OR has membership
+	 */
+	async findByIdAccessible(
+		id: string,
+		userId: string
+	): Promise<(Space & { userRole: SpaceRole }) | null> {
+		const rows = await sql<(SpaceRow & { user_role: SpaceRole })[]>`
+			WITH access_check AS (
+				-- Owner check
+				SELECT 'owner'::text as role, 1 as priority
+				FROM spaces
+				WHERE id = ${id}
+					AND user_id = ${userId}::uuid
+					AND deleted_at IS NULL
+
+				UNION ALL
+
+				-- Direct membership
+				SELECT sm.role, 2 as priority
+				FROM spaces s
+				JOIN space_memberships sm ON s.id = sm.space_id
+				WHERE s.id = ${id}
+					AND sm.user_id = ${userId}::uuid
+					AND s.deleted_at IS NULL
+
+				UNION ALL
+
+				-- Group membership
+				SELECT sm.role, 3 as priority
+				FROM spaces s
+				JOIN space_memberships sm ON s.id = sm.space_id
+				JOIN group_memberships gm ON sm.group_id = gm.group_id
+				WHERE s.id = ${id}
+					AND gm.user_id = ${userId}::uuid
+					AND s.deleted_at IS NULL
+			)
+			SELECT s.*,
+				   (SELECT role FROM access_check ORDER BY priority LIMIT 1) as user_role
+			FROM spaces s
+			WHERE s.id = ${id}
+				AND s.deleted_at IS NULL
+				AND EXISTS (SELECT 1 FROM access_check)
+		`;
+
+		if (rows.length === 0) return null;
+
+		return {
+			...rowToSpace(rows[0]),
+			userRole: rows[0].user_role as SpaceRole
+		};
 	},
 
 	/**

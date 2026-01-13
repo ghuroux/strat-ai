@@ -76,7 +76,7 @@ async function canAccessSpace(userId: string, spaceId: string): Promise<SpaceAcc
 			LIMIT 1
 		)
 		SELECT
-			COALESCE(s.user_id = ${userId}, false) as is_owner,
+			COALESCE(s.user_id = ${userId}::uuid, false) as is_owner,
 			dm.role as membership_role,
 			gm.role as group_role
 		FROM space_info s

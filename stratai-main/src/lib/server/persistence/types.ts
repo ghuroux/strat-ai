@@ -340,6 +340,7 @@ export interface SpaceRepository {
 	// Membership-aware methods (Phase 2: Space Memberships)
 	findAllAccessible(userId: string): Promise<(Space & { userRole: SpaceRole })[]>;
 	findBySlugAccessible(slug: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
+	findByIdAccessible(id: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
 }
 
 // =====================================================
