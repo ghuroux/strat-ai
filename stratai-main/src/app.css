@@ -55,6 +55,15 @@
 	--role-inherited: #0ea5e9;
 	--role-inherited-bg: rgba(14, 165, 233, 0.15);
 
+	/* Page Permission Colors (Dark Mode - default) */
+	/* 3-tier: viewer, editor, admin - matches role colors for consistency */
+	--permission-viewer: #6b7280;
+	--permission-viewer-bg: rgba(107, 114, 128, 0.15);
+	--permission-editor: #10b981;
+	--permission-editor-bg: rgba(16, 185, 129, 0.15);
+	--permission-admin: #3b82f6;
+	--permission-admin-bg: rgba(59, 130, 246, 0.15);
+
 	/* Page Editor Variables (Dark Mode - default) */
 	/* Based on DOCUMENT_SYSTEM.md Section 5.1 */
 	--editor-bg: #1e1e1e;
@@ -119,6 +128,11 @@
 		--role-member-bg: rgba(16, 185, 129, 0.1);
 		--role-viewer-bg: rgba(107, 114, 128, 0.1);
 		--role-inherited-bg: rgba(14, 165, 233, 0.1);
+
+		/* Page Permission Colors (Light Mode - lighter backgrounds) */
+		--permission-viewer-bg: rgba(107, 114, 128, 0.1);
+		--permission-editor-bg: rgba(16, 185, 129, 0.1);
+		--permission-admin-bg: rgba(59, 130, 246, 0.1);
 	}
 
 	/* Light theme overrides for Tailwind surface colors */
@@ -5186,14 +5200,57 @@ body.konami-activated {
 	font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
 	color: var(--color-primary-400);
 	font-variant-numeric: tabular-nums;
+	cursor: default;
+	user-select: none;
 }
 
-/* Sum symbol before formula cells */
-.editor-body tr[data-total="true"] td::before,
-.editor-body tr[data-is-total="true"] td::before {
+/* Phase 2.5: Muted table cell background colors */
+:root {
+	--table-color-gray: rgba(156, 163, 175, 0.15);
+	--table-color-blue: rgba(59, 130, 246, 0.12);
+	--table-color-green: rgba(34, 197, 94, 0.12);
+	--table-color-amber: rgba(245, 158, 11, 0.12);
+	--table-color-red: rgba(239, 68, 68, 0.10);
+	--table-color-purple: rgba(168, 85, 247, 0.12);
+}
+
+/* Phase 2.5: ∑ prefix - only show when explicitly enabled */
+.editor-body td[data-show-prefix="true"]::before {
 	content: '∑ ';
 	opacity: 0.5;
 	margin-right: 0.25rem;
+}
+
+/* Legacy: Remove default ∑ from total rows (Phase 2 cleanup) */
+/* Only show prefix when data-show-prefix="true" is set on cell */
+
+/* Phase 2.5: Formula mode - clickable cells */
+.editor-body-wrapper.formula-mode {
+	/* Indicate we're in a special mode */
+}
+
+.editor-body-wrapper.formula-mode .editor-body table td,
+.editor-body-wrapper.formula-mode .editor-body table th {
+	cursor: pointer !important;
+	transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+.editor-body-wrapper.formula-mode .editor-body table td:hover,
+.editor-body-wrapper.formula-mode .editor-body table th:hover {
+	background-color: rgba(59, 130, 246, 0.15) !important;
+	box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.4);
+}
+
+/* Formula mode - highlight the source cell (different color) */
+.editor-body-wrapper.formula-mode .editor-body table td:focus,
+.editor-body-wrapper.formula-mode .editor-body table th:focus {
+	background-color: rgba(245, 158, 11, 0.15) !important;
+	box-shadow: inset 0 0 0 2px rgba(245, 158, 11, 0.5);
+}
+
+/* Disable text selection in formula mode */
+.editor-body-wrapper.formula-mode .editor-body table {
+	user-select: none;
 }
 
 /* Selection */

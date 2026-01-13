@@ -33,6 +33,7 @@
 	import type { PagePermission } from '$lib/types/page-sharing';
 	import { EMPTY_TIPTAP_CONTENT, countWords, extractTextFromContent } from '$lib/types/page';
 	import EditorToolbar from './EditorToolbar.svelte';
+	import FormulaBar from './FormulaBar.svelte';
 	import PageHeader from './PageHeader.svelte';
 	import EditorChatPanel from './EditorChatPanel.svelte';
 	import SharePageModal from './SharePageModal.svelte';
@@ -178,6 +179,10 @@
 
 	let formulaMode = $state<FormulaMode | null>(null);
 
+	// Phase 2.5: Track selected cell formula for FormulaBar display
+	let selectedCellFormula = $state<string | null>(null);
+	let selectedCellRowValues = $state<(number | null)[]>([]);
+
 	// Current user ID from store
 	let currentUserId = $derived(userStore.id ?? '');
 
@@ -266,9 +271,6 @@
 					return;
 				}
 
-				// Phase 2.5: Check for formula mode entry
-				checkForFormulaEntry(ed);
-
 				// Update table totals in real-time (uses transactions, not JSON mutation)
 				updateTableTotalsInEditor(ed);
 
@@ -287,9 +289,12 @@
 				saveStatus = 'idle';
 				scheduleAutoSave();
 			},
-			onTransaction: () => {
+			onTransaction: ({ editor: ed }) => {
 				// Increment tick to trigger toolbar reactivity on cursor/selection changes
 				editorTick++;
+
+				// Phase 2.5: Check if selection is in a formula cell
+				checkSelectedCellFormula(ed);
 			},
 			editorProps: {
 				attributes: {
@@ -567,6 +572,29 @@
 		}
 
 		if (save && formulaMode.formula.length > 1) {
+			// Validate formula before saving
+			const formula = formulaMode.formula;
+
+			// Check for invalid trailing operators
+			const lastChar = formula.slice(-1);
+			if (['+', '-', '*', '/', '('].includes(lastChar)) {
+				console.warn('[FormulaMode] Invalid formula - ends with operator:', lastChar);
+				// Remove trailing operator and continue
+				formulaMode.formula = formula.slice(0, -1);
+				if (formulaMode.formula.length <= 1) {
+					console.log('[FormulaMode] Formula too short after cleanup, cancelling');
+					formulaMode = null;
+					return;
+				}
+			}
+
+			// Must have at least one column reference
+			if (!formulaMode.formula.includes('[')) {
+				console.warn('[FormulaMode] Invalid formula - no column references');
+				formulaMode = null;
+				return;
+			}
+
 			console.log('[FormulaMode] Saving formula:', formulaMode.formula);
 
 			// Find the cell position dynamically (not using stale cellPos)
@@ -665,90 +693,215 @@
 	/**
 	 * Handle keyboard events during formula mode
 	 * Must be on capture phase to intercept before editor
+	 * BLOCKS ALL KEYS from reaching the editor when in formula mode
 	 */
 	function handleFormulaKeydown(event: KeyboardEvent) {
 		if (!formulaMode) return;
 
 		console.log('[FormulaMode] Keydown:', event.key);
 
+		// Block ALL keys from reaching the editor when in formula mode
+		// The FormulaBar input will handle text entry
+		event.preventDefault();
+		event.stopPropagation();
+
+		// Handle special keys
 		switch (event.key) {
 			case 'Enter':
 				console.log('[FormulaMode] Enter pressed - saving');
 				completeFormula(true);
-				event.preventDefault();
-				event.stopPropagation();
 				break;
 			case 'Escape':
 				console.log('[FormulaMode] Escape pressed - cancelling');
 				completeFormula(false);
-				event.preventDefault();
-				event.stopPropagation();
 				break;
+			// Operators can be typed via FormulaBar, but also handle here for convenience
 			case '+':
 			case '-':
 			case '*':
 			case '/':
 				addFormulaOperator(event.key as '+' | '-' | '*' | '/');
-				event.preventDefault();
-				event.stopPropagation();
 				break;
 		}
 	}
 
 	/**
-	 * Check if user typed "=" to enter formula mode (called in onUpdate)
+	 * Handle formula change from FormulaBar input
 	 */
-	function checkForFormulaEntry(ed: Editor) {
-		// Skip if already in formula mode
-		if (formulaMode) return;
+	function handleFormulaChange(newFormula: string) {
+		if (!formulaMode) return;
+		console.log('[FormulaMode] Formula changed from bar:', newFormula);
+		formulaMode.formula = newFormula;
+	}
+
+	/**
+	 * Handle edit existing formula (when user clicks on formula display in bar)
+	 */
+	function handleEditExistingFormula() {
+		if (!selectedCellFormula || !editor) return;
+
+		console.log('[FormulaMode] Editing existing formula:', selectedCellFormula);
+
+		// Find the currently selected cell's position
+		const { state } = editor;
+		const { selection } = state;
+		const selPos = selection.$from;
+
+		// Find the cell, row, and column indices
+		for (let depth = selPos.depth; depth > 0; depth--) {
+			const node = selPos.node(depth);
+			if (node.type.name === 'tableCell' && node.attrs?.formula) {
+				const row = selPos.node(depth - 1);
+				const table = selPos.node(depth - 2);
+				let rowIndex = 0;
+				let colIndex = 0;
+
+				// Get indices
+				const rowPos = selPos.before(depth - 1);
+				row.forEach((cell, offset, index) => {
+					if (selPos.pos >= rowPos + 1 + offset && selPos.pos < rowPos + 1 + offset + cell.nodeSize) {
+						colIndex = index;
+					}
+				});
+
+				const tablePos = selPos.before(depth - 2);
+				table.forEach((r, offset, index) => {
+					if (selPos.pos >= tablePos + 1 + offset && selPos.pos < tablePos + 1 + offset + r.nodeSize) {
+						rowIndex = index;
+					}
+				});
+
+				// Enter formula mode with the existing formula
+				formulaMode = {
+					active: true,
+					cellPos: -1,
+					rowIndex,
+					colIndex,
+					formula: selectedCellFormula,
+					previousValue: ''
+				};
+
+				// Clear selected cell formula (we're now editing)
+				selectedCellFormula = null;
+
+				// Blur editor
+				editor?.commands.blur();
+				break;
+			}
+		}
+	}
+
+	/**
+	 * Check if current selection is in a formula cell
+	 * Called on transaction to update FormulaBar
+	 */
+	function checkSelectedCellFormula(ed: Editor) {
+		// Don't update if in formula mode - we're building a formula
+		if (formulaMode?.active) return;
 
 		const { state } = ed;
 		const { selection } = state;
 		const selPos = selection.$from;
 
+		// Check if we're in a table cell with a formula
+		for (let depth = selPos.depth; depth > 0; depth--) {
+			const node = selPos.node(depth);
+			if (node.type.name === 'tableCell' && node.attrs?.formula) {
+				const formula = node.attrs.formula as string;
+
+				// Only show row formulas in the bar (not column formulas like SUM)
+				if (formula.startsWith('=')) {
+					if (selectedCellFormula !== formula) {
+						console.log('[FormulaMode] Selected cell with formula:', formula);
+						selectedCellFormula = formula;
+
+						// Get row values for preview
+						const row = selPos.node(depth - 1);
+						const values: (number | null)[] = [];
+						row.forEach((cell) => {
+							const text = cell.textContent.trim().replace(/[^0-9.-]/g, '');
+							const num = parseFloat(text);
+							values.push(!isNaN(num) && text !== '' ? num : null);
+						});
+						selectedCellRowValues = values;
+					}
+					return;
+				}
+			}
+		}
+
+		// Not in a formula cell
+		if (selectedCellFormula !== null) {
+			selectedCellFormula = null;
+			selectedCellRowValues = [];
+		}
+	}
+
+	/**
+	 * Start formula mode for the currently selected cell
+	 * Called from toolbar button - explicit activation (not keystroke detection)
+	 */
+	function startFormulaModeForCurrentCell() {
+		if (!editor || formulaMode) return;
+
+		const { state } = editor;
+		const { selection } = state;
+		const selPos = selection.$from;
+
+		console.log('[FormulaMode] Starting formula mode for current cell');
+
 		// Check if we're in a table cell
 		for (let depth = selPos.depth; depth > 0; depth--) {
 			const node = selPos.node(depth);
-			if (node.type.name === 'tableCell') {
-				const text = node.textContent;
+			if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+				// Find row and column indices
+				const row = selPos.node(depth - 1);
+				const table = selPos.node(depth - 2);
+				let rowIndex = 0;
+				let colIndex = 0;
 
-				// If cell contains only "=", enter formula mode
-				if (text === '=') {
-					console.log('[FormulaMode] Detected "=" in cell');
+				// Get column index within row
+				const rowPos = selPos.before(depth - 1);
+				row.forEach((cell, offset, index) => {
+					if (selPos.pos >= rowPos + 1 + offset && selPos.pos < rowPos + 1 + offset + cell.nodeSize) {
+						colIndex = index;
+					}
+				});
 
-					// Find row and column indices
-					const row = selPos.node(depth - 1);
-					const table = selPos.node(depth - 2);
-					let rowIndex = 0;
-					let colIndex = 0;
+				// Get row index within table
+				const tablePos = selPos.before(depth - 2);
+				table.forEach((r, offset, index) => {
+					if (selPos.pos >= tablePos + 1 + offset && selPos.pos < tablePos + 1 + offset + r.nodeSize) {
+						rowIndex = index;
+					}
+				});
 
-					// Get column index within row
-					const rowPos = selPos.before(depth - 1);
-					row.forEach((cell, offset, index) => {
-						if (selPos.pos >= rowPos + 1 + offset && selPos.pos < rowPos + 1 + offset + cell.nodeSize) {
-							colIndex = index;
-						}
-					});
+				// Get existing formula if any
+				const existingFormula = node.attrs?.formula;
+				const startFormula = existingFormula?.startsWith('=') ? existingFormula : '=';
 
-					// Get row index within table
-					const tablePos = selPos.before(depth - 2);
-					table.forEach((r, offset, index) => {
-						if (selPos.pos >= tablePos + 1 + offset && selPos.pos < tablePos + 1 + offset + r.nodeSize) {
-							rowIndex = index;
-						}
-					});
+				console.log('[FormulaMode] Cell location', { rowIndex, colIndex, existingFormula });
 
-					console.log('[FormulaMode] Cell location', { rowIndex, colIndex });
+				// Get row values for preview
+				const values: (number | null)[] = [];
+				row.forEach((cell) => {
+					const text = cell.textContent.trim().replace(/[^0-9.-]/g, '');
+					const num = parseFloat(text);
+					values.push(!isNaN(num) && text !== '' ? num : null);
+				});
+				selectedCellRowValues = values;
 
-					// Clear the "=" from the cell first
-					ed.commands.deleteRange({ from: selPos.pos - 1, to: selPos.pos });
-
-					// Enter formula mode (after clearing, so we don't track stale position)
-					enterFormulaMode(rowIndex, colIndex, '');
+				// Enter formula mode
+				enterFormulaMode(rowIndex, colIndex, startFormula === '=' ? '' : node.textContent);
+				if (startFormula !== '=') {
+					formulaMode!.formula = startFormula;
 				}
-				break;
+
+				return;
 			}
 		}
+
+		console.log('[FormulaMode] Not in a table cell - cannot start formula mode');
 	}
 </script>
 
@@ -776,7 +929,25 @@
 		<div class="editor-main" class:chat-open={chatPanelOpen} class:activity-open={activityPanelOpen}>
 			<!-- Toolbar (hidden for viewers) -->
 			{#if editor && !isReadOnly}
-				<EditorToolbar {editor} {editorTick} {formulaMode} />
+				<EditorToolbar
+					{editor}
+					{editorTick}
+					{formulaMode}
+					onStartFormula={startFormulaModeForCurrentCell}
+				/>
+			{/if}
+
+			<!-- Phase 2.5: Formula Bar (appears when building/viewing formulas) -->
+			{#if !isReadOnly}
+				<FormulaBar
+					{formulaMode}
+					{selectedCellFormula}
+					rowValues={selectedCellRowValues}
+					onFormulaChange={handleFormulaChange}
+					onSave={() => completeFormula(true)}
+					onCancel={() => completeFormula(false)}
+					onEditExisting={handleEditExistingFormula}
+				/>
 			{/if}
 
 			<!-- Read-only banner -->

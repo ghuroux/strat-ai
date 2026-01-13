@@ -14,18 +14,42 @@
 
 	import type { Editor } from '@tiptap/core';
 
+	// Phase 2.5: Formula mode type
+	interface FormulaMode {
+		active: boolean;
+		cellPos: number;
+		rowIndex: number;
+		colIndex: number;
+		formula: string;
+		previousValue: string;
+	}
+
 	// Props
 	interface Props {
 		editor: Editor;
 		editorTick?: number; // Increments on each transaction to trigger reactivity
+		formulaMode?: FormulaMode | null; // Phase 2.5: Formula being built
+		onStartFormula?: () => void; // Phase 2.5: Callback to start formula mode
 	}
 
-	let { editor, editorTick = 0 }: Props = $props();
+	let { editor, editorTick = 0, formulaMode = null, onStartFormula }: Props = $props();
 
 	// Link modal state
 	let showLinkModal = $state(false);
 	let linkUrl = $state('');
 	let selectedText = $state('');
+
+	// Phase 2.5: Color picker state
+	let showColorPicker = $state(false);
+	const cellColors = ['gray', 'blue', 'green', 'amber', 'red', 'purple'] as const;
+
+	/**
+	 * Set background color on selected table cell
+	 */
+	function setCellBackgroundColor(color: string | null) {
+		editor.chain().focus().updateAttributes('tableCell', { backgroundColor: color }).run();
+		showColorPicker = false;
+	}
 
 	// Reactive format states - depend on editorTick to re-evaluate on cursor changes
 	// The `editorTick >= 0` check ensures Svelte tracks editorTick as a dependency
@@ -49,6 +73,7 @@
 	let isBlockquoteActive = $derived(editorTick >= 0 && editor.isActive('blockquote'));
 	let isCodeBlockActive = $derived(editorTick >= 0 && editor.isActive('codeBlock'));
 	let isLinkActive = $derived(editorTick >= 0 && editor.isActive('link'));
+	let isTableActive = $derived(editorTick >= 0 && editor.isActive('table'));
 
 	// Check if OS is Mac for shortcut display
 	const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -436,7 +461,7 @@
 			<!-- Insert Table -->
 			<button
 				type="button"
-				class="toolbar-button"
+				class="toolbar-btn"
 				onclick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
 				title="Insert Table"
 				disabled={!editor.can().insertTable()}
@@ -447,83 +472,85 @@
 			</button>
 
 			<!-- Contextual table commands (only show when cursor is in a table) -->
-			{#if editor.isActive('table')}
+			{#if isTableActive}
+				<!-- Column operations -->
 				<button
 					type="button"
-					class="toolbar-button"
-					onclick={() => editor.chain().focus().addColumnBefore().run()}
-					title="Add Column Before"
-				>
-					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-					</svg>
-				</button>
-
-				<button
-					type="button"
-					class="toolbar-button"
+					class="toolbar-btn"
 					onclick={() => editor.chain().focus().addColumnAfter().run()}
-					title="Add Column After"
+					title="Add Column"
 				>
+					<!-- Column with plus icon -->
 					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+						<rect x="9" y="3" width="6" height="18" rx="1" />
+						<path d="M17 9h4m-2-2v4" />
 					</svg>
 				</button>
 
 				<button
 					type="button"
-					class="toolbar-button"
+					class="toolbar-btn"
 					onclick={() => editor.chain().focus().deleteColumn().run()}
 					title="Delete Column"
 				>
+					<!-- Column with X icon -->
 					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+						<rect x="9" y="3" width="6" height="18" rx="1" />
+						<path d="M17 8l4 4m0-4l-4 4" />
 					</svg>
 				</button>
 
 				<div class="toolbar-divider"></div>
 
+				<!-- Row operations -->
 				<button
 					type="button"
-					class="toolbar-button"
-					onclick={() => editor.chain().focus().addRowBefore().run()}
-					title="Add Row Before"
-				>
-					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-					</svg>
-				</button>
-
-				<button
-					type="button"
-					class="toolbar-button"
+					class="toolbar-btn"
 					onclick={() => editor.chain().focus().addRowAfter().run()}
-					title="Add Row After"
+					title="Add Row"
 				>
+					<!-- Row with plus icon -->
 					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+						<rect x="3" y="9" width="18" height="6" rx="1" />
+						<path d="M9 17v4m-2-2h4" />
 					</svg>
 				</button>
 
 				<button
 					type="button"
-					class="toolbar-button"
+					class="toolbar-btn"
 					onclick={() => editor.chain().focus().deleteRow().run()}
 					title="Delete Row"
 				>
+					<!-- Row with X icon -->
 					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+						<rect x="3" y="9" width="18" height="6" rx="1" />
+						<path d="M8 17l4 4m0-4l-4 4" />
 					</svg>
 				</button>
 
 				<div class="toolbar-divider"></div>
 
+				<!-- Table actions -->
 				<button
 					type="button"
-					class="toolbar-button"
+					class="toolbar-btn"
+					onclick={() => insertTotalRow(editor)}
+					title="Add Total Row (SUM)"
+				>
+					<!-- Calculator/sum icon -->
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+					</svg>
+				</button>
+
+				<button
+					type="button"
+					class="toolbar-btn"
 					onclick={() => editor.chain().focus().deleteTable().run()}
 					title="Delete Table"
 				>
+					<!-- Trash icon -->
 					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 						<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
 					</svg>
@@ -531,15 +558,59 @@
 
 				<div class="toolbar-divider"></div>
 
+				<!-- Phase 2.5: Cell Color Picker -->
+				<div class="color-picker-wrapper">
+					<button
+						type="button"
+						class="toolbar-btn"
+						class:active={showColorPicker}
+						onclick={() => showColorPicker = !showColorPicker}
+						title="Cell Background Color"
+					>
+						<!-- Paint bucket icon -->
+						<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"/>
+						</svg>
+					</button>
+
+					{#if showColorPicker}
+						<div class="color-picker-dropdown">
+							{#each cellColors as color}
+								<button
+									type="button"
+									class="color-swatch"
+									style="background-color: var(--table-color-{color})"
+									onclick={() => setCellBackgroundColor(color)}
+									title="{color.charAt(0).toUpperCase() + color.slice(1)}"
+								></button>
+							{/each}
+							<button
+								type="button"
+								class="color-swatch color-none"
+								onclick={() => setCellBackgroundColor(null)}
+								title="Remove Color"
+							>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<line x1="18" y1="6" x2="6" y2="18" />
+									<line x1="6" y1="6" x2="18" y2="18" />
+								</svg>
+							</button>
+						</div>
+					{/if}
+				</div>
+
+				<div class="toolbar-divider"></div>
+
+				<!-- Phase 2.5: Formula Button -->
 				<button
 					type="button"
-					class="toolbar-button"
-					onclick={() => insertTotalRow(editor)}
-					title="Add Total Row (SUM)"
+					class="toolbar-btn formula-btn"
+					class:active={formulaMode?.active}
+					onclick={() => onStartFormula?.()}
+					disabled={formulaMode?.active}
+					title="Add Formula (e.g., =[0]*[1])"
 				>
-					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-					</svg>
+					<span class="fx-label">fx</span>
 				</button>
 			{/if}
 		</div>
@@ -819,5 +890,82 @@
 
 	.btn-apply:hover {
 		filter: brightness(1.1);
+	}
+
+	/* Phase 2.5: Color Picker */
+	.color-picker-wrapper {
+		position: relative;
+	}
+
+	.color-picker-dropdown {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		margin-top: 4px;
+		padding: 8px;
+		background: var(--editor-bg);
+		border: 1px solid var(--editor-border);
+		border-radius: 8px;
+		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+		display: flex;
+		gap: 6px;
+		z-index: 50;
+	}
+
+	.color-swatch {
+		width: 24px;
+		height: 24px;
+		border: 1px solid var(--editor-border);
+		border-radius: 4px;
+		cursor: pointer;
+		transition: transform 100ms ease, border-color 100ms ease;
+		padding: 0;
+	}
+
+	.color-swatch:hover {
+		transform: scale(1.1);
+		border-color: var(--editor-border-focus);
+	}
+
+	.color-swatch.color-none {
+		background: var(--editor-bg);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.color-swatch.color-none svg {
+		width: 14px;
+		height: 14px;
+		color: var(--editor-text-secondary);
+	}
+
+	.color-swatch.color-none:hover svg {
+		color: var(--editor-text);
+	}
+
+	/* Phase 2.5: Formula Button */
+	.formula-btn {
+		width: auto !important;
+		padding: 0 0.5rem !important;
+	}
+
+	.formula-btn .fx-label {
+		font-style: italic;
+		font-weight: 600;
+		color: #3b82f6;
+		font-size: 0.875rem;
+	}
+
+	.formula-btn:hover .fx-label {
+		color: #2563eb;
+	}
+
+	.formula-btn.active {
+		background: rgba(59, 130, 246, 0.15);
+	}
+
+	.formula-btn:disabled {
+		opacity: 0.5;
 	}
 </style>
