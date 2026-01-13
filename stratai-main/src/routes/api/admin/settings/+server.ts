@@ -26,7 +26,7 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
-		const { name, slug, systemPrompt } = body;
+		const { name, slug, systemPrompt, icon } = body;
 
 		// Validate slug format
 		if (slug && !/^[a-z0-9-]+$/.test(slug)) {
@@ -73,6 +73,17 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				UPDATE organizations
 				SET system_prompt = ${systemPrompt || null}
 				WHERE id = ${organizationId}
+			`;
+		}
+
+		// Update org space icon if provided
+		if (icon !== undefined) {
+			await sql`
+				UPDATE spaces
+				SET icon = ${icon || null}, updated_at = NOW()
+				WHERE organization_id = ${organizationId}
+				  AND space_type = 'organization'
+				  AND deleted_at IS NULL
 			`;
 		}
 

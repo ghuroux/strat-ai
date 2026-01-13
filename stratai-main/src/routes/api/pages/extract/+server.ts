@@ -128,6 +128,31 @@ function extractJsonObject(text: string): string | null {
 }
 
 /**
+ * Validate TipTap content structure
+ * Ensures content is properly formatted and not raw JSON text
+ */
+function validateTipTapContent(content: TipTapContent): boolean {
+	if (content.type !== 'doc' || !Array.isArray(content.content)) {
+		return false;
+	}
+
+	// Check that we don't have raw JSON as text content
+	// This catches the bug where JSON parsing fails and falls back to paragraphs
+	for (const node of content.content) {
+		if (node.type === 'paragraph' && node.content?.[0]?.text) {
+			const text = node.content[0].text;
+			// If first paragraph starts with JSON-like content, something went wrong
+			if (text.trim().startsWith('{"type":') || text.trim().startsWith('{ "type":')) {
+				console.error('[validateTipTapContent] Content appears to be raw JSON text:', text.substring(0, 100));
+				return false;
+			}
+		}
+	}
+
+	return true;
+}
+
+/**
  * Parse AI response into TipTap content
  *
  * Handles various response formats:
@@ -270,6 +295,13 @@ function parseAIResponse(responseText: string): TipTapContent {
 		}
 
 		// Final fallback: convert to paragraphs
+		// But ONLY if the text doesn't look like JSON - otherwise we'd display raw JSON as text!
+		if (cleanText.startsWith('{') || cleanText.includes('"type":')) {
+			console.error('[parseAIResponse] Cannot parse JSON - refusing to convert to paragraphs');
+			console.error('[parseAIResponse] Text preview:', cleanText.substring(0, 300));
+			throw new Error('Failed to parse AI response as TipTap JSON. The AI may have returned malformed content.');
+		}
+
 		console.log('[parseAIResponse] Converting to paragraphs (last resort)');
 		const paragraphs = cleanText.split('\n\n').filter(Boolean);
 		const content: TipTapNode[] = paragraphs.map((p) => ({
@@ -277,34 +309,136 @@ function parseAIResponse(responseText: string): TipTapContent {
 			content: [{ type: 'text', text: p.trim() }]
 		}));
 
-		return {
+		const fallbackContent: TipTapContent = {
 			type: 'doc',
 			content
 		};
+
+		// Validate the fallback content
+		if (!validateTipTapContent(fallbackContent)) {
+			throw new Error('Failed to create valid TipTap content from AI response');
+		}
+
+		return fallbackContent;
 	}
 }
 
+// Type alias for extraction types
+type ExtractionType = 'summary' | 'last_response' | 'full_conversation' | 'custom';
+
+// Result type with retry metadata
+interface ExtractionResult {
+	content: TipTapContent;
+	inputTokens: number;
+	outputTokens: number;
+	attempts: number;
+	retryReason?: string;
+}
+
 /**
- * Extract content based on extraction type
+ * System prompt for JSON correction
  */
-async function extractContent(
+function getCorrectionSystemPrompt(): string {
+	return `You are a JSON correction assistant. Your task is to fix malformed TipTap/ProseMirror JSON.
+
+Rules:
+1. Output ONLY valid JSON - no explanation, no markdown code blocks
+2. Preserve the original content meaning
+3. Fix syntax errors (missing quotes, trailing commas, unclosed brackets)
+4. Ensure structure follows TipTap format: { "type": "doc", "content": [...] }
+5. If content is truncated, close the structure cleanly
+
+Valid node types: heading, paragraph, bulletList, orderedList, listItem, taskList, taskItem, blockquote, codeBlock, horizontalRule
+
+Output the fixed JSON directly.`;
+}
+
+/**
+ * Attempt to fix malformed JSON by asking AI to correct it
+ */
+async function attemptSelfCorrection(
+	malformedResponse: string,
+	originalError: Error
+): Promise<{ content: TipTapContent; inputTokens: number; outputTokens: number }> {
+	console.log('[attemptSelfCorrection] Starting self-correction for error:', originalError.message);
+	console.log('[attemptSelfCorrection] Malformed response length:', malformedResponse.length);
+
+	const correctionPrompt = `The following TipTap JSON has errors and cannot be parsed.
+
+Error: ${originalError.message}
+
+Please fix the JSON and return ONLY the corrected, valid TipTap JSON document.
+Do not include any explanation or markdown code blocks - just the raw JSON object starting with { and ending with }.
+
+Malformed content:
+${malformedResponse.substring(0, 8000)}`;
+
+	const response = await fetch(`${getBaseUrl()}/v1/chat/completions`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${getApiKey()}`
+		},
+		body: JSON.stringify({
+			model: EXTRACTION_MODEL,
+			messages: [
+				{ role: 'system', content: getCorrectionSystemPrompt() },
+				{ role: 'user', content: correctionPrompt }
+			],
+			max_tokens: EXTRACTION_MAX_TOKENS,
+			temperature: 0.1, // Lower temperature for more deterministic correction
+			stream: false
+		})
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		console.error('[attemptSelfCorrection] API call failed:', response.status, errorText);
+		throw new Error(`Self-correction API call failed: ${response.status}`);
+	}
+
+	const data = await response.json();
+	const correctedText = data.choices?.[0]?.message?.content || '';
+
+	console.log('[attemptSelfCorrection] Correction response length:', correctedText.length);
+	console.log('[attemptSelfCorrection] Correction response (first 200 chars):', correctedText.substring(0, 200));
+
+	const content = parseAIResponse(correctedText);
+
+	if (!validateTipTapContent(content)) {
+		console.error('[attemptSelfCorrection] Corrected content still invalid');
+		throw new Error('Self-correction still produced invalid content');
+	}
+
+	console.log('[attemptSelfCorrection] Self-correction SUCCESS');
+	return {
+		content,
+		inputTokens: data.usage?.prompt_tokens || 0,
+		outputTokens: data.usage?.completion_tokens || 0
+	};
+}
+
+/**
+ * Make API call for content extraction (returns raw response)
+ */
+async function callExtractionAPI(
 	messages: Message[],
-	extractionType: 'summary' | 'last_response' | 'full_conversation' | 'custom',
+	extractionType: ExtractionType,
 	pageType: PageType,
 	customInstructions?: string
-): Promise<{ content: TipTapContent; inputTokens: number; outputTokens: number }> {
+): Promise<{ rawResponse: string; inputTokens: number; outputTokens: number }> {
 	let userPrompt: string;
 
 	switch (extractionType) {
 		case 'last_response': {
-			// Just take the last assistant message and structure it
 			const lastAssistant = [...messages]
 				.reverse()
 				.find((m) => m.role === 'assistant');
 
 			if (!lastAssistant) {
+				// Return empty doc structure as raw JSON
 				return {
-					content: { type: 'doc', content: [] },
+					rawResponse: '{"type":"doc","content":[]}',
 					inputTokens: 0,
 					outputTokens: 0
 				};
@@ -358,23 +492,74 @@ async function extractContent(
 	}
 
 	const data = await response.json();
-	const responseText = data.choices?.[0]?.message?.content || '';
+	const rawResponse = data.choices?.[0]?.message?.content || '';
 
-	console.log('[extractContent] Raw AI response length:', responseText.length);
-	console.log('[extractContent] Raw AI response (first 300 chars):', responseText.substring(0, 300));
-
-	const parsedContent = parseAIResponse(responseText);
-	console.log('[extractContent] Parsed content type:', parsedContent.type);
-	console.log('[extractContent] Parsed content nodes:', parsedContent.content.length);
-	if (parsedContent.content[0]) {
-		console.log('[extractContent] First node type:', parsedContent.content[0].type);
-	}
+	console.log('[callExtractionAPI] Raw AI response length:', rawResponse.length);
+	console.log('[callExtractionAPI] Raw AI response (first 300 chars):', rawResponse.substring(0, 300));
 
 	return {
-		content: parsedContent,
+		rawResponse,
 		inputTokens: data.usage?.prompt_tokens || 0,
 		outputTokens: data.usage?.completion_tokens || 0
 	};
+}
+
+/**
+ * Extract content with automatic self-correction retry on parse failure
+ */
+async function extractContentWithRetry(
+	messages: Message[],
+	extractionType: ExtractionType,
+	pageType: PageType,
+	customInstructions?: string
+): Promise<ExtractionResult> {
+	// Attempt 1: Normal extraction
+	console.log('[extractContentWithRetry] Starting extraction attempt 1');
+	const firstAttempt = await callExtractionAPI(messages, extractionType, pageType, customInstructions);
+
+	try {
+		const content = parseAIResponse(firstAttempt.rawResponse);
+
+		if (!validateTipTapContent(content)) {
+			throw new Error('Content validation failed - invalid structure');
+		}
+
+		console.log('[extractContentWithRetry] Attempt 1 SUCCESS');
+		return {
+			content,
+			inputTokens: firstAttempt.inputTokens,
+			outputTokens: firstAttempt.outputTokens,
+			attempts: 1
+		};
+	} catch (parseError) {
+		console.log('[extractContentWithRetry] Attempt 1 FAILED:', parseError instanceof Error ? parseError.message : 'Unknown error');
+
+		// Attempt 2: Self-correction
+		console.log('[extractContentWithRetry] Starting self-correction attempt 2');
+		try {
+			const correctionResult = await attemptSelfCorrection(
+				firstAttempt.rawResponse,
+				parseError instanceof Error ? parseError : new Error('Parse failed')
+			);
+
+			console.log('[extractContentWithRetry] Self-correction SUCCESS');
+			return {
+				content: correctionResult.content,
+				inputTokens: firstAttempt.inputTokens + correctionResult.inputTokens,
+				outputTokens: firstAttempt.outputTokens + correctionResult.outputTokens,
+				attempts: 2,
+				retryReason: parseError instanceof Error ? parseError.message : 'Parse failed'
+			};
+		} catch (correctionError) {
+			console.error('[extractContentWithRetry] Self-correction FAILED:', correctionError);
+			// Re-throw with informative message
+			throw new Error(
+				`Content extraction failed after 2 attempts. Original error: ${
+					parseError instanceof Error ? parseError.message : 'Unknown'
+				}. Please try a different extraction type.`
+			);
+		}
+	}
 }
 
 /**
@@ -385,6 +570,8 @@ async function extractContent(
  * - extractionType: 'summary' | 'last_response' | 'full_conversation' | 'custom'
  * - pageType: Target page type
  * - customInstructions: Optional instructions for custom extraction
+ *
+ * Response includes metadata about retry attempts for debugging
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
 	console.log('========================================');
@@ -411,26 +598,32 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		const messages = body.messages as Message[];
-		const extractionType = body.extractionType as
-			| 'summary'
-			| 'last_response'
-			| 'full_conversation'
-			| 'custom';
+		const extractionType = body.extractionType as ExtractionType;
 		const pageType = (body.pageType as PageType) || 'general';
 		const customInstructions = body.customInstructions as string | undefined;
 
-		const result = await extractContent(
+		// Use the retry-enabled extraction function
+		const result = await extractContentWithRetry(
 			messages,
 			extractionType,
 			pageType,
 			customInstructions
 		);
 
+		console.log('[/api/pages/extract] Extraction complete, attempts:', result.attempts);
+		if (result.retryReason) {
+			console.log('[/api/pages/extract] Retry was needed:', result.retryReason);
+		}
+
 		return json({
 			content: result.content,
 			usage: {
 				inputTokens: result.inputTokens,
 				outputTokens: result.outputTokens
+			},
+			meta: {
+				attempts: result.attempts,
+				retryReason: result.retryReason
 			}
 		});
 	} catch (error) {

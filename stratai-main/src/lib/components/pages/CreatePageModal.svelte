@@ -78,9 +78,36 @@
 		}
 	});
 
+	/**
+	 * Validate TipTap content structure
+	 */
+	function isValidTipTapContent(content: TipTapContent | null): content is TipTapContent {
+		if (!content) return false;
+		if (content.type !== 'doc') return false;
+		if (!Array.isArray(content.content)) return false;
+		if (content.content.length === 0) return false;
+
+		// Check for raw JSON in text content (indicates failed parsing)
+		for (const node of content.content) {
+			if (node.type === 'paragraph' && node.content?.[0]?.text) {
+				const text = node.content[0].text;
+				if (text.trim().startsWith('{"type":') || text.trim().startsWith('{ "type":')) {
+					console.error('[CreatePageModal] Invalid content - raw JSON detected');
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
 	// Extract content when extraction type or page type changes
-	async function handleExtract() {
-		if (!messages.length) return;
+	// Returns true if extraction succeeded, false otherwise
+	async function handleExtract(): Promise<boolean> {
+		if (!messages.length) {
+			error = 'No messages to extract from';
+			return false;
+		}
 
 		isExtracting = true;
 		error = null;
@@ -100,17 +127,31 @@
 
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.error || 'Extraction failed');
+				throw new Error(data.error || data.details || 'Extraction failed');
 			}
 
 			const data = await response.json();
 			console.log('[CreatePageModal] Extract API response:', JSON.stringify(data).substring(0, 500));
 			console.log('[CreatePageModal] Content type:', data.content?.type);
 			console.log('[CreatePageModal] First node:', JSON.stringify(data.content?.content?.[0]).substring(0, 200));
+
+			// Log retry metadata for debugging
+			if (data.meta?.attempts > 1) {
+				console.log('[CreatePageModal] Extraction succeeded after retry:', data.meta.retryReason);
+			}
+
+			// Validate the extracted content
+			if (!isValidTipTapContent(data.content)) {
+				throw new Error('Extraction returned invalid content. Please try again.');
+			}
+
 			extractedContent = data.content;
+			return true;
 		} catch (err) {
 			console.error('Extraction error:', err);
 			error = err instanceof Error ? err.message : 'Failed to extract content';
+			extractedContent = null;
+			return false;
 		} finally {
 			isExtracting = false;
 		}
@@ -126,15 +167,23 @@
 		try {
 			// If no content extracted yet, do it now
 			let contentToSave = extractedContent;
-			if (!contentToSave) {
-				await handleExtract();
-				// After handleExtract, extractedContent should be set
+			if (!isValidTipTapContent(contentToSave)) {
+				// Need to extract content first
+				const extractionSucceeded = await handleExtract();
+
+				if (!extractionSucceeded) {
+					// handleExtract already set the error state
+					isCreating = false;
+					return;
+				}
+
+				// After successful extraction, get the content
 				contentToSave = extractedContent;
 			}
 
-			// Verify we have content
-			if (!contentToSave) {
-				throw new Error('Failed to extract content from conversation');
+			// Final validation - ensure we have valid content
+			if (!isValidTipTapContent(contentToSave)) {
+				throw new Error('Failed to extract valid content from conversation. Please try generating a preview first.');
 			}
 
 			console.log('[CreatePageModal] Content to save:', JSON.stringify(contentToSave).substring(0, 200));
@@ -332,9 +381,21 @@
 					</div>
 				</div>
 
-				<!-- Error message -->
+				<!-- Error message with suggestions -->
 				{#if error}
-					<div class="error-message">{error}</div>
+					<div class="error-message">
+						<span class="error-text">{error}</span>
+						{#if error.includes('invalid content') || error.includes('failed') || error.includes('Extraction')}
+							<div class="error-suggestions">
+								<strong>Try:</strong>
+								<ul>
+									<li>Select a different extraction type (e.g., "Summary" instead of "Last AI response")</li>
+									<li>Shorten the conversation before extracting</li>
+									<li>Use "Custom" extraction with specific instructions</li>
+								</ul>
+							</div>
+						{/if}
+					</div>
 				{/if}
 			</div>
 
@@ -616,12 +677,43 @@
 	}
 
 	.error-message {
-		padding: 0.625rem;
+		padding: 0.75rem;
 		background: color-mix(in srgb, #ef4444 15%, transparent);
 		border: 1px solid #ef4444;
 		border-radius: 8px;
 		color: #ef4444;
 		font-size: 0.875rem;
+	}
+
+	.error-text {
+		display: block;
+	}
+
+	.error-suggestions {
+		margin-top: 0.75rem;
+		padding-top: 0.75rem;
+		border-top: 1px solid color-mix(in srgb, #ef4444 30%, transparent);
+		font-size: 0.8125rem;
+	}
+
+	.error-suggestions strong {
+		display: block;
+		margin-bottom: 0.375rem;
+		color: var(--editor-text-secondary);
+	}
+
+	.error-suggestions ul {
+		margin: 0;
+		padding-left: 1.25rem;
+		color: var(--editor-text-secondary);
+	}
+
+	.error-suggestions li {
+		margin-bottom: 0.25rem;
+	}
+
+	.error-suggestions li:last-child {
+		margin-bottom: 0;
 	}
 
 	.modal-footer {

@@ -18,9 +18,11 @@
 	import DeleteConfirmModal from './DeleteConfirmModal.svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
+	import SharedWithMeSection from './SharedWithMeSection.svelte';
+	import { getSpaceIconPath } from '$lib/config/space-icons';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
-	import type { Area } from '$lib/types/areas';
+	import type { Area, SharedAreaInfo } from '$lib/types/areas';
 	import type { Space } from '$lib/types/spaces';
 	import type { Conversation } from '$lib/types/chat';
 	import type { SpaceType } from '$lib/types/chat';
@@ -37,6 +39,7 @@
 		recentConversations: Conversation[];
 		activeTasks: Task[];
 		spaceSlug: string;
+		sharedAreas?: SharedAreaInfo[]; // Phase 6: Areas from other spaces shared with user
 		onCreateArea: () => void;
 		onEditArea?: (area: Area) => void;
 		onDeleteArea?: (area: Area) => void;
@@ -50,6 +53,7 @@
 		recentConversations,
 		activeTasks,
 		spaceSlug,
+		sharedAreas = [],
 		onCreateArea,
 		onEditArea,
 		onDeleteArea,
@@ -71,6 +75,17 @@
 
 	// Derive space color
 	let spaceColor = $derived(space.color || '#3b82f6');
+
+	// Check if this is a custom space (has an icon stored as a name, not a system space)
+	let isCustomSpace = $derived(space.type === 'custom');
+
+	// Get appropriate description for the space
+	let spaceDescription = $derived.by(() => {
+		if (space.spaceType === 'organization') {
+			return 'Organization shared workspace';
+		}
+		return space.context || `Your ${space.name.toLowerCase()} space`;
+	});
 
 	// Phase 4: Areas with member counts
 	let areasWithCounts = $derived.by(() => {
@@ -208,15 +223,23 @@
 		<div class="header-content">
 			<div class="space-info">
 				<div class="space-icon-wrapper">
-					<SpaceIcon space={spaceSlug as SpaceType} size="xl" />
+					{#if isCustomSpace && space.icon}
+						<!-- Custom space with icon -->
+						<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d={getSpaceIconPath(space.icon)} />
+						</svg>
+					{:else if isCustomSpace}
+						<!-- Custom space without icon (folder) -->
+						<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d={getSpaceIconPath(undefined)} />
+						</svg>
+					{:else}
+						<SpaceIcon space={spaceSlug as SpaceType} size="xl" />
+					{/if}
 				</div>
 				<div class="space-text">
 					<h1 class="space-name">{space.name}</h1>
-					{#if space.context}
-						<p class="space-description">{space.context}</p>
-					{:else}
-						<p class="space-description">Your {space.name.toLowerCase()} space</p>
-					{/if}
+					<p class="space-description">{spaceDescription}</p>
 				</div>
 			</div>
 			<!-- Quick nav links -->
@@ -239,6 +262,11 @@
 
 	<!-- Main content: Two-column layout -->
 	<main class="dashboard-content">
+		<!-- Phase 6: Shared with Me (org spaces only) -->
+		{#if space.spaceType === 'organization' && sharedAreas.length > 0}
+			<SharedWithMeSection {sharedAreas} />
+		{/if}
+
 		<div class="main-columns">
 			<!-- Left Column: Areas (Context-rich discussions) -->
 			<section class="areas-section">
