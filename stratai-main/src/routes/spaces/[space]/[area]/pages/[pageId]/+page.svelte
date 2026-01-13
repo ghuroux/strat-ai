@@ -14,6 +14,7 @@
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Page as PageType, TipTapContent, PageType as PageTypeEnum, PageVisibility } from '$lib/types/page';
+	import type { PagePermission } from '$lib/types/page-sharing';
 	import type { Area } from '$lib/types/areas';
 	import type { Space } from '$lib/types/spaces';
 
@@ -168,6 +169,9 @@
 		<PageEditor
 			page={currentPage}
 			areaId={area.id}
+			areaName={area.name}
+			spaceName={spaceFromStore?.name ?? 'Space'}
+			userPermission={data.userPermission}
 			initialContent={initialContent}
 			initialTitle={initialTitle}
 			initialType={initialType}

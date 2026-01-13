@@ -21,6 +21,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (pageId === 'new') {
 		return {
 			page: null,
+			userPermission: 'admin' as const, // Creator is always admin
 			isNew: true,
 			spaceSlug: space,
 			areaSlug: area,
@@ -35,6 +36,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		if (!page) {
 			error(404, 'Page not found');
 		}
+
+		// Get user's permission level for this page
+		const userPermission = await postgresPageRepository.getUserPagePermission(userId, pageId);
 
 		return {
 			page: {
@@ -52,6 +56,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 				createdAt: page.createdAt.toISOString(),
 				updatedAt: page.updatedAt.toISOString()
 			},
+			userPermission,
 			isNew: false,
 			spaceSlug: space,
 			areaSlug: area,

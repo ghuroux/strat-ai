@@ -8,7 +8,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { PageList, NewPageModal, DeletePageModal } from '$lib/components/pages';
+	import { PageList, NewPageModal, DeletePageModal, SharePageModal } from '$lib/components/pages';
 	import { pageStore } from '$lib/stores/pages.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -39,6 +39,10 @@
 	let pageToDelete = $state<PageType | null>(null);
 	let isDeleteModalOpen = $state(false);
 	let isDeleting = $state(false);
+
+	// Share modal state
+	let pageToShare = $state<PageType | null>(null);
+	let isShareModalOpen = $state(false);
 
 	// Load space (system or custom)
 	let spaceFromStore = $derived.by(() => {
@@ -269,10 +273,15 @@
 		}
 	}
 
-	// Share handler
-	// TODO: Implement sharing functionality - for now just shows a placeholder toast
+	// Share handlers
 	function handleSharePage(pageItem: PageType) {
-		toastStore.info(`Sharing "${pageItem.title}" coming soon`);
+		pageToShare = pageItem;
+		isShareModalOpen = true;
+	}
+
+	function handleCloseShareModal() {
+		pageToShare = null;
+		isShareModalOpen = false;
 	}
 </script>
 
@@ -353,6 +362,19 @@
 	onConfirm={handleConfirmDelete}
 	onCancel={handleCancelDelete}
 />
+
+<!-- Share Page Modal -->
+{#if pageToShare && area && space}
+	<SharePageModal
+		open={isShareModalOpen}
+		page={pageToShare}
+		areaId={area.id}
+		areaName={area.name}
+		spaceName={space.name}
+		currentUserId={data.userId ?? ''}
+		onClose={handleCloseShareModal}
+	/>
+{/if}
 
 <style>
 	.pages-page {

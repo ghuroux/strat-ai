@@ -27,12 +27,17 @@
 	import { TableHeader } from '@tiptap/extension-table-header';
 	import { TableCell as BaseTableCell } from '@tiptap/extension-table-cell';
 	import { common, createLowlight } from 'lowlight';
-	import { recalculateTable } from '$lib/services/table-calculations';
+	import { recalculateTable, updateTableTotalsInEditor } from '$lib/services/table-calculations';
+	import { Lock } from 'lucide-svelte';
 	import type { Page, TipTapContent, PageType, PageVisibility } from '$lib/types/page';
+	import type { PagePermission } from '$lib/types/page-sharing';
 	import { EMPTY_TIPTAP_CONTENT, countWords, extractTextFromContent } from '$lib/types/page';
 	import EditorToolbar from './EditorToolbar.svelte';
 	import PageHeader from './PageHeader.svelte';
 	import EditorChatPanel from './EditorChatPanel.svelte';
+	import SharePageModal from './SharePageModal.svelte';
+	import PageAuditLog from './PageAuditLog.svelte';
+	import { userStore } from '$lib/stores/user.svelte';
 
 	// Custom TableRow that supports isTotal attribute for total rows
 	const TableRow = BaseTableRow.extend({
@@ -52,6 +57,7 @@
 	});
 
 	// Custom TableCell that supports formula attributes for calculated cells
+	// Formula cells are read-only (contenteditable=false)
 	const TableCell = BaseTableCell.extend({
 		addAttributes() {
 			return {
@@ -61,7 +67,12 @@
 					parseHTML: (element) => element.getAttribute('data-formula'),
 					renderHTML: (attributes) => {
 						if (!attributes.formula) return {};
-						return { 'data-formula': attributes.formula };
+						// Formula cells are read-only
+						return {
+							'data-formula': attributes.formula,
+							'class': 'formula-cell',
+							'contenteditable': 'false'
+						};
 					}
 				},
 				columnIndex: {
@@ -74,6 +85,30 @@
 						if (attributes.columnIndex === null) return {};
 						return { 'data-col-index': attributes.columnIndex };
 					}
+				},
+				// Phase 2.5: Cell background color
+				backgroundColor: {
+					default: null,
+					parseHTML: (element) => element.getAttribute('data-bg-color'),
+					renderHTML: (attributes) => {
+						if (!attributes.backgroundColor) return {};
+						return {
+							'data-bg-color': attributes.backgroundColor,
+							style: `background-color: var(--table-color-${attributes.backgroundColor})`
+						};
+					}
+				},
+				// Phase 2.5: Optional formula prefix display
+				showFormulaPrefix: {
+					default: null,
+					parseHTML: (element) => {
+						const attr = element.getAttribute('data-show-prefix');
+						return attr === 'true' ? true : attr === 'false' ? false : null;
+					},
+					renderHTML: (attributes) => {
+						if (attributes.showFormulaPrefix === null) return {};
+						return { 'data-show-prefix': attributes.showFormulaPrefix ? 'true' : 'false' };
+					}
 				}
 			};
 		}
@@ -83,6 +118,9 @@
 	interface Props {
 		page?: Page | null;
 		areaId: string;
+		areaName?: string;
+		spaceName?: string;
+		userPermission?: PagePermission | null;
 		taskId?: string;
 		initialContent?: TipTapContent;
 		initialTitle?: string;
@@ -95,6 +133,9 @@
 	let {
 		page = null,
 		areaId,
+		areaName = 'Area',
+		spaceName = 'Space',
+		userPermission,
 		taskId,
 		initialContent,
 		initialTitle = 'Untitled',
@@ -118,6 +159,34 @@
 	let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 	let chatPanelOpen = $state(false);
 	let editorTick = $state(0); // Increments on each transaction to force toolbar reactivity
+
+	// Sharing state
+	let showShareModal = $state(false);
+
+	// Activity panel state
+	let activityPanelOpen = $state(false);
+
+	// Phase 2.5: Formula mode state for row formulas
+	interface FormulaMode {
+		active: boolean;
+		cellPos: number;        // Position of the formula cell in the document
+		rowIndex: number;       // Row index within table
+		colIndex: number;       // Column index within row
+		formula: string;        // Formula being built (e.g., "=[1]*[2]")
+		previousValue: string;  // Original cell content for cancel
+	}
+
+	let formulaMode = $state<FormulaMode | null>(null);
+
+	// Current user ID from store
+	let currentUserId = $derived(userStore.id ?? '');
+
+	// Permission-based derived states
+	let isReadOnly = $derived(userPermission === 'viewer');
+	let isAdmin = $derived(userPermission === 'admin');
+
+	// Check if current user can manage sharing (owner has admin permission)
+	let canManageSharing = $derived(page ? page.userId === currentUserId : false);
 
 	// Sync state with props when page or initial values change
 	$effect(() => {
@@ -159,7 +228,7 @@
 					codeBlock: false // Use CodeBlockLowlight instead
 				}),
 				Placeholder.configure({
-					placeholder: 'Start typing your content...'
+					placeholder: isReadOnly ? '' : 'Start typing your content...'
 				}),
 				Underline,
 				Link.configure({
@@ -173,9 +242,9 @@
 					nested: true
 				}),
 				Table.configure({
-					resizable: true,
+					resizable: !isReadOnly,
 					cellMinWidth: 50,
-					lastColumnResizable: true,
+					lastColumnResizable: !isReadOnly,
 					allowTableNodeSelection: false
 				}),
 				TableRow,
@@ -186,10 +255,27 @@
 				})
 			],
 			content: content,
-			onUpdate: ({ editor: ed }) => {
+			editable: !isReadOnly, // Disable editing for viewers
+			onUpdate: ({ editor: ed, transaction }) => {
+				// Skip updates for read-only users
+				if (isReadOnly) return;
+				// Skip if this update was triggered by our table calculation
+				if (transaction.getMeta('tableCalculation')) {
+					// Still update content for saving, but don't trigger auto-save again
+					content = ed.getJSON() as TipTapContent;
+					return;
+				}
+
+				// Phase 2.5: Check for formula mode entry
+				checkForFormulaEntry(ed);
+
+				// Update table totals in real-time (uses transactions, not JSON mutation)
+				updateTableTotalsInEditor(ed);
+
+				// Get updated content for state/saving
 				const json = ed.getJSON() as TipTapContent;
 
-				// Recalculate table totals if any tables exist
+				// Also update the JSON for persistence (recalculateTable ensures totals in saved content)
 				json.content?.forEach((node) => {
 					if (node.type === 'table') {
 						recalculateTable(node);
@@ -212,11 +298,13 @@
 			}
 		});
 
-		// Add keyboard shortcut for save
+		// Add keyboard shortcut for save (disabled for viewers)
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && e.key === 's') {
 				e.preventDefault();
-				handleSave();
+				if (!isReadOnly) {
+					handleSave();
+				}
 			}
 		};
 		document.addEventListener('keydown', handleKeyDown);
@@ -236,8 +324,11 @@
 		}
 	});
 
-	// Auto-save with 30-second debounce
+	// Auto-save with 30-second debounce (disabled for viewers)
 	function scheduleAutoSave() {
+		// Don't auto-save for read-only users
+		if (isReadOnly) return;
+
 		if (autoSaveTimer) {
 			clearTimeout(autoSaveTimer);
 		}
@@ -248,9 +339,9 @@
 		}, 30000); // 30 seconds
 	}
 
-	// Handle save
+	// Handle save (disabled for viewers)
 	async function handleSave() {
-		if (isSaving) return;
+		if (isSaving || isReadOnly) return;
 
 		isSaving = true;
 		saveStatus = 'saving';
@@ -376,6 +467,289 @@
 	function handleChatPanelOpenChange(isOpen: boolean) {
 		chatPanelOpen = isOpen;
 	}
+
+	// Phase 2.5: Formula mode functions
+
+	/**
+	 * Enter formula mode when "=" is typed in a table cell
+	 */
+	function enterFormulaMode(rowIndex: number, colIndex: number, previousValue: string) {
+		console.log('[FormulaMode] Entering formula mode', { rowIndex, colIndex, previousValue });
+		formulaMode = {
+			active: true,
+			cellPos: -1, // Not used anymore - we find cell dynamically
+			rowIndex,
+			colIndex,
+			formula: '=',
+			previousValue
+		};
+
+		// Blur the editor to prevent it from capturing keyboard events
+		editor?.commands.blur();
+	}
+
+	/**
+	 * Add a column reference to the formula
+	 */
+	function addColumnReference(colIndex: number) {
+		if (!formulaMode) return;
+
+		console.log('[FormulaMode] Adding column reference', { colIndex, currentFormula: formulaMode.formula });
+
+		// Prevent self-reference
+		if (colIndex === formulaMode.colIndex) {
+			console.log('[FormulaMode] Blocked: self-reference attempt');
+			return;
+		}
+
+		// Add operator if needed (after previous ref or number)
+		const lastChar = formulaMode.formula.slice(-1);
+		if (lastChar !== '=' && lastChar !== '+' && lastChar !== '-' && lastChar !== '*' && lastChar !== '/' && lastChar !== '(') {
+			formulaMode.formula += '*'; // Default to multiplication
+		}
+
+		formulaMode.formula += `[${colIndex}]`;
+		console.log('[FormulaMode] Updated formula', { formula: formulaMode.formula });
+	}
+
+	/**
+	 * Add an operator to the formula
+	 */
+	function addFormulaOperator(op: '+' | '-' | '*' | '/') {
+		if (!formulaMode) return;
+		console.log('[FormulaMode] Adding operator', { op });
+		formulaMode.formula += op;
+	}
+
+	/**
+	 * Find a table cell by row and column index in the document
+	 * Returns the position of the cell node, or -1 if not found
+	 */
+	function findCellPosition(ed: Editor, targetRowIndex: number, targetColIndex: number): number {
+		const { state } = ed;
+		let cellPos = -1;
+
+		state.doc.descendants((node, pos) => {
+			if (node.type.name === 'table') {
+				let currentRowIndex = 0;
+				node.forEach((row, rowOffset) => {
+					if (row.type.name === 'tableRow') {
+						let currentColIndex = 0;
+						row.forEach((cell, cellOffset) => {
+							if (cell.type.name === 'tableCell' || cell.type.name === 'tableHeader') {
+								if (currentRowIndex === targetRowIndex && currentColIndex === targetColIndex) {
+									// pos + 1 (table opening) + rowOffset + 1 (row opening) + cellOffset
+									cellPos = pos + 1 + rowOffset + 1 + cellOffset;
+									console.log('[FormulaMode] Found cell at position', { cellPos, targetRowIndex, targetColIndex });
+								}
+								currentColIndex++;
+							}
+						});
+						currentRowIndex++;
+					}
+				});
+			}
+			return cellPos === -1; // Stop searching once found
+		});
+
+		return cellPos;
+	}
+
+	/**
+	 * Complete (save) the formula
+	 */
+	function completeFormula(save: boolean) {
+		console.log('[FormulaMode] Completing formula', { save, formulaMode });
+
+		if (!formulaMode || !editor) {
+			console.log('[FormulaMode] No formula mode or editor');
+			return;
+		}
+
+		if (save && formulaMode.formula.length > 1) {
+			console.log('[FormulaMode] Saving formula:', formulaMode.formula);
+
+			// Find the cell position dynamically (not using stale cellPos)
+			const cellPos = findCellPosition(editor, formulaMode.rowIndex, formulaMode.colIndex);
+
+			if (cellPos === -1) {
+				console.error('[FormulaMode] Could not find cell position');
+				formulaMode = null;
+				return;
+			}
+
+			const { state } = editor;
+			const cell = state.doc.nodeAt(cellPos);
+
+			console.log('[FormulaMode] Cell at position:', { cellPos, cell: cell?.type.name, attrs: cell?.attrs });
+
+			if (cell && (cell.type.name === 'tableCell' || cell.type.name === 'tableHeader')) {
+				// Create transaction to update cell attributes AND set cell content
+				const tr = state.tr;
+
+				// Update cell attributes with formula
+				tr.setNodeMarkup(cellPos, undefined, {
+					...cell.attrs,
+					formula: formulaMode.formula,
+					columnIndex: formulaMode.colIndex
+				});
+
+				// Also set the cell content to show the formula result placeholder
+				// Find the paragraph inside the cell and replace its content
+				const paragraphPos = cellPos + 1; // tableCell > paragraph
+				const paragraph = state.doc.nodeAt(paragraphPos);
+				if (paragraph && paragraph.type.name === 'paragraph') {
+					const textStart = paragraphPos + 1;
+					const textEnd = paragraphPos + paragraph.nodeSize - 1;
+					// Replace with placeholder (calculation will update it)
+					tr.replaceWith(textStart, textEnd, state.schema.text('...'));
+					console.log('[FormulaMode] Replaced cell content', { textStart, textEnd });
+				}
+
+				tr.setMeta('tableCalculation', true);
+				editor.view.dispatch(tr);
+				console.log('[FormulaMode] Transaction dispatched');
+
+				// Trigger recalculation
+				setTimeout(() => {
+					if (editor) {
+						updateTableTotalsInEditor(editor);
+						console.log('[FormulaMode] Triggered recalculation');
+					}
+				}, 50);
+			} else {
+				console.error('[FormulaMode] Invalid cell node', { cell });
+			}
+		} else {
+			console.log('[FormulaMode] Cancelled or empty formula');
+		}
+
+		formulaMode = null;
+		console.log('[FormulaMode] Formula mode cleared');
+	}
+
+	/**
+	 * Handle clicks during formula mode (capture phase)
+	 */
+	function handleEditorClick(event: MouseEvent) {
+		if (!formulaMode || !editor) return;
+
+		console.log('[FormulaMode] Click detected', { target: (event.target as HTMLElement).tagName });
+
+		const target = event.target as HTMLElement;
+		const cell = target.closest('td, th');
+
+		if (!cell) {
+			console.log('[FormulaMode] Clicked outside table - saving');
+			completeFormula(true);
+			return;
+		}
+
+		// Get column index from the cell
+		const row = cell.parentElement;
+		if (!row) {
+			console.log('[FormulaMode] No parent row found');
+			return;
+		}
+
+		const colIndex = Array.from(row.children).indexOf(cell);
+		console.log('[FormulaMode] Cell clicked', { colIndex });
+
+		if (colIndex >= 0) {
+			addColumnReference(colIndex);
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	}
+
+	/**
+	 * Handle keyboard events during formula mode
+	 * Must be on capture phase to intercept before editor
+	 */
+	function handleFormulaKeydown(event: KeyboardEvent) {
+		if (!formulaMode) return;
+
+		console.log('[FormulaMode] Keydown:', event.key);
+
+		switch (event.key) {
+			case 'Enter':
+				console.log('[FormulaMode] Enter pressed - saving');
+				completeFormula(true);
+				event.preventDefault();
+				event.stopPropagation();
+				break;
+			case 'Escape':
+				console.log('[FormulaMode] Escape pressed - cancelling');
+				completeFormula(false);
+				event.preventDefault();
+				event.stopPropagation();
+				break;
+			case '+':
+			case '-':
+			case '*':
+			case '/':
+				addFormulaOperator(event.key as '+' | '-' | '*' | '/');
+				event.preventDefault();
+				event.stopPropagation();
+				break;
+		}
+	}
+
+	/**
+	 * Check if user typed "=" to enter formula mode (called in onUpdate)
+	 */
+	function checkForFormulaEntry(ed: Editor) {
+		// Skip if already in formula mode
+		if (formulaMode) return;
+
+		const { state } = ed;
+		const { selection } = state;
+		const selPos = selection.$from;
+
+		// Check if we're in a table cell
+		for (let depth = selPos.depth; depth > 0; depth--) {
+			const node = selPos.node(depth);
+			if (node.type.name === 'tableCell') {
+				const text = node.textContent;
+
+				// If cell contains only "=", enter formula mode
+				if (text === '=') {
+					console.log('[FormulaMode] Detected "=" in cell');
+
+					// Find row and column indices
+					const row = selPos.node(depth - 1);
+					const table = selPos.node(depth - 2);
+					let rowIndex = 0;
+					let colIndex = 0;
+
+					// Get column index within row
+					const rowPos = selPos.before(depth - 1);
+					row.forEach((cell, offset, index) => {
+						if (selPos.pos >= rowPos + 1 + offset && selPos.pos < rowPos + 1 + offset + cell.nodeSize) {
+							colIndex = index;
+						}
+					});
+
+					// Get row index within table
+					const tablePos = selPos.before(depth - 2);
+					table.forEach((r, offset, index) => {
+						if (selPos.pos >= tablePos + 1 + offset && selPos.pos < tablePos + 1 + offset + r.nodeSize) {
+							rowIndex = index;
+						}
+					});
+
+					console.log('[FormulaMode] Cell location', { rowIndex, colIndex });
+
+					// Clear the "=" from the cell first
+					ed.commands.deleteRange({ from: selPos.pos - 1, to: selPos.pos });
+
+					// Enter formula mode (after clearing, so we don't track stale position)
+					enterFormulaMode(rowIndex, colIndex, '');
+				}
+				break;
+			}
+		}
+	}
 </script>
 
 <div class="page-editor" class:chat-open={chatPanelOpen}>
@@ -386,9 +760,12 @@
 		{pageType}
 		{visibility}
 		{saveStatus}
-		{isDirty}
+		isDirty={isReadOnly ? false : isDirty}
+		{canManageSharing}
+		{userPermission}
 		onTitleChange={handleTitleChange}
-		onVisibilityChange={handleVisibilityChange}
+		onOpenShareModal={() => showShareModal = true}
+		onOpenActivityLog={() => activityPanelOpen = !activityPanelOpen}
 		onSave={handleSave}
 		onClose={handleClose}
 	/>
@@ -396,14 +773,30 @@
 	<!-- Main content area -->
 	<div class="editor-content">
 		<!-- Editor main area -->
-		<div class="editor-main" class:chat-open={chatPanelOpen}>
-			<!-- Toolbar -->
-			{#if editor}
-				<EditorToolbar {editor} {editorTick} />
+		<div class="editor-main" class:chat-open={chatPanelOpen} class:activity-open={activityPanelOpen}>
+			<!-- Toolbar (hidden for viewers) -->
+			{#if editor && !isReadOnly}
+				<EditorToolbar {editor} {editorTick} {formulaMode} />
+			{/if}
+
+			<!-- Read-only banner -->
+			{#if isReadOnly}
+				<div class="read-only-banner">
+					<Lock size={16} />
+					<span>Read-only - You have viewer permission</span>
+				</div>
 			{/if}
 
 			<!-- Editor body -->
-			<div class="editor-body-wrapper">
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="editor-body-wrapper"
+				class:read-only={isReadOnly}
+				class:formula-mode={formulaMode?.active}
+				onclickcapture={handleEditorClick}
+				onkeydowncapture={handleFormulaKeydown}
+			>
 				<div bind:this={editorElement} class="editor-container"></div>
 			</div>
 		</div>
@@ -415,6 +808,16 @@
 					{page}
 					onApplyChange={handleApplyChange}
 					onOpenChange={handleChatPanelOpenChange}
+				/>
+			</div>
+		{/if}
+
+		<!-- Activity panel (admin only) -->
+		{#if activityPanelOpen && page}
+			<div class="activity-panel-container">
+				<PageAuditLog
+					pageId={page.id}
+					onClose={() => activityPanelOpen = false}
 				/>
 			</div>
 		{/if}
@@ -454,6 +857,20 @@
 	</div>
 </div>
 
+<!-- Share Modal -->
+<SharePageModal
+	open={showShareModal}
+	{page}
+	{areaId}
+	{areaName}
+	{spaceName}
+	{currentUserId}
+	onClose={() => showShareModal = false}
+	onVisibilityChange={(newVisibility) => {
+		visibility = newVisibility;
+	}}
+/>
+
 <style>
 	.page-editor {
 		position: relative;
@@ -482,10 +899,44 @@
 		margin-right: 350px;
 	}
 
+	.editor-main.activity-open {
+		margin-right: 380px;
+	}
+
+	.editor-main.chat-open.activity-open {
+		margin-right: 730px; /* 350px chat + 380px activity */
+	}
+
+	/* Read-only banner */
+	.read-only-banner {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 1rem;
+		background: rgba(107, 114, 128, 0.1);
+		border: 1px solid rgba(107, 114, 128, 0.2);
+		border-radius: 0.5rem;
+		font-size: 0.875rem;
+		color: #6b7280;
+		margin: 1rem 1.5rem 0;
+	}
+
 	.editor-body-wrapper {
 		flex: 1;
 		overflow-y: auto;
 		padding: 2rem;
+	}
+
+	.editor-body-wrapper.read-only {
+		cursor: default;
+		user-select: text;
+	}
+
+	.editor-body-wrapper.read-only :global(.ProseMirror) {
+		opacity: 0.9;
+		background: rgba(0, 0, 0, 0.02);
+		border-radius: 0.5rem;
+		padding: 1rem;
 	}
 
 	.editor-container {
@@ -603,5 +1054,20 @@
 		bottom: 4rem;
 		right: 1.5rem;
 		z-index: 10;
+	}
+
+	/* Activity panel container */
+	.activity-panel-container {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 380px;
+		background: var(--editor-bg);
+		border-left: 1px solid var(--editor-border);
+		z-index: 20;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
 	}
 </style>

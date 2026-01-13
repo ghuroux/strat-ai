@@ -83,7 +83,7 @@ function generateShareId(prefix: 'pus' | 'pgs'): string {
  * Check if user can access page and determine their permission level
  *
  * Resolution order:
- * 1. Page owner → admin permission
+ * 1. Page owner → admin permission (always, even if area is deleted)
  * 2. If visibility = 'private':
  *    - Check direct user share → return that permission
  *    - Check group share (best role if multiple groups) → return that permission
@@ -95,25 +95,27 @@ function generateShareId(prefix: 'pus' | 'pgs'): string {
  *    - Check space ownership → editor permission
  */
 async function canAccessPage(userId: string, pageId: string): Promise<PageAccessResult> {
-	// Get page details and check ownership
+	// Get page details - use LEFT JOIN so we can still check ownership even if area is deleted
+	// Note: postgres.js auto-transforms column names to camelCase
 	const pageRows = await sql<
 		{
-			user_id: string;
-			area_id: string;
+			userId: string;
+			areaId: string;
 			visibility: 'private' | 'area' | 'space';
-			space_id: string;
+			spaceId: string | null;
+			areaDeleted: boolean;
 		}[]
 	>`
 		SELECT
 			p.user_id,
 			p.area_id,
 			p.visibility,
-			a.space_id
+			a.space_id,
+			(a.deleted_at IS NOT NULL) as area_deleted
 		FROM pages p
-		JOIN areas a ON p.area_id = a.id
+		LEFT JOIN areas a ON p.area_id = a.id
 		WHERE p.id = ${pageId}
 			AND p.deleted_at IS NULL
-			AND a.deleted_at IS NULL
 	`;
 
 	if (pageRows.length === 0) {
@@ -123,7 +125,7 @@ async function canAccessPage(userId: string, pageId: string): Promise<PageAccess
 	const page = pageRows[0];
 
 	// 1. Owner check - page creator always has admin access
-	if (page.user_id === userId) {
+	if (page.userId === userId) {
 		return { hasAccess: true, permission: 'admin', source: 'owner' };
 	}
 
@@ -173,9 +175,14 @@ async function canAccessPage(userId: string, pageId: string): Promise<PageAccess
 
 	// 3. Area visibility - check area access
 	if (page.visibility === 'area') {
+		// If area is deleted or doesn't exist, deny access (owner already handled above)
+		if (page.areaDeleted || !page.spaceId) {
+			return { hasAccess: false, permission: null, source: 'area' };
+		}
+
 		// Import area memberships repository
 		const { postgresAreaMembershipsRepository } = await import('./area-memberships-postgres');
-		const areaAccess = await postgresAreaMembershipsRepository.canAccessArea(userId, page.area_id);
+		const areaAccess = await postgresAreaMembershipsRepository.canAccessArea(userId, page.areaId);
 
 		if (!areaAccess.hasAccess) {
 			return { hasAccess: false, permission: null, source: 'area' };
@@ -200,10 +207,15 @@ async function canAccessPage(userId: string, pageId: string): Promise<PageAccess
 
 	// 4. Space visibility - check space ownership
 	if (page.visibility === 'space') {
+		// If spaceId is null (area doesn't exist), deny access (owner already handled above)
+		if (!page.spaceId) {
+			return { hasAccess: false, permission: null, source: 'space' };
+		}
+
 		const spaceOwnerRows = await sql<{ exists: boolean }[]>`
 			SELECT EXISTS (
 				SELECT 1 FROM spaces
-				WHERE id = ${page.space_id}
+				WHERE id = ${page.spaceId}
 					AND user_id = ${userId}
 					AND deleted_at IS NULL
 			) as exists
@@ -368,10 +380,11 @@ async function getPageShares(pageId: string): Promise<{
 	groups: PageGroupShareWithDetails[];
 }> {
 	// Get user shares with user details
+	// Note: postgres.js auto-transforms column names to camelCase
 	const userRows = await sql<
 		(PageUserShareRow & {
-			user_name: string | null;
-			user_email: string | null;
+			userName: string | null;
+			userEmail: string | null;
 		})[]
 	>`
 		SELECT
@@ -386,15 +399,16 @@ async function getPageShares(pageId: string): Promise<{
 
 	const users: PageUserShareWithDetails[] = userRows.map((row) => ({
 		...rowToPageUserShare(row),
-		userName: row.user_name,
-		userEmail: row.user_email
+		userName: row.userName,
+		userEmail: row.userEmail
 	}));
 
 	// Get group shares with group details
+	// Note: postgres.js auto-transforms column names to camelCase
 	const groupRows = await sql<
 		(PageGroupShareRow & {
-			group_name: string;
-			member_count: string; // COUNT returns string
+			groupName: string;
+			memberCount: string; // COUNT returns string
 		})[]
 	>`
 		SELECT
@@ -412,8 +426,8 @@ async function getPageShares(pageId: string): Promise<{
 
 	const groups: PageGroupShareWithDetails[] = groupRows.map((row) => ({
 		...rowToPageGroupShare(row),
-		groupName: row.group_name,
-		groupMemberCount: parseInt(row.member_count, 10)
+		groupName: row.groupName,
+		groupMemberCount: parseInt(row.memberCount, 10)
 	}));
 
 	return { users, groups };

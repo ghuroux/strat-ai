@@ -7,13 +7,11 @@
 import { sql } from './db';
 import type {
 	AuditEvent,
-	AuditEventRow,
 	AuditEventWithUser,
 	AuditEventType,
 	AuditResourceType,
 	AuditQueryOptions
 } from '$lib/types/audit';
-import { rowToAuditEvent } from '$lib/types/audit';
 
 // ============================================================================
 // Repository Interface
@@ -98,6 +96,7 @@ async function logEvent(
 
 /**
  * Get audit events for a specific resource with user details
+ * Note: postgres.js auto-transforms column names to camelCase
  */
 async function getResourceAudit(
 	resourceType: AuditResourceType,
@@ -106,55 +105,79 @@ async function getResourceAudit(
 ): Promise<AuditEventWithUser[]> {
 	const { eventTypes, limit = 50, offset = 0, startDate, endDate } = options;
 
-	// Build query dynamically based on options
-	let query = sql`
+	// Query with camelCase-aware column selection
+	// postgres.js transforms snake_case columns to camelCase automatically
+	const rows = await sql<
+		{
+			id: string;
+			userId: string;
+			eventType: AuditEventType;
+			resourceType: AuditResourceType;
+			resourceId: string;
+			action: string;
+			metadata: Record<string, unknown> | string;
+			createdAt: Date;
+			userName: string | null;
+			userEmail: string | null;
+		}[]
+	>`
 		SELECT
-			ae.*,
+			ae.id,
+			ae.user_id,
+			ae.event_type,
+			ae.resource_type,
+			ae.resource_id,
+			ae.action,
+			ae.metadata,
+			ae.created_at,
 			u.display_name as user_name,
 			u.email as user_email
 		FROM audit_events ae
 		LEFT JOIN users u ON ae.user_id = u.id::text
 		WHERE ae.resource_type = ${resourceType}
 			AND ae.resource_id = ${resourceId}
-	`;
-
-	// Add event type filter if specified
-	if (eventTypes && eventTypes.length > 0) {
-		query = sql`${query} AND ae.event_type = ANY(${eventTypes})`;
-	}
-
-	// Add date range filters if specified
-	if (startDate) {
-		query = sql`${query} AND ae.created_at >= ${startDate}`;
-	}
-
-	if (endDate) {
-		query = sql`${query} AND ae.created_at <= ${endDate}`;
-	}
-
-	// Add ordering and pagination
-	query = sql`${query}
+			AND (${!eventTypes || eventTypes.length === 0} OR ae.event_type = ANY(${eventTypes || []}))
+			AND (${!startDate} OR ae.created_at >= ${startDate || new Date(0)})
+			AND (${!endDate} OR ae.created_at <= ${endDate || new Date()})
 		ORDER BY ae.created_at DESC
 		LIMIT ${limit}
 		OFFSET ${offset}
 	`;
 
-	const rows = await sql<
-		(AuditEventRow & {
-			user_name: string | null;
-			user_email: string | null;
-		})[]
-	>`${query}`;
+	return rows.map((row) => {
+		// Parse metadata if it's a string (JSONB can sometimes be returned as string)
+		let metadata: Record<string, unknown> = {};
+		if (row.metadata) {
+			if (typeof row.metadata === 'string') {
+				try {
+					metadata = JSON.parse(row.metadata);
+				} catch {
+					metadata = {};
+				}
+			} else {
+				metadata = row.metadata;
+			}
+		}
 
-	return rows.map((row) => ({
-		...rowToAuditEvent(row),
-		userName: row.user_name,
-		userEmail: row.user_email
-	}));
+		return {
+			id: row.id,
+			organizationId: null,
+			userId: row.userId,
+			eventType: row.eventType,
+			resourceType: row.resourceType,
+			resourceId: row.resourceId,
+			action: row.action,
+			metadata,
+			createdAt: row.createdAt,
+			userName: row.userName,
+			userEmail: row.userEmail
+		};
+	});
 }
 
 /**
  * Get audit events for a specific user
+ * Note: postgres.js auto-transforms column names to camelCase
  */
 async function getUserActivity(
 	userId: string,
@@ -162,49 +185,72 @@ async function getUserActivity(
 ): Promise<AuditEventWithUser[]> {
 	const { eventTypes, limit = 50, offset = 0, startDate, endDate } = options;
 
-	// Build query dynamically
-	let query = sql`
+	// Query with camelCase-aware column selection
+	const rows = await sql<
+		{
+			id: string;
+			visitorUserId: string;
+			eventType: AuditEventType;
+			resourceType: AuditResourceType;
+			resourceId: string;
+			action: string;
+			metadata: Record<string, unknown> | string;
+			createdAt: Date;
+			userName: string | null;
+			userEmail: string | null;
+		}[]
+	>`
 		SELECT
-			ae.*,
+			ae.id,
+			ae.user_id as visitor_user_id,
+			ae.event_type,
+			ae.resource_type,
+			ae.resource_id,
+			ae.action,
+			ae.metadata,
+			ae.created_at,
 			u.display_name as user_name,
 			u.email as user_email
 		FROM audit_events ae
 		LEFT JOIN users u ON ae.user_id = u.id::text
 		WHERE ae.user_id = ${userId}
-	`;
-
-	// Add filters
-	if (eventTypes && eventTypes.length > 0) {
-		query = sql`${query} AND ae.event_type = ANY(${eventTypes})`;
-	}
-
-	if (startDate) {
-		query = sql`${query} AND ae.created_at >= ${startDate}`;
-	}
-
-	if (endDate) {
-		query = sql`${query} AND ae.created_at <= ${endDate}`;
-	}
-
-	// Add ordering and pagination
-	query = sql`${query}
+			AND (${!eventTypes || eventTypes.length === 0} OR ae.event_type = ANY(${eventTypes || []}))
+			AND (${!startDate} OR ae.created_at >= ${startDate || new Date(0)})
+			AND (${!endDate} OR ae.created_at <= ${endDate || new Date()})
 		ORDER BY ae.created_at DESC
 		LIMIT ${limit}
 		OFFSET ${offset}
 	`;
 
-	const rows = await sql<
-		(AuditEventRow & {
-			user_name: string | null;
-			user_email: string | null;
-		})[]
-	>`${query}`;
+	return rows.map((row) => {
+		// Parse metadata if it's a string
+		let metadata: Record<string, unknown> = {};
+		if (row.metadata) {
+			if (typeof row.metadata === 'string') {
+				try {
+					metadata = JSON.parse(row.metadata);
+				} catch {
+					metadata = {};
+				}
+			} else {
+				metadata = row.metadata;
+			}
+		}
 
-	return rows.map((row) => ({
-		...rowToAuditEvent(row),
-		userName: row.user_name,
-		userEmail: row.user_email
-	}));
+		return {
+			id: row.id,
+			organizationId: null,
+			userId: row.visitorUserId,
+			eventType: row.eventType,
+			resourceType: row.resourceType,
+			resourceId: row.resourceId,
+			action: row.action,
+			metadata,
+			createdAt: row.createdAt,
+			userName: row.userName,
+			userEmail: row.userEmail
+		};
+	});
 }
 
 // ============================================================================

@@ -30,3 +30,11 @@ export { default as ExportMenu } from './ExportMenu.svelte';
 
 // Modal components
 export { default as DeletePageModal } from './DeletePageModal.svelte';
+
+// Sharing components
+export { default as SharePageModal } from './SharePageModal.svelte';
+export { default as PagePermissionSelector } from './PagePermissionSelector.svelte';
+export { default as PagePermissionBadge } from './PagePermissionBadge.svelte';
+
+// Audit components
+export { default as PageAuditLog } from './PageAuditLog.svelte';

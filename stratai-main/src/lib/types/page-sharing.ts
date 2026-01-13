@@ -32,15 +32,15 @@ export interface PageUserShare {
 	createdAt: Date;
 }
 
-/** Database row representation (for postgres.js) */
+/** Database row representation (for postgres.js - auto camelCase transformed) */
 export interface PageUserShareRow {
 	id: string;
-	page_id: string;
-	user_id: string;
+	pageId: string;
+	userId: string;
 	permission: PagePermission;
-	shared_by: string;
-	shared_at: Date;
-	created_at: Date;
+	sharedBy: string;
+	sharedAt: Date;
+	createdAt: Date;
 }
 
 /** User share with user details (for UI display) */
@@ -64,15 +64,15 @@ export interface PageGroupShare {
 	createdAt: Date;
 }
 
-/** Database row representation */
+/** Database row representation (for postgres.js - auto camelCase transformed) */
 export interface PageGroupShareRow {
 	id: string;
-	page_id: string;
-	group_id: string; // UUID in DB but string in TS
+	pageId: string;
+	groupId: string; // UUID in DB but string in TS
 	permission: PagePermission;
-	shared_by: string;
-	shared_at: Date;
-	created_at: Date;
+	sharedBy: string;
+	sharedAt: Date;
+	createdAt: Date;
 }
 
 /** Group share with group details (for UI display) */
@@ -161,12 +161,12 @@ export const PAGE_PERMISSION_COLORS: Record<PagePermission, string> = {
 export function rowToPageUserShare(row: PageUserShareRow): PageUserShare {
 	return {
 		id: row.id,
-		pageId: row.page_id,
-		userId: row.user_id,
+		pageId: row.pageId,
+		userId: row.userId,
 		permission: row.permission,
-		sharedBy: row.shared_by,
-		sharedAt: new Date(row.shared_at),
-		createdAt: new Date(row.created_at)
+		sharedBy: row.sharedBy,
+		sharedAt: new Date(row.sharedAt),
+		createdAt: new Date(row.createdAt)
 	};
 }
 
@@ -174,11 +174,11 @@ export function rowToPageUserShare(row: PageUserShareRow): PageUserShare {
 export function rowToPageGroupShare(row: PageGroupShareRow): PageGroupShare {
 	return {
 		id: row.id,
-		pageId: row.page_id,
-		groupId: row.group_id,
+		pageId: row.pageId,
+		groupId: row.groupId,
 		permission: row.permission,
-		sharedBy: row.shared_by,
-		sharedAt: new Date(row.shared_at),
-		createdAt: new Date(row.created_at)
+		sharedBy: row.sharedBy,
+		sharedAt: new Date(row.sharedAt),
+		createdAt: new Date(row.createdAt)
 	};
 }
