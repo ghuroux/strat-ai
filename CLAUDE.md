@@ -37,6 +37,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/BACKLOG.md` - Feature backlog and priorities
 - `stratai-main/docs/enterprise-roadmap.md` - Implementation phases and timeline
 - `stratai-main/docs/SENDGRID_EMAIL_INTEGRATION.md` - **Email system** (SendGrid, password reset, future notifications)
+- `stratai-main/docs/MODEL_CONFIGURATION_SYSTEM.md` - **Model configuration** (parameter constraints, runtime overrides, Admin UI)
 
 ---
 
@@ -117,6 +118,7 @@ Don't revisit without good reason:
 | Meeting Notes first template | Most common, clearest structure, proves pattern before expanding |
 | Guided creation progressive disclosure | Card-based interview (not wizard forms), skip always available, context does heavy lifting |
 | Decisions feed context hierarchy | Structured decisions from meetings bubble up to Area memory (CONTEXT_STRATEGY.md integration) |
+| Model config: hybrid code + DB | Code provides type-safe defaults; DB enables runtime fixes without deployment; Admin UI for quick tweaks |
 
 ---
 
