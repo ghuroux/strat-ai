@@ -9,6 +9,26 @@ export type SpaceKind = 'system' | 'custom';
 export type SystemSpaceSlug = 'work' | 'research' | 'random' | 'personal';
 
 /**
+ * Space type for collaboration model:
+ * - personal: Single owner, no sharing (traditional personal spaces)
+ * - organization: Org-wide space, all org members have access
+ * - project: Team project space, explicit invitation required
+ */
+export type SpaceType = 'personal' | 'organization' | 'project';
+
+export const SPACE_TYPE_LABELS: Record<SpaceType, string> = {
+	personal: 'Personal',
+	organization: 'Organization',
+	project: 'Project'
+};
+
+export const SPACE_TYPE_DESCRIPTIONS: Record<SpaceType, string> = {
+	personal: 'Private workspace for individual use',
+	organization: 'Shared workspace for your organization',
+	project: 'Collaborative space for a team or project'
+};
+
+/**
  * Space entity
  */
 export interface Space {
@@ -24,6 +44,9 @@ export interface Space {
 	orderIndex: number;
 	createdAt: Date;
 	updatedAt: Date;
+	// Space membership fields (added in migration 031)
+	spaceType?: SpaceType; // personal, organization, or project
+	organizationId?: string; // For org-scoped spaces
 }
 
 /**
@@ -44,6 +67,10 @@ export interface SpaceRow {
 	createdAt: Date;
 	updatedAt: Date;
 	deletedAt: Date | null;
+	// Space membership fields (added in migration 031)
+	// Note: postgres.js auto-converts snake_case to camelCase
+	spaceType: SpaceType | null;
+	organizationId: string | null;
 }
 
 /**
@@ -109,7 +136,9 @@ export function rowToSpace(row: SpaceRow): Space {
 		icon: row.icon ?? undefined,
 		orderIndex: row.orderIndex,
 		createdAt: row.createdAt,
-		updatedAt: row.updatedAt
+		updatedAt: row.updatedAt,
+		spaceType: row.spaceType ?? undefined,
+		organizationId: row.organizationId ?? undefined
 	};
 }
 
