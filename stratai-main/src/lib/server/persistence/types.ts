@@ -26,6 +26,7 @@ import type {
 } from '$lib/types/documents';
 import type { Area, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
 import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
+import type { SpaceRole } from '$lib/types/space-memberships';
 import type {
 	FocusArea,
 	CreateFocusAreaInput,
@@ -325,6 +326,7 @@ export interface FocusAreaRepository {
  * Repository interface for Space entities
  */
 export interface SpaceRepository {
+	// Owner-only methods (existing)
 	findAll(userId: string): Promise<Space[]>;
 	findBySlug(slug: string, userId: string): Promise<Space | null>;
 	findById(id: string, userId: string): Promise<Space | null>;
@@ -334,6 +336,10 @@ export interface SpaceRepository {
 	ensureSystemSpaces(userId: string): Promise<void>;
 	reorder(orderedIds: string[], userId: string): Promise<void>;
 	getCustomSpaceCount(userId: string): Promise<number>;
+
+	// Membership-aware methods (Phase 2: Space Memberships)
+	findAllAccessible(userId: string): Promise<(Space & { userRole: SpaceRole })[]>;
+	findBySlugAccessible(slug: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
 }
 
 // =====================================================

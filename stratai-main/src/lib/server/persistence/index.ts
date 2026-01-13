@@ -22,6 +22,10 @@ export { postgresPageSharingRepository } from './page-sharing-postgres';
 export { postgresAuditRepository } from './audit-postgres';
 export { postgresPageRepository } from './pages-postgres';
 
+// Space memberships (Phase 2: Space Access Control)
+export { postgresSpaceMembershipsRepository } from './space-memberships-postgres';
+export type { SpaceAccessResult } from './space-memberships-postgres';
+
 export { sql, testConnection, closeConnection } from './db';
 
 // Backwards compatibility - re-export areas as focusAreas

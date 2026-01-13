@@ -10,8 +10,10 @@ import type {
 	Space,
 	SpaceRow,
 	CreateSpaceInput,
-	UpdateSpaceInput
+	UpdateSpaceInput,
+	SpaceType
 } from '$lib/types/spaces';
+import type { SpaceRole } from '$lib/types/space-memberships';
 import {
 	rowToSpace,
 	generateSlug,
@@ -357,5 +359,127 @@ export const postgresSpaceRepository: SpaceRepository = {
 			  AND deleted_at IS NULL
 		`;
 		return parseInt(result[0]?.count ?? '0', 10);
+	},
+
+	/**
+	 * Find all spaces accessible to user (owned + membership)
+	 * Used for space discovery / navigation
+	 */
+	async findAllAccessible(userId: string): Promise<(Space & { userRole: SpaceRole })[]> {
+		// Ensure system spaces exist
+		await this.ensureSystemSpaces(userId);
+
+		const rows = await sql<(SpaceRow & { user_role: SpaceRole })[]>`
+			WITH accessible_spaces AS (
+				-- Spaces user owns
+				SELECT DISTINCT s.id, 'owner'::text as access_role
+				FROM spaces s
+				WHERE s.user_id = ${userId}
+					AND s.deleted_at IS NULL
+
+				UNION
+
+				-- Spaces with direct user membership
+				SELECT DISTINCT s.id, sm.role as access_role
+				FROM spaces s
+				JOIN space_memberships sm ON s.id = sm.space_id
+				WHERE sm.user_id = ${userId}::uuid
+					AND s.deleted_at IS NULL
+
+				UNION
+
+				-- Spaces with group membership
+				SELECT DISTINCT s.id, sm.role as access_role
+				FROM spaces s
+				JOIN space_memberships sm ON s.id = sm.space_id
+				JOIN group_memberships gm ON sm.group_id = gm.group_id
+				WHERE gm.user_id = ${userId}::uuid
+					AND s.deleted_at IS NULL
+			)
+			SELECT s.*,
+				   (
+					 SELECT access_role FROM accessible_spaces
+					 WHERE id = s.id
+					 ORDER BY
+						 CASE access_role
+							 WHEN 'owner' THEN 1
+							 WHEN 'admin' THEN 2
+							 WHEN 'member' THEN 3
+							 WHEN 'guest' THEN 4
+						 END
+					 LIMIT 1
+				   ) as user_role
+			FROM spaces s
+			JOIN accessible_spaces a ON s.id = a.id
+			ORDER BY
+				s.space_type ASC,    -- org first, then project, then personal
+				s.type ASC,          -- system spaces first
+				s.order_index ASC,
+				s.created_at ASC
+		`;
+
+		return rows.map((row) => ({
+			...rowToSpace(row),
+			userRole: row.user_role as SpaceRole
+		}));
+	},
+
+	/**
+	 * Find space by slug with membership access check
+	 * Returns space if user owns it OR has membership
+	 */
+	async findBySlugAccessible(
+		slug: string,
+		userId: string
+	): Promise<(Space & { userRole: SpaceRole }) | null> {
+		// Ensure system spaces exist before lookup
+		if (isSystemSpace(slug)) {
+			await this.ensureSystemSpaces(userId);
+		}
+
+		const rows = await sql<(SpaceRow & { user_role: SpaceRole })[]>`
+			WITH access_check AS (
+				-- Owner check
+				SELECT 'owner'::text as role, 1 as priority
+				FROM spaces
+				WHERE slug = ${slug}
+					AND user_id = ${userId}
+					AND deleted_at IS NULL
+
+				UNION ALL
+
+				-- Direct membership
+				SELECT sm.role, 2 as priority
+				FROM spaces s
+				JOIN space_memberships sm ON s.id = sm.space_id
+				WHERE s.slug = ${slug}
+					AND sm.user_id = ${userId}::uuid
+					AND s.deleted_at IS NULL
+
+				UNION ALL
+
+				-- Group membership
+				SELECT sm.role, 3 as priority
+				FROM spaces s
+				JOIN space_memberships sm ON s.id = sm.space_id
+				JOIN group_memberships gm ON sm.group_id = gm.group_id
+				WHERE s.slug = ${slug}
+					AND gm.user_id = ${userId}::uuid
+					AND s.deleted_at IS NULL
+			)
+			SELECT s.*,
+				   (SELECT role FROM access_check ORDER BY priority LIMIT 1) as user_role
+			FROM spaces s
+			WHERE s.slug = ${slug}
+				AND s.deleted_at IS NULL
+				AND EXISTS (SELECT 1 FROM access_check)
+		`;
+
+		if (rows.length === 0) return null;
+
+		return {
+			...rowToSpace(rows[0]),
+			userRole: rows[0].user_role as SpaceRole
+		};
 	}
 };
