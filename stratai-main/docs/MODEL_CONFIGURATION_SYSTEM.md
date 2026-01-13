@@ -931,28 +931,29 @@ Removes the DB override, reverting to code defaults.
 
 ## Implementation Phases
 
-### Phase 1: Foundation (Immediate Fix)
+### Phase 1: Foundation (Immediate Fix) ✅ COMPLETE
 
 **Goal:** Fix GPT-5.2 Instant immediately, establish patterns.
 
-**Tasks:**
-1. Extend `ModelCapabilities` interface with `parameterConstraints`
-2. Add `parameterConstraints` to affected models in `model-capabilities.ts`
-3. Create `applyModelConstraints()` function
-4. Integrate into chat API endpoint (`/api/chat`)
-5. Add logging for applied constraints
+**Status:** Completed 2026-01-13 (commit `f699ddd`)
 
-**Files to modify:**
-- `src/lib/config/model-capabilities.ts`
-- `src/lib/types/model-configuration.ts` (NEW)
-- `src/lib/services/apply-model-constraints.ts` (NEW)
-- `src/routes/api/chat/+server.ts`
+**Tasks:**
+1. ✅ Extend `ModelCapabilities` interface with `parameterConstraints`
+2. ✅ Add `parameterConstraints` to affected models in `model-capabilities.ts`
+3. ✅ Create `getConstrainedTemperature()` helper function
+4. ✅ Integrate into `litellm.ts` (both `createChatCompletion` and `createChatCompletionWithTools`)
+5. ✅ Add logging for applied constraints
+
+**Files modified:**
+- `src/lib/config/model-capabilities.ts` - Added interfaces, constraints, helper function
+- `src/lib/server/litellm.ts` - Applied constraints before API calls
 
 **Acceptance Tests:**
-- [ ] GPT-5.2 Instant requests have temperature forced to 1
-- [ ] Console logs show when constraints are applied
-- [ ] Other models unaffected
-- [ ] TypeScript compiles with no errors
+- [x] GPT-5.2 Instant requests have temperature forced to 1
+- [x] GPT-5.1 Instant requests have temperature forced to 1
+- [x] Console logs show when constraints are applied
+- [x] Other models unaffected
+- [x] TypeScript compiles with no errors
 
 ### Phase 2: Database Layer
 
