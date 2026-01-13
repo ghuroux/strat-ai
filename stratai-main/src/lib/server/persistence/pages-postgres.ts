@@ -30,6 +30,7 @@ import {
 	EMPTY_TIPTAP_CONTENT
 } from '$lib/types/page';
 import { sql, type JSONValue } from './db';
+import type { PagePermission } from '$lib/types/page-sharing';
 
 /**
  * Generate unique page ID
@@ -83,6 +84,10 @@ export interface PageRepository {
 	// Utility
 	duplicate(id: string, userId: string): Promise<Page | null>;
 	count(userId: string, filter?: PageListFilter): Promise<number>;
+
+	// Permission checks (Phase 1: Page Sharing)
+	canUserAccessPage(userId: string, pageId: string): Promise<boolean>;
+	getUserPagePermission(userId: string, pageId: string): Promise<PagePermission | null>;
 }
 
 /**
@@ -134,11 +139,16 @@ export const postgresPageRepository: PageRepository = {
 	},
 
 	async findById(id: string, userId: string): Promise<Page | null> {
+		// Phase 1: Check access via sharing system (not just ownership)
+		const canAccess = await this.canUserAccessPage(userId, id);
+		if (!canAccess) {
+			return null;
+		}
+
 		const rows = await sql<PageRow[]>`
 			SELECT *
 			FROM pages
 			WHERE id = ${id}
-				AND user_id = ${userId}
 				AND deleted_at IS NULL
 		`;
 		return rows.length > 0 ? rowToPage(rows[0]) : null;
@@ -180,6 +190,25 @@ export const postgresPageRepository: PageRepository = {
 	},
 
 	async update(id: string, updates: UpdatePageInput, userId: string): Promise<Page | null> {
+		// Phase 1: Check user has editor or admin permission
+		const permission = await this.getUserPagePermission(userId, id);
+		if (!permission || permission === 'viewer') {
+			// Viewer can't edit, no permission means no access
+			return null;
+		}
+
+		// Get current page for visibility change detection
+		const currentRows = await sql<Pick<PageRow, 'visibility'>[]>`
+			SELECT visibility FROM pages
+			WHERE id = ${id} AND deleted_at IS NULL
+		`;
+
+		if (currentRows.length === 0) {
+			return null; // Page doesn't exist
+		}
+
+		const currentVisibility = currentRows[0].visibility;
+
 		// If content is updated, extract text and calculate word count
 		let contentText: string | undefined;
 		let wordCount: number | undefined;
@@ -187,6 +216,50 @@ export const postgresPageRepository: PageRepository = {
 		if (updates.content) {
 			contentText = extractTextFromContent(updates.content);
 			wordCount = countWords(updates.content);
+		}
+
+		// Phase 1: Handle visibility changes
+		if (updates.visibility && updates.visibility !== currentVisibility) {
+			// Import audit repository
+			const { postgresAuditRepository } = await import('./audit-postgres');
+
+			// Log visibility change
+			await postgresAuditRepository.logEvent(
+				userId,
+				'page_visibility_changed',
+				'page',
+				id,
+				'visibility_change',
+				{
+					old_visibility: currentVisibility,
+					new_visibility: updates.visibility
+				}
+			);
+
+			// If changing FROM private TO area/space, remove all specific shares
+			if (
+				currentVisibility === 'private' &&
+				(updates.visibility === 'area' || updates.visibility === 'space')
+			) {
+				const { postgresPageSharingRepository } = await import('./page-sharing-postgres');
+				const sharesRemoved = await postgresPageSharingRepository.removeAllSpecificShares(id);
+
+				if (sharesRemoved > 0) {
+					// Log that specific shares were removed
+					await postgresAuditRepository.logEvent(
+						userId,
+						'page_visibility_changed',
+						'page',
+						id,
+						'shares_removed',
+						{
+							old_visibility: currentVisibility,
+							new_visibility: updates.visibility,
+							specific_shares_removed: sharesRemoved
+						}
+					);
+				}
+			}
 		}
 
 		await sql`
@@ -201,7 +274,6 @@ export const postgresPageRepository: PageRepository = {
 				word_count = COALESCE(${wordCount ?? null}, word_count),
 				updated_at = NOW()
 			WHERE id = ${id}
-				AND user_id = ${userId}
 				AND deleted_at IS NULL
 		`;
 
@@ -437,6 +509,26 @@ export const postgresPageRepository: PageRepository = {
 		}
 
 		return parseInt(result[0]?.count || '0', 10);
+	},
+
+	/**
+	 * Check if user can access page (Phase 1: Page Sharing)
+	 * Uses page sharing repository to check ownership + shares
+	 */
+	async canUserAccessPage(userId: string, pageId: string): Promise<boolean> {
+		const { postgresPageSharingRepository } = await import('./page-sharing-postgres');
+		const access = await postgresPageSharingRepository.canAccessPage(userId, pageId);
+		return access.hasAccess;
+	},
+
+	/**
+	 * Get user's permission level for page (Phase 1: Page Sharing)
+	 * Returns permission if user has access, null otherwise
+	 */
+	async getUserPagePermission(userId: string, pageId: string): Promise<PagePermission | null> {
+		const { postgresPageSharingRepository } = await import('./page-sharing-postgres');
+		const access = await postgresPageSharingRepository.canAccessPage(userId, pageId);
+		return access.hasAccess ? access.permission : null;
 	}
 };
 

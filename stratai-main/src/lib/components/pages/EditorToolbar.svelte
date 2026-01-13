@@ -54,6 +54,74 @@
 	const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 	const modKey = isMac ? '⌘' : 'Ctrl';
 
+	/**
+	 * Get number of columns in current table
+	 */
+	function getTableColumnCount(editor: Editor): number {
+		const { state } = editor;
+		const selectionFrom = state.selection.$from;
+
+		// Find parent table node
+		for (let depth = selectionFrom.depth; depth > 0; depth--) {
+			const node = selectionFrom.node(depth);
+			if (node.type.name === 'table') {
+				// Get column count from first row
+				return node.firstChild?.childCount || 0;
+			}
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Insert a total row at the bottom of current table
+	 */
+	function insertTotalRow(editor: Editor) {
+		const columnCount = getTableColumnCount(editor);
+		if (columnCount === 0) return;
+
+		const { state } = editor;
+		const selectionFrom = state.selection.$from;
+
+		// Find table node and its end position
+		for (let depth = selectionFrom.depth; depth > 0; depth--) {
+			const node = selectionFrom.node(depth);
+			if (node.type.name === 'table') {
+				const tableEndPos = selectionFrom.end(depth);
+
+				// Create total row cells (all set to SUM by default)
+				const cells: any[] = [];
+				for (let i = 0; i < columnCount; i++) {
+					cells.push({
+						type: 'tableCell',
+						attrs: {
+							formula: 'SUM',
+							columnIndex: i
+						},
+						content: [
+							{
+								type: 'paragraph',
+								content: [{ type: 'text', text: '—' }]
+							}
+						]
+					});
+				}
+
+				// Insert total row
+				editor
+					.chain()
+					.insertContentAt(tableEndPos, {
+						type: 'tableRow',
+						attrs: { isTotal: true },
+						content: cells
+					})
+					.run();
+
+				return;
+			}
+		}
+	}
+
 	// Handle link insertion
 	function handleSetLink() {
 		if (linkUrl) {
@@ -360,6 +428,122 @@
 			</svg>
 		</button>
 	</div>
+
+	<!-- Table -->
+	{#if editor}
+		<div class="toolbar-divider"></div>
+		<div class="toolbar-group">
+			<!-- Insert Table -->
+			<button
+				type="button"
+				class="toolbar-button"
+				onclick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+				title="Insert Table"
+				disabled={!editor.can().insertTable()}
+			>
+				<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+				</svg>
+			</button>
+
+			<!-- Contextual table commands (only show when cursor is in a table) -->
+			{#if editor.isActive('table')}
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => editor.chain().focus().addColumnBefore().run()}
+					title="Add Column Before"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+					</svg>
+				</button>
+
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => editor.chain().focus().addColumnAfter().run()}
+					title="Add Column After"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+					</svg>
+				</button>
+
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => editor.chain().focus().deleteColumn().run()}
+					title="Delete Column"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
+
+				<div class="toolbar-divider"></div>
+
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => editor.chain().focus().addRowBefore().run()}
+					title="Add Row Before"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+					</svg>
+				</button>
+
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => editor.chain().focus().addRowAfter().run()}
+					title="Add Row After"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+					</svg>
+				</button>
+
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => editor.chain().focus().deleteRow().run()}
+					title="Delete Row"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
+
+				<div class="toolbar-divider"></div>
+
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => editor.chain().focus().deleteTable().run()}
+					title="Delete Table"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+					</svg>
+				</button>
+
+				<div class="toolbar-divider"></div>
+
+				<button
+					type="button"
+					class="toolbar-button"
+					onclick={() => insertTotalRow(editor)}
+					title="Add Total Row (SUM)"
+				>
+					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+					</svg>
+				</button>
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <!-- Link Modal -->

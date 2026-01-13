@@ -5100,6 +5100,102 @@ body.konami-activated {
 	margin: 2rem 0;
 }
 
+/* ============================================
+   TABLE STYLES (Pages Editor)
+   ============================================ */
+
+.editor-body table {
+	border-collapse: collapse;
+	table-layout: fixed;
+	width: 100%;
+	margin: 1rem 0;
+	overflow: hidden;
+	border-radius: 0.5rem;
+}
+
+.editor-body th,
+.editor-body td {
+	min-width: 1em;
+	border: 2px solid var(--editor-border);
+	padding: 0.5rem 0.75rem;
+	vertical-align: top;
+	box-sizing: border-box;
+	position: relative;
+}
+
+.editor-body th {
+	font-weight: 600;
+	text-align: left;
+	background-color: var(--editor-bg-secondary);
+	color: var(--editor-text);
+}
+
+.editor-body td {
+	background-color: var(--editor-bg);
+	color: var(--editor-text);
+}
+
+/* Selected cell highlight */
+.editor-body .selectedCell {
+	background-color: var(--editor-selection);
+	outline: 2px solid var(--editor-border-focus);
+	outline-offset: -2px;
+}
+
+/* Column resize handle */
+.editor-body .column-resize-handle {
+	position: absolute;
+	right: -2px;
+	top: 0;
+	bottom: -2px;
+	width: 4px;
+	background-color: transparent;
+	cursor: col-resize;
+	z-index: 10;
+	pointer-events: all;
+}
+
+.editor-body .column-resize-handle:hover {
+	background-color: var(--editor-border-focus);
+}
+
+/* Table cell paragraph spacing (prevent extra gaps) */
+.editor-body td > p,
+.editor-body th > p {
+	margin: 0;
+}
+
+/* Empty cell placeholder */
+.editor-body td:empty::before,
+.editor-body th:empty::before {
+	content: '';
+	display: inline-block;
+	width: 1px;
+}
+
+/* Total row styling */
+.editor-body tr[data-total="true"] td,
+.editor-body tr[data-is-total="true"] td {
+	font-weight: 600;
+	background-color: var(--editor-bg-secondary);
+	border-top: 3px solid var(--editor-border-focus);
+	color: var(--editor-text);
+}
+
+.editor-body .formula-cell {
+	font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+	color: var(--color-primary-400);
+	font-variant-numeric: tabular-nums;
+}
+
+/* Sum symbol before formula cells */
+.editor-body tr[data-total="true"] td::before,
+.editor-body tr[data-is-total="true"] td::before {
+	content: '∑ ';
+	opacity: 0.5;
+	margin-right: 0.25rem;
+}
+
 /* Selection */
 .editor-body ::selection {
 	background: var(--editor-selection);

@@ -20,7 +20,7 @@ export type PageType =
 /**
  * Page visibility levels
  */
-export type PageVisibility = 'private' | 'shared';
+export type PageVisibility = 'private' | 'area' | 'space';  // Updated for Phase 1: Page Sharing
 
 /**
  * Relationship types for page-conversation links

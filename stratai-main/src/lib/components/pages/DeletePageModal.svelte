@@ -60,7 +60,7 @@
 				<ul class="consequences">
 					<li>The page content will be permanently deleted</li>
 					<li>All version history will be removed</li>
-					{#if page.visibility === 'shared'}
+					{#if page.visibility === 'area' || page.visibility === 'space'}
 						<li class="shared-warning">
 							<strong>This page is shared</strong> — other users will lose access
 						</li>

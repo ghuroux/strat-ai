@@ -17,6 +17,11 @@ export * from './user-id-mappings-postgres';
 export { postgresPasswordResetTokenRepository } from './password-reset-tokens-postgres';
 export { postgresEmailLogRepository } from './email-logs-postgres';
 
+// Page sharing & audit (Phase 1: Page Sharing)
+export { postgresPageSharingRepository } from './page-sharing-postgres';
+export { postgresAuditRepository } from './audit-postgres';
+export { postgresPageRepository } from './pages-postgres';
+
 export { sql, testConnection, closeConnection } from './db';
 
 // Backwards compatibility - re-export areas as focusAreas

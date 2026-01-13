@@ -22,12 +22,62 @@
 	import TaskList from '@tiptap/extension-task-list';
 	import TaskItem from '@tiptap/extension-task-item';
 	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+	import { Table } from '@tiptap/extension-table';
+	import { TableRow as BaseTableRow } from '@tiptap/extension-table-row';
+	import { TableHeader } from '@tiptap/extension-table-header';
+	import { TableCell as BaseTableCell } from '@tiptap/extension-table-cell';
 	import { common, createLowlight } from 'lowlight';
+	import { recalculateTable } from '$lib/services/table-calculations';
 	import type { Page, TipTapContent, PageType, PageVisibility } from '$lib/types/page';
 	import { EMPTY_TIPTAP_CONTENT, countWords, extractTextFromContent } from '$lib/types/page';
 	import EditorToolbar from './EditorToolbar.svelte';
 	import PageHeader from './PageHeader.svelte';
 	import EditorChatPanel from './EditorChatPanel.svelte';
+
+	// Custom TableRow that supports isTotal attribute for total rows
+	const TableRow = BaseTableRow.extend({
+		addAttributes() {
+			return {
+				...this.parent?.(),
+				isTotal: {
+					default: false,
+					parseHTML: (element) => element.getAttribute('data-is-total') === 'true',
+					renderHTML: (attributes) => {
+						if (!attributes.isTotal) return {};
+						return { 'data-is-total': 'true' };
+					}
+				}
+			};
+		}
+	});
+
+	// Custom TableCell that supports formula attributes for calculated cells
+	const TableCell = BaseTableCell.extend({
+		addAttributes() {
+			return {
+				...this.parent?.(),
+				formula: {
+					default: null,
+					parseHTML: (element) => element.getAttribute('data-formula'),
+					renderHTML: (attributes) => {
+						if (!attributes.formula) return {};
+						return { 'data-formula': attributes.formula };
+					}
+				},
+				columnIndex: {
+					default: null,
+					parseHTML: (element) => {
+						const val = element.getAttribute('data-col-index');
+						return val ? parseInt(val, 10) : null;
+					},
+					renderHTML: (attributes) => {
+						if (attributes.columnIndex === null) return {};
+						return { 'data-col-index': attributes.columnIndex };
+					}
+				}
+			};
+		}
+	});
 
 	// Props
 	interface Props {
@@ -122,13 +172,31 @@
 				TaskItem.configure({
 					nested: true
 				}),
+				Table.configure({
+					resizable: true,
+					cellMinWidth: 50,
+					lastColumnResizable: true,
+					allowTableNodeSelection: false
+				}),
+				TableRow,
+				TableHeader,
+				TableCell,
 				CodeBlockLowlight.configure({
 					lowlight
 				})
 			],
 			content: content,
 			onUpdate: ({ editor: ed }) => {
-				content = ed.getJSON() as TipTapContent;
+				const json = ed.getJSON() as TipTapContent;
+
+				// Recalculate table totals if any tables exist
+				json.content?.forEach((node) => {
+					if (node.type === 'table') {
+						recalculateTable(node);
+					}
+				});
+
+				content = json;
 				isDirty = true;
 				saveStatus = 'idle';
 				scheduleAutoSave();

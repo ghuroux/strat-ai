@@ -114,12 +114,12 @@
 	function handleVisibilityChange(newVisibility: PageVisibility) {
 		if (!onVisibilityChange || newVisibility === visibility) return;
 
-		// Confirmation only needed when making public (private → shared)
-		if (newVisibility === 'shared' && visibility === 'private') {
+		// Confirmation only needed when making public (private → area)
+		if (newVisibility === 'area' && visibility === 'private') {
 			pendingVisibility = newVisibility;
 			showVisibilityModal = true;
 		} else {
-			// No confirmation needed for shared → private (reducing access)
+			// No confirmation needed for area → private (reducing access)
 			onVisibilityChange(newVisibility);
 		}
 	}
@@ -190,8 +190,8 @@
 				<button
 					type="button"
 					class="visibility-btn"
-					class:active={visibility === 'shared'}
-					onclick={() => handleVisibilityChange('shared')}
+					class:active={visibility === 'area'}
+					onclick={() => handleVisibilityChange('area')}
 					title="Area members can see this page"
 				>
 					<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
