@@ -10,6 +10,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
+import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
 import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
 import type { CreateAreaInput } from '$lib/types/areas';
 
@@ -85,6 +86,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const resolvedSpaceId = await resolveSpaceId(body.spaceId, userId);
 		if (!resolvedSpaceId) {
 			return json({ error: `Space not found: ${body.spaceId}` }, { status: 404 });
+		}
+
+		// Phase 7: Check if user can create areas in this space
+		const spaceAccess = await postgresSpaceMembershipsRepository.canAccessSpace(userId, resolvedSpaceId);
+		if (!spaceAccess.hasAccess) {
+			return json({ error: 'Access denied to this space' }, { status: 403 });
+		}
+
+		// Guests cannot create areas - they only have precision access to shared areas
+		if (spaceAccess.role === 'guest') {
+			return json(
+				{
+					error: 'Guests cannot create areas',
+					details: 'Contact a space admin to upgrade your access or ask them to create the area for you.',
+					code: 'GUEST_CANNOT_CREATE'
+				},
+				{ status: 403 }
+			);
 		}
 
 		const input: CreateAreaInput = {

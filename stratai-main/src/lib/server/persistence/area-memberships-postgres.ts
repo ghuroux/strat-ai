@@ -78,6 +78,7 @@ interface AccessCheckRow {
 	membershipRole: AreaMemberRole | null;
 	groupRole: AreaMemberRole | null;
 	hasSpaceAccess: boolean;
+	spaceRole: 'owner' | 'admin' | 'member' | 'guest' | null;
 }
 
 // =====================================================
@@ -167,19 +168,32 @@ export const postgresAreaMembershipsRepository = {
 				LIMIT 1
 			),
 			space_access AS (
-				SELECT EXISTS (
-					SELECT 1 FROM spaces s
-					WHERE s.id = (SELECT space_id FROM area_info)
-					  AND s.user_id = ${userId}
-					  AND s.deleted_at IS NULL
-				) as has_access
+				SELECT
+					CASE
+						-- Space owner always has access
+						WHEN s.user_id = ${userId} THEN true
+						-- Space member has access
+						WHEN sm.user_id IS NOT NULL THEN true
+						ELSE false
+					END as has_access,
+					CASE
+						-- Space owner gets 'owner' role
+						WHEN s.user_id = ${userId} THEN 'owner'
+						-- Otherwise use membership role
+						ELSE sm.role
+					END as space_role
+				FROM spaces s
+				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
+				WHERE s.id = (SELECT space_id FROM area_info)
+				  AND s.deleted_at IS NULL
 			)
 			SELECT
 				(ai.created_by = ${userId} OR ai.user_id = ${userId}) as is_creator,
 				COALESCE(ai.is_restricted, false) as is_restricted,
 				dm.role as membership_role,
 				gm.role as group_role,
-				sa.has_access as has_space_access
+				sa.has_access as has_space_access,
+				sa.space_role as space_role
 			FROM area_info ai
 			CROSS JOIN space_access sa
 			LEFT JOIN direct_membership dm ON true
@@ -217,7 +231,8 @@ export const postgresAreaMembershipsRepository = {
 		}
 
 		// 4. If not restricted, space access grants area access
-		if (!row.isRestricted && row.hasSpaceAccess) {
+		// Phase 7: Guests only see explicitly shared areas, NOT open areas
+		if (!row.isRestricted && row.hasSpaceAccess && row.spaceRole !== 'guest') {
 			return {
 				hasAccess: true,
 				role: 'inherited',

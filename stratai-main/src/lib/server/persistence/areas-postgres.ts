@@ -98,15 +98,22 @@ export const postgresAreaRepository: AreaRepository = {
 
 				UNION
 
-				-- Non-restricted areas in spaces user owns
+				-- Non-restricted areas for space owners and members (NOT guests)
+				-- Phase 7: Guests only see explicitly shared areas
 				SELECT DISTINCT a.id
 				FROM areas a
 				JOIN spaces s ON a.space_id = s.id
+				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
 				WHERE a.space_id = ${spaceId}
-				  AND s.user_id = ${userId}
-				  AND s.deleted_at IS NULL
 				  AND a.deleted_at IS NULL
+				  AND s.deleted_at IS NULL
 				  AND COALESCE(a.is_restricted, false) = false
+				  AND (
+				    -- Space owner always sees open areas
+				    s.user_id = ${userId}
+				    -- OR member/admin (NOT guest) sees open areas
+				    OR sm.role IN ('owner', 'admin', 'member')
+				  )
 			)
 			SELECT a.*
 			FROM areas a
