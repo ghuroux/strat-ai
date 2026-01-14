@@ -24,6 +24,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 
 **Strategic Documents:**
 - `stratai-main/ENTITY_MODEL.md` - **Authoritative data architecture** (implementation source of truth)
+- `stratai-main/docs/DATABASE_STANDARDIZATION_PROJECT.md` - **🔴 CRITICAL: Database standardization** (snake_case vs camelCase, postgres.js guide, reference for all DB work)
 - `stratai-main/docs/DOCUMENT_SYSTEM.md` - **Pages system** (AI-native created content - Area-level, TipTap editor)
 - `stratai-main/docs/DOCUMENT_SHARING.md` - **Document sharing** (uploaded files - Space storage, Area-level sharing)
 - `stratai-main/docs/GUIDED_CREATION.md` - **Guided creation system** (templates as data schemas, Meeting Notes first)
@@ -39,6 +40,9 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/SENDGRID_EMAIL_INTEGRATION.md` - **Email system** (SendGrid, password reset, future notifications)
 - `stratai-main/docs/MODEL_CONFIGURATION_SYSTEM.md` - **Model configuration** (parameter constraints, runtime overrides, Admin UI)
 - `stratai-main/docs/SPACE_MEMBERSHIPS.md` - **Space memberships & Org Spaces** (collaboration model, Guest role, "Shared with Me")
+- `stratai-main/docs/CONFLUENCE_COMPETITIVE_ANALYSIS.md` - **Competitive intelligence** (Confluence pain points, feature gaps, opportunities)
+- `stratai-main/docs/MEETING_LIFECYCLE.md` - **Meeting lifecycle system** (end-to-end: AI-guided creation → Teams scheduling → transcript capture → context integration)
+- `stratai-main/docs/AI_RETRIEVAL_ARCHITECTURE.md` - **AI retrieval mechanics** (how AI accesses org knowledge via tools, graph traversal, semantic search)
 
 ---
 
@@ -48,6 +52,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - **No bloat** - Every line justified, simple over clever, prefer removing code
 - **Performance first** - Optimize time-to-first-token, UI responsiveness, prompt caching
 - **UX excellence** - Reduce cognitive load (paramount), clean/clear/premium aesthetic
+- **Database access** - ALWAYS use camelCase for column access (postgres.js transforms snake_case → camelCase). See `DATABASE_STANDARDIZATION_PROJECT.md` before any DB work.
 
 ---
 
@@ -125,11 +130,22 @@ Don't revisit without good reason:
 | Org Space name = editable | Defaults to org name; admins can customize in settings |
 | "Shared with Me" in Org Space | Convenience view, not separate container; areas link to actual Space/Area URL |
 | No cross-Space area visibility | Would break context hierarchy; sharing requires Space membership first |
+| Meeting lifecycle end-to-end | Create → Schedule → Capture → Process → Context. Meetings are context generators, not just calendar events |
+| Microsoft Graph for calendar | Direct API integration for control; MCP considered for future multi-integration standardization |
+| Transcript: manual first, auto second | Manual upload reliable; Teams API depends on tenant policies. Graceful degradation over hard requirements |
+| AI extraction with human confirmation | AI suggests decisions/actions, humans confirm ownership. Never auto-commit without review |
+| Meetings create Pages + Tasks + Context | Finalization generates minutes Page, creates Tasks from actions, propagates decisions to Area memory |
+| Graph-ready, not graph-native | Capture relationships in PostgreSQL `entity_relationships` table now; add Neo4j/Neptune later when CTEs >500ms or need recommendations |
+| entity_relationships table | Universal edge table for typed relationships (attended, produced, informed_by, etc.); enables expertise discovery, provenance chains |
+| AI retrieval via tools | AI has no inherent org knowledge; uses tool calls to query data, then reasons over results. Semantic + hierarchical + relational queries |
+| postgres.js camelCase standard | Database columns use snake_case, postgres.js transforms to camelCase at runtime. ALWAYS access as camelCase (row.userId not row.user_id) |
+| Database standardization project | Systematic fix of snake_case bugs + comprehensive docs. 6-phase plan over 2 weeks. Critical for reliable development. |
 
 ---
 
 ## Known Issues
 
+- [ ] **🔴 Database snake_case/camelCase confusion** - ACTIVE PROJECT. Multiple repository files use snake_case access (returns undefined). See `DATABASE_STANDARDIZATION_PROJECT.md` for ongoing fix plan.
 - [ ] **Mobile responsiveness** - App-wide issue; layouts break on small screens (Arena, Spaces, Chat). Needs systematic review.
 - [ ] **localStorage quota exceeded** - Chat store hitting storage limits. **Addressed by CONTEXT_STRATEGY.md Phase 1** (server-side persistence)
 - [ ] localStorage keys use `strathost-` prefix (will lose POC data on rename)
@@ -158,7 +174,138 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-13 (Page Sharing Phase 1 - Backend Complete)
+### Latest: 2026-01-14 (Database Standardization Project & Membership Bug Fixes)
+
+**Completed:**
+
+*Critical Bug Fixes (Committed: b7a21c3):*
+- Fixed member names showing "Unknown" (postgres.js camelCase issue)
+- Fixed duplicate owner in member lists (existence check)
+- Fixed General area not created for new spaces (per-space not per-user)
+- Fixed area access control not persisting (isRestricted flag handling)
+- All fixes pushed to main branch
+
+*Database Standardization Project Plan:*
+- Created comprehensive 2-week project plan: `DATABASE_STANDARDIZATION_PROJECT.md`
+- Documented postgres.js snake_case → camelCase transformation issue
+- Defined 6 implementation phases with detailed checklists
+- Created "For Coding Agents" quick start guide
+- Established success criteria (code quality, docs, tooling, testing, process)
+- Defined reference patterns for all database access
+- Planned audit script, schema generator, lint rules, CI validation
+- Updated CLAUDE.md with database access principles
+
+**Key Insights:**
+- postgres.js automatically transforms column names: `user_id` → `userId`
+- Mixed patterns in codebase causing silent undefined access bugs
+- Type definitions don't match runtime shapes (illusion of type safety)
+- Every new feature risks similar bugs without standardization
+- Comprehensive docs needed: schema, relationships, access patterns, type mapping
+
+**Files Created:**
+- `docs/DATABASE_STANDARDIZATION_PROJECT.md` - Complete 6-phase implementation plan
+
+**Files Modified:**
+- `CLAUDE.md` - Added database principles, strategic doc reference, known issue, 2 decision log entries, session log
+
+**Decision Log Entries:**
+- postgres.js camelCase standard (row.userId not row.user_id)
+- Database standardization project (2-week systematic fix)
+
+**Next Steps:**
+- Phase 1: Create docs structure, audit script, POSTGRES_JS_GUIDE.md
+- Phase 2: Fix all repositories to use camelCase consistently
+- Phase 3: Generate schema docs, relationships, access patterns
+- See DATABASE_STANDARDIZATION_PROJECT.md for full roadmap
+
+### Previous: 2026-01-14 (Graph-Ready Architecture & AI Retrieval Documentation)
+
+**Completed:**
+
+*Graph-Ready Architecture (ENTITY_MODEL.md - Section 9):*
+- Added new Section 9: Relationship Modeling (Graph-Ready Architecture)
+- Designed `entity_relationships` table for typed relationship capture
+- Defined relationship vocabulary: attended, produced, informed_by, owns, etc.
+- PostgreSQL query patterns: expertise discovery, decision provenance, impact analysis
+- Future graph DB migration path documented (Neo4j/Neptune when CTEs >500ms)
+- Updated Complete Schema (Section 12.7) with full table definition + indexes
+- Added 2 decision log entries for graph-ready approach
+
+*AI Retrieval Architecture (docs/AI_RETRIEVAL_ARCHITECTURE.md):*
+- New comprehensive document explaining how AI accesses organizational knowledge
+- The "Intelligence Triangle": Semantic (pgvector) + Hierarchical (tree) + Relational (graph)
+- Detailed retrieval patterns: AI-initiated tool calling vs System-initiated suggestions
+- Tool definitions for context retrieval (find_experts, get_decision_provenance, etc.)
+- Query composition strategies and optimization patterns
+- Privacy/permission-aware retrieval and audit logging
+- Performance considerations: latency budgets, caching strategy, query limits
+
+*Azure App Registration Instructions:*
+- Created step-by-step DevOps instructions for Microsoft Graph API setup
+- Required permissions: Calendars.ReadWrite, OnlineMeetings.ReadWrite, etc.
+- OAuth redirect URI configuration
+- Security notes for credential handling
+
+**Key Insights:**
+- AI doesn't "know" org data - it retrieves via tools and reasons over results
+- Relationship data must be captured at creation time (irreversible decision)
+- Graph-ready in PostgreSQL now; dedicated graph DB only when patterns justify
+- Three query types (semantic + hierarchical + relational) are complementary, not competing
+
+**Files Created:**
+- `docs/AI_RETRIEVAL_ARCHITECTURE.md` - Complete retrieval mechanics documentation
+
+**Files Modified:**
+- `ENTITY_MODEL.md` - New Section 9 (Relationship Modeling), Section 12.7 (entity_relationships table), updated numbering, 2 decision log entries
+- `CLAUDE.md` - Strategic doc reference, 3 decision log entries, session log
+
+**Next Steps:**
+- Azure App Registration (waiting on DevOps)
+- Phase 1 Foundation: Database migration, OAuth flow implementation
+- Consider adding `entity_relationships` migration alongside meeting lifecycle migration
+
+### Previous: 2026-01-13 (Meeting Lifecycle System - Complete Specification)
+
+**Completed:**
+
+*Strategic Research - Microsoft Outlook Calendar Integration:*
+- Researched MCP ecosystem for Microsoft 365 (found 3+ production-ready servers)
+- Analyzed Microsoft Graph API capabilities (Calendar, Teams, Transcripts)
+- Evaluated integration patterns from leading tools (Slack, Otter.ai, Fireflies, Copilot)
+- Decision: Direct Microsoft Graph API for control; MCP for future multi-integration
+
+*Meeting Lifecycle Specification (docs/MEETING_LIFECYCLE.md):*
+- Complete 2,200+ line specification document
+- End-to-end flow: Create → Schedule → Meet → Capture → Process → Confirm → Context
+- Database schema: 8 tables (meetings, agenda_items, expected_outcomes, attendees, decisions, action_items, key_points, calendar_connections)
+- Microsoft Graph OAuth integration design with token refresh strategy
+- AI-guided creation flow: 4-step wizard (Context, Outcomes, Agenda, Attendees)
+- Intelligent scheduling: Free/busy query for internal, propose times for external
+- Post-meeting capture: Teams transcript API, manual upload, quick notes fallback
+- AI extraction: Decisions, action items, key points with confidence scoring
+- Gap-filling UI: Human confirms ownership before finalization
+- Context integration: Minutes Page + Tasks + Area decisions (flywheel)
+- 7-phase implementation roadmap (15-22 weeks total)
+- Graceful degradation levels (full integration → manual only)
+- ASCII wireframes for all major UI flows
+
+*Key Insights:*
+- Transcript retrieval depends on Teams admin policies (manual upload as fallback)
+- External attendee free/busy not queryable (propose times pattern)
+- AI extraction with human confirmation (never auto-commit)
+- Meetings are context generators, not just calendar events
+
+**Files Created:**
+- `docs/MEETING_LIFECYCLE.md` - Complete specification
+
+**Files Modified:**
+- `CLAUDE.md` - Added strategic doc reference, 5 decision log entries
+
+**Next Steps:**
+- Phase 1 Foundation: Azure App Registration, OAuth flow, database migration
+- Test transcript API with StratGroup tenant to determine auto-pull feasibility
+
+### Previous: 2026-01-13 (Page Sharing Phase 1 - Backend Complete)
 
 **Completed:**
 
