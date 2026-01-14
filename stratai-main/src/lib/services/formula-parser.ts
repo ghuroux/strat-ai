@@ -1,62 +1,98 @@
 /**
  * Formula Parser Service
  *
- * Parses and evaluates row formulas for table cells.
- * Formulas use column indices (e.g., =[1]*[2]) for robustness.
- * See: docs/TABLE_IMPLEMENTATION.md Phase 2.5
+ * Parses Excel-like formulas with A1-style cell references.
+ * Supports: cell refs (B1), ranges (A1:A5), functions (SUM, AVG), operators, numbers.
+ *
+ * See: docs/TABLE_IMPLEMENTATION.md Phase 3
  */
 
-export type FormulaTokenType = 'column_ref' | 'operator' | 'number' | 'lparen' | 'rparen';
+import {
+	parseCellRef,
+	extractCellRefs,
+	extractRangeRefs,
+	columnLetterToIndex
+} from './cell-references';
+
+// ============================================
+// TYPES
+// ============================================
+
+export type FormulaTokenType =
+	| 'cell_ref' // A1, B2, AA10
+	| 'range_ref' // A1:A5
+	| 'function' // SUM, AVG, COUNT, MIN, MAX
+	| 'operator' // +, -, *, /
+	| 'number' // 123, 45.67
+	| 'lparen' // (
+	| 'rparen'; // )
 
 export interface FormulaToken {
 	type: FormulaTokenType;
 	value: string | number;
-	columnIndex?: number;
+	// For cell_ref tokens
+	col?: number;
+	row?: number;
+	// For range_ref tokens
+	startCol?: number;
+	startRow?: number;
+	endCol?: number;
+	endRow?: number;
 }
 
 export interface ParsedFormula {
 	tokens: FormulaToken[];
-	type: 'row' | 'column';
+	type: 'expression' | 'function' | 'constant';
 	isValid: boolean;
 	error?: string;
-	referencedColumns: number[];
+	cellRefs: string[]; // All cell references found (["B1", "C2"])
+	rangeRefs: string[]; // All range references found (["A1:A5"])
 }
+
+// Supported functions
+export const FORMULA_FUNCTIONS = ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX'] as const;
+export type FormulaFunction = (typeof FORMULA_FUNCTIONS)[number];
+
+// ============================================
+// TOKENIZER
+// ============================================
 
 /**
  * Parse a formula string into tokens
- * Formulas must start with "=" for row formulas
- * Column references use [n] syntax where n is 0-based column index
+ * Formulas must start with "=" for expressions
+ *
+ * @example parseFormula('=B1*C2') → { tokens: [...], cellRefs: ['B1', 'C2'], isValid: true }
+ * @example parseFormula('=SUM(A1:A5)') → { tokens: [...], rangeRefs: ['A1:A5'], isValid: true }
+ * @example parseFormula('=2+2') → { tokens: [...], type: 'constant', isValid: true }
  */
 export function parseFormula(formula: string): ParsedFormula {
-	// Check if this is a column formula (SUM, AVG, etc.)
-	const columnFormulas = ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX'];
-	if (columnFormulas.includes(formula)) {
-		return {
-			tokens: [],
-			type: 'column',
-			isValid: true,
-			referencedColumns: []
-		};
+	// Empty formula
+	if (!formula || formula.trim() === '') {
+		return createInvalidResult('Empty formula');
 	}
 
-	// Row formulas must start with =
+	// Must start with =
 	if (!formula.startsWith('=')) {
-		return {
-			tokens: [],
-			type: 'row',
-			isValid: false,
-			error: 'Formula must start with =',
-			referencedColumns: []
-		};
+		return createInvalidResult('Formula must start with =');
 	}
 
-	const tokens: FormulaToken[] = [];
-	const referencedColumns: number[] = [];
-	let pos = 1; // Skip the leading =
-	const expr = formula.slice(1);
+	const expr = formula.slice(1).trim(); // Remove leading =
 
-	while (pos <= expr.length) {
-		const char = expr[pos - 1];
+	// Empty after =
+	if (expr === '') {
+		return createInvalidResult('Empty formula after =');
+	}
+
+	// Extract all references for the result
+	const cellRefs = extractCellRefs(formula);
+	const rangeRefs = extractRangeRefs(formula);
+
+	// Tokenize
+	const tokens: FormulaToken[] = [];
+	let pos = 0;
+
+	while (pos < expr.length) {
+		const char = expr[pos];
 
 		// Skip whitespace
 		if (/\s/.test(char)) {
@@ -64,39 +100,60 @@ export function parseFormula(formula: string): ParsedFormula {
 			continue;
 		}
 
-		// Column reference: [n]
-		if (char === '[') {
-			const endBracket = expr.indexOf(']', pos);
-			if (endBracket === -1) {
-				return {
-					tokens,
-					type: 'row',
-					isValid: false,
-					error: 'Unclosed column reference',
-					referencedColumns
-				};
-			}
+		// Check for function names first (SUM, AVG, etc.)
+		const funcMatch = expr.slice(pos).match(/^(SUM|AVG|COUNT|MIN|MAX)\s*\(/i);
+		if (funcMatch) {
+			tokens.push({
+				type: 'function',
+				value: funcMatch[1].toUpperCase()
+			});
+			pos += funcMatch[1].length;
+			// Skip whitespace before (
+			while (pos < expr.length && /\s/.test(expr[pos])) pos++;
+			continue;
+		}
 
-			const colIndexStr = expr.slice(pos, endBracket);
-			const colIndex = parseInt(colIndexStr, 10);
+		// Check for range reference (A1:B5) - must check before cell ref
+		const rangeMatch = expr.slice(pos).match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)/i);
+		if (rangeMatch) {
+			const startCol = columnLetterToIndex(rangeMatch[1]);
+			const startRow = parseInt(rangeMatch[2], 10) - 1;
+			const endCol = columnLetterToIndex(rangeMatch[3]);
+			const endRow = parseInt(rangeMatch[4], 10) - 1;
 
-			if (isNaN(colIndex) || colIndex < 0) {
-				return {
-					tokens,
-					type: 'row',
-					isValid: false,
-					error: `Invalid column index: ${colIndexStr}`,
-					referencedColumns
-				};
+			if (startCol < 0 || startRow < 0 || endCol < 0 || endRow < 0) {
+				return createInvalidResult(`Invalid range reference: ${rangeMatch[0]}`);
 			}
 
 			tokens.push({
-				type: 'column_ref',
-				value: `[${colIndex}]`,
-				columnIndex: colIndex
+				type: 'range_ref',
+				value: rangeMatch[0].toUpperCase(),
+				startCol: Math.min(startCol, endCol),
+				startRow: Math.min(startRow, endRow),
+				endCol: Math.max(startCol, endCol),
+				endRow: Math.max(startRow, endRow)
 			});
-			referencedColumns.push(colIndex);
-			pos = endBracket + 2; // Move past ]
+			pos += rangeMatch[0].length;
+			continue;
+		}
+
+		// Check for cell reference (A1, B23, AA100)
+		const cellMatch = expr.slice(pos).match(/^([A-Z]+)(\d+)/i);
+		if (cellMatch) {
+			const col = columnLetterToIndex(cellMatch[1]);
+			const row = parseInt(cellMatch[2], 10) - 1;
+
+			if (col < 0 || row < 0) {
+				return createInvalidResult(`Invalid cell reference: ${cellMatch[0]}`);
+			}
+
+			tokens.push({
+				type: 'cell_ref',
+				value: cellMatch[0].toUpperCase(),
+				col,
+				row
+			});
+			pos += cellMatch[0].length;
 			continue;
 		}
 
@@ -120,13 +177,13 @@ export function parseFormula(formula: string): ParsedFormula {
 			continue;
 		}
 
-		// Numbers (including decimals)
+		// Numbers (including decimals and percentages)
 		if (/[0-9.]/.test(char)) {
 			let numStr = '';
 			let hasDecimal = false;
 
-			while (pos <= expr.length) {
-				const c = expr[pos - 1];
+			while (pos < expr.length) {
+				const c = expr[pos];
 				if (c === '.' && !hasDecimal) {
 					hasDecimal = true;
 					numStr += c;
@@ -139,196 +196,92 @@ export function parseFormula(formula: string): ParsedFormula {
 				}
 			}
 
-			const num = parseFloat(numStr);
+			let num = parseFloat(numStr);
 			if (isNaN(num)) {
-				return {
-					tokens,
-					type: 'row',
-					isValid: false,
-					error: `Invalid number: ${numStr}`,
-					referencedColumns
-				};
+				return createInvalidResult(`Invalid number: ${numStr}`);
+			}
+
+			// Check for percentage suffix - 10% becomes 0.1
+			if (pos < expr.length && expr[pos] === '%') {
+				num = num / 100;
+				pos++; // Consume the %
 			}
 
 			tokens.push({ type: 'number', value: num });
 			continue;
 		}
 
+		// Comma (for function arguments) - skip it
+		if (char === ',') {
+			pos++;
+			continue;
+		}
+
 		// Unknown character
-		return {
-			tokens,
-			type: 'row',
-			isValid: false,
-			error: `Unexpected character: ${char}`,
-			referencedColumns
-		};
+		return createInvalidResult(`Unexpected character: ${char}`);
 	}
 
-	// Check for empty formula
+	// Check for empty tokens
 	if (tokens.length === 0) {
-		return {
-			tokens,
-			type: 'row',
-			isValid: false,
-			error: 'Empty formula',
-			referencedColumns
-		};
+		return createInvalidResult('Empty formula');
+	}
+
+	// Determine formula type
+	let type: ParsedFormula['type'] = 'expression';
+	if (tokens.some((t) => t.type === 'function')) {
+		type = 'function';
+	} else if (cellRefs.length === 0 && rangeRefs.length === 0) {
+		type = 'constant';
+	}
+
+	// Validate parentheses matching
+	let parenDepth = 0;
+	for (const token of tokens) {
+		if (token.type === 'lparen') parenDepth++;
+		if (token.type === 'rparen') parenDepth--;
+		if (parenDepth < 0) {
+			return createInvalidResult('Unmatched closing parenthesis');
+		}
+	}
+	if (parenDepth !== 0) {
+		return createInvalidResult('Unmatched opening parenthesis');
 	}
 
 	return {
 		tokens,
-		type: 'row',
+		type,
 		isValid: true,
-		referencedColumns
+		cellRefs,
+		rangeRefs
 	};
 }
 
 /**
- * Evaluate a parsed formula with actual row values
- * Returns null if evaluation fails (e.g., division by zero, missing values)
+ * Create an invalid ParsedFormula result
  */
-export function evaluateFormula(parsed: ParsedFormula, rowValues: (number | null)[]): number | null {
-	if (!parsed.isValid || parsed.type === 'column') {
-		return null;
-	}
-
-	// Convert tokens to expression and evaluate
-	// Uses a simple recursive descent parser for operator precedence
-
-	let pos = 0;
-	const tokens = parsed.tokens;
-
-	function getValue(token: FormulaToken): number | null {
-		if (token.type === 'number') {
-			return token.value as number;
-		}
-		if (token.type === 'column_ref' && token.columnIndex !== undefined) {
-			const val = rowValues[token.columnIndex];
-			return val;
-		}
-		return null;
-	}
-
-	function parseExpression(): number | null {
-		return parseAddSub();
-	}
-
-	function parseAddSub(): number | null {
-		let left = parseMulDiv();
-		if (left === null) return null;
-
-		while (pos < tokens.length) {
-			const token = tokens[pos];
-			if (token.type === 'operator' && (token.value === '+' || token.value === '-')) {
-				pos++;
-				const right = parseMulDiv();
-				if (right === null) return null;
-
-				if (token.value === '+') {
-					left = left + right;
-				} else {
-					left = left - right;
-				}
-			} else {
-				break;
-			}
-		}
-
-		return left;
-	}
-
-	function parseMulDiv(): number | null {
-		let left = parsePrimary();
-		if (left === null) return null;
-
-		while (pos < tokens.length) {
-			const token = tokens[pos];
-			if (token.type === 'operator' && (token.value === '*' || token.value === '/')) {
-				pos++;
-				const right = parsePrimary();
-				if (right === null) return null;
-
-				if (token.value === '*') {
-					left = left * right;
-				} else {
-					// Division by zero check
-					if (right === 0) return null;
-					left = left / right;
-				}
-			} else {
-				break;
-			}
-		}
-
-		return left;
-	}
-
-	function parsePrimary(): number | null {
-		if (pos >= tokens.length) return null;
-
-		const token = tokens[pos];
-
-		// Handle parentheses
-		if (token.type === 'lparen') {
-			pos++; // Skip (
-			const result = parseExpression();
-			if (pos < tokens.length && tokens[pos].type === 'rparen') {
-				pos++; // Skip )
-			}
-			return result;
-		}
-
-		// Handle unary minus
-		if (token.type === 'operator' && token.value === '-') {
-			pos++;
-			const val = parsePrimary();
-			return val !== null ? -val : null;
-		}
-
-		// Handle numbers and column refs
-		if (token.type === 'number' || token.type === 'column_ref') {
-			pos++;
-			return getValue(token);
-		}
-
-		return null;
-	}
-
-	try {
-		const result = parseExpression();
-		// Check for any unparsed tokens
-		if (pos < tokens.length) {
-			return null; // Invalid expression
-		}
-		return result;
-	} catch {
-		return null;
-	}
+function createInvalidResult(error: string): ParsedFormula {
+	return {
+		tokens: [],
+		type: 'expression',
+		isValid: false,
+		error,
+		cellRefs: [],
+		rangeRefs: []
+	};
 }
 
+// ============================================
+// DISPLAY FORMATTING
+// ============================================
+
 /**
- * Convert formula with indices to display format with column names
- * e.g., "=[1]*[2]" with headers ["Item", "Qty", "Rate"] becomes "Qty × Rate"
+ * Convert formula to display format with nicer symbols
+ * e.g., "=B1*C2" becomes "B1 × C2"
  */
-export function getDisplayFormula(formula: string, columnHeaders: string[]): string {
-	if (!formula.startsWith('=')) return formula;
+export function getDisplayFormula(formula: string): string {
+	if (!formula || !formula.startsWith('=')) return formula;
 
 	let display = formula.slice(1); // Remove leading =
-
-	// Replace column references with names
-	// Sort by index descending to avoid replacing [1] before [10]
-	const refs = [...display.matchAll(/\[(\d+)\]/g)].map((match) => ({
-		full: match[0],
-		index: parseInt(match[1], 10),
-		pos: match.index!
-	}));
-
-	refs.sort((a, b) => b.pos - a.pos);
-
-	for (const ref of refs) {
-		const name = columnHeaders[ref.index] || `Col ${ref.index + 1}`;
-		display = display.slice(0, ref.pos) + name + display.slice(ref.pos + ref.full.length);
-	}
 
 	// Replace operators with nicer symbols
 	display = display.replace(/\*/g, ' × ').replace(/\//g, ' ÷ ');
@@ -336,30 +289,55 @@ export function getDisplayFormula(formula: string, columnHeaders: string[]): str
 	return display;
 }
 
+// ============================================
+// VALIDATION
+// ============================================
+
 /**
  * Check if a formula would create a circular reference
- * For row formulas, prevents self-reference to the current cell's column
+ *
+ * @param formula - The formula to check
+ * @param currentCell - The cell where this formula is being entered
  */
 export function hasCircularReference(
-	currentColumnIndex: number,
 	formula: string,
-	_allFormulas?: Map<string, string>
+	currentCell: { col: number; row: number }
 ): boolean {
 	const parsed = parseFormula(formula);
 
 	if (!parsed.isValid) return false;
 
-	// Check if the formula references its own column
-	return parsed.referencedColumns.includes(currentColumnIndex);
+	// Build current cell reference string for comparison
+	const currentRef = `${columnIndexToLetter(currentCell.col)}${currentCell.row + 1}`;
+
+	// Check direct self-reference
+	return parsed.cellRefs.some((ref) => ref.toUpperCase() === currentRef.toUpperCase());
+}
+
+// Helper for circular reference check
+function columnIndexToLetter(index: number): string {
+	let letter = '';
+	let remaining = index;
+
+	while (remaining >= 0) {
+		letter = String.fromCharCode((remaining % 26) + 65) + letter;
+		remaining = Math.floor(remaining / 26) - 1;
+	}
+
+	return letter;
 }
 
 /**
  * Validate a formula and return an error message if invalid
+ *
+ * @param formula - The formula to validate
+ * @param currentCell - The cell where this formula is being entered
+ * @param tableSize - The size of the table { cols, rows }
  */
 export function validateFormula(
 	formula: string,
-	currentColumnIndex: number,
-	totalColumns: number
+	currentCell: { col: number; row: number },
+	tableSize: { cols: number; rows: number }
 ): string | null {
 	const parsed = parseFormula(formula);
 
@@ -368,19 +346,29 @@ export function validateFormula(
 	}
 
 	// Check for circular reference
-	if (hasCircularReference(currentColumnIndex, formula)) {
-		return 'Formula cannot reference its own column';
+	if (hasCircularReference(formula, currentCell)) {
+		return 'Formula cannot reference its own cell';
 	}
 
-	// Check for out-of-range column references
-	for (const colIndex of parsed.referencedColumns) {
-		if (colIndex >= totalColumns) {
-			return `Column [${colIndex}] does not exist`;
+	// Check for out-of-range cell references
+	for (const ref of parsed.cellRefs) {
+		const pos = parseCellRef(ref);
+		if (pos) {
+			if (pos.col >= tableSize.cols) {
+				return `Column ${ref.match(/[A-Z]+/i)?.[0]} is outside the table`;
+			}
+			if (pos.row >= tableSize.rows) {
+				return `Row ${pos.row + 1} is outside the table`;
+			}
 		}
 	}
 
 	return null;
 }
+
+// ============================================
+// RESULT FORMATTING
+// ============================================
 
 /**
  * Format a calculated result for display
@@ -389,6 +377,27 @@ export function formatResult(value: number | null): string {
 	if (value === null) return '—';
 	if (!isFinite(value)) return 'Error';
 
-	// Format with 2 decimal places
-	return value.toFixed(2);
+	// Format with 2 decimal places, add thousands separator
+	return value.toLocaleString('en-US', {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2
+	});
+}
+
+// ============================================
+// LEGACY COMPATIBILITY (DEPRECATED)
+// ============================================
+
+/**
+ * @deprecated Use formula-engine.ts evaluateFormula instead
+ * This is kept temporarily for backward compatibility during migration
+ */
+export function evaluateFormula(
+	_parsed: ParsedFormula,
+	_rowValues: (number | null)[]
+): number | null {
+	console.warn(
+		'formula-parser.evaluateFormula is deprecated. Use formula-engine.ts evaluateFormula instead.'
+	);
+	return null;
 }

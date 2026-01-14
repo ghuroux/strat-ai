@@ -18,13 +18,14 @@
 6. [Workspace Entities](#6-workspace-entities)
 7. [Context Entities](#7-context-entities)
 8. [Operational Entities](#8-operational-entities)
-9. [Access Resolution Algorithms](#9-access-resolution-algorithms)
-10. [Guardrails Resolution](#10-guardrails-resolution)
-11. [Complete Schema](#11-complete-schema)
-12. [Index Strategy](#12-index-strategy)
-13. [Migration Path](#13-migration-path)
-14. [Decision Log](#14-decision-log)
-15. [Appendix: Query Examples](#15-appendix-query-examples)
+9. [Relationship Modeling (Graph-Ready)](#9-relationship-modeling-graph-ready-architecture)
+10. [Access Resolution Algorithms](#10-access-resolution-algorithms)
+11. [Guardrails Resolution](#11-guardrails-resolution)
+12. [Complete Schema](#12-complete-schema)
+13. [Index Strategy](#13-index-strategy)
+14. [Migration Path](#14-migration-path)
+15. [Decision Log](#15-decision-log)
+16. [Appendix: Query Examples](#16-appendix-query-examples)
 
 ---
 
@@ -1022,9 +1023,330 @@ Comprehensive audit trail for compliance.
 
 ---
 
-## 9. Access Resolution Algorithms
+## 9. Relationship Modeling (Graph-Ready Architecture)
 
-### 9.1 Space Access
+### 9.1 Why Explicit Relationships
+
+Foreign keys capture containment (Task belongs to Area) but not semantic relationships:
+- Who **decided** this?
+- What **informed** that decision?
+- Which meetings **produced** these action items?
+
+These relationships are the foundation for organizational intelligence—expertise discovery, decision provenance, context recommendation. **If not captured at the moment they occur, they're lost forever.**
+
+### 9.2 Design Philosophy: Graph-Ready, Not Graph-Native
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         GRAPH-READY ARCHITECTURE                                 │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  NOW (Phase 1): Capture relationships in PostgreSQL                             │
+│  ├─ entity_relationships table with typed edges                                 │
+│  ├─ Metadata: weight, context, timestamps                                       │
+│  ├─ Query via recursive CTEs (handles 2-4 hops efficiently)                     │
+│  └─ Combined with pgvector for semantic + relational queries                    │
+│                                                                                  │
+│  LATER (When Needed): Add dedicated graph database                              │
+│  ├─ Export entity_relationships → Neo4j/Neptune                                 │
+│  ├─ Complex traversals, network analysis, recommendations                       │
+│  └─ Signal: CTEs >500ms, need real-time recommendations                         │
+│                                                                                  │
+│  WHY THIS APPROACH:                                                              │
+│  ├─ Captures valuable data now (can't go back in time)                          │
+│  ├─ Avoids operational complexity before validation                             │
+│  ├─ Clean migration path when needed                                            │
+│  └─ Single PostgreSQL for OLTP simplicity                                       │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 9.3 Entity Relationships Table
+
+```sql
+-- ============================================================
+-- ENTITY RELATIONSHIPS (Graph-Ready Edge Table)
+-- ============================================================
+-- Captures typed relationships between any entities.
+-- Designed for future migration to graph database.
+
+CREATE TABLE entity_relationships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Source Entity
+    source_type VARCHAR(50) NOT NULL,
+    source_id UUID NOT NULL,
+
+    -- Relationship Type
+    relationship VARCHAR(50) NOT NULL,
+
+    -- Target Entity
+    target_type VARCHAR(50) NOT NULL,
+    target_id UUID NOT NULL,
+
+    -- Relationship Metadata
+    weight FLOAT DEFAULT 1.0,              -- Strength/importance (0.0-1.0)
+    context JSONB DEFAULT '{}',            -- Why this relationship exists
+
+    -- Temporal (for bi-temporal if needed)
+    valid_from TIMESTAMPTZ DEFAULT NOW(),
+    valid_to TIMESTAMPTZ,                  -- NULL = currently valid
+
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id),
+
+    -- Constraints
+    UNIQUE(source_type, source_id, relationship, target_type, target_id, valid_from),
+
+    -- Validation
+    CONSTRAINT valid_source_type CHECK (source_type IN (
+        'user', 'meeting', 'task', 'page', 'document', 'decision',
+        'area', 'space', 'organization', 'message', 'memory'
+    )),
+    CONSTRAINT valid_target_type CHECK (target_type IN (
+        'user', 'meeting', 'task', 'page', 'document', 'decision',
+        'area', 'space', 'organization', 'message', 'memory'
+    )),
+    CONSTRAINT valid_relationship CHECK (relationship IN (
+        -- Participation
+        'attended', 'organized', 'owns', 'assigned_to', 'authored',
+        -- Production
+        'produced', 'created', 'resulted_in',
+        -- Reference
+        'references', 'informed_by', 'related_to', 'preceded_by', 'followed_by',
+        -- Hierarchy
+        'parent_of', 'child_of', 'subtask_of',
+        -- Collaboration
+        'collaborated_on', 'reviewed', 'approved', 'rejected',
+        -- Context
+        'discussed_in', 'mentioned_in', 'decided_in'
+    ))
+);
+
+-- Indexes for efficient traversal
+CREATE INDEX idx_entity_rel_source ON entity_relationships(source_type, source_id);
+CREATE INDEX idx_entity_rel_target ON entity_relationships(target_type, target_id);
+CREATE INDEX idx_entity_rel_type ON entity_relationships(relationship);
+CREATE INDEX idx_entity_rel_source_rel ON entity_relationships(source_type, source_id, relationship);
+CREATE INDEX idx_entity_rel_valid ON entity_relationships(valid_from, valid_to)
+    WHERE valid_to IS NULL;  -- Active relationships
+```
+
+### 9.4 Relationship Vocabulary
+
+| Relationship | Source → Target | Description |
+|--------------|-----------------|-------------|
+| **Participation** |||
+| `attended` | user → meeting | User attended the meeting |
+| `organized` | user → meeting | User created/scheduled the meeting |
+| `owns` | user → task/meeting/decision | User is accountable |
+| `assigned_to` | task → user | Task assigned to user |
+| `authored` | user → page/document | User created the content |
+| **Production** |||
+| `produced` | meeting → decision/task | Meeting resulted in decision/action item |
+| `created` | entity → entity | General creation relationship |
+| `resulted_in` | decision → task | Decision led to this work |
+| **Reference** |||
+| `references` | entity → document/page | Entity links to source material |
+| `informed_by` | decision → decision/document | Prior work influenced this decision |
+| `related_to` | entity → entity | General semantic relationship |
+| `preceded_by` | entity → entity | Temporal ordering |
+| **Hierarchy** |||
+| `parent_of` | task → task | Parent-child task relationship |
+| `subtask_of` | task → task | Inverse of parent_of |
+| **Collaboration** |||
+| `collaborated_on` | user → entity | User contributed to entity |
+| `reviewed` | user → entity | User reviewed the entity |
+| `approved` / `rejected` | user → decision/task | User approved/rejected |
+| **Context** |||
+| `discussed_in` | topic → meeting | Topic was discussed in meeting |
+| `mentioned_in` | entity → message | Entity mentioned in conversation |
+| `decided_in` | decision → meeting | Decision was made in meeting |
+
+### 9.5 Relationship Capture Patterns
+
+**When a Meeting is Created:**
+```sql
+-- Organizer relationship
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id)
+VALUES ('user', organizer_id, 'organized', 'meeting', meeting_id);
+
+-- Owner relationship (if different from organizer)
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id, context)
+VALUES ('user', owner_id, 'owns', 'meeting', meeting_id, '{"role": "accountable"}');
+
+-- Attendee relationships
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id, context)
+SELECT 'user', attendee_id, 'attended', 'meeting', meeting_id,
+       jsonb_build_object('response', response_status)
+FROM meeting_attendees WHERE meeting_id = meeting_id;
+```
+
+**When a Decision is Made in a Meeting:**
+```sql
+-- Decision produced by meeting
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id)
+VALUES ('meeting', meeting_id, 'produced', 'decision', decision_id);
+
+-- Decision owner
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id)
+VALUES ('user', owner_id, 'owns', 'decision', decision_id);
+
+-- Decision informed by documents (if referenced)
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id)
+VALUES ('decision', decision_id, 'informed_by', 'document', referenced_doc_id);
+```
+
+**When an Action Item Becomes a Subtask:**
+```sql
+-- Task produced by meeting
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id)
+VALUES ('meeting', meeting_id, 'produced', 'task', subtask_id);
+
+-- Subtask relationship to meeting task
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id)
+VALUES ('task', subtask_id, 'subtask_of', 'task', meeting_task_id);
+
+-- Task assignment
+INSERT INTO entity_relationships (source_type, source_id, relationship, target_type, target_id)
+VALUES ('task', subtask_id, 'assigned_to', 'user', assignee_id);
+```
+
+### 9.6 Query Patterns (PostgreSQL)
+
+**Find Experts on a Topic:**
+```sql
+-- Combines semantic search (pgvector) with relationship traversal
+WITH topic_entities AS (
+    -- Find entities semantically related to the topic
+    SELECT id, type, title
+    FROM entities
+    WHERE embedding <-> $topic_embedding < 0.3
+),
+user_involvement AS (
+    -- Find users connected to those entities
+    SELECT
+        er.source_id as user_id,
+        COUNT(*) as involvement_count,
+        COUNT(DISTINCT er.relationship) as relationship_diversity,
+        array_agg(DISTINCT er.relationship) as relationship_types,
+        array_agg(DISTINCT te.title) as related_work
+    FROM entity_relationships er
+    JOIN topic_entities te ON er.target_id = te.id
+    WHERE er.source_type = 'user'
+      AND er.relationship IN ('authored', 'owns', 'decided', 'completed', 'attended')
+      AND er.valid_to IS NULL  -- Currently valid relationships
+    GROUP BY er.source_id
+)
+SELECT
+    u.id,
+    u.display_name,
+    ui.involvement_count,
+    ui.relationship_diversity,
+    ui.relationship_types,
+    ui.related_work[1:3] as sample_work,  -- First 3 items
+    -- Expertise score: involvement * diversity
+    (ui.involvement_count * ui.relationship_diversity)::float / 10 as expertise_score
+FROM user_involvement ui
+JOIN users u ON u.id = ui.user_id
+ORDER BY expertise_score DESC
+LIMIT 5;
+```
+
+**Decision Provenance (2-hop traversal):**
+```sql
+-- What informed this decision?
+WITH RECURSIVE provenance AS (
+    -- Start with the decision
+    SELECT
+        target_type, target_id,
+        relationship,
+        source_type, source_id,
+        1 as depth,
+        ARRAY[decision_id] as path
+    FROM entity_relationships
+    WHERE target_id = $decision_id
+      AND target_type = 'decision'
+      AND relationship IN ('informed_by', 'preceded_by', 'discussed_in')
+
+    UNION ALL
+
+    -- Traverse backwards
+    SELECT
+        er.target_type, er.target_id,
+        er.relationship,
+        er.source_type, er.source_id,
+        p.depth + 1,
+        p.path || er.source_id
+    FROM entity_relationships er
+    JOIN provenance p ON er.target_id = p.source_id AND er.target_type = p.source_type
+    WHERE p.depth < 3  -- Limit traversal depth
+      AND NOT (er.source_id = ANY(p.path))  -- Prevent cycles
+      AND er.relationship IN ('informed_by', 'preceded_by', 'produced')
+)
+SELECT DISTINCT source_type, source_id, relationship, depth
+FROM provenance
+ORDER BY depth, source_type;
+```
+
+**Meeting Impact Analysis:**
+```sql
+-- What resulted from this meeting?
+SELECT
+    er.relationship,
+    er.target_type,
+    COUNT(*) as count,
+    array_agg(er.target_id) as entity_ids
+FROM entity_relationships er
+WHERE er.source_id = $meeting_id
+  AND er.source_type = 'meeting'
+  AND er.relationship IN ('produced', 'resulted_in')
+GROUP BY er.relationship, er.target_type;
+
+-- Returns: [{ relationship: 'produced', target_type: 'decision', count: 3 },
+--           { relationship: 'produced', target_type: 'task', count: 5 }]
+```
+
+### 9.7 Future: Graph Database Integration
+
+When usage patterns indicate the need for a dedicated graph database:
+
+**Migration Path:**
+1. Export `entity_relationships` to Neo4j/Neptune node/edge format
+2. Run graph DB alongside PostgreSQL (dual-write during transition)
+3. Complex traversals → Graph DB, OLTP → PostgreSQL
+4. Evaluate and potentially consolidate
+
+**Signals to Add Graph DB:**
+- Recursive CTEs regularly exceed 500ms
+- Need for real-time recommendation engine
+- Users request network visualization
+- Graph algorithms needed (PageRank for expertise, community detection)
+
+**Neo4j Schema Equivalent:**
+```cypher
+// Nodes (from PostgreSQL tables)
+(:User {id, display_name, email})
+(:Meeting {id, title, scheduled_start})
+(:Decision {id, description, status})
+(:Task {id, title, status})
+(:Page {id, title})
+(:Document {id, filename})
+
+// Edges (from entity_relationships)
+(u:User)-[:ATTENDED {weight, context}]->(m:Meeting)
+(u:User)-[:OWNS]->(d:Decision)
+(m:Meeting)-[:PRODUCED]->(d:Decision)
+(d:Decision)-[:INFORMED_BY]->(doc:Document)
+(t:Task)-[:SUBTASK_OF]->(parent:Task)
+```
+
+---
+
+## 10. Access Resolution Algorithms
+
+### 10.1 Space Access
 
 ```
 ALGORITHM: CanAccessSpace(user_id, space_id)
@@ -1075,7 +1397,7 @@ When a user has access from multiple sources (e.g., both membership and group), 
 owner > admin > member > viewer
 ```
 
-### 9.2 Area Access
+### 10.2 Area Access
 
 ```
 ALGORITHM: CanAccessArea(user_id, area_id)
@@ -1118,7 +1440,7 @@ OUTPUT:
   - source: 'space_inherited' | 'user_membership' | 'group_membership' | null
 ```
 
-### 9.3 Model Access
+### 10.3 Model Access
 
 ```
 ALGORITHM: CanUseModel(user_id, model_id)
@@ -1165,7 +1487,7 @@ OUTPUT:
   - guardrail: string (if guardrail caused denial)
 ```
 
-### 9.4 User Allowed Tiers
+### 10.4 User Allowed Tiers
 
 ```
 ALGORITHM: GetUserAllowedTiers(user_id)
@@ -1206,9 +1528,9 @@ OUTPUT:
 
 ---
 
-## 10. Guardrails Resolution
+## 11. Guardrails Resolution
 
-### 10.1 Collecting Applicable Guardrails
+### 11.1 Collecting Applicable Guardrails
 
 ```
 ALGORITHM: GetApplicableGuardrails(user_id)
@@ -1237,7 +1559,7 @@ OUTPUT:
   - guardrails: Guardrail[]
 ```
 
-### 10.2 Resolving Guardrails by Type
+### 11.2 Resolving Guardrails by Type
 
 For each guardrail type, the resolution rule differs:
 
@@ -1251,7 +1573,7 @@ For each guardrail type, the resolution rule differs:
 | `budget_limit` | MINIMUM of all limits |
 | `content_filter` | UNION of all patterns |
 
-### 10.3 Full Guardrails Resolution
+### 11.3 Full Guardrails Resolution
 
 ```
 ALGORITHM: ResolveGuardrails(user_id)
@@ -1303,7 +1625,7 @@ OUTPUT:
   - resolved: ResolvedGuardrails
 ```
 
-### 10.4 Request Validation
+### 11.4 Request Validation
 
 ```
 ALGORITHM: ValidateRequest(user_id, request)
@@ -1352,9 +1674,9 @@ OUTPUT:
 
 ---
 
-## 11. Complete Schema
+## 12. Complete Schema
 
-### 11.1 Extensions
+### 12.1 Extensions
 
 ```sql
 -- Required PostgreSQL extensions
@@ -1363,7 +1685,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "vector";
 ```
 
-### 11.2 Platform Tables
+### 12.2 Platform Tables
 
 ```sql
 -- ============================================================
@@ -1444,7 +1766,7 @@ CREATE TABLE guardrails (
 );
 ```
 
-### 11.3 Organization Tables
+### 12.3 Organization Tables
 
 ```sql
 -- ============================================================
@@ -1565,7 +1887,7 @@ CREATE TABLE group_memberships (
 );
 ```
 
-### 11.4 Workspace Tables
+### 12.4 Workspace Tables
 
 ```sql
 -- ============================================================
@@ -1695,7 +2017,7 @@ CREATE TABLE tasks (
 );
 ```
 
-### 11.5 Context Tables
+### 12.5 Context Tables
 
 ```sql
 -- ============================================================
@@ -1905,7 +2227,7 @@ CREATE TABLE page_conversations (
 );
 ```
 
-### 11.6 Operational Tables
+### 12.6 Operational Tables
 
 ```sql
 -- ============================================================
@@ -2019,11 +2341,85 @@ CREATE TABLE audit_log (
 );
 ```
 
+### 12.7 Relationship Tables
+
+```sql
+-- ============================================================
+-- ENTITY RELATIONSHIPS (Graph-Ready Edge Table)
+-- ============================================================
+-- Captures typed relationships between any entities.
+-- Designed for future migration to graph database.
+-- See Section 9 for complete documentation.
+
+CREATE TABLE entity_relationships (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Source Entity
+    source_type VARCHAR(50) NOT NULL,
+    source_id UUID NOT NULL,
+
+    -- Relationship Type
+    relationship VARCHAR(50) NOT NULL,
+
+    -- Target Entity
+    target_type VARCHAR(50) NOT NULL,
+    target_id UUID NOT NULL,
+
+    -- Relationship Metadata
+    weight FLOAT DEFAULT 1.0,              -- Strength/importance (0.0-1.0)
+    context JSONB DEFAULT '{}',            -- Why this relationship exists
+
+    -- Temporal (for bi-temporal if needed)
+    valid_from TIMESTAMPTZ DEFAULT NOW(),
+    valid_to TIMESTAMPTZ,                  -- NULL = currently valid
+
+    -- Audit
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by UUID REFERENCES users(id),
+
+    -- Constraints
+    UNIQUE(source_type, source_id, relationship, target_type, target_id, valid_from),
+
+    -- Validation (entity types)
+    CONSTRAINT valid_source_type CHECK (source_type IN (
+        'user', 'meeting', 'task', 'page', 'document', 'decision',
+        'area', 'space', 'organization', 'message', 'memory'
+    )),
+    CONSTRAINT valid_target_type CHECK (target_type IN (
+        'user', 'meeting', 'task', 'page', 'document', 'decision',
+        'area', 'space', 'organization', 'message', 'memory'
+    )),
+    -- Validation (relationship types)
+    CONSTRAINT valid_relationship CHECK (relationship IN (
+        -- Participation
+        'attended', 'organized', 'owns', 'assigned_to', 'authored',
+        -- Production
+        'produced', 'created', 'resulted_in',
+        -- Reference
+        'references', 'informed_by', 'related_to', 'preceded_by', 'followed_by',
+        -- Hierarchy
+        'parent_of', 'child_of', 'subtask_of',
+        -- Collaboration
+        'collaborated_on', 'reviewed', 'approved', 'rejected',
+        -- Context
+        'discussed_in', 'mentioned_in', 'decided_in'
+    ))
+);
+
+-- Indexes for efficient traversal
+CREATE INDEX idx_entity_rel_source ON entity_relationships(source_type, source_id);
+CREATE INDEX idx_entity_rel_target ON entity_relationships(target_type, target_id);
+CREATE INDEX idx_entity_rel_type ON entity_relationships(relationship);
+CREATE INDEX idx_entity_rel_source_rel ON entity_relationships(source_type, source_id, relationship);
+CREATE INDEX idx_entity_rel_valid ON entity_relationships(valid_from, valid_to)
+    WHERE valid_to IS NULL;  -- Active relationships only
+```
+
 ---
 
-## 12. Index Strategy
+## 13. Index Strategy
 
-### 12.1 Primary Key and Foreign Key Indexes
+### 13.1 Primary Key and Foreign Key Indexes
 
 PostgreSQL automatically creates indexes for primary keys. Foreign key indexes must be explicit.
 
@@ -2172,7 +2568,7 @@ CREATE INDEX idx_models_tier ON models(tier_id) WHERE is_enabled = true;
 CREATE INDEX idx_models_provider ON models(provider) WHERE is_enabled = true;
 ```
 
-### 12.2 Index Rationale Summary
+### 13.2 Index Rationale Summary
 
 | Index | Query Pattern | Expected Frequency |
 |-------|--------------|-------------------|
@@ -2185,9 +2581,9 @@ CREATE INDEX idx_models_provider ON models(provider) WHERE is_enabled = true;
 
 ---
 
-## 13. Migration Path
+## 14. Migration Path
 
-### 13.1 Current State
+### 14.1 Current State
 
 | Entity | Current Location | Migration Needed |
 |--------|-----------------|------------------|
@@ -2198,7 +2594,7 @@ CREATE INDEX idx_models_provider ON models(provider) WHERE is_enabled = true;
 | Conversations | localStorage | Full migration to PostgreSQL |
 | Messages | localStorage | Full migration to PostgreSQL |
 
-### 13.2 Migration Phases
+### 14.2 Migration Phases
 
 #### Phase 1: Organization Infrastructure
 
@@ -2325,7 +2721,7 @@ CREATE INDEX idx_groups_org ...;
 -- (all indexes from Section 12)
 ```
 
-### 13.3 Migration Validation Checklist
+### 14.3 Migration Validation Checklist
 
 - [ ] All existing spaces have `organization_id`
 - [ ] All existing tasks have `organization_id`
@@ -2341,7 +2737,7 @@ CREATE INDEX idx_groups_org ...;
 
 ---
 
-## 14. Decision Log
+## 15. Decision Log
 
 | Date | Decision | Rationale | Alternatives Considered |
 |------|----------|-----------|------------------------|
@@ -2363,12 +2759,14 @@ CREATE INDEX idx_groups_org ...;
 | 2026-01 | user_id_mappings table | Backward compatibility bridge from legacy TEXT user_ids to UUIDs during transition | Update all data in place |
 | 2026-01 | Documents vs Pages distinction | **Documents** = uploaded files at Space-level (avoid duplication, activate per-area); **Pages** = created content at Area-level (born from context, lives where created) | Single "documents" concept for both |
 | 2026-01 | Document Area-level sharing | Documents stored at Space (dedup), shared at Area (precision). Avoids noise - only relevant Areas see shared docs. Unshare auto-deactivates from contextDocumentIds. | Space-level visibility only |
+| 2026-01 | Graph-ready, not graph-native | Capture relationships in PostgreSQL `entity_relationships` table now; add Neo4j/Neptune later when usage patterns justify. Data capture is irreversible; infrastructure is additive. | Immediate graph DB; No explicit relationships |
+| 2026-01 | Typed relationship vocabulary | Constrained relationship types (attended, produced, informed_by, etc.) enable consistent querying and future graph migration. Extensible via schema updates. | Free-form relationship strings |
 
 ---
 
-## 15. Appendix: Query Examples
+## 16. Appendix: Query Examples
 
-### 15.1 Get User's Accessible Spaces
+### 16.1 Get User's Accessible Spaces
 
 ```sql
 -- All spaces user can access (via membership, group access, or org-wide)
@@ -2411,7 +2809,7 @@ WHERE s.organization_id = $org_id
 ORDER BY s.updated_at DESC;
 ```
 
-### 15.2 Get User's Accessible Areas in a Space
+### 16.2 Get User's Accessible Areas in a Space
 
 ```sql
 -- All areas user can access in a given space
@@ -2460,7 +2858,7 @@ WHERE a.space_id = $space_id
 ORDER BY a.name;
 ```
 
-### 15.3 Get User's Available Models
+### 16.3 Get User's Available Models
 
 ```sql
 -- All models user can access based on subscription and guardrails
@@ -2521,7 +2919,7 @@ WHERE m.is_enabled = true
 ORDER BY mt.sort_order, m.sort_order;
 ```
 
-### 15.4 Context Assembly for Chat
+### 16.4 Context Assembly for Chat
 
 ```sql
 -- Get relevant memories for context assembly
@@ -2562,7 +2960,7 @@ ORDER BY
 LIMIT 50;
 ```
 
-### 15.5 Usage Summary for Billing
+### 16.5 Usage Summary for Billing
 
 ```sql
 -- Monthly usage summary by organization

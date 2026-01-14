@@ -395,6 +395,8 @@ export interface User {
 	organizationId: string;
 	email: string;
 	username: string;
+	firstName: string | null;
+	lastName: string | null;
 	displayName: string | null;
 	status: 'active' | 'inactive' | 'suspended';
 	lastLoginAt: Date | null;
@@ -415,6 +417,8 @@ export interface UserRepository {
 		organizationId: string;
 		email: string;
 		username: string;
+		firstName?: string;
+		lastName?: string;
 		displayName?: string;
 		passwordHash?: string;
 		status?: 'active' | 'inactive' | 'suspended';
@@ -425,6 +429,8 @@ export interface UserRepository {
 		updates: {
 			email?: string;
 			username?: string;
+			firstName?: string | null;
+			lastName?: string | null;
 			displayName?: string | null;
 			passwordHash?: string;
 			status?: 'active' | 'inactive' | 'suspended';

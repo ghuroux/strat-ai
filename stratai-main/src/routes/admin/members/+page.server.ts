@@ -63,6 +63,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			id: u.id,
 			email: u.email,
 			username: u.username,
+			firstName: u.firstName,
+			lastName: u.lastName,
 			displayName: u.displayName,
 			status: u.status,
 			role: membership?.role || 'member',
@@ -92,7 +94,8 @@ export const actions: Actions = {
 		const formData = await request.formData();
 		const email = formData.get('email')?.toString().trim();
 		const username = formData.get('username')?.toString().trim();
-		const displayName = formData.get('displayName')?.toString().trim() || null;
+		const firstName = formData.get('firstName')?.toString().trim() || null;
+		const lastName = formData.get('lastName')?.toString().trim() || null;
 		const password = formData.get('password')?.toString();
 		const role = formData.get('role')?.toString() as 'owner' | 'admin' | 'member';
 
@@ -127,7 +130,8 @@ export const actions: Actions = {
 				organizationId: orgId,
 				email,
 				username,
-				displayName: displayName || undefined,
+				firstName: firstName || undefined,
+				lastName: lastName || undefined,
 				passwordHash,
 				status: 'active'
 			});
@@ -159,7 +163,8 @@ export const actions: Actions = {
 		const membershipId = formData.get('membershipId')?.toString();
 		const email = formData.get('email')?.toString().trim();
 		const username = formData.get('username')?.toString().trim();
-		const displayName = formData.get('displayName')?.toString().trim() || null;
+		const firstName = formData.get('firstName')?.toString().trim();
+		const lastName = formData.get('lastName')?.toString().trim();
 		const role = formData.get('role')?.toString() as 'owner' | 'admin' | 'member';
 
 		if (!userId) {
@@ -171,7 +176,8 @@ export const actions: Actions = {
 			const updates: Parameters<typeof postgresUserRepository.update>[1] = {};
 			if (email) updates.email = email;
 			if (username) updates.username = username;
-			if (displayName !== undefined) updates.displayName = displayName;
+			if (firstName !== undefined) updates.firstName = firstName || null;
+			if (lastName !== undefined) updates.lastName = lastName || null;
 
 			if (Object.keys(updates).length > 0) {
 				await postgresUserRepository.update(userId, updates);

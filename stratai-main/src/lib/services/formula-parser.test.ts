@@ -1,13 +1,13 @@
 /**
  * Formula Parser Tests
  *
+ * Tests for A1-style formula parsing.
  * Run with: npx vitest run formula-parser
  */
 
 import { describe, it, expect } from 'vitest';
 import {
 	parseFormula,
-	evaluateFormula,
 	getDisplayFormula,
 	hasCircularReference,
 	validateFormula,
@@ -15,189 +15,311 @@ import {
 } from './formula-parser';
 
 describe('parseFormula', () => {
-	it('parses simple column reference', () => {
-		const result = parseFormula('=[1]');
-		expect(result.isValid).toBe(true);
-		expect(result.type).toBe('row');
-		expect(result.referencedColumns).toEqual([1]);
-		expect(result.tokens).toHaveLength(1);
-		expect(result.tokens[0].type).toBe('column_ref');
+	describe('cell references', () => {
+		it('parses simple cell reference', () => {
+			const result = parseFormula('=A1');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('expression');
+			expect(result.cellRefs).toEqual(['A1']);
+			expect(result.tokens).toHaveLength(1);
+			expect(result.tokens[0].type).toBe('cell_ref');
+			expect(result.tokens[0].col).toBe(0);
+			expect(result.tokens[0].row).toBe(0);
+		});
+
+		it('parses multi-letter column reference', () => {
+			const result = parseFormula('=AA10');
+			expect(result.isValid).toBe(true);
+			expect(result.cellRefs).toEqual(['AA10']);
+			expect(result.tokens[0].col).toBe(26);
+			expect(result.tokens[0].row).toBe(9);
+		});
+
+		it('parses multiple cell references', () => {
+			const result = parseFormula('=B1*C2');
+			expect(result.isValid).toBe(true);
+			expect(result.cellRefs).toEqual(['B1', 'C2']);
+			expect(result.tokens).toHaveLength(3);
+		});
+
+		it('is case-insensitive', () => {
+			const result = parseFormula('=b1*c2');
+			expect(result.isValid).toBe(true);
+			expect(result.cellRefs).toEqual(['B1', 'C2']);
+		});
 	});
 
-	it('parses multiplication formula', () => {
-		const result = parseFormula('=[1]*[2]');
-		expect(result.isValid).toBe(true);
-		expect(result.referencedColumns).toEqual([1, 2]);
-		expect(result.tokens).toHaveLength(3);
+	describe('range references', () => {
+		it('parses simple range', () => {
+			const result = parseFormula('=SUM(A1:A5)');
+			expect(result.isValid).toBe(true);
+			expect(result.rangeRefs).toEqual(['A1:A5']);
+		});
+
+		it('parses rectangular range', () => {
+			const result = parseFormula('=SUM(B2:D4)');
+			expect(result.isValid).toBe(true);
+			expect(result.rangeRefs).toEqual(['B2:D4']);
+			// Check the range token
+			const rangeToken = result.tokens.find((t) => t.type === 'range_ref');
+			expect(rangeToken).toBeDefined();
+			expect(rangeToken?.startCol).toBe(1);
+			expect(rangeToken?.startRow).toBe(1);
+			expect(rangeToken?.endCol).toBe(3);
+			expect(rangeToken?.endRow).toBe(3);
+		});
+
+		it('normalizes reversed ranges', () => {
+			const result = parseFormula('=SUM(A5:A1)');
+			expect(result.isValid).toBe(true);
+			const rangeToken = result.tokens.find((t) => t.type === 'range_ref');
+			// Should be normalized so start <= end
+			expect(rangeToken?.startRow).toBeLessThanOrEqual(rangeToken?.endRow ?? -1);
+		});
 	});
 
-	it('parses formula with numbers', () => {
-		const result = parseFormula('=[2]*0.15');
-		expect(result.isValid).toBe(true);
-		expect(result.tokens).toHaveLength(3);
-		expect(result.tokens[2].type).toBe('number');
-		expect(result.tokens[2].value).toBe(0.15);
+	describe('functions', () => {
+		it('parses SUM function', () => {
+			const result = parseFormula('=SUM(A1:A5)');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('function');
+			expect(result.tokens.some((t) => t.type === 'function' && t.value === 'SUM')).toBe(true);
+		});
+
+		it('parses AVG function', () => {
+			const result = parseFormula('=AVG(B1:B10)');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('function');
+		});
+
+		it('parses COUNT function', () => {
+			const result = parseFormula('=COUNT(A1:A100)');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('function');
+		});
+
+		it('parses MIN function', () => {
+			const result = parseFormula('=MIN(C1:C5)');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('function');
+		});
+
+		it('parses MAX function', () => {
+			const result = parseFormula('=MAX(D1:D5)');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('function');
+		});
+
+		it('is case-insensitive for functions', () => {
+			const result = parseFormula('=sum(A1:A5)');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('function');
+		});
 	});
 
-	it('parses complex formula with parentheses', () => {
-		const result = parseFormula('=([1]+[2])*[3]');
-		expect(result.isValid).toBe(true);
-		expect(result.referencedColumns).toEqual([1, 2, 3]);
+	describe('constants', () => {
+		it('parses pure math expression', () => {
+			const result = parseFormula('=2+2');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('constant');
+			expect(result.cellRefs).toEqual([]);
+		});
+
+		it('parses decimal numbers', () => {
+			const result = parseFormula('=100*0.15');
+			expect(result.isValid).toBe(true);
+			expect(result.tokens.some((t) => t.type === 'number' && t.value === 0.15)).toBe(true);
+		});
 	});
 
-	it('recognizes column formulas', () => {
-		expect(parseFormula('SUM').type).toBe('column');
-		expect(parseFormula('AVG').type).toBe('column');
-		expect(parseFormula('COUNT').type).toBe('column');
-		expect(parseFormula('MIN').type).toBe('column');
-		expect(parseFormula('MAX').type).toBe('column');
+	describe('operators', () => {
+		it('parses addition', () => {
+			const result = parseFormula('=A1+B1');
+			expect(result.isValid).toBe(true);
+			expect(result.tokens.some((t) => t.type === 'operator' && t.value === '+')).toBe(true);
+		});
+
+		it('parses subtraction', () => {
+			const result = parseFormula('=A1-B1');
+			expect(result.isValid).toBe(true);
+			expect(result.tokens.some((t) => t.type === 'operator' && t.value === '-')).toBe(true);
+		});
+
+		it('parses multiplication', () => {
+			const result = parseFormula('=A1*B1');
+			expect(result.isValid).toBe(true);
+			expect(result.tokens.some((t) => t.type === 'operator' && t.value === '*')).toBe(true);
+		});
+
+		it('parses division', () => {
+			const result = parseFormula('=A1/B1');
+			expect(result.isValid).toBe(true);
+			expect(result.tokens.some((t) => t.type === 'operator' && t.value === '/')).toBe(true);
+		});
 	});
 
-	it('rejects formula without leading =', () => {
-		const result = parseFormula('[1]*[2]');
-		expect(result.isValid).toBe(false);
-		expect(result.error).toContain('must start with =');
+	describe('parentheses', () => {
+		it('parses grouped expressions', () => {
+			const result = parseFormula('=(A1+B1)*C1');
+			expect(result.isValid).toBe(true);
+			expect(result.tokens.filter((t) => t.type === 'lparen')).toHaveLength(1);
+			expect(result.tokens.filter((t) => t.type === 'rparen')).toHaveLength(1);
+		});
+
+		it('parses nested parentheses', () => {
+			const result = parseFormula('=((A1+B1)*C1)/D1');
+			expect(result.isValid).toBe(true);
+			expect(result.tokens.filter((t) => t.type === 'lparen')).toHaveLength(2);
+			expect(result.tokens.filter((t) => t.type === 'rparen')).toHaveLength(2);
+		});
+
+		it('rejects unmatched opening parenthesis', () => {
+			const result = parseFormula('=(A1+B1');
+			expect(result.isValid).toBe(false);
+			expect(result.error).toContain('parenthesis');
+		});
+
+		it('rejects unmatched closing parenthesis', () => {
+			const result = parseFormula('=A1+B1)');
+			expect(result.isValid).toBe(false);
+			expect(result.error).toContain('parenthesis');
+		});
 	});
 
-	it('rejects unclosed bracket', () => {
-		const result = parseFormula('=[1');
-		expect(result.isValid).toBe(false);
-		expect(result.error).toContain('Unclosed');
+	describe('complex formulas', () => {
+		it('parses cross-row references', () => {
+			const result = parseFormula('=B1+C2');
+			expect(result.isValid).toBe(true);
+			expect(result.cellRefs).toEqual(['B1', 'C2']);
+		});
+
+		it('parses mixed cell refs and constants', () => {
+			const result = parseFormula('=B2*0.15');
+			expect(result.isValid).toBe(true);
+			expect(result.cellRefs).toEqual(['B2']);
+			expect(result.tokens.some((t) => t.type === 'number')).toBe(true);
+		});
+
+		it('parses formula with function and additional ops', () => {
+			const result = parseFormula('=SUM(A1:A5)+B1');
+			expect(result.isValid).toBe(true);
+			expect(result.type).toBe('function');
+			expect(result.rangeRefs).toEqual(['A1:A5']);
+			expect(result.cellRefs).toContain('B1');
+		});
 	});
 
-	it('rejects invalid column index', () => {
-		const result = parseFormula('=[abc]');
-		expect(result.isValid).toBe(false);
-		expect(result.error).toContain('Invalid column index');
-	});
+	describe('error handling', () => {
+		it('rejects empty formula', () => {
+			expect(parseFormula('').isValid).toBe(false);
+			expect(parseFormula('=').isValid).toBe(false);
+			expect(parseFormula('= ').isValid).toBe(false);
+		});
 
-	it('rejects empty formula', () => {
-		const result = parseFormula('=');
-		expect(result.isValid).toBe(false);
-		expect(result.error).toContain('Empty formula');
-	});
-});
+		it('rejects formula without leading =', () => {
+			const result = parseFormula('A1+B1');
+			expect(result.isValid).toBe(false);
+			expect(result.error).toContain('must start with =');
+		});
 
-describe('evaluateFormula', () => {
-	it('evaluates simple multiplication', () => {
-		const parsed = parseFormula('=[1]*[2]');
-		const result = evaluateFormula(parsed, [null, 5, 10]);
-		expect(result).toBe(50);
-	});
-
-	it('evaluates addition', () => {
-		const parsed = parseFormula('=[0]+[1]+[2]');
-		const result = evaluateFormula(parsed, [10, 20, 30]);
-		expect(result).toBe(60);
-	});
-
-	it('evaluates with constants', () => {
-		const parsed = parseFormula('=[1]*0.15');
-		const result = evaluateFormula(parsed, [null, 100]);
-		expect(result).toBe(15);
-	});
-
-	it('respects operator precedence', () => {
-		const parsed = parseFormula('=[0]+[1]*[2]');
-		const result = evaluateFormula(parsed, [5, 3, 4]); // 5 + (3*4) = 17
-		expect(result).toBe(17);
-	});
-
-	it('handles parentheses', () => {
-		const parsed = parseFormula('=([0]+[1])*[2]');
-		const result = evaluateFormula(parsed, [5, 3, 4]); // (5+3)*4 = 32
-		expect(result).toBe(32);
-	});
-
-	it('returns null for division by zero', () => {
-		const parsed = parseFormula('=[0]/[1]');
-		const result = evaluateFormula(parsed, [10, 0]);
-		expect(result).toBe(null);
-	});
-
-	it('returns null for missing column value', () => {
-		const parsed = parseFormula('=[0]*[1]');
-		const result = evaluateFormula(parsed, [10, null]);
-		expect(result).toBe(null);
-	});
-
-	it('handles subtraction', () => {
-		const parsed = parseFormula('=[0]-[1]');
-		const result = evaluateFormula(parsed, [100, 25]);
-		expect(result).toBe(75);
-	});
-
-	it('handles unary minus', () => {
-		const parsed = parseFormula('=-[0]');
-		const result = evaluateFormula(parsed, [50]);
-		expect(result).toBe(-50);
+		it('rejects unknown characters', () => {
+			const result = parseFormula('=A1@B1');
+			expect(result.isValid).toBe(false);
+			expect(result.error).toContain('Unexpected character');
+		});
 	});
 });
 
 describe('getDisplayFormula', () => {
-	it('converts indices to column names', () => {
-		const headers = ['Item', 'Qty', 'Rate', 'Total'];
-		const display = getDisplayFormula('=[1]*[2]', headers);
-		expect(display).toBe('Qty × Rate');
+	it('converts multiplication to ×', () => {
+		expect(getDisplayFormula('=B1*C2')).toBe('B1 × C2');
 	});
 
-	it('handles missing column names', () => {
-		const headers = ['A', 'B'];
-		const display = getDisplayFormula('=[1]*[5]', headers);
-		expect(display).toContain('Col 6');
+	it('converts division to ÷', () => {
+		expect(getDisplayFormula('=A1/B1')).toBe('A1 ÷ B1');
 	});
 
-	it('converts division operator', () => {
-		const headers = ['Total', 'Count'];
-		const display = getDisplayFormula('=[0]/[1]', headers);
-		expect(display).toBe('Total ÷ Count');
+	it('handles complex formulas', () => {
+		expect(getDisplayFormula('=B1*C2+D3/E4')).toBe('B1 × C2+D3 ÷ E4');
 	});
 
 	it('returns non-formulas unchanged', () => {
-		expect(getDisplayFormula('SUM', [])).toBe('SUM');
+		expect(getDisplayFormula('SUM')).toBe('SUM');
+		expect(getDisplayFormula('')).toBe('');
 	});
 });
 
 describe('hasCircularReference', () => {
 	it('detects self-reference', () => {
-		expect(hasCircularReference(1, '=[1]*[2]')).toBe(true);
-		expect(hasCircularReference(2, '=[1]*[2]')).toBe(true);
+		expect(hasCircularReference('=A1+B1', { col: 0, row: 0 })).toBe(true); // A1 refs itself
+		expect(hasCircularReference('=B2+C2', { col: 1, row: 1 })).toBe(true); // B2 refs itself
 	});
 
-	it('allows non-self-referencing formulas', () => {
-		expect(hasCircularReference(0, '=[1]*[2]')).toBe(false);
-		expect(hasCircularReference(3, '=[1]*[2]')).toBe(false);
+	it('allows references to other cells', () => {
+		expect(hasCircularReference('=A1+B1', { col: 2, row: 0 })).toBe(false); // C1 refs A1 and B1
+		expect(hasCircularReference('=B2*C2', { col: 3, row: 1 })).toBe(false); // D2 refs B2 and C2
+	});
+
+	it('handles invalid formulas', () => {
+		expect(hasCircularReference('invalid', { col: 0, row: 0 })).toBe(false);
 	});
 });
 
 describe('validateFormula', () => {
-	it('validates correct formula', () => {
-		expect(validateFormula('=[1]*[2]', 3, 4)).toBe(null);
+	it('validates correct formulas', () => {
+		expect(validateFormula('=B2*C2', { col: 3, row: 1 }, { cols: 5, rows: 5 })).toBeNull();
 	});
 
-	it('rejects circular reference', () => {
-		const error = validateFormula('=[1]*[2]', 1, 4);
-		expect(error).toContain('own column');
+	it('rejects circular references', () => {
+		const error = validateFormula('=A1+B1', { col: 0, row: 0 }, { cols: 5, rows: 5 });
+		expect(error).toContain('own cell');
 	});
 
-	it('rejects out-of-range column', () => {
-		const error = validateFormula('=[1]*[5]', 3, 4);
-		expect(error).toContain('does not exist');
+	it('rejects out-of-range columns', () => {
+		const error = validateFormula('=Z1', { col: 0, row: 0 }, { cols: 5, rows: 5 });
+		expect(error).toContain('outside the table');
+	});
+
+	it('rejects out-of-range rows', () => {
+		const error = validateFormula('=A100', { col: 0, row: 0 }, { cols: 5, rows: 5 });
+		expect(error).toContain('outside the table');
+	});
+
+	it('rejects invalid syntax', () => {
+		const error = validateFormula('invalid', { col: 0, row: 0 }, { cols: 5, rows: 5 });
+		expect(error).not.toBeNull();
 	});
 });
 
 describe('formatResult', () => {
-	it('formats numbers with 2 decimal places', () => {
-		expect(formatResult(123.456)).toBe('123.46');
-		expect(formatResult(100)).toBe('100.00');
+	it('formats positive numbers', () => {
+		expect(formatResult(1500)).toBe('1,500.00');
+		expect(formatResult(42)).toBe('42.00');
 	});
 
-	it('handles null', () => {
+	it('formats decimal numbers', () => {
+		expect(formatResult(3.14159)).toBe('3.14');
+		expect(formatResult(0.5)).toBe('0.50');
+	});
+
+	it('formats null as em dash', () => {
 		expect(formatResult(null)).toBe('—');
 	});
 
-	it('handles infinity', () => {
+	it('formats Infinity as Error', () => {
 		expect(formatResult(Infinity)).toBe('Error');
 		expect(formatResult(-Infinity)).toBe('Error');
+	});
+
+	it('formats NaN as Error', () => {
+		expect(formatResult(NaN)).toBe('Error');
+	});
+
+	it('formats large numbers with commas', () => {
+		expect(formatResult(1000000)).toBe('1,000,000.00');
+	});
+
+	it('formats negative numbers', () => {
+		expect(formatResult(-500)).toBe('-500.00');
 	});
 });

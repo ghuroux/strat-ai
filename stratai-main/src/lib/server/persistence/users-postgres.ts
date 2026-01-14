@@ -16,6 +16,8 @@ interface UserRow {
 	organizationId: string;
 	email: string;
 	username: string;
+	firstName: string | null;
+	lastName: string | null;
 	displayName: string | null;
 	passwordHash: string | null;
 	status: 'active' | 'inactive' | 'suspended';
@@ -35,6 +37,8 @@ function rowToUser(row: UserRow): User {
 		organizationId: row.organizationId,
 		email: row.email,
 		username: row.username,
+		firstName: row.firstName,
+		lastName: row.lastName,
 		displayName: row.displayName,
 		status: row.status,
 		lastLoginAt: row.lastLoginAt,
@@ -42,6 +46,14 @@ function rowToUser(row: UserRow): User {
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt
 	};
+}
+
+/**
+ * Compute display name from first and last name
+ */
+function computeDisplayName(firstName: string | null | undefined, lastName: string | null | undefined): string | null {
+	const parts = [firstName, lastName].filter(Boolean);
+	return parts.length > 0 ? parts.join(' ') : null;
 }
 
 export const postgresUserRepository: UserRepository = {
@@ -117,21 +129,28 @@ export const postgresUserRepository: UserRepository = {
 		organizationId: string;
 		email: string;
 		username: string;
+		firstName?: string;
+		lastName?: string;
 		displayName?: string;
 		passwordHash?: string;
 		status?: 'active' | 'inactive' | 'suspended';
 		settings?: Record<string, unknown>;
 	}): Promise<User> {
+		// Compute display name from first/last if not explicitly provided
+		const displayName = input.displayName ?? computeDisplayName(input.firstName, input.lastName);
+
 		const rows = await sql<UserRow[]>`
 			INSERT INTO users (
-				organization_id, email, username, display_name,
+				organization_id, email, username, first_name, last_name, display_name,
 				password_hash, status, settings
 			)
 			VALUES (
 				${input.organizationId},
 				${input.email},
 				${input.username},
-				${input.displayName || null},
+				${input.firstName || null},
+				${input.lastName || null},
+				${displayName},
 				${input.passwordHash || null},
 				${input.status || 'active'},
 				${sql.json((input.settings || {}) as JSONValue)}
@@ -149,6 +168,8 @@ export const postgresUserRepository: UserRepository = {
 		updates: {
 			email?: string;
 			username?: string;
+			firstName?: string | null;
+			lastName?: string | null;
 			displayName?: string | null;
 			passwordHash?: string;
 			status?: 'active' | 'inactive' | 'suspended';
@@ -162,7 +183,23 @@ export const postgresUserRepository: UserRepository = {
 		if (updates.username !== undefined) {
 			await sql`UPDATE users SET username = ${updates.username} WHERE id = ${id} AND deleted_at IS NULL`;
 		}
-		if (updates.displayName !== undefined) {
+		if (updates.firstName !== undefined) {
+			await sql`UPDATE users SET first_name = ${updates.firstName} WHERE id = ${id} AND deleted_at IS NULL`;
+		}
+		if (updates.lastName !== undefined) {
+			await sql`UPDATE users SET last_name = ${updates.lastName} WHERE id = ${id} AND deleted_at IS NULL`;
+		}
+		// Recompute displayName if firstName or lastName changed (unless displayName was explicitly set)
+		if ((updates.firstName !== undefined || updates.lastName !== undefined) && updates.displayName === undefined) {
+			// Need to fetch current values to compute new display name
+			const current = await this.findById(id);
+			if (current) {
+				const newFirstName = updates.firstName !== undefined ? updates.firstName : current.firstName;
+				const newLastName = updates.lastName !== undefined ? updates.lastName : current.lastName;
+				const newDisplayName = computeDisplayName(newFirstName, newLastName);
+				await sql`UPDATE users SET display_name = ${newDisplayName} WHERE id = ${id} AND deleted_at IS NULL`;
+			}
+		} else if (updates.displayName !== undefined) {
 			await sql`UPDATE users SET display_name = ${updates.displayName} WHERE id = ${id} AND deleted_at IS NULL`;
 		}
 		if (updates.passwordHash !== undefined) {

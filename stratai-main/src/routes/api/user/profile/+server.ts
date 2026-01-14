@@ -29,6 +29,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 				id: user.id,
 				email: user.email,
 				username: user.username,
+				firstName: user.firstName,
+				lastName: user.lastName,
 				displayName: user.displayName
 			}
 		});
@@ -43,7 +45,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 /**
  * PATCH /api/user/profile
- * Body: { displayName?: string }
+ * Body: { firstName?: string, lastName?: string }
  */
 export const PATCH: RequestHandler = async ({ request, locals }) => {
 	if (!locals.session) {
@@ -52,30 +54,51 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 
 	try {
 		const body = await request.json();
-		const updates: { displayName?: string | null } = {};
+		const updates: { firstName?: string | null; lastName?: string | null } = {};
 
-		// Validate and apply displayName if present
-		if (body.displayName !== undefined) {
-			if (body.displayName === null || body.displayName === '') {
-				updates.displayName = null;
-			} else if (typeof body.displayName === 'string') {
-				const trimmed = body.displayName.trim();
+		// Validate and apply firstName if present
+		if (body.firstName !== undefined) {
+			if (body.firstName === null || body.firstName === '') {
+				updates.firstName = null;
+			} else if (typeof body.firstName === 'string') {
+				const trimmed = body.firstName.trim();
 				if (trimmed.length > 100) {
 					return json(
-						{ error: { message: 'Display name too long (max 100 chars)', type: 'validation_error' } },
+						{ error: { message: 'First name too long (max 100 chars)', type: 'validation_error' } },
 						{ status: 400 }
 					);
 				}
-				updates.displayName = trimmed;
+				updates.firstName = trimmed;
 			} else {
 				return json(
-					{ error: { message: 'Invalid display name', type: 'validation_error' } },
+					{ error: { message: 'Invalid first name', type: 'validation_error' } },
 					{ status: 400 }
 				);
 			}
 		}
 
-		// Update user in database
+		// Validate and apply lastName if present
+		if (body.lastName !== undefined) {
+			if (body.lastName === null || body.lastName === '') {
+				updates.lastName = null;
+			} else if (typeof body.lastName === 'string') {
+				const trimmed = body.lastName.trim();
+				if (trimmed.length > 100) {
+					return json(
+						{ error: { message: 'Last name too long (max 100 chars)', type: 'validation_error' } },
+						{ status: 400 }
+					);
+				}
+				updates.lastName = trimmed;
+			} else {
+				return json(
+					{ error: { message: 'Invalid last name', type: 'validation_error' } },
+					{ status: 400 }
+				);
+			}
+		}
+
+		// Update user in database (displayName is auto-computed in repository)
 		const user = await postgresUserRepository.update(locals.session.userId, updates);
 
 		if (!user) {
@@ -87,6 +110,8 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 				id: user.id,
 				email: user.email,
 				username: user.username,
+				firstName: user.firstName,
+				lastName: user.lastName,
 				displayName: user.displayName
 			}
 		});

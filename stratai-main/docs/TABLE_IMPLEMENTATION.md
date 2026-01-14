@@ -4,7 +4,7 @@
 
 Roadmap for adding table functionality to the TipTap-based Pages editor, including optional calculation/formula support.
 
-**Status:** Phase 2 Complete
+**Status:** Phase 2 Complete, Phase 3 Redesigned (Ready for Development)
 **Created:** 2026-01-13
 **Updated:** 2026-01-13
 **Owner:** Product/Engineering
@@ -1898,270 +1898,646 @@ Add visual indicator when formula mode is active:
 
 ---
 
-### Phase 3: Advanced Formulas (Excel-like)
+### Phase 3: Excel-Like Formulas (Redesigned)
 
-**Goal:** Full spreadsheet formula support with cell references.
+**Status:** Ready for Development (Supersedes Phase 2.5 Index-Based Approach)
+**Goal:** Excel-familiar formulas with A1-style cell references, cross-row support, and a floating formula bar.
 
-**Complexity:** High (2-4 weeks)
-**Risk:** High - significant custom development
-**Dependencies:** Phase 1 (basic tables)
+**Complexity:** Medium-High (1-2 weeks)
+**Risk:** Medium - clean implementation without legacy baggage
+**Dependencies:** Phase 1 (basic tables), Phase 2 (total rows)
 
-**When to implement:** Only if strong user demand for complex calculations. Most users satisfied with Phase 2 totals.
+#### Design Philosophy
+
+**Excel familiarity over complexity.** Users know Excel - we should feel familiar while staying simple:
+- `=B1*C1` not `=[1]*[2]` (human-readable storage)
+- Cross-row references allowed (`=B1+C2`)
+- Constants work (`=2+2`, `=C1*0.15`)
+- Formula bar floats under table (unique, close proximity)
+- No `$A$1` absolute reference syntax (all refs are absolute by default)
+- No complex functions initially (no IF, VLOOKUP - just math)
 
 #### Features
 
-- Excel-like formula syntax: `=SUM(A1:A5)`, `=B2*C2`, `=IF(A1>100, "High", "Low")`
-- 100+ functions (SUM, AVERAGE, COUNT, IF, VLOOKUP, CONCATENATE, etc.)
-- Cell reference notation (A1, B2, C3:D10 ranges)
-- Formula bar above table (like Excel)
-- Auto-recalculation on dependencies
-- Circular reference detection and warning
-- Formula error handling (e.g., #DIV/0!, #REF!, #VALUE!)
+**3.1 Cell Reference System (A1 Notation)**
+- Columns: A, B, C, ... Z, AA, AB, ... (Excel standard)
+- Rows: 1, 2, 3, ... (1-indexed, matches Excel)
+- Examples: `A1`, `B3`, `C12`, `AA5`
+- All references are absolute (no relative copy behavior)
 
-#### Implementation Approach
+**3.2 Cross-Row References**
+- Formula in D2 can reference `B1`, `C3`, any cell
+- Example: `=B1+C2` is valid (sum cells from different rows)
+- Use case: Running totals, subtotals referencing specific cells
 
-**Use HyperFormula** (headless spreadsheet engine):
+**3.3 Constants and Operators**
+- Pure math: `=2+2` → `4`
+- Mixed: `=C1*0.15` → 15% of C1
+- Operators: `+`, `-`, `*`, `/`
+- Parentheses: `=(A1+A2)*B1` → proper precedence
+- Negative numbers: `=-5`, `=A1*-1`
 
-```bash
-npm install hyperformula@^2.8.0
+**3.4 Functions (Core Set)**
+| Function | Syntax | Example |
+|----------|--------|---------|
+| SUM | `=SUM(A1:A5)` | Sum range |
+| AVG | `=AVG(B1:B10)` | Average range |
+| COUNT | `=COUNT(A:A)` | Count numeric cells in column |
+| MIN | `=MIN(A1:A5)` | Minimum value |
+| MAX | `=MAX(A1:A5)` | Maximum value |
+
+**Future Functions (V2):**
+| Function | Syntax | Notes |
+|----------|--------|-------|
+| ROUND | `=ROUND(A1, 2)` | Round to N decimals |
+| ABS | `=ABS(A1)` | Absolute value |
+
+**3.5 Formula Bar (Floating Under Table)**
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ Table                                                       │
+├─────────┬─────────┬─────────┬─────────────────────────────┤
+│ Item    │ Qty     │ Rate    │ Total                        │
+├─────────┼─────────┼─────────┼─────────────────────────────┤
+│ Widget  │ 10      │ 150.00  │ 1,500.00                     │ ← Shows result
+│ Gadget  │ 5       │ 200.00  │ 1,000.00                     │
+├─────────┼─────────┼─────────┼─────────────────────────────┤
+│ Total   │         │         │ 2,500.00                     │
+└─────────┴─────────┴─────────┴─────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│ D2  │ fx │  =B2*C2                                         │ ← Formula bar
+└────────────────────────────────────────────────────────────┘
+        ↑ Shows when cell selected, floats directly under table
 ```
 
-**Architecture:**
+**Formula Bar UX:**
+- Appears when any table cell is selected
+- Floats directly under the table (close proximity = better UX)
+- Shows: Cell reference (D2) | fx icon | Formula or value
+- Edit in bar OR directly in cell (both work)
+- Enter to confirm, Escape to cancel
+- Disappears when clicking outside table
+
+**Why Under (Not Above)?**
+- Closer to the action (less eye travel)
+- Unique differentiation from Excel
+- Natural reading flow (top-down)
+- Doesn't push content up when appearing
+
+#### Data Model
+
+**Cell Formula Storage:**
 
 ```typescript
-// 1. Create cell registry (position → ID mapping)
-const cellRegistry = new Map<string, CellPosition>();
-// A1 → { row: 0, col: 0 }
+interface FormulaCellAttrs {
+  // Formula stored as typed (human-readable)
+  formula?: string;              // e.g., "=B1*C1", "=SUM(A1:A5)", "=2+2"
 
-// 2. Initialize HyperFormula instance
-const hf = HyperFormula.buildFromArray([
-  ['100', '200', '=A1+B1'],
-  ['150', '250', '=SUM(A1:B2)']
-]);
+  // Styling (from Phase 2.5)
+  backgroundColor?: string;      // "blue" | "green" | "amber" | null
 
-// 3. On cell edit → update HyperFormula → get results → update TipTap content
-hf.setCellContents({ col: 0, row: 0, sheet: 0 }, [['150']]);
-const result = hf.getCellValue({ col: 2, row: 0, sheet: 0 });
+  // Existing TipTap attributes
+  colspan?: number;
+  rowspan?: number;
+  colwidth?: number[];
+}
 
-// 4. Sync TipTap content with calculated results
-```
-
-**Custom Extension:** Create `FormulaTableCell` that:
-- Stores formula in `formula` attribute
-- Displays result in text content
-- Shows formula in UI when selected
-- Updates on recalculation events
-
-#### Implementation Steps
-
-**Step 3.1: Install HyperFormula**
-```bash
-npm install hyperformula@^2.8.0
-```
-
-**Step 3.2: Create Formula Service**
-
-Create `src/lib/services/formula-engine.ts` (wrapper around HyperFormula):
-
-```typescript
-import { HyperFormula, SimpleCellAddress } from 'hyperformula';
-
-export class FormulaEngine {
-  private hf: HyperFormula;
-  private cellMap: Map<string, SimpleCellAddress>;
-
-  constructor() {
-    this.hf = HyperFormula.buildEmpty();
-    this.cellMap = new Map();
-  }
-
-  // Convert table JSON to HyperFormula 2D array
-  loadTable(tableNode: any): void { ... }
-
-  // Update cell formula
-  setFormula(cellRef: string, formula: string): void { ... }
-
-  // Get calculated value
-  getValue(cellRef: string): any { ... }
-
-  // Recalculate all formulas
-  recalculate(): void { ... }
-
-  // Check for errors
-  hasError(cellRef: string): boolean { ... }
+// Example storage in TipTap JSON:
+{
+  "type": "tableCell",
+  "attrs": {
+    "formula": "=B2*C2"
+  },
+  "content": [
+    { "type": "paragraph", "content": [{ "type": "text", "text": "1500.00" }] }
+  ]
 }
 ```
 
-**Step 3.3: Create FormulaBar Component**
+**Why Store As Typed (Not Index-Based)?**
 
-Create `src/lib/components/pages/FormulaBar.svelte`:
+| Storage | Pros | Cons |
+|---------|------|------|
+| Index-based (`=[1]*[2]`) | Survives renames | Hard to read, debug; column delete breaks |
+| As-typed (`=B1*C1`) | Human-readable, debuggable | Column insert/delete shifts references |
 
-```svelte
-<script lang="ts">
-  let { editor, selectedCell } = $props<{
-    editor: Editor;
-    selectedCell: { row: number; col: number } | null;
-  }>();
+**Decision: Store as typed.** Reasoning:
+1. Tables in Pages are small (not spreadsheets) - reference shifts rare
+2. Debugging is easier when formula matches display
+3. Export to CSV/Excel is natural (no conversion)
+4. Column operations can update formulas (like Excel does)
 
-  let formula = $state('');
-  let cellRef = $derived(selectedCell ? `${getColumnLetter(selectedCell.col)}${selectedCell.row + 1}` : null);
+#### Cell Reference Utilities
 
-  // Sync formula when cell selected
-  $effect(() => {
-    if (selectedCell) {
-      formula = getCellFormula(editor, selectedCell) || '';
-    }
-  });
-
-  function handleFormulaChange() {
-    if (!selectedCell) return;
-    updateCellFormula(editor, selectedCell, formula);
+```typescript
+/**
+ * Convert column index (0-based) to letter (A, B, ... Z, AA, AB)
+ */
+export function columnIndexToLetter(index: number): string {
+  let letter = '';
+  while (index >= 0) {
+    letter = String.fromCharCode((index % 26) + 65) + letter;
+    index = Math.floor(index / 26) - 1;
   }
-</script>
+  return letter;
+}
 
-<div class="formula-bar">
-  <span class="cell-ref">{cellRef || '—'}</span>
-  <input
-    type="text"
-    class="formula-input"
-    bind:value={formula}
-    onchange={handleFormulaChange}
-    placeholder={selectedCell ? "Enter value or =formula" : "Select a cell"}
-    disabled={!selectedCell}
-  />
-</div>
+/**
+ * Convert column letter to index (0-based)
+ */
+export function columnLetterToIndex(letter: string): number {
+  let index = 0;
+  for (let i = 0; i < letter.length; i++) {
+    index = index * 26 + (letter.charCodeAt(i) - 64);
+  }
+  return index - 1;
+}
+
+/**
+ * Parse cell reference "B3" → { col: 1, row: 2 } (0-indexed internally)
+ */
+export function parseCellRef(ref: string): { col: number; row: number } | null {
+  const match = ref.match(/^([A-Z]+)(\d+)$/);
+  if (!match) return null;
+  return {
+    col: columnLetterToIndex(match[1]),
+    row: parseInt(match[2], 10) - 1  // Convert to 0-indexed
+  };
+}
+
+/**
+ * Build cell reference { col: 1, row: 2 } → "B3"
+ */
+export function buildCellRef(col: number, row: number): string {
+  return `${columnIndexToLetter(col)}${row + 1}`;
+}
+
+// Examples:
+// columnIndexToLetter(0) → "A"
+// columnIndexToLetter(25) → "Z"
+// columnIndexToLetter(26) → "AA"
+// parseCellRef("B3") → { col: 1, row: 2 }
+// buildCellRef(1, 2) → "B3"
 ```
 
-**Step 3.4: Integrate into PageEditor**
+#### Formula Parser (Enhanced)
 
-- Add FormulaBar above editor
+```typescript
+export interface ParsedFormula {
+  type: 'expression' | 'function' | 'constant' | 'invalid';
+  cellRefs: string[];           // All cell references found (["B1", "C1"])
+  rangeRefs: string[];          // All range references found (["A1:A5"])
+  isValid: boolean;
+  error?: string;
+}
+
+/**
+ * Parse formula and extract references
+ *
+ * @example parseFormula('=B1*C1') → { cellRefs: ['B1', 'C1'], isValid: true }
+ * @example parseFormula('=SUM(A1:A5)') → { rangeRefs: ['A1:A5'], isValid: true }
+ * @example parseFormula('=2+2') → { cellRefs: [], isValid: true, type: 'constant' }
+ */
+export function parseFormula(formula: string): ParsedFormula {
+  if (!formula.startsWith('=')) {
+    return { type: 'invalid', cellRefs: [], rangeRefs: [], isValid: false, error: 'Must start with =' };
+  }
+
+  const expr = formula.slice(1); // Remove leading =
+
+  // Extract cell references (A1, B23, AA5)
+  const cellRefPattern = /\b([A-Z]+)(\d+)\b/g;
+  const cellRefs: string[] = [];
+  let match;
+  while ((match = cellRefPattern.exec(expr)) !== null) {
+    cellRefs.push(match[0]);
+  }
+
+  // Extract range references (A1:A5, B1:D10)
+  const rangeRefPattern = /([A-Z]+\d+):([A-Z]+\d+)/g;
+  const rangeRefs: string[] = [];
+  while ((match = rangeRefPattern.exec(expr)) !== null) {
+    rangeRefs.push(match[0]);
+  }
+
+  // Detect function calls
+  const functionPattern = /^(SUM|AVG|COUNT|MIN|MAX|ROUND|ABS)\s*\(/i;
+  const isFunction = functionPattern.test(expr);
+
+  // Detect pure constant (no cell refs)
+  const isConstant = cellRefs.length === 0 && rangeRefs.length === 0;
+
+  return {
+    type: isFunction ? 'function' : isConstant ? 'constant' : 'expression',
+    cellRefs,
+    rangeRefs,
+    isValid: true
+  };
+}
+```
+
+#### Formula Evaluation Engine
+
+```typescript
+/**
+ * Evaluate formula against table data
+ *
+ * @param formula - The formula string (e.g., "=B1*C1")
+ * @param tableData - 2D array of cell values (numbers or null)
+ * @param currentCell - The cell containing the formula (for circular ref check)
+ */
+export function evaluateFormula(
+  formula: string,
+  tableData: (number | null)[][],
+  currentCell: { col: number; row: number }
+): { value: number | null; error?: string } {
+
+  const parsed = parseFormula(formula);
+  if (!parsed.isValid) {
+    return { value: null, error: parsed.error };
+  }
+
+  // Check for self-reference (simple circular check)
+  const currentRef = buildCellRef(currentCell.col, currentCell.row);
+  if (parsed.cellRefs.includes(currentRef)) {
+    return { value: null, error: 'Circular reference' };
+  }
+
+  let expr = formula.slice(1); // Remove =
+
+  // Handle functions first
+  if (parsed.type === 'function') {
+    return evaluateFunction(expr, tableData);
+  }
+
+  // Replace cell references with values
+  for (const ref of parsed.cellRefs) {
+    const pos = parseCellRef(ref);
+    if (!pos) continue;
+
+    const value = tableData[pos.row]?.[pos.col];
+    if (value === null || value === undefined) {
+      expr = expr.replace(new RegExp(`\\b${ref}\\b`, 'g'), '0');
+    } else {
+      expr = expr.replace(new RegExp(`\\b${ref}\\b`, 'g'), String(value));
+    }
+  }
+
+  // Evaluate math expression safely
+  try {
+    // Use Function constructor for safe eval (no access to scope)
+    const result = new Function(`return (${expr})`)();
+
+    if (typeof result !== 'number' || !isFinite(result)) {
+      return { value: null, error: 'Invalid result' };
+    }
+
+    return { value: result };
+  } catch (e) {
+    return { value: null, error: 'Syntax error' };
+  }
+}
+
+/**
+ * Evaluate function formulas (SUM, AVG, etc.)
+ */
+function evaluateFunction(
+  expr: string,
+  tableData: (number | null)[][]
+): { value: number | null; error?: string } {
+
+  const sumMatch = expr.match(/^SUM\s*\(([A-Z]+\d+):([A-Z]+\d+)\)$/i);
+  if (sumMatch) {
+    const start = parseCellRef(sumMatch[1]);
+    const end = parseCellRef(sumMatch[2]);
+    if (!start || !end) return { value: null, error: 'Invalid range' };
+
+    let sum = 0;
+    for (let r = start.row; r <= end.row; r++) {
+      for (let c = start.col; c <= end.col; c++) {
+        const val = tableData[r]?.[c];
+        if (val !== null && val !== undefined) sum += val;
+      }
+    }
+    return { value: sum };
+  }
+
+  const avgMatch = expr.match(/^AVG\s*\(([A-Z]+\d+):([A-Z]+\d+)\)$/i);
+  if (avgMatch) {
+    const start = parseCellRef(avgMatch[1]);
+    const end = parseCellRef(avgMatch[2]);
+    if (!start || !end) return { value: null, error: 'Invalid range' };
+
+    const values: number[] = [];
+    for (let r = start.row; r <= end.row; r++) {
+      for (let c = start.col; c <= end.col; c++) {
+        const val = tableData[r]?.[c];
+        if (val !== null && val !== undefined) values.push(val);
+      }
+    }
+    if (values.length === 0) return { value: null, error: 'No values' };
+    return { value: values.reduce((a, b) => a + b, 0) / values.length };
+  }
+
+  // Add COUNT, MIN, MAX similarly...
+
+  return { value: null, error: 'Unknown function' };
+}
+```
+
+#### Formula Bar Component
+
+```svelte
+<!-- src/lib/components/pages/TableFormulaBar.svelte -->
+<script lang="ts">
+  import { buildCellRef } from '$lib/services/formula-engine';
+
+  interface Props {
+    selectedCell: { col: number; row: number } | null;
+    formula: string;
+    onFormulaChange: (formula: string) => void;
+    onConfirm: () => void;
+    onCancel: () => void;
+  }
+
+  let { selectedCell, formula, onFormulaChange, onConfirm, onCancel }: Props = $props();
+
+  let cellRef = $derived(selectedCell ? buildCellRef(selectedCell.col, selectedCell.row) : '');
+  let inputElement: HTMLInputElement;
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      onConfirm();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onCancel();
+    }
+  }
+
+  // Focus input when cell selected
+  $effect(() => {
+    if (selectedCell && inputElement) {
+      inputElement.focus();
+    }
+  });
+</script>
+
+{#if selectedCell}
+  <div class="formula-bar">
+    <span class="cell-ref">{cellRef}</span>
+    <span class="fx-icon">fx</span>
+    <input
+      bind:this={inputElement}
+      type="text"
+      class="formula-input"
+      value={formula}
+      oninput={(e) => onFormulaChange(e.currentTarget.value)}
+      onkeydown={handleKeydown}
+      placeholder="Enter value or formula (e.g., =B1*C1)"
+    />
+  </div>
+{/if}
+
+<style>
+  .formula-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--editor-bg-secondary);
+    border: 1px solid var(--editor-border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    font-family: 'SF Mono', 'Monaco', monospace;
+    font-size: 0.875rem;
+  }
+
+  .cell-ref {
+    min-width: 2.5rem;
+    padding: 0.25rem 0.5rem;
+    background: var(--editor-bg);
+    border-radius: 4px;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .fx-icon {
+    font-style: italic;
+    color: var(--color-primary-500);
+    font-weight: 600;
+  }
+
+  .formula-input {
+    flex: 1;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--editor-border);
+    border-radius: 4px;
+    background: var(--editor-bg);
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  .formula-input:focus {
+    outline: none;
+    border-color: var(--color-primary-500);
+    box-shadow: 0 0 0 2px var(--color-primary-100);
+  }
+</style>
+```
+
+#### Implementation Steps
+
+**Step 3.1: Cell Reference Utilities (0.5 days)**
+- Create `src/lib/services/cell-references.ts`
+- Implement `columnIndexToLetter`, `columnLetterToIndex`, `parseCellRef`, `buildCellRef`
+- Add unit tests
+
+**Step 3.2: Formula Parser Enhancement (1 day)**
+- Update `src/lib/services/formula-parser.ts`
+- Support A1-style references (not just `[n]` indices)
+- Support range syntax (A1:A5)
+- Support function calls (SUM, AVG, COUNT, MIN, MAX)
+- Support constants and parentheses
+
+**Step 3.3: Formula Evaluation Engine (1-2 days)**
+- Create `src/lib/services/formula-engine.ts`
+- Implement `evaluateFormula` with A1 references
+- Implement function evaluation (SUM, AVG, COUNT, MIN, MAX)
+- Handle circular reference detection
+- Handle divide-by-zero and errors
+
+**Step 3.4: Formula Bar Component (1 day)**
+- Create `src/lib/components/pages/TableFormulaBar.svelte`
+- Floating under table design
+- Cell reference display, fx icon, input field
+- Enter to confirm, Escape to cancel
+
+**Step 3.5: PageEditor Integration (1-2 days)**
 - Track selected cell position
-- Sync formula on cell selection
-- Recalculate on content update
-- Display errors in cell (red background, #VALUE! text)
+- Show/hide formula bar on table cell selection
+- Sync formula bar with cell content
+- Handle formula confirmation → evaluate → update cell
+- Real-time recalculation when dependencies change
 
-**Step 3.5: Add Formula Button Dropdown**
+**Step 3.6: Cell Highlighting During Edit (0.5 days)**
+- When editing formula, highlight referenced cells
+- Blue background on cells mentioned in formula
+- Visual connection between formula and data
 
-Add to toolbar: Dropdown with common formulas:
-- SUM
-- AVERAGE
-- COUNT
-- MIN
-- MAX
-- IF
-- CONCATENATE
+#### Edge Cases and Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| Self-reference (`=A1` in cell A1) | Error: "Circular reference" |
+| Reference outside table | Error: "Invalid reference" |
+| Divide by zero | Error: "Division by zero" |
+| Empty referenced cell | Treat as 0 |
+| Non-numeric text in referenced cell | Treat as 0, show warning |
+| Invalid syntax | Error: "Syntax error" |
+| Column insert/delete | Update formula references (like Excel) |
+| Row insert/delete | Update formula references (like Excel) |
 
 #### Acceptance Criteria - Phase 3
 
 **Automated Tests:**
 
-1. **HyperFormula installed**
-   ```bash
-   npm list hyperformula
+1. **Cell reference utilities**
+   ```typescript
+   // src/lib/services/cell-references.test.ts
+   describe('Cell References', () => {
+     it('converts column index to letter', () => {
+       expect(columnIndexToLetter(0)).toBe('A');
+       expect(columnIndexToLetter(25)).toBe('Z');
+       expect(columnIndexToLetter(26)).toBe('AA');
+     });
+
+     it('parses cell references', () => {
+       expect(parseCellRef('B3')).toEqual({ col: 1, row: 2 });
+       expect(parseCellRef('AA10')).toEqual({ col: 26, row: 9 });
+     });
+   });
    ```
-   Expected: ^2.8.0
 
-2. **Formula service exists**
-   ```bash
-   ls src/lib/services/formula-engine.ts
+2. **Formula evaluation**
+   ```typescript
+   describe('Formula Evaluation', () => {
+     const tableData = [
+       [100, 200, null],  // Row 1
+       [10, 150, null],   // Row 2
+       [5, 200, null],    // Row 3
+     ];
+
+     it('evaluates simple math', () => {
+       const result = evaluateFormula('=2+2', tableData, { col: 2, row: 0 });
+       expect(result.value).toBe(4);
+     });
+
+     it('evaluates cell reference multiplication', () => {
+       const result = evaluateFormula('=B2*C2', tableData, { col: 3, row: 1 });
+       // B2 = 10, C2 = 150 → 1500
+       expect(result.value).toBe(1500);
+     });
+
+     it('evaluates cross-row references', () => {
+       const result = evaluateFormula('=A1+B2', tableData, { col: 2, row: 0 });
+       // A1 = 100, B2 = 10 → 110
+       expect(result.value).toBe(110);
+     });
+
+     it('evaluates SUM function', () => {
+       const result = evaluateFormula('=SUM(A1:A3)', tableData, { col: 3, row: 0 });
+       // 100 + 10 + 5 = 115
+       expect(result.value).toBe(115);
+     });
+
+     it('detects circular reference', () => {
+       const result = evaluateFormula('=A1+B1', tableData, { col: 0, row: 0 });
+       expect(result.error).toBe('Circular reference');
+     });
+   });
    ```
 
-3. **TypeScript compilation passes**
+3. **TypeScript compilation**
    ```bash
-   cd stratai-main && npm run check
+   npm run check  # 0 errors
    ```
-
-**Unit Tests** (create in `src/lib/services/formula-engine.test.ts`):
-
-```typescript
-import { describe, it, expect } from 'vitest';
-import { calculateFormula } from './table-calculations';
-
-describe('Table Calculations', () => {
-  it('calculates SUM correctly', () => {
-    const table = createMockTable([['100'], ['200'], ['300']]);
-    expect(calculateFormula(table, 0, 'SUM')).toBe(600);
-  });
-
-  it('calculates AVERAGE correctly', () => {
-    const table = createMockTable([['100'], ['200'], ['300']]);
-    expect(calculateFormula(table, 0, 'AVG')).toBe(200);
-  });
-
-  it('ignores non-numeric values', () => {
-    const table = createMockTable([['100'], ['N/A'], ['200']]);
-    expect(calculateFormula(table, 0, 'SUM')).toBe(300);
-  });
-
-  it('handles empty cells', () => {
-    const table = createMockTable([['100'], [''], ['200']]);
-    expect(calculateFormula(table, 0, 'SUM')).toBe(300);
-  });
-});
-```
 
 **Manual Tests:**
 
-1. **Cell reference formulas**
-   - Create 3×3 table
-   - Enter "100" in A1
-   - Enter "200" in A2
-   - Enter "=A1+A2" in A3
-   - Verify A3 shows "300"
+1. **Basic cell references**
+   - Create table with data in B2 (10) and C2 (150)
+   - Click D2, type `=B2*C2`
+   - Press Enter
+   - ✅ D2 shows "1500"
+   - ✅ Formula bar shows "=B2*C2" when D2 selected
 
-2. **Range formulas**
-   - Enter values in A1:A5
-   - Enter "=SUM(A1:A5)" in A6
-   - Verify sum is correct
-   - Change value in A3
-   - Verify A6 updates automatically
+2. **Cross-row references**
+   - Enter value in B1 (100)
+   - Enter value in C2 (50)
+   - Click D3, type `=B1+C2`
+   - ✅ D3 shows "150"
 
-3. **Cross-column formulas**
-   - Enter "100" in A1, "2" in B1
-   - Enter "=A1*B1" in C1
-   - Verify C1 shows "200"
+3. **Constants**
+   - Click empty cell
+   - Type `=2+2`
+   - ✅ Cell shows "4"
+   - Type `=100*0.15`
+   - ✅ Cell shows "15"
 
-4. **IF function**
-   - Enter "150" in A1
-   - Enter "=IF(A1>100, 'High', 'Low')" in B1
-   - Verify B1 shows "High"
-   - Change A1 to "50"
-   - Verify B1 updates to "Low"
+4. **Parentheses / Operator precedence**
+   - Enter `=2+3*4`
+   - ✅ Shows "14" (not 20 - multiplication first)
+   - Enter `=(2+3)*4`
+   - ✅ Shows "20"
 
-5. **Error handling**
-   - Enter "=A1/0" (divide by zero)
-   - Verify shows "#DIV/0!" error
-   - Enter "=XYZ123" (invalid reference)
-   - Verify shows "#REF!" error
+5. **SUM function**
+   - Enter values in A1:A5 (10, 20, 30, 40, 50)
+   - In A6, type `=SUM(A1:A5)`
+   - ✅ Shows "150"
+   - Change A3 to 100
+   - ✅ A6 updates to "220"
 
-6. **Formula bar**
-   - Click cell with formula
-   - Verify formula bar shows formula (not result)
-   - Click cell with value
-   - Verify formula bar shows value
+6. **Formula bar interaction**
+   - Click any table cell
+   - ✅ Formula bar appears under table
+   - ✅ Shows cell reference (e.g., "B2")
+   - ✅ Shows fx icon
+   - ✅ Input shows value or formula
+   - Click outside table
+   - ✅ Formula bar disappears
 
-7. **Circular references**
-   - Enter "=B1" in A1
-   - Enter "=A1" in B1
-   - Verify circular reference detected
-   - Verify error message shown
+7. **Real-time recalculation**
+   - Create formula `=B2*C2` in D2
+   - Change B2 from 10 to 20
+   - ✅ D2 immediately updates (1500 → 3000)
 
-8. **Performance**
-   - Create 20×20 table with formulas
-   - Edit values
-   - Verify recalculation happens quickly (<100ms)
-   - Verify no UI lag
+8. **Error handling**
+   - Type `=A1/0` where A1 references a cell with 0
+   - ✅ Shows "Error" or "#DIV/0!"
+   - Type `=XYZ999` (invalid ref)
+   - ✅ Shows "Invalid reference"
+
+9. **Persistence**
+   - Create table with formulas
+   - Save page
+   - Reload page
+   - ✅ Formulas evaluate correctly
+   - ✅ Formula bar shows formulas when cells selected
 
 **Success Criteria:**
-- ✅ All Phase 1 & 2 features work
-- ✅ Cell reference formulas calculate correctly
-- ✅ Range formulas (A1:A5) work
-- ✅ Auto-recalculation on dependencies
-- ✅ Formula bar shows formulas when cell selected
-- ✅ Errors handled gracefully (#DIV/0!, #REF!, etc.)
+- ✅ A1-style cell references work (B2, C3, AA5)
+- ✅ Cross-row references work (=B1+C2)
+- ✅ Constants work (=2+2)
+- ✅ Mixed expressions work (=B2*0.15)
+- ✅ Parentheses for precedence (=(A1+A2)*B1)
+- ✅ Core functions work (SUM, AVG, COUNT, MIN, MAX)
+- ✅ Formula bar floats under table
+- ✅ Real-time recalculation on dependency change
 - ✅ Circular references detected
-- ✅ Performance acceptable (<100ms recalculation)
-- ✅ Formulas persist on save/reload
+- ✅ Errors displayed gracefully
+- ✅ All data persists on save/reload
 
 ---
 
@@ -2262,11 +2638,20 @@ Instead of extending TipTap tables, consider:
 - Read-only formula cells (contenteditable=false)
 - Visual styling for total rows (bold, background, ∑ prefix)
 
-### Future (On Demand)
-⏸️ **Phase 3: Advanced Formulas**
-- Only if Phase 2 proves insufficient
-- Consider if users need complex calculations
-- Evaluate Handsontable alternative at this point
+### Ready for Development
+🔜 **Phase 3: Excel-Like Formulas (Redesigned)**
+- A1-style cell references (B2, C3, AA5)
+- Cross-row references (`=B1+C2`)
+- Constants and math (`=2+2`, `=B2*0.15`)
+- Core functions: SUM, AVG, COUNT, MIN, MAX
+- Formula bar floating under table
+- No external dependencies (custom lightweight parser)
+- Estimated: 1-2 weeks
+
+### Future (V2)
+⏸️ **Additional Functions**
+- ROUND, ABS if demand warrants
+- More complex functions only if users need them
 
 ---
 
@@ -2314,13 +2699,21 @@ Instead of extending TipTap tables, consider:
 |------|----------|-----------|
 | 2026-01-13 | Phased approach (basic → totals → formulas) | Incremental value delivery, validate demand before complexity |
 | 2026-01-13 | Start with TipTap extension (not separate component) | Maintains unified editing experience |
-| 2026-01-13 | Use HyperFormula for Phase 3 | Most complete formula engine, Excel-compatible |
-| 2026-01-13 | Store formulas by column index, display by name | Survives column renames; only deletion breaks formulas |
-| 2026-01-13 | Click-to-build over typed formulas | More intuitive UX, eliminates syntax errors |
+| 2026-01-13 | ~~Use HyperFormula for Phase 3~~ | ~~Most complete formula engine, Excel-compatible~~ |
+| 2026-01-13 | ~~Store formulas by column index, display by name~~ | ~~Survives column renames; only deletion breaks formulas~~ |
+| 2026-01-13 | ~~Click-to-build over typed formulas~~ | ~~More intuitive UX, eliminates syntax errors~~ |
 | 2026-01-13 | Prevent circular refs in UI (disable current cell) | Better UX than error recovery after the fact |
 | 2026-01-13 | Outside click saves partial formula | Less frustrating than losing work; can edit to complete |
 | 2026-01-13 | ∑ prefix optional (default off) | Clean professional appearance for proposals |
 | 2026-01-13 | Implementation order: colors → styling → parser → UX | Quick wins first, validates approach before complex work |
+| 2026-01-13 | **Excel-like A1 notation** (supersedes index-based) | Users know Excel; `=B1*C1` is readable, debuggable |
+| 2026-01-13 | **Store formulas as typed** (not index-based) | Human-readable, export-friendly; tables are small anyway |
+| 2026-01-13 | **Cross-row references allowed** | Enables subtotals, running totals, flexible calculations |
+| 2026-01-13 | **Constants allowed** (`=2+2`) | Natural expectation from users; pure math expressions valid |
+| 2026-01-13 | **Formula bar under table** (not above) | Closer proximity, unique UX, natural reading flow |
+| 2026-01-13 | **All refs absolute** (no $A$1 style) | Simplicity over Excel parity; relative refs add complexity |
+| 2026-01-13 | **Core functions only** (SUM, AVG, COUNT, MIN, MAX) | Start simple; add ROUND, ABS later based on demand |
+| 2026-01-13 | **No HyperFormula dependency** | Custom parser is simpler, lighter; tables aren't spreadsheets |
 
 ---
 
@@ -2332,32 +2725,43 @@ Instead of extending TipTap tables, consider:
    **Decision:** Yes, per-column formula selection (more flexible)
 
 2. ~~How to handle formula UI?~~
-   **Decision:** Click-to-build for row formulas (intuitive), picker modal for column formulas (SUM, AVG, etc.)
+   ~~**Decision:** Click-to-build for row formulas (intuitive), picker modal for column formulas (SUM, AVG, etc.)~~
+   **Updated:** Direct typing with formula bar under table (Excel-familiar UX)
 
 3. ~~Should formulas be visible to non-technical users?~~
-   **Decision:** Show display formula (column names like "=Qty × Rate"), hide internal format (indices like "=[1]*[2]")
+   ~~**Decision:** Show display formula (column names like "=Qty × Rate"), hide internal format (indices like "=[1]*[2]")~~
+   **Updated:** Store and display formulas as typed (`=B1*C1`) - human-readable throughout
+
+4. ~~Row formula operators - parentheses support?~~
+   **Decision:** Yes - full operator precedence with parentheses (`=(A1+A2)*B1`)
+
+5. ~~Formula reference style?~~
+   **Decision:** A1 notation with cross-row support; all references absolute (no $A$1)
+
+6. ~~Formula bar position?~~
+   **Decision:** Floats under table (closer proximity, unique UX)
 
 **Open:**
 
-4. **What's the maximum table size we support?**
+7. **What's the maximum table size we support?**
    - Recommend: 50 rows × 20 columns
    - Hard limit: 100 rows × 50 columns
    - Performance testing needed during implementation
 
-5. **Should we support CSV import/export for tables?**
+8. **Should we support CSV import/export for tables?**
    - Useful for data transfer from spreadsheets
    - Could leverage existing export infrastructure
    - Lower priority than core formula functionality
 
-6. **Row formula operators - parentheses support?**
-   - V1: No parentheses, left-to-right evaluation (e.g., `1+2*3` = 9, not 7)
-   - V2: Consider adding if user demand requires complex expressions
-   - Recommendation: Keep V1 simple, document behavior
-
-7. **Multi-cell selection for color application?**
+9. **Multi-cell selection for color application?**
    - V1: Single cell only (click cell, then color)
    - V2: Consider range selection (Shift+click) and "Apply to row" option
    - Recommendation: Start with single cell, add range later based on feedback
+
+10. **Formula reference updates on column/row insert/delete?**
+    - Expected Excel-like behavior (references shift)
+    - Requires tracking and updating formula strings
+    - Consider as part of Phase 3 implementation
 
 ---
 
@@ -2378,12 +2782,14 @@ Instead of extending TipTap tables, consider:
 - `src/lib/components/pages/EditorToolbar.svelte` - Formatting toolbar
 - `src/lib/types/page.ts` - TipTap content types
 
-**Future Files (to create):**
-- `src/lib/components/pages/extensions/TotalRow.ts` (Phase 2)
-- `src/lib/components/pages/extensions/FormulaCell.ts` (Phase 2)
-- `src/lib/services/table-calculations.ts` (Phase 2)
-- `src/lib/services/formula-engine.ts` (Phase 3)
-- `src/lib/components/pages/FormulaBar.svelte` (Phase 3)
+**Existing Files (Phase 2):**
+- `src/lib/services/table-calculations.ts` - Column totals (SUM, AVG, etc.)
+- `src/lib/services/formula-parser.ts` - Legacy index-based parser
+
+**Phase 3 Files (to create):**
+- `src/lib/services/cell-references.ts` - A1 notation utilities
+- `src/lib/services/formula-engine.ts` - Excel-like formula evaluation
+- `src/lib/components/pages/TableFormulaBar.svelte` - Floating formula bar
 
 **Documentation:**
 - `docs/DOCUMENT_SYSTEM.md` - Pages architecture (renamed from Documents)

@@ -8,8 +8,9 @@
  * - Space lookup by slug
  */
 
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
+import type { SpaceMembershipWithUser, SpaceRole } from '$lib/types/space-memberships';
 
 class SpacesStore {
 	// Space cache by ID
@@ -27,6 +28,26 @@ class SpacesStore {
 
 	// Track if spaces have been loaded
 	private loaded = $state(false);
+
+	// ============================================
+	// MEMBER MANAGEMENT STATE
+	// ============================================
+
+	// Member cache by space ID
+	membersBySpaceId = new SvelteMap<string, SpaceMembershipWithUser[]>();
+
+	// Track which spaces have had members loaded
+	private membersLoadedSet = new SvelteSet<string>();
+
+	// Loading state per space
+	private membersLoading = new SvelteMap<string, boolean>();
+
+	// Member-specific errors
+	lastMemberError = $state<string | null>(null);
+	lastMemberErrorData = $state<{ code: string; [key: string]: unknown } | null>(null);
+
+	// Member version counter for reactivity
+	private _memberVersion = $state(0);
 
 	/**
 	 * Load all spaces (system + custom)
@@ -257,6 +278,190 @@ class SpacesStore {
 		return Array.from(this.spaces.values()).filter((s) => s.type === 'custom').length;
 	}
 
+	// ============================================
+	// MEMBER MANAGEMENT FUNCTIONS
+	// ============================================
+
+	/**
+	 * Load members for a space
+	 */
+	async loadMembers(spaceId: string, forceReload = false): Promise<void> {
+		// Skip if already loaded and not forcing reload
+		if (!forceReload && this.membersLoadedSet.has(spaceId)) {
+			return;
+		}
+
+		this.membersLoading.set(spaceId, true);
+		this.lastMemberError = null;
+		this.lastMemberErrorData = null;
+
+		try {
+			const response = await fetch(`/api/spaces/${spaceId}/members`);
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				this.lastMemberErrorData = errorData.error || null;
+				throw new Error(errorData.error?.message || `Failed to load members: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.members) {
+				// Convert date strings to Date objects
+				const members: SpaceMembershipWithUser[] = data.members.map(
+					(m: SpaceMembershipWithUser & { createdAt: string; updatedAt: string }) => ({
+						...m,
+						createdAt: new Date(m.createdAt),
+						updatedAt: new Date(m.updatedAt)
+					})
+				);
+
+				this.membersBySpaceId.set(spaceId, members);
+				this.membersLoadedSet.add(spaceId);
+				this._memberVersion++;
+			}
+		} catch (e) {
+			console.error('Failed to load space members:', e);
+			this.lastMemberError = e instanceof Error ? e.message : 'Failed to load members';
+		} finally {
+			this.membersLoading.set(spaceId, false);
+		}
+	}
+
+	/**
+	 * Add a member to a space
+	 */
+	async addMember(
+		spaceId: string,
+		input: { targetUserId?: string; groupId?: string; role: SpaceRole }
+	): Promise<boolean> {
+		this.lastMemberError = null;
+		this.lastMemberErrorData = null;
+
+		try {
+			const response = await fetch(`/api/spaces/${spaceId}/members`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(input)
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				this.lastMemberErrorData = errorData.error || null;
+				throw new Error(errorData.error?.message || `Failed to add member: ${response.status}`);
+			}
+
+			// Refresh member list to get hydrated data
+			await this.loadMembers(spaceId, true);
+			return true;
+		} catch (e) {
+			console.error('Failed to add space member:', e);
+			this.lastMemberError = e instanceof Error ? e.message : 'Failed to add member';
+			return false;
+		}
+	}
+
+	/**
+	 * Remove a member from a space
+	 */
+	async removeMember(spaceId: string, memberId: string): Promise<boolean> {
+		this.lastMemberError = null;
+		this.lastMemberErrorData = null;
+
+		try {
+			const response = await fetch(`/api/spaces/${spaceId}/members/${memberId}`, {
+				method: 'DELETE'
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				this.lastMemberErrorData = errorData.error || null;
+				throw new Error(errorData.error?.message || `Failed to remove member: ${response.status}`);
+			}
+
+			// Remove from local cache
+			const members = this.membersBySpaceId.get(spaceId);
+			if (members) {
+				this.membersBySpaceId.set(
+					spaceId,
+					members.filter((m) => m.id !== memberId)
+				);
+				this._memberVersion++;
+			}
+
+			return true;
+		} catch (e) {
+			console.error('Failed to remove space member:', e);
+			this.lastMemberError = e instanceof Error ? e.message : 'Failed to remove member';
+			return false;
+		}
+	}
+
+	/**
+	 * Update a member's role
+	 */
+	async updateMemberRole(spaceId: string, memberId: string, role: SpaceRole): Promise<boolean> {
+		this.lastMemberError = null;
+		this.lastMemberErrorData = null;
+
+		try {
+			const response = await fetch(`/api/spaces/${spaceId}/members/${memberId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ role })
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				this.lastMemberErrorData = errorData.error || null;
+				throw new Error(
+					errorData.error?.message || `Failed to update member role: ${response.status}`
+				);
+			}
+
+			// Update local cache
+			const members = this.membersBySpaceId.get(spaceId);
+			if (members) {
+				const updated = members.map((m) => (m.id === memberId ? { ...m, role } : m));
+				this.membersBySpaceId.set(spaceId, updated);
+				this._memberVersion++;
+			}
+
+			return true;
+		} catch (e) {
+			console.error('Failed to update member role:', e);
+			this.lastMemberError = e instanceof Error ? e.message : 'Failed to update member role';
+			return false;
+		}
+	}
+
+	/**
+	 * Get members for a space (reactive)
+	 */
+	getMembersForSpace(spaceId: string): SpaceMembershipWithUser[] {
+		void this._memberVersion;
+		return this.membersBySpaceId.get(spaceId) || [];
+	}
+
+	/**
+	 * Check if members are loading for a space
+	 */
+	isMembersLoading(spaceId: string): boolean {
+		return this.membersLoading.get(spaceId) || false;
+	}
+
+	/**
+	 * Get the current user's role in a space (from loaded members)
+	 * Returns null if members not loaded or user not found
+	 */
+	getUserRoleInSpace(spaceId: string, userId: string): SpaceRole | null {
+		void this._memberVersion;
+		const members = this.membersBySpaceId.get(spaceId);
+		if (!members) return null;
+
+		const membership = members.find((m) => m.userId === userId);
+		return membership?.role ?? null;
+	}
+
 	/**
 	 * Clear cache (force reload)
 	 */
@@ -265,6 +470,12 @@ class SpacesStore {
 		this.spaces.clear();
 		this.spacesBySlug.clear();
 		this._version++;
+
+		// Also clear member cache
+		this.membersBySpaceId.clear();
+		this.membersLoadedSet.clear();
+		this.membersLoading.clear();
+		this._memberVersion++;
 	}
 }
 

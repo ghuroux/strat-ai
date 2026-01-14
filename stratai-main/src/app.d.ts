@@ -6,6 +6,8 @@ declare global {
 			session: {
 				userId: string;
 				organizationId: string;
+				firstName: string | null;
+				lastName: string | null;
 				displayName: string | null;
 				email: string | null;
 				role: 'owner' | 'admin' | 'member';

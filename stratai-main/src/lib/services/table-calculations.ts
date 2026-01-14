@@ -2,17 +2,74 @@
  * Table Calculation Service
  *
  * Computes column totals for tables with sum/average/count/min/max formulas.
- * Phase 2.5: Also computes row formulas (e.g., =[1]*[2])
- * See: docs/TABLE_IMPLEMENTATION.md Phase 2 & 2.5
+ * Phase 3: Also computes row formulas with A1-style cell references.
+ * See: docs/TABLE_IMPLEMENTATION.md Phase 2 & 3
  */
 
 import type { Editor } from '@tiptap/core';
-import { parseFormula, evaluateFormula, formatResult } from './formula-parser';
+import { formatResult } from './formula-parser';
+import { buildCellRef } from './cell-references';
+import { evaluateFormula as evaluateFormulaEngine, type EvaluationContext } from './formula-engine';
 
 export type FormulaType = 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX';
 
+// ============================================
+// TABLE DATA TYPES
+// ============================================
+
+/**
+ * Table data structure for formula evaluation
+ */
+export interface TableData {
+	/** 2D array of cell values (null for non-numeric or formula cells) */
+	values: (number | null)[][];
+	/** Number of rows (excluding total rows) */
+	rowCount: number;
+	/** Number of columns */
+	colCount: number;
+	/** Map of cell refs to formulas: "B2" -> "=C2*D2" */
+	formulas: Map<string, string>;
+}
+
 // Column formulas that are handled by the column-based calculation
 const COLUMN_FORMULAS = ['SUM', 'AVG', 'COUNT', 'MIN', 'MAX'];
+
+// Currency symbols mapping
+const CURRENCY_SYMBOLS: Record<string, string> = {
+	USD: '$',
+	EUR: '€',
+	GBP: '£',
+	ZAR: 'R',
+	JPY: '¥'
+};
+
+/**
+ * Format a cell value with currency and decimal settings
+ */
+function formatCellValue(
+	value: number | null,
+	currency?: string | null,
+	decimals?: number | null
+): string {
+	if (value === null) return '—';
+	if (!isFinite(value)) return 'Error';
+
+	// Default to 2 decimal places
+	const decimalPlaces = decimals ?? 2;
+
+	// Format the number
+	const formatted = value.toLocaleString('en-US', {
+		minimumFractionDigits: decimalPlaces,
+		maximumFractionDigits: decimalPlaces
+	});
+
+	// Add currency symbol if specified
+	if (currency && CURRENCY_SYMBOLS[currency]) {
+		return `${CURRENCY_SYMBOLS[currency]}${formatted}`;
+	}
+
+	return formatted;
+}
 
 /**
  * Extract text content from nested TipTap nodes
@@ -25,7 +82,7 @@ function extractTextFromNode(node: any): string {
 }
 
 /**
- * Phase 2.5: Extract numeric values from all cells in a row
+ * Extract numeric values from all cells in a row
  * Used for row formula evaluation
  */
 function extractRowValues(row: any): (number | null)[] {
@@ -44,6 +101,129 @@ function extractRowValues(row: any): (number | null)[] {
 
 		values.push(!isNaN(num) && cleaned !== '' ? num : null);
 	});
+
+	return values;
+}
+
+// ============================================
+// TABLE DATA EXTRACTION
+// ============================================
+
+/**
+ * Extract entire table as a structured TableData object for formula evaluation.
+ * This provides full table context for cross-row cell references.
+ *
+ * @param table - TipTap table JSON node
+ * @returns TableData with 2D values array and formula locations
+ *
+ * @example
+ * const tableData = extractTableData(tableNode.toJSON());
+ * // tableData.values[0][1] = cell B1 value
+ * // tableData.formulas.get("D2") = "=B2*C2"
+ */
+export function extractTableData(table: any): TableData {
+	const values: (number | null)[][] = [];
+	const formulas = new Map<string, string>();
+	let colCount = 0;
+
+	if (!table?.content) {
+		return { values: [], rowCount: 0, colCount: 0, formulas };
+	}
+
+	// Process each row
+	let dataRowIndex = 0;
+	table.content.forEach((row: any) => {
+		// Skip total rows
+		if (row.attrs?.isTotal) return;
+
+		const rowValues: (number | null)[] = [];
+
+		row.content?.forEach((cell: any, cellIndex: number) => {
+			const formula = cell.attrs?.formula;
+
+			// If cell has a formula starting with =, store it and set value to null
+			if (formula && formula.startsWith('=')) {
+				const cellRef = buildCellRef(cellIndex, dataRowIndex);
+				formulas.set(cellRef, formula);
+				rowValues.push(null); // Formulas evaluate to null in raw data
+				return;
+			}
+
+			// Extract numeric value
+			const text = extractTextFromNode(cell);
+			const cleaned = text.trim().replace(/[^0-9.-]/g, '');
+			const num = parseFloat(cleaned);
+
+			if (!isNaN(num) && cleaned !== '') {
+				rowValues.push(num);
+			} else {
+				rowValues.push(null);
+			}
+		});
+
+		// Track max column count
+		if (rowValues.length > colCount) {
+			colCount = rowValues.length;
+		}
+
+		values.push(rowValues);
+		dataRowIndex++;
+	});
+
+	// Normalize rows to have same column count (pad with null)
+	values.forEach((row) => {
+		while (row.length < colCount) {
+			row.push(null);
+		}
+	});
+
+	return {
+		values,
+		rowCount: values.length,
+		colCount,
+		formulas
+	};
+}
+
+/**
+ * Get a cell value from TableData by reference
+ *
+ * @param tableData - The table data structure
+ * @param col - 0-indexed column
+ * @param row - 0-indexed row
+ */
+export function getCellValue(tableData: TableData, col: number, row: number): number | null {
+	if (row < 0 || row >= tableData.rowCount) return null;
+	if (col < 0 || col >= tableData.colCount) return null;
+	return tableData.values[row]?.[col] ?? null;
+}
+
+/**
+ * Get all values in a range
+ *
+ * @param tableData - The table data structure
+ * @param startCol - Start column (0-indexed)
+ * @param startRow - Start row (0-indexed)
+ * @param endCol - End column (0-indexed)
+ * @param endRow - End row (0-indexed)
+ */
+export function getRangeValues(
+	tableData: TableData,
+	startCol: number,
+	startRow: number,
+	endCol: number,
+	endRow: number
+): number[] {
+	const values: number[] = [];
+
+	for (let r = startRow; r <= endRow; r++) {
+		for (let c = startCol; c <= endCol; c++) {
+			const val = getCellValue(tableData, c, r);
+			if (val !== null) {
+				values.push(val);
+			}
+		}
+	}
 
 	return values;
 }
@@ -181,6 +361,16 @@ export function updateTableTotalsInEditor(editor: Editor): void {
 
 		if (tableData.size === 0) return;
 
+		// Create shared evaluation context per table for memoization
+		// This allows formula-to-formula references to be cached across multiple cells
+		const tableContexts: Map<number, EvaluationContext> = new Map();
+		for (const tablePos of tableData.keys()) {
+			tableContexts.set(tablePos, {
+				evaluatedCache: new Map<string, number>(),
+				visitedRefs: new Set<string>()
+			});
+		}
+
 		// Second pass: find formula cells and their text positions
 		const updates: Array<{ from: number; to: number; text: string }> = [];
 
@@ -189,6 +379,8 @@ export function updateTableTotalsInEditor(editor: Editor): void {
 			if (node.type.name === 'tableCell' && node.attrs?.formula) {
 				const formula = node.attrs.formula as string;
 				const colIndex = node.attrs.columnIndex as number;
+				const cellCurrency = node.attrs.cellCurrency as string | null;
+				const cellDecimals = node.attrs.cellDecimals as number | null;
 
 				// Find the parent table and row to get data for calculation
 				let tableJson: any = null;
@@ -231,26 +423,57 @@ export function updateTableTotalsInEditor(editor: Editor): void {
 					// Column formula (SUM, AVG, COUNT, MIN, MAX)
 					if (colIndex === null) return true;
 					const result = calculateFormula(tableJson, colIndex, formula as FormulaType);
-					const formatted = formatCalculatedValue(result, formula as FormulaType);
-					safeText = formatted || '—';
+					// Use cell formatting if available
+					safeText = formatCellValue(result, cellCurrency, cellDecimals);
 				} else if (formula.startsWith('=')) {
-					// Row formula (e.g., =[1]*[2])
-					// Get row values from the current row
-					let rowValues: (number | null)[] = [];
+					// Row formula with A1-style references (e.g., =B2*C2)
+					// Extract table data for cross-row evaluation
+					const tableDataObj = extractTableData(tableJson);
 
-					// Find the row containing this cell in tableJson
-					tableJson.content?.forEach((row: any) => {
-						const hasThisCell = row.content?.some((c: any) =>
-							c.attrs?.formula === formula && c.attrs?.columnIndex === colIndex
+					// Find the row index for this formula cell
+					let formulaRowIndex = -1;
+					let currentTablePos = -1;
+					tableJson.content?.forEach((row: any, idx: number) => {
+						if (row.attrs?.isTotal) return;
+						const hasThisCell = row.content?.some(
+							(c: any) => c.attrs?.formula === formula && c.attrs?.columnIndex === colIndex
 						);
 						if (hasThisCell) {
-							rowValues = extractRowValues(row);
+							formulaRowIndex = idx;
 						}
 					});
 
-					const parsed = parseFormula(formula);
-					const result = evaluateFormula(parsed, rowValues);
-					safeText = formatResult(result);
+					// Find table position for shared context
+					doc.nodesBetween(0, pos, (n, p) => {
+						if (n.type.name === 'table' && p <= pos && p + n.nodeSize > pos) {
+							currentTablePos = p;
+						}
+						return true;
+					});
+
+					// Get shared context for this table (enables formula-to-formula refs)
+					const sharedContext = tableContexts.get(currentTablePos) || {
+						evaluatedCache: new Map<string, number>(),
+						visitedRefs: new Set<string>()
+					};
+
+					// Evaluate with full table context and shared evaluation context
+					const evalResult = evaluateFormulaEngine(
+						formula,
+						tableDataObj,
+						{
+							col: colIndex,
+							row: formulaRowIndex >= 0 ? formulaRowIndex : 0
+						},
+						sharedContext
+					);
+
+					if (evalResult.error) {
+						safeText = 'Error';
+					} else {
+						// Use cell formatting if available
+						safeText = formatCellValue(evalResult.value, cellCurrency, cellDecimals);
+					}
 				} else {
 					// Unknown formula type
 					return true;

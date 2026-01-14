@@ -2,13 +2,25 @@
 	import { userStore } from '$lib/stores/user.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 
-	let displayName = $state(userStore.user?.displayName ?? '');
+	let firstName = $state(userStore.user?.firstName ?? '');
+	let lastName = $state(userStore.user?.lastName ?? '');
 	let isSaving = $state(false);
-	let hasChanges = $derived(displayName !== (userStore.user?.displayName ?? ''));
+
+	// Computed display name preview
+	let displayNamePreview = $derived(() => {
+		const parts = [firstName.trim(), lastName.trim()].filter(Boolean);
+		return parts.length > 0 ? parts.join(' ') : 'Not set';
+	});
+
+	let hasChanges = $derived(
+		firstName !== (userStore.user?.firstName ?? '') ||
+			lastName !== (userStore.user?.lastName ?? '')
+	);
 
 	// Keep in sync with store
 	$effect(() => {
-		displayName = userStore.user?.displayName ?? '';
+		firstName = userStore.user?.firstName ?? '';
+		lastName = userStore.user?.lastName ?? '';
 	});
 
 	async function saveProfile() {
@@ -20,7 +32,10 @@
 			const response = await fetch('/api/user/profile', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ displayName: displayName.trim() || null })
+				body: JSON.stringify({
+					firstName: firstName.trim() || null,
+					lastName: lastName.trim() || null
+				})
 			});
 
 			if (!response.ok) {
@@ -33,6 +48,8 @@
 			// Update local store
 			userStore.setUser({
 				...userStore.user!,
+				firstName: result.profile.firstName,
+				lastName: result.profile.lastName,
 				displayName: result.profile.displayName
 			});
 
@@ -59,31 +76,53 @@
 		<p class="settings-section-desc">Manage your account information</p>
 	</div>
 
-	<div class="form-group">
-		<label class="form-label" for="displayName">Display Name</label>
-		<p class="form-hint">This is how your name appears in the app</p>
-		<div class="input-with-button">
+	<div class="name-row">
+		<div class="form-group">
+			<label class="form-label" for="firstName">First Name</label>
 			<input
 				type="text"
-				id="displayName"
+				id="firstName"
 				class="form-input"
-				placeholder="Enter your display name"
-				bind:value={displayName}
+				placeholder="Enter your first name"
+				bind:value={firstName}
 				onkeydown={handleKeydown}
 				maxlength={100}
 			/>
+		</div>
+
+		<div class="form-group">
+			<label class="form-label" for="lastName">Last Name</label>
+			<input
+				type="text"
+				id="lastName"
+				class="form-input"
+				placeholder="Enter your last name"
+				bind:value={lastName}
+				onkeydown={handleKeydown}
+				maxlength={100}
+			/>
+		</div>
+	</div>
+
+	<div class="display-name-preview">
+		<span class="preview-label">Display Name:</span>
+		<span class="preview-value">{displayNamePreview()}</span>
+	</div>
+
+	{#if hasChanges}
+		<div class="action-row">
 			<button
 				type="button"
 				class="save-button"
 				onclick={saveProfile}
-				disabled={!hasChanges || isSaving}
+				disabled={isSaving}
 			>
-				{isSaving ? 'Saving...' : 'Save'}
+				{isSaving ? 'Saving...' : 'Save Changes'}
 			</button>
 		</div>
-	</div>
+	{/if}
 
-	<div class="form-group">
+	<div class="form-group email-group">
 		<label class="form-label">Email</label>
 		<p class="form-value">{userStore.user?.email ?? 'Not available'}</p>
 		<p class="form-hint-muted">Contact an administrator to change your email</p>
@@ -111,8 +150,19 @@
 		color: rgb(var(--color-surface-500));
 	}
 
+	.name-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
 	.form-group {
-		margin-bottom: 1.5rem;
+		margin-bottom: 0;
+	}
+
+	.email-group {
+		margin-top: 1.5rem;
 	}
 
 	.form-label {
@@ -120,12 +170,6 @@
 		font-size: 0.875rem;
 		font-weight: 500;
 		color: var(--color-surface-200);
-		margin-bottom: 0.25rem;
-	}
-
-	.form-hint {
-		font-size: 0.8125rem;
-		color: var(--color-surface-500);
 		margin-bottom: 0.5rem;
 	}
 
@@ -141,13 +185,8 @@
 		padding: 0.5rem 0;
 	}
 
-	.input-with-button {
-		display: flex;
-		gap: 0.75rem;
-	}
-
 	.form-input {
-		flex: 1;
+		width: 100%;
 		padding: 0.625rem 0.875rem;
 		font-size: 0.9375rem;
 		background: rgb(var(--color-surface-800));
@@ -169,6 +208,31 @@
 		outline: none;
 		border-color: rgb(var(--color-primary-500));
 		box-shadow: 0 0 0 2px rgb(var(--color-primary-500) / 0.2);
+	}
+
+	.display-name-preview {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		background: rgb(var(--color-surface-800) / 0.5);
+		border-radius: 0.5rem;
+		margin-bottom: 1rem;
+	}
+
+	.preview-label {
+		font-size: 0.8125rem;
+		color: rgb(var(--color-surface-500));
+	}
+
+	.preview-value {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: rgb(var(--color-surface-200));
+	}
+
+	.action-row {
+		margin-bottom: 1.5rem;
 	}
 
 	.save-button {
@@ -194,12 +258,12 @@
 	}
 
 	@media (max-width: 480px) {
-		.input-with-button {
-			flex-direction: column;
+		.name-row {
+			grid-template-columns: 1fr;
 		}
 
-		.save-button {
-			width: 100%;
+		.form-group {
+			margin-bottom: 1rem;
 		}
 	}
 </style>

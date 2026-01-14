@@ -46,7 +46,8 @@
 	let createForm = $state({
 		email: '',
 		username: '',
-		displayName: '',
+		firstName: '',
+		lastName: '',
 		password: '',
 		role: 'member' as 'owner' | 'admin' | 'member'
 	});
@@ -54,7 +55,8 @@
 	let editForm = $state({
 		email: '',
 		username: '',
-		displayName: '',
+		firstName: '',
+		lastName: '',
 		role: 'member' as 'owner' | 'admin' | 'member'
 	});
 
@@ -82,7 +84,8 @@
 		editForm = {
 			email: user.email,
 			username: user.username,
-			displayName: user.displayName || '',
+			firstName: user.firstName || '',
+			lastName: user.lastName || '',
 			role: user.role
 		};
 		showEditModal = true;
@@ -107,7 +110,8 @@
 		createForm = {
 			email: '',
 			username: '',
-			displayName: '',
+			firstName: '',
+			lastName: '',
 			password: '',
 			role: 'member'
 		};
@@ -377,9 +381,15 @@
 						<label for="create-username">Username</label>
 						<input type="text" id="create-username" name="username" bind:value={createForm.username} required placeholder="johndoe" />
 					</div>
-					<div class="form-group">
-						<label for="create-displayName">Display Name</label>
-						<input type="text" id="create-displayName" name="displayName" bind:value={createForm.displayName} placeholder="John Doe" />
+					<div class="name-row">
+						<div class="form-group">
+							<label for="create-firstName">First Name</label>
+							<input type="text" id="create-firstName" name="firstName" bind:value={createForm.firstName} placeholder="John" />
+						</div>
+						<div class="form-group">
+							<label for="create-lastName">Last Name</label>
+							<input type="text" id="create-lastName" name="lastName" bind:value={createForm.lastName} placeholder="Doe" />
+						</div>
 					</div>
 					<div class="form-group">
 						<label for="create-password">Password</label>
@@ -438,9 +448,15 @@
 						<label for="edit-username">Username</label>
 						<input type="text" id="edit-username" name="username" bind:value={editForm.username} required />
 					</div>
-					<div class="form-group">
-						<label for="edit-displayName">Display Name</label>
-						<input type="text" id="edit-displayName" name="displayName" bind:value={editForm.displayName} />
+					<div class="name-row">
+						<div class="form-group">
+							<label for="edit-firstName">First Name</label>
+							<input type="text" id="edit-firstName" name="firstName" bind:value={editForm.firstName} />
+						</div>
+						<div class="form-group">
+							<label for="edit-lastName">Last Name</label>
+							<input type="text" id="edit-lastName" name="lastName" bind:value={editForm.lastName} />
+						</div>
 					</div>
 					<div class="form-group">
 						<label for="edit-role">Role</label>
@@ -832,6 +848,16 @@
 
 	.form-group:last-child {
 		margin-bottom: 0;
+	}
+
+	.name-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+
+	.name-row .form-group {
+		margin-bottom: 1rem;
 	}
 
 	.form-group label {

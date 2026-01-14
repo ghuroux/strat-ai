@@ -18,8 +18,12 @@
 	import DeleteConfirmModal from './DeleteConfirmModal.svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
+	import ShareSpaceModal from './ShareSpaceModal.svelte';
 	import SharedWithMeSection from './SharedWithMeSection.svelte';
 	import { getSpaceIconPath } from '$lib/config/space-icons';
+	import { spacesStore } from '$lib/stores/spaces.svelte';
+	import { userStore } from '$lib/stores/user.svelte';
+	import { canManageSpaceMembers } from '$lib/types/space-memberships';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import type { Area, SharedAreaInfo } from '$lib/types/areas';
@@ -73,6 +77,9 @@
 	let showShareModal = $state(false);
 	let sharingArea = $state<Area | null>(null);
 
+	// Space members modal state
+	let showMembersModal = $state(false);
+
 	// Derive space color
 	let spaceColor = $derived(space.color || '#3b82f6');
 
@@ -85,6 +92,22 @@
 			return 'Organization shared workspace';
 		}
 		return space.context || `Your ${space.name.toLowerCase()} space`;
+	});
+
+	// Space members for member button
+	let currentUserId = $derived(userStore.id ?? null);
+	let userSpaceRole = $derived.by(() => {
+		if (!space?.id || !currentUserId) return null;
+		return spacesStore.getUserRoleInSpace(space.id, currentUserId);
+	});
+	let canManageMembers = $derived(canManageSpaceMembers(userSpaceRole));
+	let memberCount = $derived(spacesStore.getMembersForSpace(space.id).length);
+
+	// Load space members when component mounts
+	$effect(() => {
+		if (space?.id) {
+			spacesStore.loadMembers(space.id);
+		}
 	});
 
 	// Phase 4: Areas with member counts
@@ -256,6 +279,15 @@
 					</svg>
 					Documents
 				</a>
+				<button class="nav-link members-btn" onclick={() => (showMembersModal = true)}>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+					</svg>
+					Members
+					{#if memberCount > 0}
+						<span class="member-count-badge">{memberCount}</span>
+					{/if}
+				</button>
 			</nav>
 		</div>
 	</header>
@@ -376,6 +408,15 @@
 	}}
 />
 
+<!-- Space Members Modal -->
+<ShareSpaceModal
+	open={showMembersModal}
+	{space}
+	onClose={() => {
+		showMembersModal = false;
+	}}
+/>
+
 <style>
 	.dashboard {
 		display: flex;
@@ -477,6 +518,19 @@
 	.nav-link svg {
 		width: 1rem;
 		height: 1rem;
+	}
+
+	.members-btn {
+		cursor: pointer;
+	}
+
+	.member-count-badge {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		padding: 0.125rem 0.375rem;
+		background: rgba(255, 255, 255, 0.15);
+		border-radius: 9999px;
+		color: rgba(255, 255, 255, 0.8);
 	}
 
 	/* Content */

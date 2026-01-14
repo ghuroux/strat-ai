@@ -4,6 +4,7 @@ This file tracks planned features and improvements, aligned with the product vis
 
 > **Vision Reference**: See `VISION-WORK-OS.md` for the full Work Operating System vision.
 > **Spaces Design**: See `PHASE-0.3-SPACES-DESIGN.md` for Phase 0.3 implementation details.
+> **Competitive Intelligence**: See `docs/CONFLUENCE_COMPETITIVE_ANALYSIS.md` for Confluence pain points research.
 
 ---
 
@@ -1058,6 +1059,154 @@ To User:       "Spur should consider these legal strategies..."
 
 ---
 
+## Competitive Response: Confluence Gap Exploitation
+
+> **Reference:** See `docs/CONFLUENCE_COMPETITIVE_ANALYSIS.md` for comprehensive research on Confluence pain points.
+>
+> **Strategic Insight:** Confluence users have begged for hierarchical spaces for 20 years, their search is universally hated, and their "information graveyard" problem is our opportunity. We're already architecturally ahead - now capitalize.
+
+### Immediate (This Sprint)
+
+These items address Confluence's most-complained-about issues where we can win quickly:
+
+#### 1. Mobile Responsiveness Sprint
+**Priority: HIGH | Effort: Medium | Impact: HIGH**
+
+> "The Confluence mobile app is unusable" - universal complaint
+
+- [ ] Systematic mobile audit across all views (Arena, Spaces, Chat, Pages)
+- [ ] Fix layout breakpoints (<768px, <480px)
+- [ ] Ensure 44x44px touch targets throughout
+- [ ] Safe-area padding for iOS devices
+- [ ] Test and fix Context Panel on mobile
+- [ ] Mobile-optimized share modals (already partial)
+
+**Success Criteria:** Full functionality on mobile, not degraded experience
+
+**Note:** Overlaps with UI Cleanup section - consolidate efforts there.
+
+#### 2. Global Search UI
+**Priority: HIGH | Effort: Low | Impact: HIGH**
+
+> "Confluence search is SO bad" - #1 complaint across all sources
+
+- [ ] Search bar in header (Cmd+K shortcut)
+- [ ] Search across: Pages, Areas, Spaces, Conversations
+- [ ] Real-time results dropdown
+- [ ] Recent searches history
+- [ ] Filter by type (pages, conversations, areas)
+
+**Note:** Search API exists (`/api/pages/search`), just needs UI
+
+#### 3. Comments & Discussions System
+**Priority: HIGH | Effort: Medium | Impact: HIGH**
+
+> Table stakes for collaboration - can't compete without this
+
+- [ ] `page_comments` table (threaded)
+- [ ] Comment component with reply/edit/delete
+- [ ] @mentions in comments (link to users)
+- [ ] Email notifications for @mentions
+- [ ] Resolve/unresolve comment threads
+- [ ] Comment count badge on pages
+
+**Reference:** Page Sharing Phase 3 in `docs/page-sharing-permissions-audit.md`
+
+### Short-term (This Month)
+
+#### 4. Activity Dashboard
+**Priority: MEDIUM | Effort: Low | Impact: MEDIUM**
+
+> Show team collaboration and activity
+
+- [ ] "Recent Activity" section on Space dashboard
+- [ ] Activity feed: edits, shares, comments, new pages
+- [ ] Filter by user, type, time range
+- [ ] "What's happening" view across all spaces
+
+**Note:** Audit events table exists - just needs UI
+
+#### 5. Page Table of Contents
+**Priority: MEDIUM | Effort: Low | Impact: MEDIUM**
+
+> Common Confluence feature, frequently requested
+
+- [ ] Install `@tiptap/extension-table-of-contents` or build custom
+- [ ] Auto-generate from headings
+- [ ] Sticky sidebar or floating TOC
+- [ ] Jump-to-heading on click
+
+#### 6. Labels/Tags System
+**Priority: MEDIUM | Effort: Low | Impact: MEDIUM**
+
+> Helps organization, enables filtering
+
+- [ ] `page_labels` table (many-to-many)
+- [ ] Label input component (typeahead, create new)
+- [ ] Filter pages by label
+- [ ] Label management (rename, merge, delete)
+- [ ] Popular labels display
+
+### Medium-term (This Quarter)
+
+#### 7. Confluence Import Tool
+**Priority: HIGH | Effort: High | Impact: VERY HIGH**
+
+> **Market capture opportunity** - competitive wedge
+
+- [ ] Research Confluence export formats (XML, HTML, JSON)
+- [ ] Import wizard UI
+- [ ] Space → Space mapping
+- [ ] Page hierarchy preservation
+- [ ] Attachment handling
+- [ ] User mapping (optional)
+- [ ] Progress indicators and error handling
+
+**Marketing:** "Migrate from Confluence in 5 minutes"
+
+#### 8. Content Freshness System
+**Priority: HIGH | Effort: Medium | Impact: HIGH**
+
+> Solves Confluence's "information graveyard" problem
+
+- [ ] `last_viewed_at` tracking on pages
+- [ ] Freshness indicators (green/yellow/red based on age)
+- [ ] "Stale content" dashboard view
+- [ ] Owner certification workflow ("Is this still accurate?")
+- [ ] Auto-archive suggestions after N months without activity
+- [ ] AI-assisted duplicate detection ("These pages are similar")
+
+**Differentiator:** Knowledge that stays fresh, not a graveyard
+
+#### 9. Page Navigation Sidebar
+**Priority: MEDIUM | Effort: Medium | Impact: MEDIUM**
+
+> Better orientation, Confluence-familiar pattern
+
+- [ ] Collapsible page tree sidebar
+- [ ] Show pages within current Area
+- [ ] Drag-drop reordering
+- [ ] Quick create from sidebar
+- [ ] Breadcrumb integration
+
+### Strategic (Long-term)
+
+#### 10. Full Context Intelligence (CONTEXT_STRATEGY)
+**Priority: CRITICAL | Effort: Very High | Impact: 10x**
+
+> **This is the moat** - transforms StratAI from wiki to organizational AI brain
+
+See `docs/CONTEXT_STRATEGY.md` for full architecture. Key phases:
+
+- [ ] Phase 1: Foundation (conversations to DB, embeddings, memory infrastructure)
+- [ ] Phase 2: Active Memory (extraction, evaluation, decay)
+- [ ] Phase 3: Shared Context (Space-level, approval workflows)
+- [ ] Phase 4: Organizational Intelligence (multi-tenant, full hierarchy)
+
+**Value Proposition:** New hires inherit institutional knowledge. Knowledge compounds. AI gets smarter for everyone.
+
+---
+
 ## Ongoing: Model Arena Evolution
 
 **Purpose**: User education + Internal optimization (see PRODUCT_VISION.md)
@@ -1880,10 +2029,20 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 | ~~Subtasks & Plan Mode~~ | 0.3d++ | High | Medium | ✅ |
 | Meeting Summary + Guided | 0.3d | High | High | Deferred |
 | Task Dashboard + Stale Detection | 0.3e | High | Medium | ✅ |
-| Day Change + Cleanup Offers | 0.3e | High | Medium | **NEXT** |
+| Day Change + Cleanup Offers | 0.3e | High | Medium | Planned |
 | Form templates | 0.3f | Medium | Medium | Planned |
 | Entity extraction | 0.3g | High | High | Planned |
 | Onboarding (stretch) | 0.3h | Medium | Low | Stretch |
+| **Mobile Responsiveness** | Comp | **High** | Medium | **IMMEDIATE** |
+| **Global Search UI** | Comp | **High** | Low | **IMMEDIATE** |
+| **Comments & @mentions** | Comp | **High** | Medium | **IMMEDIATE** |
+| Activity Dashboard | Comp | Medium | Low | Short-term |
+| Page TOC | Comp | Medium | Low | Short-term |
+| Labels/Tags | Comp | Medium | Low | Short-term |
+| Confluence Import Tool | Comp | **Very High** | High | Medium-term |
+| Content Freshness System | Comp | **High** | Medium | Medium-term |
+| Page Navigation Sidebar | Comp | Medium | Medium | Medium-term |
+| Context Intelligence (Moat) | Comp | **10x** | Very High | Strategic |
 | Send to Arena (context) | Arena | Medium | Medium | Planned |
 | Team management | 0.7 | High | High | Future |
 | Policy engine | 0.8 | High | High | Future |
@@ -1904,5 +2063,6 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 
 ---
 
-*Aligned with PRODUCT_VISION.md - Last Updated: January 6, 2026*
-*Completed: Phase 0.1, Phase 0.2, Phase 0.3a, Phase 0.3b, Phase 0.3c, Phase 0.3c+, Phase 0.3d++, Phase 0.3e (Task Dashboard) | Next: Phase 0.3e (Day Change + Cleanup)*
+*Aligned with PRODUCT_VISION.md - Last Updated: January 13, 2026*
+*Completed: Phase 0.1, Phase 0.2, Phase 0.3a, Phase 0.3b, Phase 0.3c, Phase 0.3c+, Phase 0.3d++, Phase 0.3e (Task Dashboard)*
+*Immediate Priority: Competitive Response (Mobile, Search, Comments) | Strategic: Context Intelligence (Moat)*

@@ -41,6 +41,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 			event.locals.session = {
 				userId: session.userId,
 				organizationId: session.organizationId,
+				firstName: user?.firstName || null,
+				lastName: user?.lastName || null,
 				displayName: user?.displayName || user?.username || null,
 				email: user?.email || null,
 				role: membership?.role || 'member',

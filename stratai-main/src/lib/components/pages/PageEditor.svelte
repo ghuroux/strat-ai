@@ -27,7 +27,8 @@
 	import { TableHeader } from '@tiptap/extension-table-header';
 	import { TableCell as BaseTableCell } from '@tiptap/extension-table-cell';
 	import { common, createLowlight } from 'lowlight';
-	import { recalculateTable, updateTableTotalsInEditor } from '$lib/services/table-calculations';
+	import { recalculateTable, updateTableTotalsInEditor, extractTableData, type TableData } from '$lib/services/table-calculations';
+	import { buildCellRef } from '$lib/services/cell-references';
 	import { Lock } from 'lucide-svelte';
 	import type { Page, TipTapContent, PageType, PageVisibility } from '$lib/types/page';
 	import type { PagePermission } from '$lib/types/page-sharing';
@@ -110,6 +111,27 @@
 						if (attributes.showFormulaPrefix === null) return {};
 						return { 'data-show-prefix': attributes.showFormulaPrefix ? 'true' : 'false' };
 					}
+				},
+				// Phase 3.8: Cell currency format (USD, EUR, GBP, ZAR, JPY)
+				cellCurrency: {
+					default: null,
+					parseHTML: (element) => element.getAttribute('data-cell-currency'),
+					renderHTML: (attributes) => {
+						if (!attributes.cellCurrency) return {};
+						return { 'data-cell-currency': attributes.cellCurrency };
+					}
+				},
+				// Phase 3.8: Cell decimal places (0 or 2)
+				cellDecimals: {
+					default: null,
+					parseHTML: (element) => {
+						const val = element.getAttribute('data-cell-decimals');
+						return val !== null ? parseInt(val, 10) : null;
+					},
+					renderHTML: (attributes) => {
+						if (attributes.cellDecimals === null) return {};
+						return { 'data-cell-decimals': attributes.cellDecimals.toString() };
+					}
 				}
 			};
 		}
@@ -179,9 +201,59 @@
 
 	let formulaMode = $state<FormulaMode | null>(null);
 
-	// Phase 2.5: Track selected cell formula for FormulaBar display
+	// Phase 3: Track selected cell formula and table data for floating FormulaBar
 	let selectedCellFormula = $state<string | null>(null);
-	let selectedCellRowValues = $state<(number | null)[]>([]);
+	let activeTableData = $state<TableData | null>(null);
+	let currentCellPosition = $state<{ col: number; row: number } | null>(null);
+	let activeTableRect = $state<{ top: number; left: number; width: number; bottom: number } | null>(null);
+	let isInTable = $state(false);
+
+	// Phase 3.8: Cell formatting (currency, decimals) - keyed by "col,row"
+	type CellFormat = { currency?: string; decimals?: number };
+	let cellFormats = $state<Map<string, CellFormat>>(new Map());
+
+	// Get format for current cell
+	let currentCellFormat = $derived.by(() => {
+		if (!currentCellPosition) return null;
+		const key = `${currentCellPosition.col},${currentCellPosition.row}`;
+		return cellFormats.get(key) || null;
+	});
+
+	// Handle format change from FormulaBar
+	function handleFormatChange(format: CellFormat) {
+		if (!currentCellPosition || !editor) return;
+		const key = `${currentCellPosition.col},${currentCellPosition.row}`;
+		const newFormats = new Map(cellFormats);
+		newFormats.set(key, format);
+		cellFormats = newFormats;
+
+		// Also update the cell attributes in the editor immediately
+		// Find the cell and update its attributes
+		const { state } = editor;
+		const { selection } = state;
+		const selPos = selection.$from;
+
+		for (let depth = selPos.depth; depth > 0; depth--) {
+			const node = selPos.node(depth);
+			if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+				const cellPos = selPos.before(depth);
+				const tr = state.tr;
+
+				// Update cell format attributes
+				tr.setNodeMarkup(cellPos, undefined, {
+					...node.attrs,
+					cellCurrency: format.currency || null,
+					cellDecimals: format.decimals ?? null
+				});
+
+				editor.view.dispatch(tr);
+
+				// Trigger recalculation to update display
+				updateTableTotalsInEditor(editor);
+				break;
+			}
+		}
+	}
 
 	// Current user ID from store
 	let currentUserId = $derived(userStore.id ?? '');
@@ -494,15 +566,16 @@
 	}
 
 	/**
-	 * Add a column reference to the formula
+	 * Add a cell reference to the formula (A1-style)
+	 * Phase 3: Now supports cross-row references (B1, C2, etc.)
 	 */
-	function addColumnReference(colIndex: number) {
+	function addCellReference(colIndex: number, rowIndex: number) {
 		if (!formulaMode) return;
 
-		console.log('[FormulaMode] Adding column reference', { colIndex, currentFormula: formulaMode.formula });
+		console.log('[FormulaMode] Adding cell reference', { colIndex, rowIndex, currentFormula: formulaMode.formula });
 
-		// Prevent self-reference
-		if (colIndex === formulaMode.colIndex) {
+		// Prevent self-reference (same row and column)
+		if (colIndex === formulaMode.colIndex && rowIndex === formulaMode.rowIndex) {
 			console.log('[FormulaMode] Blocked: self-reference attempt');
 			return;
 		}
@@ -513,7 +586,9 @@
 			formulaMode.formula += '*'; // Default to multiplication
 		}
 
-		formulaMode.formula += `[${colIndex}]`;
+		// Build A1-style cell reference (e.g., "B2", "C3")
+		const cellRef = buildCellRef(colIndex, rowIndex);
+		formulaMode.formula += cellRef;
 		console.log('[FormulaMode] Updated formula', { formula: formulaMode.formula });
 	}
 
@@ -562,6 +637,7 @@
 
 	/**
 	 * Complete (save) the formula
+	 * Phase 3: Updated validation for A1-style cell references
 	 */
 	function completeFormula(save: boolean) {
 		console.log('[FormulaMode] Completing formula', { save, formulaMode });
@@ -588,9 +664,12 @@
 				}
 			}
 
-			// Must have at least one column reference
-			if (!formulaMode.formula.includes('[')) {
-				console.warn('[FormulaMode] Invalid formula - no column references');
+			// Phase 3: Must have at least one A1-style cell reference OR be a valid constant expression
+			// Check for cell refs (A1, B2, etc.) or pure numbers for constant formulas like =2+2
+			const hasCellRef = /[A-Z]+\d+/i.test(formulaMode.formula);
+			const hasNumber = /\d/.test(formulaMode.formula);
+			if (!hasCellRef && !hasNumber) {
+				console.warn('[FormulaMode] Invalid formula - no cell references or numbers');
 				formulaMode = null;
 				return;
 			}
@@ -615,11 +694,17 @@
 				// Create transaction to update cell attributes AND set cell content
 				const tr = state.tr;
 
-				// Update cell attributes with formula
+				// Get current cell format (currency, decimals)
+				const formatKey = `${formulaMode.colIndex},${formulaMode.rowIndex}`;
+				const format = cellFormats.get(formatKey);
+
+				// Update cell attributes with formula and format
 				tr.setNodeMarkup(cellPos, undefined, {
 					...cell.attrs,
 					formula: formulaMode.formula,
-					columnIndex: formulaMode.colIndex
+					columnIndex: formulaMode.colIndex,
+					cellCurrency: format?.currency || null,
+					cellDecimals: format?.decimals ?? 2
 				});
 
 				// Also set the cell content to show the formula result placeholder
@@ -648,6 +733,43 @@
 			} else {
 				console.error('[FormulaMode] Invalid cell node', { cell });
 			}
+		} else if (save && (formulaMode.formula === '=' || formulaMode.formula === '')) {
+			// User cleared the formula - remove it from the cell
+			console.log('[FormulaMode] Clearing cell formula');
+
+			const cellPos = findCellPosition(editor, formulaMode.rowIndex, formulaMode.colIndex);
+			if (cellPos !== -1) {
+				const { state } = editor;
+				const cell = state.doc.nodeAt(cellPos);
+
+				if (cell && (cell.type.name === 'tableCell' || cell.type.name === 'tableHeader')) {
+					const tr = state.tr;
+
+					// Remove formula attribute (set to null)
+					tr.setNodeMarkup(cellPos, undefined, {
+						...cell.attrs,
+						formula: null,
+						columnIndex: formulaMode.colIndex
+					});
+
+					// Clear the cell content
+					const paragraphPos = cellPos + 1;
+					const paragraph = state.doc.nodeAt(paragraphPos);
+					if (paragraph && paragraph.type.name === 'paragraph') {
+						const textStart = paragraphPos + 1;
+						const textEnd = paragraphPos + paragraph.nodeSize - 1;
+						// Replace with empty (or a single space to avoid empty node issues)
+						if (textEnd > textStart) {
+							tr.delete(textStart, textEnd);
+						}
+						console.log('[FormulaMode] Cleared cell content');
+					}
+
+					tr.setMeta('tableCalculation', true);
+					editor.view.dispatch(tr);
+					console.log('[FormulaMode] Cell formula cleared');
+				}
+			}
 		} else {
 			console.log('[FormulaMode] Cancelled or empty formula');
 		}
@@ -658,13 +780,28 @@
 
 	/**
 	 * Handle clicks during formula mode (capture phase)
+	 * Phase 3: Now extracts both row and column for A1-style references
 	 */
 	function handleEditorClick(event: MouseEvent) {
 		if (!formulaMode || !editor) return;
 
+		// Skip double-click events - let handleDoubleClick handle them
+		// event.detail >= 2 means this click is part of a double-click sequence
+		if (event.detail >= 2) {
+			console.log('[FormulaMode] Skipping double-click event');
+			return;
+		}
+
 		console.log('[FormulaMode] Click detected', { target: (event.target as HTMLElement).tagName });
 
 		const target = event.target as HTMLElement;
+
+		// Don't intercept clicks on the formula bar itself
+		if (target.closest('.floating-formula-bar')) {
+			console.log('[FormulaMode] Click on formula bar - allowing');
+			return;
+		}
+
 		const cell = target.closest('td, th');
 
 		if (!cell) {
@@ -674,17 +811,41 @@
 		}
 
 		// Get column index from the cell
-		const row = cell.parentElement;
+		const row = cell.parentElement as HTMLTableRowElement | null;
 		if (!row) {
 			console.log('[FormulaMode] No parent row found');
 			return;
 		}
 
 		const colIndex = Array.from(row.children).indexOf(cell);
-		console.log('[FormulaMode] Cell clicked', { colIndex });
 
-		if (colIndex >= 0) {
-			addColumnReference(colIndex);
+		// Get row index from the table (skip total rows)
+		const table = row.closest('table');
+		if (!table) {
+			console.log('[FormulaMode] No parent table found');
+			return;
+		}
+
+		const allRows = Array.from(table.querySelectorAll('tr'));
+		let dataRowIndex = 0;
+		let foundRowIndex = -1;
+
+		for (const tableRow of allRows) {
+			// Check if this is the clicked row
+			if (tableRow === row) {
+				foundRowIndex = dataRowIndex;
+				break;
+			}
+			// Only count non-total rows
+			if (!tableRow.hasAttribute('data-is-total')) {
+				dataRowIndex++;
+			}
+		}
+
+		console.log('[FormulaMode] Cell clicked', { colIndex, rowIndex: foundRowIndex });
+
+		if (colIndex >= 0 && foundRowIndex >= 0) {
+			addCellReference(colIndex, foundRowIndex);
 			event.preventDefault();
 			event.stopPropagation();
 		}
@@ -693,29 +854,45 @@
 	/**
 	 * Handle keyboard events during formula mode
 	 * Must be on capture phase to intercept before editor
-	 * BLOCKS ALL KEYS from reaching the editor when in formula mode
+	 * Blocks keys from TipTap editor but allows formula bar input to work
 	 */
 	function handleFormulaKeydown(event: KeyboardEvent) {
 		if (!formulaMode) return;
 
-		console.log('[FormulaMode] Keydown:', event.key);
+		const target = event.target as HTMLElement;
+		const isFormulaInput = target.tagName === 'INPUT' && target.closest('.floating-formula-bar');
 
-		// Block ALL keys from reaching the editor when in formula mode
-		// The FormulaBar input will handle text entry
+		console.log('[FormulaMode] Keydown:', event.key, { isFormulaInput });
+
+		// Handle Enter and Escape globally (save/cancel)
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			event.stopPropagation();
+			console.log('[FormulaMode] Enter pressed - saving');
+			completeFormula(true);
+			return;
+		}
+
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			console.log('[FormulaMode] Escape pressed - cancelling');
+			completeFormula(false);
+			return;
+		}
+
+		// If typing in the formula bar input, let it handle the keystroke
+		if (isFormulaInput) {
+			// Don't block - let the input receive the keystroke
+			return;
+		}
+
+		// Block keys from reaching TipTap editor (prevent editing document while in formula mode)
 		event.preventDefault();
 		event.stopPropagation();
 
-		// Handle special keys
+		// Handle operators typed outside the formula bar (convenience)
 		switch (event.key) {
-			case 'Enter':
-				console.log('[FormulaMode] Enter pressed - saving');
-				completeFormula(true);
-				break;
-			case 'Escape':
-				console.log('[FormulaMode] Escape pressed - cancelling');
-				completeFormula(false);
-				break;
-			// Operators can be typed via FormulaBar, but also handle here for convenience
 			case '+':
 			case '-':
 			case '*':
@@ -736,64 +913,166 @@
 
 	/**
 	 * Handle edit existing formula (when user clicks on formula display in bar)
+	 * Uses the already-computed currentCellPosition state for correct row indices
 	 */
 	function handleEditExistingFormula() {
-		if (!selectedCellFormula || !editor) return;
+		if (!selectedCellFormula || !editor || !currentCellPosition) return;
 
-		console.log('[FormulaMode] Editing existing formula:', selectedCellFormula);
+		console.log('[FormulaMode] Editing existing formula:', selectedCellFormula, currentCellPosition);
 
-		// Find the currently selected cell's position
+		// Enter formula mode with the existing formula
+		// currentCellPosition is already correctly calculated (skips total rows)
+		formulaMode = {
+			active: true,
+			cellPos: -1,
+			rowIndex: currentCellPosition.row,
+			colIndex: currentCellPosition.col,
+			formula: selectedCellFormula,
+			previousValue: '' // Will be the calculated value
+		};
+
+		// Clear selected cell formula (we're now editing)
+		selectedCellFormula = null;
+
+		// Blur editor so FormulaBar input gets focus
+		editor.commands.blur();
+	}
+
+	/**
+	 * Handle double-click to start formula mode on table cells
+	 * Double-click on a cell enters formula mode for that cell
+	 */
+	function handleDoubleClick(event: MouseEvent) {
+		if (!editor || isReadOnly) return;
+
+		const target = event.target as HTMLElement;
+		const cell = target.closest('td, th');
+
+		// Only handle double-clicks on table cells
+		if (!cell) return;
+
+		// Don't start formula mode on total rows
+		const row = cell.closest('tr');
+		if (row?.hasAttribute('data-is-total')) return;
+
+		// If already in formula mode, check if clicking on same cell (do nothing)
+		// or different cell (cancel current and start new)
+		if (formulaMode?.active) {
+			const tableRow = cell.parentElement as HTMLTableRowElement | null;
+			const table = cell.closest('table');
+			if (tableRow && table) {
+				const newColIndex = Array.from(tableRow.children).indexOf(cell);
+				const allRows = Array.from(table.querySelectorAll('tr'));
+				let dataRowIndex = 0;
+				let newRowIndex = -1;
+
+				for (const tr of allRows) {
+					if (tr === tableRow) {
+						newRowIndex = dataRowIndex;
+						break;
+					}
+					if (!tr.hasAttribute('data-is-total')) {
+						dataRowIndex++;
+					}
+				}
+
+				// If same cell, just ensure formula bar is focused
+				if (newColIndex === formulaMode.colIndex && newRowIndex === formulaMode.rowIndex) {
+					console.log('[FormulaMode] Double-click on same cell - focusing formula bar');
+					editor.commands.blur();
+					event.preventDefault();
+					event.stopPropagation();
+					return;
+				}
+
+				// Different cell - cancel current formula mode (don't save) and continue to start new
+				console.log('[FormulaMode] Double-click on different cell - canceling current formula');
+				formulaMode = null;
+			}
+		}
+
+		console.log('[FormulaMode] Double-click detected on cell');
+
+		// Get cell position
+		const tableRow = cell.parentElement as HTMLTableRowElement | null;
+		const table = cell.closest('table');
+		if (!tableRow || !table) return;
+
+		const colIndex = Array.from(tableRow.children).indexOf(cell);
+
+		// Get row index (skip total rows)
+		const allRows = Array.from(table.querySelectorAll('tr'));
+		let dataRowIndex = 0;
+		let foundRowIndex = -1;
+
+		for (const tr of allRows) {
+			if (tr === tableRow) {
+				foundRowIndex = dataRowIndex;
+				break;
+			}
+			if (!tr.hasAttribute('data-is-total')) {
+				dataRowIndex++;
+			}
+		}
+
+		if (colIndex < 0 || foundRowIndex < 0) return;
+
+		// Check for existing formula on this cell
+		const cellElement = cell as HTMLElement;
+		const existingFormula = cellElement.getAttribute('data-formula');
+
+		console.log('[FormulaMode] Starting formula mode via double-click', {
+			colIndex,
+			rowIndex: foundRowIndex,
+			existingFormula
+		});
+
+		// Extract table data from ProseMirror for evaluation
 		const { state } = editor;
 		const { selection } = state;
 		const selPos = selection.$from;
 
-		// Find the cell, row, and column indices
+		let tableData: TableData | null = null;
 		for (let depth = selPos.depth; depth > 0; depth--) {
 			const node = selPos.node(depth);
-			if (node.type.name === 'tableCell' && node.attrs?.formula) {
-				const row = selPos.node(depth - 1);
-				const table = selPos.node(depth - 2);
-				let rowIndex = 0;
-				let colIndex = 0;
-
-				// Get indices
-				const rowPos = selPos.before(depth - 1);
-				row.forEach((cell, offset, index) => {
-					if (selPos.pos >= rowPos + 1 + offset && selPos.pos < rowPos + 1 + offset + cell.nodeSize) {
-						colIndex = index;
-					}
-				});
-
-				const tablePos = selPos.before(depth - 2);
-				table.forEach((r, offset, index) => {
-					if (selPos.pos >= tablePos + 1 + offset && selPos.pos < tablePos + 1 + offset + r.nodeSize) {
-						rowIndex = index;
-					}
-				});
-
-				// Enter formula mode with the existing formula
-				formulaMode = {
-					active: true,
-					cellPos: -1,
-					rowIndex,
-					colIndex,
-					formula: selectedCellFormula,
-					previousValue: ''
-				};
-
-				// Clear selected cell formula (we're now editing)
-				selectedCellFormula = null;
-
-				// Blur editor
-				editor?.commands.blur();
+			if (node.type.name === 'table') {
+				tableData = extractTableData(node.toJSON());
 				break;
 			}
 		}
+
+		if (tableData) {
+			activeTableData = tableData;
+		}
+
+		// Get existing cell value
+		const cellText = cell.textContent?.trim() || '';
+
+		// Enter formula mode
+		formulaMode = {
+			active: true,
+			cellPos: -1,
+			rowIndex: foundRowIndex,
+			colIndex,
+			formula: existingFormula || '=',
+			previousValue: existingFormula ? cellText : ''
+		};
+
+		currentCellPosition = { col: colIndex, row: foundRowIndex };
+		selectedCellFormula = null;
+
+		// Prevent default double-click behavior (text selection)
+		event.preventDefault();
+		event.stopPropagation();
+
+		// Blur editor so FormulaBar input gets focus
+		editor.commands.blur();
 	}
 
 	/**
 	 * Check if current selection is in a formula cell
 	 * Called on transaction to update FormulaBar
+	 * Phase 3: Now extracts full TableData and tracks table position for floating bar
 	 */
 	function checkSelectedCellFormula(ed: Editor) {
 		// Don't update if in formula mode - we're building a formula
@@ -803,43 +1082,126 @@
 		const { selection } = state;
 		const selPos = selection.$from;
 
-		// Check if we're in a table cell with a formula
+		// First, find if we're in a table and extract its data + DOM rect
+		let foundTable = false;
 		for (let depth = selPos.depth; depth > 0; depth--) {
 			const node = selPos.node(depth);
-			if (node.type.name === 'tableCell' && node.attrs?.formula) {
-				const formula = node.attrs.formula as string;
+			if (node.type.name === 'table') {
+				// Extract full table data for formula evaluation
+				const tableJson = node.toJSON();
+				activeTableData = extractTableData(tableJson);
+				foundTable = true;
+				isInTable = true;
 
-				// Only show row formulas in the bar (not column formulas like SUM)
-				if (formula.startsWith('=')) {
-					if (selectedCellFormula !== formula) {
-						console.log('[FormulaMode] Selected cell with formula:', formula);
-						selectedCellFormula = formula;
+				// Get table DOM element and its rect for floating bar positioning
+				const tablePos = selPos.before(depth);
+				const domNode = ed.view.nodeDOM(tablePos);
+				if (domNode && domNode instanceof HTMLElement) {
+					const rect = domNode.getBoundingClientRect();
+					const editorWrapper = domNode.closest('.editor-body-wrapper') as HTMLElement | null;
+					const wrapperRect = editorWrapper?.getBoundingClientRect();
 
-						// Get row values for preview
-						const row = selPos.node(depth - 1);
-						const values: (number | null)[] = [];
-						row.forEach((cell) => {
-							const text = cell.textContent.trim().replace(/[^0-9.-]/g, '');
-							const num = parseFloat(text);
-							values.push(!isNaN(num) && text !== '' ? num : null);
-						});
-						selectedCellRowValues = values;
+					// Calculate position relative to the editor wrapper (accounting for scroll)
+					if (wrapperRect && editorWrapper) {
+						const scrollTop = editorWrapper.scrollTop;
+						activeTableRect = {
+							top: rect.top - wrapperRect.top + scrollTop,
+							left: rect.left - wrapperRect.left,
+							width: rect.width,
+							bottom: rect.bottom - wrapperRect.top + scrollTop
+						};
 					}
-					return;
 				}
+				break;
 			}
 		}
 
-		// Not in a formula cell
-		if (selectedCellFormula !== null) {
+		// If not in a table, clear data
+		if (!foundTable) {
+			activeTableData = null;
+			currentCellPosition = null;
 			selectedCellFormula = null;
-			selectedCellRowValues = [];
+			activeTableRect = null;
+			isInTable = false;
+			return;
 		}
+
+		// Now check if we're in a table cell and track position
+		for (let depth = selPos.depth; depth > 0; depth--) {
+			const node = selPos.node(depth);
+			if (node.type.name === 'tableCell' || node.type.name === 'tableHeader') {
+				// Find cell position (col, row)
+				const row = selPos.node(depth - 1);
+				const table = selPos.node(depth - 2);
+				let rowIndex = 0;
+				let colIndex = 0;
+
+				// Get column index within row
+				const rowPos = selPos.before(depth - 1);
+				row.forEach((cell, offset, index) => {
+					if (selPos.pos >= rowPos + 1 + offset && selPos.pos < rowPos + 1 + offset + cell.nodeSize) {
+						colIndex = index;
+					}
+				});
+
+				// Get row index within table (skip total rows)
+				const tablePos = selPos.before(depth - 2);
+				let dataRowIndex = 0;
+				table.forEach((r, offset, index) => {
+					if (selPos.pos >= tablePos + 1 + offset && selPos.pos < tablePos + 1 + offset + r.nodeSize) {
+						rowIndex = dataRowIndex;
+					}
+					// Only count non-total rows
+					if (!r.attrs?.isTotal) {
+						dataRowIndex++;
+					}
+				});
+
+				// Update current cell position
+				currentCellPosition = { col: colIndex, row: rowIndex };
+
+				// Load cell format from attributes (if any)
+				const cellCurrency = node.attrs?.cellCurrency as string | null;
+				const cellDecimals = node.attrs?.cellDecimals as number | null;
+				const formatKey = `${colIndex},${rowIndex}`;
+
+				// Only update if the cell has format attributes set
+				if (cellCurrency !== null || cellDecimals !== null) {
+					const existingFormat = cellFormats.get(formatKey);
+					// Only update if different from current
+					if (existingFormat?.currency !== cellCurrency || existingFormat?.decimals !== cellDecimals) {
+						const newFormats = new Map(cellFormats);
+						newFormats.set(formatKey, {
+							currency: cellCurrency || undefined,
+							decimals: cellDecimals ?? undefined
+						});
+						cellFormats = newFormats;
+					}
+				}
+
+				// Check if this cell has a formula
+				const formula = node.attrs?.formula as string | undefined;
+				if (formula && formula.startsWith('=')) {
+					if (selectedCellFormula !== formula) {
+						console.log('[FormulaMode] Selected cell with formula:', formula);
+						selectedCellFormula = formula;
+					}
+				} else {
+					selectedCellFormula = null;
+				}
+				return;
+			}
+		}
+
+		// Not in a cell
+		currentCellPosition = null;
+		selectedCellFormula = null;
 	}
 
 	/**
 	 * Start formula mode for the currently selected cell
 	 * Called from toolbar button - explicit activation (not keystroke detection)
+	 * Phase 3: Extracts full TableData for cross-row evaluation
 	 */
 	function startFormulaModeForCurrentCell() {
 		if (!editor || formulaMode) return;
@@ -868,11 +1230,15 @@
 					}
 				});
 
-				// Get row index within table
+				// Get row index within table (skip total rows for data indexing)
 				const tablePos = selPos.before(depth - 2);
+				let dataRowIndex = 0;
 				table.forEach((r, offset, index) => {
 					if (selPos.pos >= tablePos + 1 + offset && selPos.pos < tablePos + 1 + offset + r.nodeSize) {
-						rowIndex = index;
+						rowIndex = dataRowIndex;
+					}
+					if (!r.attrs?.isTotal) {
+						dataRowIndex++;
 					}
 				});
 
@@ -882,14 +1248,10 @@
 
 				console.log('[FormulaMode] Cell location', { rowIndex, colIndex, existingFormula });
 
-				// Get row values for preview
-				const values: (number | null)[] = [];
-				row.forEach((cell) => {
-					const text = cell.textContent.trim().replace(/[^0-9.-]/g, '');
-					const num = parseFloat(text);
-					values.push(!isNaN(num) && text !== '' ? num : null);
-				});
-				selectedCellRowValues = values;
+				// Extract full table data for cross-row evaluation
+				const tableJson = table.toJSON();
+				activeTableData = extractTableData(tableJson);
+				currentCellPosition = { col: colIndex, row: rowIndex };
 
 				// Enter formula mode
 				enterFormulaMode(rowIndex, colIndex, startFormula === '=' ? '' : node.textContent);
@@ -937,19 +1299,6 @@
 				/>
 			{/if}
 
-			<!-- Phase 2.5: Formula Bar (appears when building/viewing formulas) -->
-			{#if !isReadOnly}
-				<FormulaBar
-					{formulaMode}
-					{selectedCellFormula}
-					rowValues={selectedCellRowValues}
-					onFormulaChange={handleFormulaChange}
-					onSave={() => completeFormula(true)}
-					onCancel={() => completeFormula(false)}
-					onEditExisting={handleEditExistingFormula}
-				/>
-			{/if}
-
 			<!-- Read-only banner -->
 			{#if isReadOnly}
 				<div class="read-only-banner">
@@ -966,9 +1315,37 @@
 				class:read-only={isReadOnly}
 				class:formula-mode={formulaMode?.active}
 				onclickcapture={handleEditorClick}
+				ondblclick={handleDoubleClick}
 				onkeydowncapture={handleFormulaKeydown}
 			>
 				<div bind:this={editorElement} class="editor-container"></div>
+
+				<!-- Phase 3: Floating Formula Bar - positioned below active table -->
+				{#if !isReadOnly && isInTable && activeTableRect}
+					<div
+						class="floating-formula-bar"
+						style="top: {activeTableRect.bottom + 8}px; left: {activeTableRect.left}px; width: {activeTableRect.width}px;"
+					>
+						<FormulaBar
+							{formulaMode}
+							{selectedCellFormula}
+							tableData={activeTableData}
+							currentCell={currentCellPosition}
+							cellFormat={currentCellFormat}
+							onFormulaChange={handleFormulaChange}
+							onSave={() => completeFormula(true)}
+							onCancel={() => completeFormula(false)}
+							onClear={() => {
+								if (formulaMode) {
+									formulaMode.formula = '=';
+									completeFormula(true);
+								}
+							}}
+							onEditExisting={handleEditExistingFormula}
+							onFormatChange={handleFormatChange}
+						/>
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -1096,6 +1473,35 @@
 		flex: 1;
 		overflow-y: auto;
 		padding: 2rem;
+		position: relative; /* For floating formula bar positioning */
+	}
+
+	/* Floating Formula Bar - positioned below active table */
+	.floating-formula-bar {
+		position: absolute;
+		z-index: 100;
+		pointer-events: auto;
+		animation: formula-bar-appear 200ms ease-out;
+		min-width: 320px;
+		max-width: calc(100% - 4rem); /* Respect padding */
+	}
+
+	@keyframes formula-bar-appear {
+		from {
+			opacity: 0;
+			transform: translateY(-8px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	/* Reduce motion for accessibility */
+	@media (prefers-reduced-motion: reduce) {
+		.floating-formula-bar {
+			animation: none;
+		}
 	}
 
 	.editor-body-wrapper.read-only {

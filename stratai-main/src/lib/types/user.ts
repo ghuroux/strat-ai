@@ -35,6 +35,8 @@ export interface UserPreferences {
 
 export interface UserData {
 	id: string;
+	firstName: string | null;
+	lastName: string | null;
 	displayName: string | null;
 	email: string;
 	role: UserRole;
