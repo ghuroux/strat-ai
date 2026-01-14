@@ -265,7 +265,7 @@ export const postgresAreaMembershipsRepository = {
 			SELECT
 				am.id, am.area_id, am.user_id, am.group_id,
 				am.role, am.invited_by, am.created_at,
-				u.display_name as user_name,
+				COALESCE(u.display_name, CONCAT_WS(' ', u.first_name, u.last_name)) as user_name,
 				u.email as user_email,
 				g.name as group_name
 			FROM area_memberships am

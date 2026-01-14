@@ -49,10 +49,19 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 		const searchPattern = `%${query}%`;
 
 		// Search users not already members
+		// Use COALESCE to support users with first_name/last_name instead of display_name
 		const users = await sql<{ id: string; display_name: string | null; email: string }[]>`
-			SELECT u.id, u.display_name, u.email
+			SELECT
+				u.id,
+				COALESCE(u.display_name, CONCAT_WS(' ', u.first_name, u.last_name)) as display_name,
+				u.email
 			FROM users u
-			WHERE (u.display_name ILIKE ${searchPattern} OR u.email ILIKE ${searchPattern})
+			WHERE (
+				u.display_name ILIKE ${searchPattern}
+				OR u.first_name ILIKE ${searchPattern}
+				OR u.last_name ILIKE ${searchPattern}
+				OR u.email ILIKE ${searchPattern}
+			)
 				AND NOT EXISTS (
 					SELECT 1 FROM space_memberships sm
 					WHERE sm.space_id = ${spaceId} AND sm.user_id = u.id

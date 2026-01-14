@@ -74,11 +74,18 @@ async function searchSpaceMembers(query: string, areaId: string, spaceId: string
 	if (query.length < 2) return [];
 
 	const pattern = `%${query}%`;
+	// Use COALESCE to support users with first_name/last_name instead of display_name
 	const results = await sql`
-		SELECT DISTINCT u.id, u.display_name, u.username, u.email
+		SELECT DISTINCT
+			u.id,
+			COALESCE(u.display_name, CONCAT_WS(' ', u.first_name, u.last_name)) as display_name,
+			u.username,
+			u.email
 		FROM users u
 		WHERE (
 			u.display_name ILIKE ${pattern}
+			OR u.first_name ILIKE ${pattern}
+			OR u.last_name ILIKE ${pattern}
 			OR u.username ILIKE ${pattern}
 			OR u.email ILIKE ${pattern}
 		)
@@ -103,7 +110,7 @@ async function searchSpaceMembers(query: string, areaId: string, spaceId: string
 			SELECT user_id FROM area_memberships
 			WHERE area_id = ${areaId} AND user_id IS NOT NULL
 		)
-		ORDER BY u.display_name ASC
+		ORDER BY 2 ASC
 		LIMIT 10
 	`;
 

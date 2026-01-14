@@ -32,6 +32,9 @@ export const SPACE_ROLE_DESCRIPTIONS: Record<SpaceRole, string> = {
 	guest: 'Only sees explicitly shared areas'
 };
 
+// Roles that can be assigned to members (excludes owner)
+export const SPACE_ASSIGNABLE_ROLES: SpaceRole[] = ['admin', 'member', 'guest'];
+
 // ============================================
 // SPACE MEMBERSHIP ENTITY
 // ============================================
@@ -80,15 +83,17 @@ export interface SpaceMembershipRow {
 // ============================================
 
 export function rowToSpaceMembership(row: SpaceMembershipRow): SpaceMembership {
+	// postgres.js auto-transforms all columns to camelCase, so access them accordingly
+	const r = row as any;
 	return {
-		id: row.id,
-		spaceId: row.space_id,
-		userId: row.user_id ?? undefined,
-		groupId: row.group_id ?? undefined,
-		role: row.role,
-		invitedBy: row.invited_by ?? undefined,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at
+		id: r.id,
+		spaceId: r.spaceId ?? r.space_id, // Try camelCase first, fallback to snake_case
+		userId: r.userId ?? r.user_id ?? undefined,
+		groupId: r.groupId ?? r.group_id ?? undefined,
+		role: r.role,
+		invitedBy: r.invitedBy ?? r.invited_by ?? undefined,
+		createdAt: r.createdAt ?? r.created_at,
+		updatedAt: r.updatedAt ?? r.updated_at
 	};
 }
 

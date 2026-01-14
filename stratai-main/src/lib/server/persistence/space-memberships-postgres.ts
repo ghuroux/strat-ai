@@ -233,15 +233,13 @@ async function getMembers(spaceId: string): Promise<SpaceMembershipWithUser[]> {
 		(SpaceMembershipRow & {
 			user_email: string | null;
 			user_display_name: string | null;
-			user_avatar_url: string | null;
 			group_name: string | null;
 		})[]
 	>`
 		SELECT
 			sm.*,
 			u.email as user_email,
-			u.display_name as user_display_name,
-			u.avatar_url as user_avatar_url,
+			COALESCE(u.display_name, CONCAT_WS(' ', u.first_name, u.last_name)) as user_display_name,
 			g.name as group_name
 		FROM space_memberships sm
 		LEFT JOIN users u ON sm.user_id = u.id
@@ -257,23 +255,33 @@ async function getMembers(spaceId: string): Promise<SpaceMembershipWithUser[]> {
 			sm.created_at ASC
 	`;
 
-	return rows.map((row) => ({
-		...rowToSpaceMembership(row),
-		user: row.user_id
-			? {
-					id: row.user_id,
-					email: row.user_email!,
-					displayName: row.user_display_name,
-					avatarUrl: row.user_avatar_url
-				}
-			: undefined,
-		group: row.group_id
-			? {
-					id: row.group_id,
-					name: row.group_name!
-				}
-			: undefined
-	}));
+	return rows.map((row) => {
+		// postgres.js transforms all columns to camelCase, so we need to use:
+		// userId (not user_id), userEmail (not user_email), etc.
+		const userId = (row as any).userId;
+		const userEmail = (row as any).userEmail;
+		const userDisplayName = (row as any).userDisplayName;
+		const groupId = (row as any).groupId;
+		const groupName = (row as any).groupName;
+
+		return {
+			...rowToSpaceMembership(row),
+			user: userId
+				? {
+						id: userId,
+						email: userEmail!,
+						displayName: userDisplayName,
+						avatarUrl: null // avatar_url column not yet in database
+					}
+				: undefined,
+			group: groupId
+				? {
+						id: groupId,
+						name: groupName!
+					}
+				: undefined
+		};
+	});
 }
 
 /**

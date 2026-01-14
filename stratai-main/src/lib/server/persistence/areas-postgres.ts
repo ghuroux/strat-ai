@@ -169,14 +169,15 @@ export const postgresAreaRepository: AreaRepository = {
 
 	/**
 	 * Find the General area for a space
+	 * General areas are shared across all space members, not per-user
 	 */
 	async findGeneral(spaceId: string, userId: string): Promise<Area | null> {
 		const rows = await sql<AreaRow[]>`
 			SELECT * FROM areas
 			WHERE space_id = ${spaceId}
 			  AND is_general = true
-			  AND user_id = ${userId}
 			  AND deleted_at IS NULL
+			LIMIT 1
 		`;
 		return rows.length > 0 ? rowToArea(rows[0]) : null;
 	},
@@ -255,15 +256,14 @@ export const postgresAreaRepository: AreaRepository = {
 	 * Called automatically when a space is created
 	 */
 	async createGeneral(spaceId: string, userId: string): Promise<Area> {
-		// Check if General already exists
+		// Check if General already exists (shared across all space members)
 		const existing = await this.findGeneral(spaceId, userId);
 		if (existing) {
 			return existing;
 		}
 
-		// Include userId in ID to avoid conflicts between users
-		// Format matches migration 004: space_id-user_id-general
-		const id = `${spaceId}-${userId}-general`;
+		// General area ID format: space_id-general (no user_id, since it's shared)
+		const id = `${spaceId}-general`;
 		const now = new Date();
 		let wasInserted = false;
 
@@ -290,12 +290,12 @@ export const postgresAreaRepository: AreaRepository = {
 					${now},
 					${now}
 				)
-				ON CONFLICT (space_id, slug, user_id) WHERE deleted_at IS NULL DO NOTHING
+				ON CONFLICT (id) DO NOTHING
 				RETURNING id
 			`;
 			wasInserted = result.length > 0;
 		} catch (e) {
-			// If ON CONFLICT inference fails or other error, check if area exists
+			// If insert fails, check if area already exists
 			console.error('[createGeneral] INSERT failed, checking if area exists:', e);
 			const fallback = await this.findGeneral(spaceId, userId);
 			if (fallback) return fallback;
@@ -347,6 +347,7 @@ export const postgresAreaRepository: AreaRepository = {
 				color = ${updates.color === undefined ? sql`color` : updates.color},
 				icon = ${updates.icon === undefined ? sql`icon` : updates.icon},
 				order_index = COALESCE(${updates.orderIndex ?? null}, order_index),
+				is_restricted = ${updates.isRestricted === undefined ? sql`is_restricted` : updates.isRestricted},
 				updated_at = NOW()
 			WHERE id = ${id}
 			  AND user_id = ${userId}

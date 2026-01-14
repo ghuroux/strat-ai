@@ -8,7 +8,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
-import { canManageSpaceMembers, type SpaceRole } from '$lib/types/space-memberships';
+import { canManageSpaceMembers, type SpaceRole, type SpaceMembershipWithUser } from '$lib/types/space-memberships';
+import { sql } from '$lib/server/persistence/db';
 
 /**
  * GET /api/spaces/[id]/members
@@ -31,11 +32,62 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
-		// Fetch all members
+		// Fetch all members from memberships table
 		const members = await postgresSpaceMembershipsRepository.getMembers(spaceId);
 
+		// Fetch the space owner (stored in spaces.user_id, not in memberships)
+		// Use COALESCE for display_name fallback to first_name + last_name
+		const ownerRows = await sql<{
+			ownerId: string;
+			ownerEmail: string;
+			ownerDisplayName: string | null;
+			spaceCreatedAt: Date;
+		}[]>`
+			SELECT
+				s.user_id as owner_id,
+				u.email as owner_email,
+				COALESCE(u.display_name, CONCAT_WS(' ', u.first_name, u.last_name)) as owner_display_name,
+				s.created_at as space_created_at
+			FROM spaces s
+			JOIN users u ON s.user_id = u.id
+			WHERE s.id = ${spaceId}
+				AND s.deleted_at IS NULL
+		`;
+
+		// Check if owner already exists in members list (from space_memberships table)
+		// This prevents duplicates since migration 031 auto-creates owner memberships
+		let allMembers: SpaceMembershipWithUser[] = [...members];
+
+		if (ownerRows.length > 0) {
+			const owner = ownerRows[0];
+
+			// Check if owner is already in the members list
+			const ownerAlreadyExists = members.some(m => m.userId === owner.ownerId);
+
+			if (!ownerAlreadyExists) {
+				// Only synthesize owner record if they're not already in the list
+				const ownerMembership: SpaceMembershipWithUser = {
+					id: `owner_${spaceId}`, // Synthetic ID
+					spaceId,
+					userId: owner.ownerId,
+					// groupId and invitedBy omitted (undefined) for owner
+					role: 'owner',
+					createdAt: owner.spaceCreatedAt,
+					updatedAt: owner.spaceCreatedAt, // Same as created for synthetic record
+					user: {
+						id: owner.ownerId,
+						email: owner.ownerEmail,
+						displayName: owner.ownerDisplayName,
+						avatarUrl: null // avatar_url column not yet in database
+					}
+				};
+				// Owner goes first
+				allMembers = [ownerMembership, ...members];
+			}
+		}
+
 		return json({
-			members,
+			members: allMembers,
 			userRole: access.role,
 			accessSource: access.source
 		});

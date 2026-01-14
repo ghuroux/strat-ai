@@ -66,7 +66,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
 /**
  * PATCH /api/areas/[id]
- * Body: { name?, context?, contextDocumentIds?, color?, icon?, orderIndex? }
+ * Body: { name?, context?, contextDocumentIds?, color?, icon?, orderIndex?, isRestricted? }
  * Note: General areas cannot have their name changed
  * Requires: owner or admin access
  */
@@ -141,6 +141,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		if (body.color !== undefined) updates.color = body.color;
 		if (body.icon !== undefined) updates.icon = body.icon;
 		if (body.orderIndex !== undefined) updates.orderIndex = body.orderIndex;
+		if (body.isRestricted !== undefined) updates.isRestricted = body.isRestricted;
 
 		const area = await postgresAreaRepository.update(params.id, updates, userId);
 
