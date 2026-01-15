@@ -94,6 +94,14 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			return json({ error: 'name must be a non-empty string' }, { status: 400 });
 		}
 
+		// Fail fast: Check if attempting to restrict a General area
+		if (body.isRestricted === true) {
+			const area = await postgresAreaRepository.findById(params.id, userId);
+			if (area?.isGeneral) {
+				return json({ error: 'General area cannot be restricted' }, { status: 400 });
+			}
+		}
+
 		// Validate document activation if contextDocumentIds is being updated
 		if (body.contextDocumentIds !== undefined) {
 			// Get current area to find spaceId and current contextDocumentIds
@@ -160,6 +168,11 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 		// Handle General area rename attempt
 		if (error instanceof Error && error.message.includes('Cannot rename the General area')) {
+			return json({ error: error.message }, { status: 400 });
+		}
+
+		// Handle General area restriction attempt
+		if (error instanceof Error && error.message.includes('General area cannot be restricted')) {
 			return json({ error: error.message }, { status: 400 });
 		}
 

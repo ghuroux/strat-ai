@@ -194,6 +194,60 @@ Continue to next story...
 
 ---
 
+## When All Stories Complete (Feature Cleanup)
+
+When all stories in `prd.json` are marked "completed":
+
+### 1. Final Quality Gate
+```bash
+npm run check           # 0 TypeScript errors
+npm run lint            # 0 lint errors (or pre-existing only)
+```
+
+### 2. Update AGENTS.md with Reusable Learnings
+
+Extract **general patterns** from `progress.txt` that apply beyond this feature:
+- New code patterns discovered
+- Gotchas that others should know
+- Architectural insights
+
+**Skip feature-specific learnings** - they're already in the code.
+
+### 3. Mark PRD as Complete
+
+Update `tasks/prd-[feature].md` header:
+```markdown
+# PRD: [Feature Name]
+
+> **Status:** ✅ COMPLETED
+> **Completed:** [date]
+> **Stories:** X/X complete
+```
+
+### 4. Reset Working Files
+
+Clear for next feature:
+
+**parent-task-id.txt** → Empty
+**prd.json** → Reset to:
+```json
+{
+  "feature": "",
+  "created": "",
+  "parent_task_id": "",
+  "stories": []
+}
+```
+**progress.txt** → Reset to template (keep header, clear iterations)
+
+### 5. Commit Cleanup
+```bash
+git add -A
+git commit -m "chore: complete [feature] and reset ralph working files"
+```
+
+---
+
 ## Quick Reference
 
 ### File Locations

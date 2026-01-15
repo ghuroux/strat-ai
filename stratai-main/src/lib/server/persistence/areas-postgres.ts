@@ -114,6 +114,26 @@ export const postgresAreaRepository: AreaRepository = {
 				    -- OR member/admin (NOT guest) sees open areas
 				    OR sm.role IN ('owner', 'admin', 'member')
 				  )
+
+				UNION
+
+				-- General areas are ALWAYS visible to space members (not guests)
+				-- This is explicit defense-in-depth for the General area invariant
+				-- General areas cannot be restricted (enforced by DB constraint)
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN spaces s ON a.space_id = s.id
+				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
+				WHERE a.space_id = ${spaceId}
+				  AND a.deleted_at IS NULL
+				  AND s.deleted_at IS NULL
+				  AND a.is_general = true
+				  AND (
+				    -- Space owner
+				    s.user_id = ${userId}
+				    -- OR non-guest space member
+				    OR sm.role IN ('owner', 'admin', 'member')
+				  )
 			)
 			SELECT a.*
 			FROM areas a
@@ -328,6 +348,11 @@ export const postgresAreaRepository: AreaRepository = {
 		// General areas have limited update capabilities
 		if (existing.isGeneral && updates.name) {
 			throw new Error('Cannot rename the General area');
+		}
+
+		// General areas cannot be restricted (enforced at DB level too)
+		if (existing.isGeneral && updates.isRestricted === true) {
+			throw new Error('General area cannot be restricted');
 		}
 
 		// If name is being changed, check for duplicates

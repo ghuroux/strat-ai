@@ -1,9 +1,9 @@
 ---
 name: prd-creator
-description: "Generate schema-aware PRD from spec documents. Use when planning a feature, starting a new project, or creating requirements. Triggers on: create prd, write prd, plan feature, requirements for, spec out, ralph prd."
+description: "Generate schema-aware PRD structure and output. For research and clarification, use prd-creator-interactive.md first. Triggers on: generate prd, prd structure, format prd."
 ---
 
-# PRD Creator
+# PRD Creator (Generation)
 
 ## Purpose
 
@@ -13,89 +13,27 @@ Generate detailed Product Requirements Documents that are:
 - **Gate-enforced**: All acceptance criteria include required quality checks
 - **Right-sized**: Tasks fit within one context window
 
+## Prerequisites
+
+**This skill assumes research and clarification are COMPLETE.**
+
+For the full interactive workflow (research → clarify → generate), use:
+```
+agents/ralph/skills/prd-creator-interactive.md
+```
+
+The interactive skill will delegate to this skill for generation.
+
 ## The Job
 
-1. **Research** - Analyze codebase for similar patterns
-2. **Clarify** - Ask 3-5 essential questions (if needed)
-3. **Generate** - Create structured PRD with stories
-4. **Output** - Save to `agents/ralph/prd.json` and optional markdown
+1. **Structure** - Create PRD with required sections
+2. **Schema Context** - Include DB mappings for all data work  
+3. **Output** - Save to `agents/ralph/prd.json` and markdown
+4. **Validate** - Run quality checklist before saving
 
 ---
 
-## Step 1: Research Phase
-
-Before generating the PRD, research the codebase:
-
-### Codebase Analysis
-
-```bash
-# Search for similar patterns
-grep -r "similar_pattern" src/
-
-# Find related components
-find src -name "*related*" -type f
-
-# Check existing implementations
-cat src/lib/server/persistence/similar-postgres.ts
-```
-
-### Git History
-
-```bash
-# Find related commits
-git log --oneline --grep="related feature"
-
-# See how similar features were built
-git log --oneline -- src/lib/server/persistence/
-```
-
-### Documentation Check
-
-- `AGENTS.md` - Patterns and gotchas
-- `docs/database/SCHEMA_REFERENCE.md` - Auto-generated TypeScript interfaces
-- `docs/database/ENTITY_MODEL.md` - Schema context (Section 12 for complete schema)
-- `docs/DATABASE_STANDARDIZATION_PROJECT.md` - DB access patterns
-
-### Schema Query
-
-If the feature involves database entities:
-1. Check `docs/database/SCHEMA_REFERENCE.md` for ready-made TypeScript interfaces
-2. Look up tables in `docs/database/ENTITY_MODEL.md` for relationships
-3. Note nullable columns requiring `??` handling
-4. Identify relationships and foreign keys
-
----
-
-## Step 2: Clarifying Questions (If Needed)
-
-Only ask if the initial prompt is ambiguous. Focus on:
-
-- **Problem/Goal**: What problem does this solve?
-- **Core Functionality**: What are the key actions?
-- **Scope/Boundaries**: What should it NOT do?
-- **Users**: Who is this for?
-
-### Format Questions Like This
-
-```
-1. What is the primary goal?
-   A. Improve user experience
-   B. Add new capability
-   C. Fix existing issue
-   D. Other: [specify]
-
-2. What is the scope?
-   A. Minimal viable version
-   B. Full-featured implementation
-   C. Backend only
-   D. Frontend only
-```
-
-This lets users respond with "1A, 2B" for quick iteration.
-
----
-
-## Step 3: PRD Structure
+## Step 1: PRD Structure
 
 Generate the PRD with these sections:
 
@@ -198,7 +136,7 @@ What this feature will NOT include. Critical for managing scope.
 
 ---
 
-## Step 4: DB Stories Must Include Schema Context
+## Step 2: DB Stories Must Include Schema Context
 
 For any story involving database work, include the schema context:
 
@@ -239,15 +177,19 @@ For any story involving database work, include the schema context:
 
 ---
 
-## Step 5: Output Formats
+## Step 3: Output Formats
 
-### prd.json Format
+**⚠️ CRITICAL: You MUST create BOTH files. The Ralph loop requires prd.json.**
+
+### Primary Output: prd.json (REQUIRED)
+
+**Note:** The `parent_task_id` must match the value in `agents/ralph/parent-task-id.txt`
 
 ```json
 {
   "feature": "Model Configuration System",
   "created": "2026-01-14",
-  "parent_task_id": "task-abc123",
+  "parent_task_id": "model-configuration-system",  // Must match parent-task-id.txt
   "research": {
     "similar_patterns": [
       "src/lib/server/persistence/users-postgres.ts"
@@ -285,16 +227,20 @@ For any story involving database work, include the schema context:
 }
 ```
 
-### Markdown PRD (Optional)
+### Secondary Output: Markdown PRD (Optional but Recommended)
 
 Also generate a readable markdown version at `tasks/prd-[feature-name].md` for human review.
 
+**Output Priority:**
+1. ✅ `agents/ralph/prd.json` - **REQUIRED** - Ralph loop reads this
+2. ✅ `agents/ralph/progress.txt` - **REQUIRED** - Initialize with feature context
+3. ✅ `agents/ralph/parent-task-id.txt` - **REQUIRED** - Task scope
+4. 📄 `tasks/prd-[feature-name].md` - Optional - Human-readable copy
+
 ---
 
-## Step 6: Checklist Before Saving
+## Step 4: Checklist Before Saving
 
-- [ ] Researched codebase for similar patterns
-- [ ] Asked clarifying questions (if needed)
 - [ ] Each story is right-sized (one context window)
 - [ ] DB stories include schema context with camelCase
 - [ ] All AC include `npm run check` and `npm run lint`
@@ -302,6 +248,7 @@ Also generate a readable markdown version at `tasks/prd-[feature-name].md` for h
 - [ ] UI stories include browser verification
 - [ ] Non-goals clearly define scope boundaries
 - [ ] Stories ordered by dependencies
+- [ ] Research findings documented (from interactive phase)
 
 ---
 

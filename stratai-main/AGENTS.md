@@ -46,6 +46,63 @@ interface Row { user_id: string }
 
 ---
 
+### Pattern: Conditional Column Fetch with CASE WHEN
+
+**When to use:** Fetching related data only for certain rows (efficiency)
+
+**Implementation:**
+```sql
+-- Only fetch owner info for spaces the user doesn't own
+SELECT
+  s.*,
+  CASE WHEN s.user_id != ${userId}::uuid 
+       THEN owner_user.first_name 
+  END as owner_first_name,
+  CASE WHEN s.user_id != ${userId}::uuid 
+       THEN owner_user.display_name 
+  END as owner_display_name
+FROM spaces s
+LEFT JOIN users owner_user ON s.user_id = owner_user.id
+```
+
+**Why:** Avoids fetching unnecessary data for rows that don't need it. 
+Results in NULL for excluded rows (handled by `?? null` in rowTo* converter).
+
+**See:** `spaces-postgres.ts` → `findAllAccessible`
+
+---
+
+### Pattern: Display Helper with Fallback Chain
+
+**When to use:** UI display logic with multiple fallback levels
+
+**Implementation:**
+```typescript
+// src/lib/utils/space-display.ts pattern
+export function getDisplayName(item: Item, context: string): string {
+  // Level 1: Primary condition
+  if (item.ownerId === context) return item.name;
+  
+  // Level 2: Special case
+  if (item.type === 'special') return item.name;
+  
+  // Level 3: Preferred field
+  if (item.ownerFirstName) return `${item.name} (${item.ownerFirstName})`;
+  
+  // Level 4: Fallback field (extract from compound)
+  if (item.ownerDisplayName) {
+    return `${item.name} (${item.ownerDisplayName.split(' ')[0]})`;
+  }
+  
+  // Level 5: Final fallback
+  return item.name;
+}
+```
+
+**See:** `src/lib/utils/space-display.ts`
+
+---
+
 ### Pattern: Name Fallback
 
 **When to use:** Displaying user names where display_name might be null
@@ -130,6 +187,79 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   return json(entity);
 };
 ```
+
+---
+
+### Pattern: CTE with Multiple UNIONs for Access Control
+
+**When to use:** Complex visibility queries where access can come from multiple paths
+
+**Implementation:**
+```sql
+-- findAllAccessible pattern: CTE with UNIONs for each access path
+WITH accessible_ids AS (
+  -- Path 1: User owns the resource
+  SELECT id FROM areas WHERE user_id = $userId
+  UNION
+  -- Path 2: User has explicit membership
+  SELECT area_id FROM area_memberships WHERE user_id = $userId
+  UNION
+  -- Path 3: User is in a group with access
+  SELECT am.area_id FROM area_memberships am
+  JOIN group_memberships gm ON am.group_id = gm.group_id
+  WHERE gm.user_id = $userId
+  UNION
+  -- Path 4: Special case (e.g., General areas for space members)
+  SELECT id FROM areas WHERE is_general = true AND ...
+)
+SELECT * FROM areas WHERE id IN (SELECT id FROM accessible_ids)
+```
+
+**See:** `areas-postgres.ts` → `findAllAccessible`
+
+---
+
+### Pattern: Defense-in-Depth for Business Rules
+
+**When to use:** Critical invariants that must never be violated (e.g., "General area cannot be restricted")
+
+**Implementation layers:**
+```
+Layer 1: Database Constraint (CHECK/UNIQUE)
+    ↓ Cannot insert/update invalid state
+Layer 2: Repository Validation (throw Error)
+    ↓ Fails before SQL execution  
+Layer 3: API Validation (return 400)
+    ↓ Fail fast, clear error message
+Layer 4: UI Prevention (hide/disable control)
+    ↓ User cannot attempt invalid action
+```
+
+**Example:** General area protection
+- DB: `CHECK (NOT (is_general = true AND is_restricted = true))`
+- Repo: `throw new Error('General area cannot be restricted')`
+- API: `return json({ error: '...' }, { status: 400 })`
+- UI: `{#if !isGeneral} <Toggle /> {:else} <InfoMessage /> {/if}`
+
+---
+
+### Pattern: PostgreSQL CHECK Constraints
+
+**When to use:** Enforcing business rules at database level
+
+**Implementation:**
+```sql
+-- Add constraint to existing table
+ALTER TABLE areas
+ADD CONSTRAINT chk_general_not_restricted
+CHECK (NOT (is_general = true AND is_restricted = true));
+
+-- With documentation
+COMMENT ON CONSTRAINT chk_general_not_restricted ON areas IS
+    'General areas must always be accessible. They cannot be restricted.';
+```
+
+**See:** Migration `033-general-area-protection.sql`
 
 ---
 
@@ -322,6 +452,6 @@ Examples:
 
 ---
 
-*Last updated: 2026-01-14*
+*Last updated: 2026-01-15 (Phase B patterns added)*
 *Maintainer: Development Team*
 

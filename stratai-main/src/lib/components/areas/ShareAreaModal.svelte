@@ -426,6 +426,7 @@
 								spaceName={space?.name ?? 'space'}
 								onChange={handleAccessChange}
 								disabled={userAccessInfo?.userRole !== 'owner'}
+								isGeneral={area?.isGeneral ?? false}
 							/>
 						</section>
 					{/if}

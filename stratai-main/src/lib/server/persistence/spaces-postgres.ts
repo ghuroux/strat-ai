@@ -436,9 +436,13 @@ export const postgresSpaceRepository: SpaceRepository = {
 							 WHEN 'guest' THEN 4
 						 END
 					 LIMIT 1
-				   ) as user_role
+				   ) as user_role,
+				   -- Owner info for invited spaces (only when not the owner)
+				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.first_name END as owner_first_name,
+				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.display_name END as owner_display_name
 			FROM spaces s
 			JOIN accessible_spaces a ON s.id = a.id
+			LEFT JOIN users owner_user ON s.user_id = owner_user.id
 			ORDER BY
 				s.space_type ASC,    -- org first, then project, then personal
 				s.type ASC,          -- system spaces first
@@ -491,8 +495,12 @@ export const postgresSpaceRepository: SpaceRepository = {
 					AND s.deleted_at IS NULL
 			)
 			SELECT s.*,
-				   (SELECT role FROM access_check ORDER BY priority LIMIT 1) as user_role
+				   (SELECT role FROM access_check ORDER BY priority LIMIT 1) as user_role,
+				   -- Owner info for invited spaces (only when not the owner)
+				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.first_name END as owner_first_name,
+				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.display_name END as owner_display_name
 			FROM spaces s
+			LEFT JOIN users owner_user ON s.user_id = owner_user.id
 			WHERE s.id = ${id}
 				AND s.deleted_at IS NULL
 				AND EXISTS (SELECT 1 FROM access_check)
@@ -550,8 +558,12 @@ export const postgresSpaceRepository: SpaceRepository = {
 					AND s.deleted_at IS NULL
 			)
 			SELECT s.*,
-				   (SELECT role FROM access_check ORDER BY priority LIMIT 1) as user_role
+				   (SELECT role FROM access_check ORDER BY priority LIMIT 1) as user_role,
+				   -- Owner info for invited spaces (only when not the owner)
+				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.first_name END as owner_first_name,
+				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.display_name END as owner_display_name
 			FROM spaces s
+			LEFT JOIN users owner_user ON s.user_id = owner_user.id
 			WHERE s.slug = ${slug}
 				AND s.deleted_at IS NULL
 				AND EXISTS (SELECT 1 FROM access_check)

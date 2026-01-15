@@ -15,6 +15,7 @@
 	import { SpaceModal } from '../spaces';
 	import type { CreateSpaceInput, UpdateSpaceInput, Space } from '$lib/types/spaces';
 	import { MAX_CUSTOM_SPACES } from '$lib/types/spaces';
+	import { getSpaceDisplayName } from '$lib/utils/space-display';
 
 	interface Props {
 		onModelChange?: (model: string) => void;
@@ -63,6 +64,9 @@
 
 	// Get user data from page data (set by +layout.server.ts)
 	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
+
+	// Current user ID for space display name disambiguation
+	let currentUserId = $derived(userStore.id ?? '');
 
 	onMount(() => {
 		spacesStore.loadSpaces();
@@ -214,7 +218,7 @@
 					class:active={currentSpaceSlug === space.slug}
 					style="--space-color: {space.color}"
 				>
-					{space.name}
+					{getSpaceDisplayName(space, currentUserId)}
 				</a>
 			{/each}
 
@@ -233,7 +237,7 @@
 					ondblclick={(e) => { e.preventDefault(); handleEditSpace(space); }}
 					title="Double-click to edit"
 				>
-					{space.name}
+					{getSpaceDisplayName(space, currentUserId)}
 					<button
 						type="button"
 						class="space-nav-edit"

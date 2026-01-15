@@ -18,9 +18,10 @@
 		spaceName: string;
 		onChange: (isRestricted: boolean) => Promise<void>;
 		disabled?: boolean;
+		isGeneral?: boolean;
 	}
 
-	let { isRestricted, areaName, spaceName, onChange, disabled = false }: Props = $props();
+	let { isRestricted, areaName, spaceName, onChange, disabled = false, isGeneral = false }: Props = $props();
 
 	// State
 	let isChanging = $state(false);
@@ -65,71 +66,84 @@
 	}
 </script>
 
-<div class="access-toggle">
-	<!-- Open Option -->
-	<button
-		type="button"
-		class="access-option"
-		class:selected={!isRestricted}
-		onclick={() => handleOptionClick(false)}
-		disabled={disabled || isChanging}
-		role="radio"
-		aria-checked={!isRestricted}
-	>
-		<div class="option-radio">
-			{#if !isRestricted}
-				<div class="radio-dot"></div>
-			{/if}
-		</div>
-		<div class="option-content">
-			<div class="option-header">
-				<Unlock size={18} class="option-icon" />
-				<span class="option-title">Open to Space</span>
-			</div>
-			<p class="option-description">
-				Anyone with access to {spaceName} can view and participate
+{#if isGeneral}
+	<!-- General Area Info Message -->
+	<div class="general-area-info">
+		<Info size={18} class="info-icon" />
+		<div class="info-content">
+			<p class="info-title">Always Open</p>
+			<p class="info-description">
+				The General area is always accessible to all space members.
 			</p>
 		</div>
-	</button>
+	</div>
+{:else}
+	<div class="access-toggle">
+		<!-- Open Option -->
+		<button
+			type="button"
+			class="access-option"
+			class:selected={!isRestricted}
+			onclick={() => handleOptionClick(false)}
+			disabled={disabled || isChanging}
+			role="radio"
+			aria-checked={!isRestricted}
+		>
+			<div class="option-radio">
+				{#if !isRestricted}
+					<div class="radio-dot"></div>
+				{/if}
+			</div>
+			<div class="option-content">
+				<div class="option-header">
+					<Unlock size={18} class="option-icon" />
+					<span class="option-title">Open to Space</span>
+				</div>
+				<p class="option-description">
+					Anyone with access to {spaceName} can view and participate
+				</p>
+			</div>
+		</button>
 
-	<!-- Restricted Option -->
-	<button
-		type="button"
-		class="access-option"
-		class:selected={isRestricted}
-		onclick={() => handleOptionClick(true)}
-		disabled={disabled || isChanging}
-		role="radio"
-		aria-checked={isRestricted}
-	>
-		<div class="option-radio">
+		<!-- Restricted Option -->
+		<button
+			type="button"
+			class="access-option"
+			class:selected={isRestricted}
+			onclick={() => handleOptionClick(true)}
+			disabled={disabled || isChanging}
+			role="radio"
+			aria-checked={isRestricted}
+		>
+			<div class="option-radio">
+				{#if isRestricted}
+					<div class="radio-dot"></div>
+				{/if}
+			</div>
+			<div class="option-content">
+				<div class="option-header">
+					<Lock size={18} class="option-icon" />
+					<span class="option-title">Restricted</span>
+				</div>
+				<p class="option-description">
+					Only invited members have access. Requires explicit invites.
+				</p>
+			</div>
+		</button>
+	</div>
+
+	<!-- Info Box -->
+	<div class="access-info">
+		<Info size={16} class="info-icon" />
+		<p class="info-text">
 			{#if isRestricted}
-				<div class="radio-dot"></div>
+				This area is private. Only invited members can access it.
+			{:else}
+				All space members can access this area by default.
 			{/if}
-		</div>
-		<div class="option-content">
-			<div class="option-header">
-				<Lock size={18} class="option-icon" />
-				<span class="option-title">Restricted</span>
-			</div>
-			<p class="option-description">
-				Only invited members have access. Requires explicit invites.
-			</p>
-		</div>
-	</button>
-</div>
-
-<!-- Info Box -->
-<div class="access-info">
-	<Info size={16} class="info-icon" />
-	<p class="info-text">
-		{#if isRestricted}
-			This area is private. Only invited members can access it.
-		{:else}
-			All space members can access this area by default.
-		{/if}
-	</p>
-</div>
+		</p>
+	</div>
+{/if}
 
 <!-- Restriction Confirmation Modal -->
 <RestrictAccessConfirmModal
@@ -143,6 +157,58 @@
 />
 
 <style>
+	/* General Area Info */
+	.general-area-info {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 1rem;
+		background: rgba(34, 197, 94, 0.1);
+		border: 1px solid rgba(34, 197, 94, 0.3);
+		border-radius: 0.5rem;
+	}
+
+	.general-area-info :global(.info-icon) {
+		color: #22c55e;
+		flex-shrink: 0;
+		margin-top: 0.125rem;
+	}
+
+	.info-content {
+		flex: 1;
+	}
+
+	.info-title {
+		font-weight: 600;
+		color: #22c55e;
+		margin: 0 0 0.25rem 0;
+	}
+
+	.info-description {
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.7);
+		line-height: 1.4;
+		margin: 0;
+	}
+
+	/* Light mode - General Area */
+	:global(html.light) .general-area-info {
+		background: rgba(34, 197, 94, 0.08);
+		border-color: rgba(22, 163, 74, 0.3);
+	}
+
+	:global(html.light) .general-area-info :global(.info-icon) {
+		color: #16a34a;
+	}
+
+	:global(html.light) .info-title {
+		color: #16a34a;
+	}
+
+	:global(html.light) .info-description {
+		color: rgba(0, 0, 0, 0.7);
+	}
+
 	.access-toggle {
 		display: flex;
 		flex-direction: column;

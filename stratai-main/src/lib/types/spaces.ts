@@ -47,6 +47,9 @@ export interface Space {
 	// Space membership fields (added in migration 031)
 	spaceType?: SpaceType; // personal, organization, or project
 	organizationId?: string; // For org-scoped spaces
+	// Owner info for invited spaces (Phase B: name collision fix)
+	ownerFirstName?: string | null; // Owner's first name (for display when invited)
+	ownerDisplayName?: string | null; // Owner's display name (fallback)
 }
 
 /**
@@ -71,6 +74,10 @@ export interface SpaceRow {
 	// Note: postgres.js auto-converts snake_case to camelCase
 	spaceType: SpaceType | null;
 	organizationId: string | null;
+	// Owner info for invited spaces (Phase B: name collision fix)
+	// Populated via JOIN when fetching accessible spaces
+	ownerFirstName: string | null;
+	ownerDisplayName: string | null;
 }
 
 /**
@@ -138,7 +145,10 @@ export function rowToSpace(row: SpaceRow): Space {
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
 		spaceType: row.spaceType ?? undefined,
-		organizationId: row.organizationId ?? undefined
+		organizationId: row.organizationId ?? undefined,
+		// Owner info for invited spaces (Phase B: name collision fix)
+		ownerFirstName: row.ownerFirstName ?? null,
+		ownerDisplayName: row.ownerDisplayName ?? null
 	};
 }
 
