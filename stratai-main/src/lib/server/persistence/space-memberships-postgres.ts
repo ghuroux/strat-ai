@@ -231,9 +231,9 @@ async function updateMemberRole(
 async function getMembers(spaceId: string): Promise<SpaceMembershipWithUser[]> {
 	const rows = await sql<
 		(SpaceMembershipRow & {
-			user_email: string | null;
-			user_display_name: string | null;
-			group_name: string | null;
+			userEmail: string | null;
+			userDisplayName: string | null;
+			groupName: string | null;
 		})[]
 	>`
 		SELECT
@@ -256,28 +256,22 @@ async function getMembers(spaceId: string): Promise<SpaceMembershipWithUser[]> {
 	`;
 
 	return rows.map((row) => {
-		// postgres.js transforms all columns to camelCase, so we need to use:
-		// userId (not user_id), userEmail (not user_email), etc.
-		const userId = (row as any).userId;
-		const userEmail = (row as any).userEmail;
-		const userDisplayName = (row as any).userDisplayName;
-		const groupId = (row as any).groupId;
-		const groupName = (row as any).groupName;
-
+		// postgres.js transforms all columns to camelCase
+		// SpaceMembershipRow now uses camelCase, so we can access directly
 		return {
 			...rowToSpaceMembership(row),
-			user: userId
+			user: row.userId
 				? {
-						id: userId,
-						email: userEmail!,
-						displayName: userDisplayName,
+						id: row.userId,
+						email: row.userEmail!,
+						displayName: row.userDisplayName,
 						avatarUrl: null // avatar_url column not yet in database
 					}
 				: undefined,
-			group: groupId
+			group: row.groupId
 				? {
-						id: groupId,
-						name: groupName!
+						id: row.groupId,
+						name: row.groupName!
 					}
 				: undefined
 		};
@@ -289,7 +283,7 @@ async function getMembers(spaceId: string): Promise<SpaceMembershipWithUser[]> {
  * Returns both direct and group memberships
  */
 async function findSpacesForUser(userId: string): Promise<{ spaceId: string; role: SpaceRole }[]> {
-	const rows = await sql<{ space_id: string; role: SpaceRole }[]>`
+	const rows = await sql<{ spaceId: string; role: SpaceRole }[]>`
 		SELECT DISTINCT sm.space_id, sm.role
 		FROM space_memberships sm
 		WHERE sm.user_id = ${userId}::uuid
@@ -302,7 +296,7 @@ async function findSpacesForUser(userId: string): Promise<{ spaceId: string; rol
 		WHERE gm.user_id = ${userId}::uuid
 	`;
 
-	return rows.map((r) => ({ spaceId: r.space_id, role: r.role }));
+	return rows.map((r) => ({ spaceId: r.spaceId, role: r.role }));
 }
 
 /**

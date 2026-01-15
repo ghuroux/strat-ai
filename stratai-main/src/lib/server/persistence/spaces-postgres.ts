@@ -397,7 +397,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 		// Ensure system spaces exist
 		await this.ensureSystemSpaces(userId);
 
-		const rows = await sql<(SpaceRow & { user_role: SpaceRole })[]>`
+		const rows = await sql<(SpaceRow & { userRole: SpaceRole })[]>`
 			WITH accessible_spaces AS (
 				-- Spaces user owns
 				SELECT DISTINCT s.id, 'owner'::text as access_role
@@ -448,7 +448,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 		return rows.map((row) => ({
 			...rowToSpace(row),
-			userRole: row.user_role as SpaceRole
+			userRole: row.userRole as SpaceRole
 		}));
 	},
 
@@ -460,7 +460,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 		id: string,
 		userId: string
 	): Promise<(Space & { userRole: SpaceRole }) | null> {
-		const rows = await sql<(SpaceRow & { user_role: SpaceRole })[]>`
+		const rows = await sql<(SpaceRow & { userRole: SpaceRole })[]>`
 			WITH access_check AS (
 				-- Owner check
 				SELECT 'owner'::text as role, 1 as priority
@@ -502,7 +502,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 		return {
 			...rowToSpace(rows[0]),
-			userRole: rows[0].user_role as SpaceRole
+			userRole: rows[0].userRole as SpaceRole
 		};
 	},
 
@@ -519,7 +519,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 			await this.ensureSystemSpaces(userId);
 		}
 
-		const rows = await sql<(SpaceRow & { user_role: SpaceRole })[]>`
+		const rows = await sql<(SpaceRow & { userRole: SpaceRole })[]>`
 			WITH access_check AS (
 				-- Owner check
 				SELECT 'owner'::text as role, 1 as priority
@@ -561,7 +561,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 		return {
 			...rowToSpace(rows[0]),
-			userRole: rows[0].user_role as SpaceRole
+			userRole: rows[0].userRole as SpaceRole
 		};
 	}
 };

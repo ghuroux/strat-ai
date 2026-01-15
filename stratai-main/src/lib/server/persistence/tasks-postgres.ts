@@ -631,7 +631,7 @@ export const postgresTaskRepository: TaskRepository = {
 
 	async getRelatedTasks(taskId: string, userId: string): Promise<RelatedTaskInfo[]> {
 		// Get tasks where this task is the source (outgoing relationships)
-		const outgoingRows = await sql<(TaskRow & { relationship_type: string })[]>`
+		const outgoingRows = await sql<(TaskRow & { relationshipType: string })[]>`
 			SELECT t.*, rt.relationship_type
 			FROM tasks t
 			JOIN related_tasks rt ON rt.target_task_id = t.id
@@ -642,7 +642,7 @@ export const postgresTaskRepository: TaskRepository = {
 		`;
 
 		// Get tasks where this task is the target (incoming relationships)
-		const incomingRows = await sql<(TaskRow & { relationship_type: string })[]>`
+		const incomingRows = await sql<(TaskRow & { relationshipType: string })[]>`
 			SELECT t.*, rt.relationship_type
 			FROM tasks t
 			JOIN related_tasks rt ON rt.source_task_id = t.id
@@ -657,7 +657,7 @@ export const postgresTaskRepository: TaskRepository = {
 		for (const row of outgoingRows) {
 			results.push({
 				task: dbRowToTask(row),
-				relationshipType: row.relationship_type as TaskRelationshipType,
+				relationshipType: row.relationshipType as TaskRelationshipType,
 				direction: 'outgoing'
 			});
 		}
@@ -665,7 +665,7 @@ export const postgresTaskRepository: TaskRepository = {
 		for (const row of incomingRows) {
 			results.push({
 				task: dbRowToTask(row),
-				relationshipType: row.relationship_type as TaskRelationshipType,
+				relationshipType: row.relationshipType as TaskRelationshipType,
 				direction: 'incoming'
 			});
 		}

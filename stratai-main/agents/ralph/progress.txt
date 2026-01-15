@@ -1,0 +1,23 @@
+# Ralph Progress Log
+
+> **Purpose:** Short-term memory for the current feature only.
+> **Reset:** When starting a new feature, archive this file and create fresh.
+> **Related:** See `stratai-main/AGENTS.md` for long-term codebase learnings.
+
+Started: [DATE]
+Feature: [FEATURE NAME]
+Parent Task: [TASK ID]
+
+## Codebase Patterns (This Feature)
+
+(Patterns discovered during this feature build that may be reusable.
+Move to AGENTS.md if they apply broadly.)
+
+---
+
+## Iteration Log
+
+(Each iteration appends a section below)
+
+---
+

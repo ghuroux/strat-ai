@@ -275,7 +275,7 @@ export const postgresDocumentRepository: DocumentRepository = {
 			return [];
 		}
 
-		const rows = await sql<{ task_id: string }[]>`
+		const rows = await sql<{ taskId: string }[]>`
 			SELECT td.task_id
 			FROM task_documents td
 			JOIN tasks t ON t.id = td.task_id
@@ -284,7 +284,7 @@ export const postgresDocumentRepository: DocumentRepository = {
 			  AND t.deleted_at IS NULL
 		`;
 
-		return rows.map((r) => r.task_id);
+		return rows.map((r) => r.taskId);
 	},
 
 	/**

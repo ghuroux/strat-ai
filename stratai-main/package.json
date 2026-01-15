@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:setup": "npx tsx scripts/setup-db.ts",
-    "db:migrate": "npx tsx scripts/setup-db.ts"
+    "db:migrate": "npx tsx scripts/setup-db.ts",
+    "audit-db-access": "npx tsx scripts/audit-db-access.ts",
+    "generate-schema-docs": "npx tsx scripts/generate-schema-docs.ts"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^3.0.0",

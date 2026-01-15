@@ -67,33 +67,40 @@ export interface SpaceMembershipWithUser extends SpaceMembership {
 // DATABASE ROW TYPE
 // ============================================
 
+/**
+ * Database row type for space_memberships table
+ * NOTE: postgres.js auto-transforms snake_case columns to camelCase at runtime
+ * This interface must use camelCase to match the actual runtime shape
+ */
 export interface SpaceMembershipRow {
 	id: string;
-	space_id: string;
-	user_id: string | null;
-	group_id: string | null;
+	spaceId: string;
+	userId: string | null;
+	groupId: string | null;
 	role: SpaceRole;
-	invited_by: string | null;
-	created_at: Date;
-	updated_at: Date;
+	invitedBy: string | null;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 // ============================================
 // CONVERTERS
 // ============================================
 
+/**
+ * Convert database row to SpaceMembership entity
+ * Since postgres.js transforms to camelCase, we can access properties directly
+ */
 export function rowToSpaceMembership(row: SpaceMembershipRow): SpaceMembership {
-	// postgres.js auto-transforms all columns to camelCase, so access them accordingly
-	const r = row as any;
 	return {
-		id: r.id,
-		spaceId: r.spaceId ?? r.space_id, // Try camelCase first, fallback to snake_case
-		userId: r.userId ?? r.user_id ?? undefined,
-		groupId: r.groupId ?? r.group_id ?? undefined,
-		role: r.role,
-		invitedBy: r.invitedBy ?? r.invited_by ?? undefined,
-		createdAt: r.createdAt ?? r.created_at,
-		updatedAt: r.updatedAt ?? r.updated_at
+		id: row.id,
+		spaceId: row.spaceId,
+		userId: row.userId ?? undefined,
+		groupId: row.groupId ?? undefined,
+		role: row.role,
+		invitedBy: row.invitedBy ?? undefined,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt
 	};
 }
 

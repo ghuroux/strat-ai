@@ -4,39 +4,41 @@ import { randomUUID } from 'crypto';
 
 /**
  * Database row type for tool_result_cache table
+ * NOTE: postgres.js auto-transforms snake_case columns to camelCase at runtime
  */
 interface ToolCacheRow {
 	id: string;
-	conversation_id: string;
-	user_id: string;
-	tool_name: string;
-	params_hash: string;
-	full_result: string;
+	conversationId: string;
+	userId: string;
+	toolName: string;
+	paramsHash: string;
+	fullResult: string;
 	summary: string | null;
-	token_count: number | null;
-	access_count: number;
-	created_at: Date;
-	last_accessed_at: Date;
-	expires_at: Date;
+	tokenCount: number | null;
+	accessCount: number;
+	createdAt: Date;
+	lastAccessedAt: Date;
+	expiresAt: Date;
 }
 
 /**
  * Convert database row to ToolCacheEntry type
+ * Since postgres.js transforms to camelCase, we can access properties directly
  */
 function rowToEntry(row: ToolCacheRow): ToolCacheEntry {
 	return {
 		id: row.id,
-		conversationId: row.conversation_id,
-		userId: row.user_id,
-		toolName: row.tool_name,
-		paramsHash: row.params_hash,
-		fullResult: row.full_result,
+		conversationId: row.conversationId,
+		userId: row.userId,
+		toolName: row.toolName,
+		paramsHash: row.paramsHash,
+		fullResult: row.fullResult,
 		summary: row.summary,
-		tokenCount: row.token_count,
-		accessCount: row.access_count,
-		createdAt: row.created_at,
-		lastAccessedAt: row.last_accessed_at,
-		expiresAt: row.expires_at
+		tokenCount: row.tokenCount,
+		accessCount: row.accessCount,
+		createdAt: row.createdAt,
+		lastAccessedAt: row.lastAccessedAt,
+		expiresAt: row.expiresAt
 	};
 }
 
