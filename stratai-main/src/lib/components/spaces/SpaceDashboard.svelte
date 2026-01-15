@@ -110,6 +110,14 @@
 		}
 	});
 
+	// Load area members for member count badges
+	$effect(() => {
+		for (const area of areas) {
+			// loadMembers has internal caching, won't refetch if already loaded
+			areaStore.loadMembers(area.id);
+		}
+	});
+
 	// Phase 4: Areas with member counts
 	let areasWithCounts = $derived.by(() => {
 		return areas.map((area) => ({
