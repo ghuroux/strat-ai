@@ -11,7 +11,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
-import { resolveSpaceId, resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
+import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import type { CreateAreaInput } from '$lib/types/areas';
 
 /**
@@ -32,9 +32,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
 
 		// Resolve space identifier (slug or ID) to proper ID
+		// Use resolveSpaceIdAccessible to support both owned and shared spaces
 		let resolvedSpaceId: string | undefined;
 		if (spaceIdParam) {
-			const resolved = await resolveSpaceId(spaceIdParam, userId);
+			const resolved = await resolveSpaceIdAccessible(spaceIdParam, userId);
 			if (!resolved) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}
