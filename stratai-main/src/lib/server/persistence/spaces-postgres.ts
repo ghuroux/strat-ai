@@ -444,7 +444,13 @@ export const postgresSpaceRepository: SpaceRepository = {
 						WHEN 'guest' THEN 4
 					END
 			)
-			SELECT s.*,
+			SELECT
+				   -- Explicitly list columns to avoid duplicate is_pinned conflict
+				   -- (s.* would include is_pinned, overriding our COALESCE)
+				   s.id, s.user_id, s.name, s.type, s.slug,
+				   s.context, s.context_document_ids, s.color, s.icon,
+				   s.order_index, s.created_at, s.updated_at, s.deleted_at,
+				   s.space_type, s.organization_id,
 				   ba.access_role as user_role,
 				   -- isPinned: for owned spaces use spaces.is_pinned, for invited use membership.is_pinned
 				   COALESCE(ba.is_pinned, s.is_pinned, false) as is_pinned,

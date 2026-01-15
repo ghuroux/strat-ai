@@ -186,17 +186,30 @@ When you complete the story:
 
 ## Self-Continuation
 
-After completing this story, invoke the ralph skill to pick up the next pending story. This creates a self-sustaining development loop.
+After completing this story:
 
+### ⚠️ CHECK: Are All Stories Complete?
+
+```bash
+# Check prd.json - if ALL stories have status "completed":
+jq '.stories[] | select(.status != "completed")' agents/ralph/prd.json
 ```
-Continue to next story...
-```
+
+**If the above returns EMPTY (no pending stories):**
+→ **STOP** - Do NOT continue to next story
+→ **EXECUTE** the "When All Stories Complete" cleanup below
+→ **THEN** report feature complete to user
+
+**If there ARE pending stories:**
+→ Continue to next story as normal
 
 ---
 
 ## When All Stories Complete (Feature Cleanup)
 
-When all stories in `prd.json` are marked "completed":
+**⚠️ MANDATORY: You MUST execute ALL steps below when all stories are "completed"**
+
+**Do NOT skip this section. Do NOT just report "feature complete" without cleanup.**
 
 ### 1. Final Quality Gate
 ```bash
@@ -244,6 +257,20 @@ Clear for next feature:
 ```bash
 git add -A
 git commit -m "chore: complete [feature] and reset ralph working files"
+```
+
+### 6. Report Completion
+
+Present to user:
+```markdown
+## Feature Complete: [Feature Name] ✅
+
+**Stories:** X/X completed
+**Patterns added to AGENTS.md:** [list]
+**PRD marked complete:** tasks/prd-[name].md
+**Working files reset:** ✅
+
+Ready for next feature!
 ```
 
 ---
