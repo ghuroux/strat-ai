@@ -6,7 +6,7 @@ import {
 	getConversationsPaginated,
 	searchConversations
 } from '$lib/server/persistence';
-import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
+import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 
 /**
  * GET /api/conversations
@@ -35,7 +35,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		// Resolve space identifier (slug or ID) to proper ID
 		let resolvedSpaceId: string | undefined;
 		if (spaceIdParam) {
-			const resolved = await resolveSpaceId(spaceIdParam, userId);
+			const resolved = await resolveSpaceIdAccessible(spaceIdParam, userId);
 			if (!resolved) {
 				return json({ error: { message: `Space not found: ${spaceIdParam}`, type: 'not_found' } }, { status: 404 });
 			}

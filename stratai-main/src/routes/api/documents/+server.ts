@@ -9,7 +9,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { parseFile, validateFile } from '$lib/server/file-parser';
-import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
+import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import { generateSummaryBackground } from '$lib/server/summarization';
 
 /**
@@ -33,7 +33,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		// Resolve space identifier (slug or ID) to proper ID
 		let resolvedSpaceId: string | undefined;
 		if (spaceIdParam) {
-			const resolved = await resolveSpaceId(spaceIdParam, userId);
+			const resolved = await resolveSpaceIdAccessible(spaceIdParam, userId);
 			if (!resolved) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}
@@ -121,7 +121,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Resolve space identifier (slug or ID) to proper ID
 		let resolvedSpaceId: string | undefined;
 		if (spaceIdParam) {
-			const resolved = await resolveSpaceId(spaceIdParam, userId);
+			const resolved = await resolveSpaceIdAccessible(spaceIdParam, userId);
 			if (!resolved) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}

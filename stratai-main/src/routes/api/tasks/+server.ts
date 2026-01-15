@@ -8,7 +8,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
-import { resolveSpaceId } from '$lib/server/persistence/spaces-postgres';
+import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import type { CreateTaskInput, TaskListFilter, TaskStatus } from '$lib/types/tasks';
 
 /**
@@ -38,7 +38,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 		// Resolve space identifier (slug or ID) to proper ID
 		if (spaceIdParam) {
-			const resolvedSpaceId = await resolveSpaceId(spaceIdParam, userId);
+			const resolvedSpaceId = await resolveSpaceIdAccessible(spaceIdParam, userId);
 			if (!resolvedSpaceId) {
 				return json({ error: `Space not found: ${spaceIdParam}` }, { status: 404 });
 			}
@@ -89,7 +89,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			return json({ error: 'Missing required field: spaceId' }, { status: 400 });
 		}
 
-		const resolvedSpaceId = await resolveSpaceId(body.spaceId, userId);
+		const resolvedSpaceId = await resolveSpaceIdAccessible(body.spaceId, userId);
 		if (!resolvedSpaceId) {
 			return json({ error: `Space not found: ${body.spaceId}` }, { status: 404 });
 		}
