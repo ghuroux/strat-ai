@@ -1,17 +1,38 @@
 # Ralph Progress Log
 
-> **Purpose:** Short-term memory for the current feature only.
-> **Reset:** When starting a new feature, archive this file and create fresh.
-> **Related:** See `stratai-main/AGENTS.md` for long-term codebase learnings.
+## Feature: Phase C - Navigation Redesign with Space Pinning
+**Parent Task:** phase-c-nav-pinning
+**Started:** 2026-01-15
+**Status:** ✅ COMPLETE
 
-Started: [DATE]
-Feature: [FEATURE NAME]
-Parent Task: [TASK ID]
+## Decisions Made During PRD Creation
 
-## Codebase Patterns (This Feature)
+- **Migration number**: Use 034 instead of spec's 032 (migrations 032-033 already exist)
+- **Auto-pin when at max 6**: Skip auto-pin when at max 6 rather than auto-unpinning oldest (avoids confusing users)
 
-(Patterns discovered during this feature build that may be reusable.
-Move to AGENTS.md if they apply broadly.)
+## Codebase Patterns Discovered
+
+- Space repository uses `rowToSpace()` converter pattern with camelCase field access
+- Space memberships follow same pattern with `rowToSpaceMembership()`
+- Spaces store uses `SvelteMap` for reactive cache with `_version` counter for fine-grained reactivity
+- Header.svelte has existing `space-nav-item` CSS classes and styling patterns to follow
+- `getSpaceDisplayName()` utility already exists in `src/lib/utils/space-display.ts`
+- API endpoints follow pattern: `/api/spaces/[id]/action/+server.ts`
+
+## Stories
+
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Create space pinning database migration | ✅ completed |
+| US-002 | Update Space and SpaceMembership types with pinning fields | ✅ completed |
+| US-003 | Add pin/unpin repository methods to spaces-postgres.ts | ✅ completed |
+| US-004 | Create pin/unpin API endpoints | ✅ completed |
+| US-005 | Update spaces store with pin/unpin actions and derived states | ✅ completed |
+| US-006 | Create AllSpacesDropdown component | ✅ completed |
+| US-007 | Create SpaceNavTabs component | ✅ completed |
+| US-008 | Integrate SpaceNavTabs into Header component | ✅ completed |
+| US-009 | Implement auto-pin rules on space creation and org join | ✅ completed |
+| US-010 | Handle edge cases and cleanup | ✅ completed |
 
 ---
 
@@ -20,4 +41,327 @@ Move to AGENTS.md if they apply broadly.)
 (Each iteration appends a section below)
 
 ---
+
+### US-001: Create space pinning database migration ✅
+
+**Completed:** 2026-01-15
+
+**Files Created:**
+- `src/lib/server/persistence/migrations/034-space-pinning.sql`
+
+**Changes:**
+- Added `is_pinned BOOLEAN DEFAULT true` to spaces table (owned spaces auto-pin)
+- Added `is_pinned BOOLEAN DEFAULT false` to space_memberships table (invited spaces don't auto-pin)
+- Added `display_alias VARCHAR(100)` to space_memberships table (future feature)
+- Created partial indexes for efficient pinned space queries
+- No backfill needed - defaults match desired behavior for existing users
+
+**Quality Gates:**
+- ✅ npm run check passes (only pre-existing a11y warnings)
+- ⚠️ npm run lint - pre-existing eslint.config.js missing (not related to changes)
+
+---
+
+### US-002: Update Space and SpaceMembership types with pinning fields ✅
+
+**Completed:** 2026-01-15
+
+**Files Modified:**
+- `src/lib/types/spaces.ts` - Added isPinned to Space and SpaceRow, updated rowToSpace
+- `src/lib/types/space-memberships.ts` - Added isPinned and displayAlias to SpaceMembership/Row, updated converter
+
+**Changes:**
+- Space interface: Added `isPinned?: boolean`
+- SpaceRow interface: Added `isPinned: boolean | null` (postgres.js camelCase)
+- rowToSpace converter: Added `isPinned: row.isPinned ?? undefined`
+- SpaceMembership interface: Added `isPinned?: boolean` and `displayAlias?: string | null`
+- SpaceMembershipRow: Added `isPinned: boolean | null` and `displayAlias: string | null`
+- rowToSpaceMembership converter: Added both new fields
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-003: Add pin/unpin repository methods to spaces-postgres.ts ✅
+
+**Completed:** 2026-01-15
+
+**Files Modified:**
+- `src/lib/server/persistence/spaces-postgres.ts` - Added pinning methods and updated findAllAccessible query
+- `src/lib/server/persistence/types.ts` - Added pinning methods to SpaceRepository interface
+
+**Changes:**
+- Updated `findAllAccessible` query to include isPinned from correct source:
+  - Owned spaces: use `spaces.is_pinned`
+  - Invited spaces: use `space_memberships.is_pinned`
+  - Uses CTE with `best_access` to pick correct isPinned per space
+- Added `getPinnedCount(userId)` - counts pinned owned + invited spaces (for max 6 enforcement)
+- Added `pinSpace(spaceId, userId)` - updates correct table based on ownership
+- Added `unpinSpace(spaceId, userId)` - same pattern as pin
+- Both pin/unpin return the updated space with userRole
+
+**Patterns Applied:**
+- CTE with DISTINCT ON for best access selection
+- Ownership check before membership check (avoid unnecessary queries)
+- Return full space data after update (for store sync)
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-004: Create pin/unpin API endpoints ✅
+
+**Completed:** 2026-01-15
+
+**Files Created:**
+- `src/routes/api/spaces/[id]/pin/+server.ts` - POST endpoint to pin spaces
+- `src/routes/api/spaces/[id]/unpin/+server.ts` - POST endpoint to unpin spaces
+
+**Changes:**
+- Pin endpoint checks `getPinnedCount < 6` before pinning
+- Pin endpoint returns 400 with `MAX_PINNED_REACHED` code when at max
+- Both endpoints verify user has access via repository methods
+- Both endpoints return updated space data and current pinned count
+- Response format: `{ space: {..., userRole}, pinnedCount }`
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-005: Update spaces store with pin/unpin actions and derived states ✅
+
+**Completed:** 2026-01-15
+
+**Files Modified:**
+- `src/lib/stores/spaces.svelte.ts` - Added pinning state and methods
+
+**Changes:**
+- Added pinning state: `pinnedCount`, `isPinning`, `lastPinError`, `lastPinErrorCode`
+- Added `getPinnedSpaces()` - returns spaces where isPinned=true, sorted by order
+- Added `getUnpinnedOwnedSpaces(currentUserId)` - unpinned spaces user owns
+- Added `getUnpinnedSharedSpaces(currentUserId)` - unpinned shared spaces
+- Added `canPinMore()` and `getRemainingPinSlots()` helpers
+- Added `pinSpace(spaceId)` async action - calls API, updates local state
+- Added `unpinSpace(spaceId)` async action - same pattern
+- Pre-check in pinSpace prevents API call when at max 6
+- Both actions update local space cache and pinnedCount from server response
+
+**Design Decision:**
+- `getUnpinnedOwnedSpaces` and `getUnpinnedSharedSpaces` take `currentUserId` as parameter to keep store decoupled from userStore
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-006: Create AllSpacesDropdown component ✅
+
+**Completed:** 2026-01-15
+
+**Files Created:**
+- `src/lib/components/spaces/AllSpacesDropdown.svelte` - Dropdown showing all spaces organized by section
+
+**Files Modified:**
+- `src/lib/components/spaces/index.ts` - Added AllSpacesDropdown export
+
+**Changes:**
+- Three sections: PINNED TO NAV (star icon, unpin X buttons), YOUR SPACES, SHARED WITH YOU
+- Uses `spacesStore.getPinnedSpaces()`, `getUnpinnedOwnedSpaces()`, `getUnpinnedSharedSpaces()`
+- Pin buttons disabled when `canPinMore()` returns false
+- Footer shows remaining pin slots (e.g., "3 of 6 remaining")
+- Click outside and Escape key close dropdown
+- Smooth fly transition on open/close
+- Uses `getSpaceDisplayName()` utility for consistent space naming
+- Fixed nested button issue by using `div[role="button"]` for clickable space items
+
+**Acceptance Criteria Met:**
+- ✅ AllSpacesDropdown.svelte in src/lib/components/spaces/
+- ✅ PINNED TO NAV section with star icon and X (unpin) buttons
+- ✅ YOUR SPACES section with unpinned owned spaces and pin buttons
+- ✅ SHARED WITH YOU section with unpinned invited spaces and pin buttons
+- ✅ Footer with remaining count display
+- ✅ Pin buttons disabled with tooltip when at max 6
+- ✅ Uses getSpaceDisplayName() for space names
+- ✅ Click outside closes dropdown
+- ✅ Escape key closes dropdown
+- ✅ Smooth open/close animation (fly transition)
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-007: Create SpaceNavTabs component ✅
+
+**Completed:** 2026-01-15
+
+**Files Created:**
+- `src/lib/components/spaces/SpaceNavTabs.svelte` - Nav tabs showing pinned spaces with context menu
+
+**Files Modified:**
+- `src/lib/components/spaces/index.ts` - Added SpaceNavTabs export
+
+**Changes:**
+- Shows pinned spaces as clickable tab links with active state styling
+- Color dot indicator for each space (uses space.color)
+- Right-click opens context menu with "Unpin from navigation" option
+- Integrates AllSpacesDropdown component as the "All" button
+- Uses `getSpaceDisplayName()` for consistent space naming
+- Tab styling matches existing `space-nav-item` pattern from Header.svelte
+- Click outside or Escape key closes context menu
+- Text truncation with ellipsis for long space names (max-width: 10rem)
+
+**Acceptance Criteria Met:**
+- ✅ SpaceNavTabs.svelte in src/lib/components/spaces/
+- ✅ Shows pinned spaces as tab links with active state
+- ✅ Right-click on tab shows context menu with "Unpin from navigation"
+- ✅ Integrates AllSpacesDropdown as the All button
+- ✅ Uses getSpaceDisplayName() for space names
+- ✅ Tab styling matches existing space-nav-item pattern
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-008: Integrate SpaceNavTabs into Header component ✅
+
+**Completed:** 2026-01-15
+
+**Files Modified:**
+- `src/lib/components/layout/Header.svelte` - Replaced space loops with SpaceNavTabs
+
+**Changes:**
+- Imported SpaceNavTabs from '../spaces'
+- Removed `getSpaceDisplayName` import (now handled in SpaceNavTabs)
+- Removed `systemSpaces` derived state (now handled in SpaceNavTabs)
+- Replaced entire system/custom spaces nav section with `<SpaceNavTabs {currentUserId} {currentSpaceSlug} />`
+- Removed space-nav-add button (users create spaces via "Manage spaces" link in dropdown)
+- Kept Main Chat button with its existing styling
+- Kept mobile navigation unchanged (Chat and Spaces buttons)
+- Kept Arena link unchanged
+- Removed unused CSS classes: `.space-nav-item`, `.space-nav-separator`, `.space-nav-add`, `.space-nav-all`, `.space-nav-edit`
+- Kept `.space-nav-chat` styles (still used in Header)
+
+**Design Decisions:**
+- Space add button removed from Header - "Manage spaces" link in AllSpacesDropdown provides access
+- Mobile nav remains simple with Chat/Spaces buttons (pinning is desktop-focused)
+
+**Acceptance Criteria Met:**
+- ✅ Header.svelte updated to use SpaceNavTabs instead of current space tab loop
+- ✅ Existing system/custom space loops replaced with single SpaceNavTabs component
+- ✅ Space add button moved to AllSpacesDropdown (via "Manage spaces" link)
+- ✅ Mobile navigation unchanged (appropriate for mobile UX)
+- ✅ Main Chat and Arena links remain unchanged
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-009: Implement auto-pin rules on space creation and org join ✅
+
+**Completed:** 2026-01-15
+
+**Files Modified:**
+- `src/lib/server/persistence/spaces-postgres.ts` - Added auto-pin on space creation
+- `src/lib/server/persistence/org-memberships-postgres.ts` - Added auto-pin on org join
+
+**Changes:**
+
+*Space Creation (spaces-postgres.ts create method):*
+- Added `getPinnedCount(userId)` check before inserting new space
+- Sets `is_pinned=true` if user has < 6 pinned spaces, `false` otherwise
+- Added `is_pinned` column to INSERT statement
+
+*Org Join (org-memberships-postgres.ts create method):*
+- Added pinned count check before inserting space membership for org space
+- Uses same max 6 rule: auto-pin if under max, skip if at max
+- Query counts pinned owned spaces + pinned invited spaces
+
+**Acceptance Criteria Met:**
+- ✅ Space creation sets is_pinned=true if user has < 6 pinned
+- ✅ Org space auto-pins when user joins org (if under max)
+- ✅ Invited spaces start with is_pinned=false (database default, unless auto-pinned)
+- ✅ Auto-pin skips if user already at max 6 (no auto-unpin)
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+### US-010: Handle edge cases and cleanup ✅
+
+**Completed:** 2026-01-15
+
+**Files Modified:**
+- `src/lib/stores/spaces.svelte.ts` - Added cache management methods
+
+**Edge Cases Verified:**
+
+1. **User with 0 spaces sees empty dropdown with helpful message** ✅
+   - AllSpacesDropdown has empty-state UI with folder icon
+   - Shows "No spaces yet" and "Create a space to get started"
+   - Footer still shows "Manage spaces" link for navigation
+
+2. **User with 1-6 spaces: all auto-pinned by default** ✅
+   - Database default: `is_pinned DEFAULT true` for owned spaces
+   - Auto-pin on create checks pinned count (US-009)
+   - Dropdown always accessible via All button in SpaceNavTabs
+
+3. **Deleting a pinned space removes it from nav immediately** ✅
+   - `deleteSpace()` removes from cache and increments `_version`
+   - `getPinnedSpaces()` is reactive via `_version` subscription
+   - SpaceNavTabs reactively updates from `getPinnedSpaces()`
+
+4. **Leaving a shared space removes it from nav** ✅
+   - Added `removeFromCache(spaceId)` method for immediate UI update
+   - Added `reloadSpaces()` method for full cache refresh
+   - Backend already handles membership removal via DELETE endpoint
+
+5. **Dropdown footer count updates correctly after pin/unpin** ✅
+   - Footer uses `getRemainingPinSlots()` which derives from `getPinnedSpaces().length`
+   - Fully reactive: changes propagate immediately
+
+**New Store Methods Added:**
+- `removeFromCache(spaceId)` - Remove specific space from local cache (for leave scenarios)
+- `reloadSpaces()` - Force clear cache and reload all spaces
+
+**Acceptance Criteria Met:**
+- ✅ User with 0 spaces sees empty dropdown with helpful message
+- ✅ User with 1-6 spaces: all auto-pinned by default, dropdown still accessible
+- ✅ Deleting a pinned space removes it from nav immediately
+- ✅ Leaving a shared space removes it from nav if pinned
+- ✅ Dropdown footer count updates correctly after pin/unpin
+
+**Quality Gates:**
+- ✅ npm run check passes (0 errors, 158 pre-existing warnings)
+
+---
+
+## Phase C Complete! 🎉
+
+All 10 stories completed successfully:
+- Database migration for space pinning
+- TypeScript types updated
+- Repository methods for pin/unpin
+- API endpoints with max 6 enforcement
+- Spaces store with reactive pinning state
+- AllSpacesDropdown component with sections
+- SpaceNavTabs component with context menu
+- Header integration with SpaceNavTabs
+- Auto-pin rules on space creation and org join
+- Edge case handling and cleanup utilities
+
+**Total Files Created:** 5
+**Total Files Modified:** 10
+**Manual Testing Required:**
+- Verify pinned spaces appear as tabs in nav
+- Test pin/unpin from dropdown
+- Test right-click context menu to unpin
+- Verify max 6 enforcement
+- Test auto-pin on new space creation
 

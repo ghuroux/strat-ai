@@ -12,3 +12,5 @@ export { default as CreateAreaCard } from './CreateAreaCard.svelte';
 export { default as RecentActivitySection } from './RecentActivitySection.svelte';
 export { default as TasksSection } from './TasksSection.svelte';
 export { default as TaskPanel } from './TaskPanel.svelte';
+export { default as AllSpacesDropdown } from './AllSpacesDropdown.svelte';
+export { default as SpaceNavTabs } from './SpaceNavTabs.svelte';

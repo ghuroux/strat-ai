@@ -166,6 +166,10 @@ export const postgresSpaceRepository: SpaceRepository = {
 		`;
 		const nextOrder = (orderResult[0]?.maxOrder ?? 3) + 1;
 
+		// Check if user has room to pin this new space (max 6)
+		const pinnedCount = await this.getPinnedCount(userId);
+		const shouldAutoPin = pinnedCount < 6;
+
 		const id = generateSpaceId();
 		const now = new Date();
 
@@ -173,7 +177,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 			INSERT INTO spaces (
 				id, user_id, name, type, slug,
 				context, context_document_ids, color, icon, order_index,
-				created_at, updated_at
+				is_pinned, created_at, updated_at
 			) VALUES (
 				${id},
 				${userId},
@@ -185,6 +189,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 				${input.color ?? null},
 				${input.icon ?? null},
 				${nextOrder},
+				${shouldAutoPin},
 				${now},
 				${now}
 			)
@@ -399,16 +404,16 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 		const rows = await sql<(SpaceRow & { userRole: SpaceRole })[]>`
 			WITH accessible_spaces AS (
-				-- Spaces user owns
-				SELECT DISTINCT s.id, 'owner'::text as access_role
+				-- Spaces user owns (isPinned from spaces table)
+				SELECT DISTINCT s.id, 'owner'::text as access_role, s.is_pinned as is_pinned
 				FROM spaces s
 				WHERE s.user_id = ${userId}
 					AND s.deleted_at IS NULL
 
 				UNION
 
-				-- Spaces with direct user membership
-				SELECT DISTINCT s.id, sm.role as access_role
+				-- Spaces with direct user membership (isPinned from space_memberships)
+				SELECT DISTINCT s.id, sm.role as access_role, sm.is_pinned as is_pinned
 				FROM spaces s
 				JOIN space_memberships sm ON s.id = sm.space_id
 				WHERE sm.user_id = ${userId}::uuid
@@ -416,32 +421,38 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 				UNION
 
-				-- Spaces with group membership
-				SELECT DISTINCT s.id, sm.role as access_role
+				-- Spaces with group membership (isPinned from space_memberships)
+				SELECT DISTINCT s.id, sm.role as access_role, sm.is_pinned as is_pinned
 				FROM spaces s
 				JOIN space_memberships sm ON s.id = sm.space_id
 				JOIN group_memberships gm ON sm.group_id = gm.group_id
 				WHERE gm.user_id = ${userId}::uuid
 					AND s.deleted_at IS NULL
+			),
+			best_access AS (
+				-- Get the best role and corresponding isPinned for each space
+				SELECT DISTINCT ON (id)
+					id,
+					access_role,
+					is_pinned
+				FROM accessible_spaces
+				ORDER BY id,
+					CASE access_role
+						WHEN 'owner' THEN 1
+						WHEN 'admin' THEN 2
+						WHEN 'member' THEN 3
+						WHEN 'guest' THEN 4
+					END
 			)
 			SELECT s.*,
-				   (
-					 SELECT access_role FROM accessible_spaces
-					 WHERE id = s.id
-					 ORDER BY
-						 CASE access_role
-							 WHEN 'owner' THEN 1
-							 WHEN 'admin' THEN 2
-							 WHEN 'member' THEN 3
-							 WHEN 'guest' THEN 4
-						 END
-					 LIMIT 1
-				   ) as user_role,
+				   ba.access_role as user_role,
+				   -- isPinned: for owned spaces use spaces.is_pinned, for invited use membership.is_pinned
+				   COALESCE(ba.is_pinned, s.is_pinned, false) as is_pinned,
 				   -- Owner info for invited spaces (only when not the owner)
 				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.first_name END as owner_first_name,
 				   CASE WHEN s.user_id != ${userId}::uuid THEN owner_user.display_name END as owner_display_name
 			FROM spaces s
-			JOIN accessible_spaces a ON s.id = a.id
+			JOIN best_access ba ON s.id = ba.id
 			LEFT JOIN users owner_user ON s.user_id = owner_user.id
 			ORDER BY
 				s.space_type ASC,    -- org first, then project, then personal
@@ -575,5 +586,130 @@ export const postgresSpaceRepository: SpaceRepository = {
 			...rowToSpace(rows[0]),
 			userRole: rows[0].userRole as SpaceRole
 		};
+	},
+
+	/**
+	 * Get count of pinned spaces for a user (owned + invited)
+	 * Used to enforce max 6 pinned spaces limit
+	 */
+	async getPinnedCount(userId: string): Promise<number> {
+		const result = await sql<{ count: string }[]>`
+			SELECT COUNT(*) as count FROM (
+				-- Pinned owned spaces
+				SELECT id FROM spaces
+				WHERE user_id = ${userId}::uuid
+					AND is_pinned = true
+					AND deleted_at IS NULL
+
+				UNION
+
+				-- Pinned invited spaces (via direct membership)
+				SELECT sm.space_id as id
+				FROM space_memberships sm
+				JOIN spaces s ON sm.space_id = s.id
+				WHERE sm.user_id = ${userId}::uuid
+					AND sm.is_pinned = true
+					AND s.deleted_at IS NULL
+			) as pinned
+		`;
+		return parseInt(result[0]?.count ?? '0', 10);
+	},
+
+	/**
+	 * Pin a space to the user's navigation bar
+	 * For owned spaces: updates spaces.is_pinned
+	 * For invited spaces: updates space_memberships.is_pinned
+	 * Returns the updated space or null if not found/no access
+	 */
+	async pinSpace(
+		spaceId: string,
+		userId: string
+	): Promise<(Space & { userRole: SpaceRole }) | null> {
+		// First, check if user owns the space
+		const ownedSpace = await this.findById(spaceId, userId);
+		if (ownedSpace) {
+			// User owns the space - update spaces.is_pinned
+			await sql`
+				UPDATE spaces
+				SET is_pinned = true, updated_at = NOW()
+				WHERE id = ${spaceId}
+					AND user_id = ${userId}::uuid
+					AND deleted_at IS NULL
+			`;
+			return this.findByIdAccessible(spaceId, userId);
+		}
+
+		// Check if user has membership (invited space)
+		const membership = await sql<{ id: string }[]>`
+			SELECT sm.id FROM space_memberships sm
+			JOIN spaces s ON sm.space_id = s.id
+			WHERE sm.space_id = ${spaceId}
+				AND sm.user_id = ${userId}::uuid
+				AND s.deleted_at IS NULL
+		`;
+
+		if (membership.length === 0) {
+			// User has no access to this space
+			return null;
+		}
+
+		// User has membership - update space_memberships.is_pinned
+		await sql`
+			UPDATE space_memberships
+			SET is_pinned = true, updated_at = NOW()
+			WHERE space_id = ${spaceId}
+				AND user_id = ${userId}::uuid
+		`;
+
+		return this.findByIdAccessible(spaceId, userId);
+	},
+
+	/**
+	 * Unpin a space from the user's navigation bar
+	 * For owned spaces: updates spaces.is_pinned
+	 * For invited spaces: updates space_memberships.is_pinned
+	 * Returns the updated space or null if not found/no access
+	 */
+	async unpinSpace(
+		spaceId: string,
+		userId: string
+	): Promise<(Space & { userRole: SpaceRole }) | null> {
+		// First, check if user owns the space
+		const ownedSpace = await this.findById(spaceId, userId);
+		if (ownedSpace) {
+			// User owns the space - update spaces.is_pinned
+			await sql`
+				UPDATE spaces
+				SET is_pinned = false, updated_at = NOW()
+				WHERE id = ${spaceId}
+					AND user_id = ${userId}::uuid
+					AND deleted_at IS NULL
+			`;
+			return this.findByIdAccessible(spaceId, userId);
+		}
+
+		// Check if user has membership (invited space)
+		const membership = await sql<{ id: string }[]>`
+			SELECT sm.id FROM space_memberships sm
+			JOIN spaces s ON sm.space_id = s.id
+			WHERE sm.space_id = ${spaceId}
+				AND sm.user_id = ${userId}::uuid
+				AND s.deleted_at IS NULL
+		`;
+
+		if (membership.length === 0) {
+			// User has no access to this space
+			return null;
+		}
+
+		// User has membership - update space_memberships.is_pinned
+		await sql`
+			UPDATE space_memberships
+			SET is_pinned = false, updated_at = NOW()
+			WHERE space_id = ${spaceId}
+				AND user_id = ${userId}::uuid
+		`;
+
+		return this.findByIdAccessible(spaceId, userId);
 	}
 };

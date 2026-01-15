@@ -49,6 +49,20 @@ class SpacesStore {
 	// Member version counter for reactivity
 	private _memberVersion = $state(0);
 
+	// ============================================
+	// PINNING STATE (Phase C: Navigation Redesign)
+	// ============================================
+
+	// Track pinned count for UI display
+	pinnedCount = $state(0);
+
+	// Pinning operation in progress
+	isPinning = $state(false);
+
+	// Pinning-specific error
+	lastPinError = $state<string | null>(null);
+	lastPinErrorCode = $state<string | null>(null);
+
 	/**
 	 * Load all spaces (system + custom)
 	 */
@@ -476,6 +490,206 @@ class SpacesStore {
 		this.membersLoadedSet.clear();
 		this.membersLoading.clear();
 		this._memberVersion++;
+
+		// Reset pinning state
+		this.pinnedCount = 0;
+		this.lastPinError = null;
+		this.lastPinErrorCode = null;
+	}
+
+	// ============================================
+	// PINNING FUNCTIONS (Phase C: Navigation Redesign)
+	// ============================================
+
+	/**
+	 * Maximum number of pinned spaces allowed
+	 */
+	static readonly MAX_PINNED = 6;
+
+	/**
+	 * Get pinned spaces (reactive)
+	 * Returns spaces where isPinned=true, sorted by order
+	 */
+	getPinnedSpaces(): Space[] {
+		void this._version;
+		return Array.from(this.spaces.values())
+			.filter((s) => s.isPinned === true)
+			.sort((a, b) => a.orderIndex - b.orderIndex);
+	}
+
+	/**
+	 * Get unpinned owned spaces (reactive)
+	 * Returns spaces where isPinned=false/undefined AND userId matches currentUserId
+	 */
+	getUnpinnedOwnedSpaces(currentUserId: string): Space[] {
+		void this._version;
+		return Array.from(this.spaces.values())
+			.filter((s) => s.isPinned !== true && s.userId === currentUserId)
+			.sort((a, b) => a.orderIndex - b.orderIndex);
+	}
+
+	/**
+	 * Get unpinned shared spaces (reactive)
+	 * Returns spaces where isPinned=false/undefined AND userId != currentUserId
+	 */
+	getUnpinnedSharedSpaces(currentUserId: string): Space[] {
+		void this._version;
+		return Array.from(this.spaces.values())
+			.filter((s) => s.isPinned !== true && s.userId !== currentUserId)
+			.sort((a, b) => a.orderIndex - b.orderIndex);
+	}
+
+	/**
+	 * Check if user can pin more spaces
+	 */
+	canPinMore(): boolean {
+		return this.getPinnedSpaces().length < SpacesStore.MAX_PINNED;
+	}
+
+	/**
+	 * Get remaining pin slots
+	 */
+	getRemainingPinSlots(): number {
+		return Math.max(0, SpacesStore.MAX_PINNED - this.getPinnedSpaces().length);
+	}
+
+	/**
+	 * Pin a space to the navigation bar
+	 * Returns true on success, false on failure
+	 */
+	async pinSpace(spaceId: string): Promise<boolean> {
+		this.lastPinError = null;
+		this.lastPinErrorCode = null;
+
+		// Pre-check: Don't call API if already at max
+		if (!this.canPinMore()) {
+			this.lastPinError = `Maximum ${SpacesStore.MAX_PINNED} spaces can be pinned.`;
+			this.lastPinErrorCode = 'MAX_PINNED_REACHED';
+			return false;
+		}
+
+		this.isPinning = true;
+
+		try {
+			const response = await fetch(`/api/spaces/${spaceId}/pin`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				this.lastPinErrorCode = errorData.code || null;
+				throw new Error(errorData.error || `Failed to pin space: ${response.status}`);
+			}
+
+			const data = await response.json();
+
+			// Update local state
+			if (data.space) {
+				const space = this.spaces.get(spaceId);
+				if (space) {
+					const updatedSpace = {
+						...space,
+						isPinned: true,
+						updatedAt: new Date(data.space.updatedAt)
+					};
+					this.spaces.set(spaceId, updatedSpace);
+					this.spacesBySlug.set(updatedSpace.slug, updatedSpace);
+				}
+			}
+
+			// Update pinned count from server response
+			if (typeof data.pinnedCount === 'number') {
+				this.pinnedCount = data.pinnedCount;
+			}
+
+			this._version++;
+			return true;
+		} catch (e) {
+			console.error('Failed to pin space:', e);
+			this.lastPinError = e instanceof Error ? e.message : 'Failed to pin space';
+			return false;
+		} finally {
+			this.isPinning = false;
+		}
+	}
+
+	/**
+	 * Unpin a space from the navigation bar
+	 * Returns true on success, false on failure
+	 */
+	async unpinSpace(spaceId: string): Promise<boolean> {
+		this.lastPinError = null;
+		this.lastPinErrorCode = null;
+		this.isPinning = true;
+
+		try {
+			const response = await fetch(`/api/spaces/${spaceId}/unpin`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				this.lastPinErrorCode = errorData.code || null;
+				throw new Error(errorData.error || `Failed to unpin space: ${response.status}`);
+			}
+
+			const data = await response.json();
+
+			// Update local state
+			if (data.space) {
+				const space = this.spaces.get(spaceId);
+				if (space) {
+					const updatedSpace = {
+						...space,
+						isPinned: false,
+						updatedAt: new Date(data.space.updatedAt)
+					};
+					this.spaces.set(spaceId, updatedSpace);
+					this.spacesBySlug.set(updatedSpace.slug, updatedSpace);
+				}
+			}
+
+			// Update pinned count from server response
+			if (typeof data.pinnedCount === 'number') {
+				this.pinnedCount = data.pinnedCount;
+			}
+
+			this._version++;
+			return true;
+		} catch (e) {
+			console.error('Failed to unpin space:', e);
+			this.lastPinError = e instanceof Error ? e.message : 'Failed to unpin space';
+			return false;
+		} finally {
+			this.isPinning = false;
+		}
+	}
+
+	/**
+	 * Remove a space from the local cache (for leave/removal scenarios)
+	 * This updates the UI immediately without requiring a full reload
+	 */
+	removeFromCache(spaceId: string): void {
+		const space = this.spaces.get(spaceId);
+		if (space) {
+			this.spaces.delete(spaceId);
+			this.spacesBySlug.delete(space.slug);
+			this.membersBySpaceId.delete(spaceId);
+			this.membersLoadedSet.delete(spaceId);
+			this._version++;
+		}
+	}
+
+	/**
+	 * Force reload all spaces (clears cache first)
+	 * Use when spaces may have changed server-side (e.g., after leaving an org)
+	 */
+	async reloadSpaces(): Promise<void> {
+		this.loaded = false;
+		this.spaces.clear();
+		this.spacesBySlug.clear();
+		this._version++;
+		await this.loadSpaces();
 	}
 }
 

@@ -341,6 +341,11 @@ export interface SpaceRepository {
 	findAllAccessible(userId: string): Promise<(Space & { userRole: SpaceRole })[]>;
 	findBySlugAccessible(slug: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
 	findByIdAccessible(id: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
+
+	// Pinning methods (Phase C: Navigation Redesign)
+	getPinnedCount(userId: string): Promise<number>;
+	pinSpace(spaceId: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
+	unpinSpace(spaceId: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
 }
 
 // =====================================================

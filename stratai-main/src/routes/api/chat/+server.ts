@@ -196,6 +196,83 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
 	});
 }
 
+/**
+ * Final validation step: Ensure we never exceed Anthropic's 4 cache_control block limit
+ * This is a safety net that catches any edge cases in the caching logic above
+ * 
+ * Strategy: Count all cache_control blocks, and if > 4, remove from historical
+ * messages (keeping system message cache_control intact as it's most valuable)
+ */
+function enforceCacheControlLimit(messages: ChatMessage[], model: string): ChatMessage[] {
+	if (!shouldUseCacheControl(model)) {
+		return messages;
+	}
+
+	const MAX_CACHE_BLOCKS = 4;
+	
+	// Count all cache_control blocks and track their locations
+	const cacheLocations: { messageIndex: number; blockIndex: number; isSystem: boolean }[] = [];
+	
+	messages.forEach((msg, msgIndex) => {
+		if (Array.isArray(msg.content)) {
+			msg.content.forEach((block, blockIndex) => {
+				if ('cache_control' in block && block.cache_control) {
+					cacheLocations.push({
+						messageIndex: msgIndex,
+						blockIndex,
+						isSystem: msg.role === 'system'
+					});
+				}
+			});
+		}
+	});
+
+	// If within limit, no action needed
+	if (cacheLocations.length <= MAX_CACHE_BLOCKS) {
+		return messages;
+	}
+
+	// Log warning - this helps identify where the bug is occurring
+	console.warn(`[Cache] LIMIT EXCEEDED: Found ${cacheLocations.length} cache_control blocks (limit: ${MAX_CACHE_BLOCKS}). Removing extras from historical messages.`);
+
+	// Calculate how many to remove
+	const toRemove = cacheLocations.length - MAX_CACHE_BLOCKS;
+	
+	// Prioritize keeping system message cache (most valuable for cache hits)
+	// Remove from non-system messages first, starting from oldest
+	const nonSystemCaches = cacheLocations.filter(loc => !loc.isSystem);
+	const cachesToRemove = nonSystemCaches.slice(0, toRemove);
+
+	// If we need to remove more than non-system caches, we have a serious bug
+	if (cachesToRemove.length < toRemove) {
+		console.error(`[Cache] CRITICAL: Need to remove ${toRemove} cache blocks but only ${nonSystemCaches.length} non-system caches available. System has ${cacheLocations.length - nonSystemCaches.length} cache blocks.`);
+	}
+
+	// Create set of locations to remove for fast lookup
+	const removeSet = new Set(
+		cachesToRemove.map(loc => `${loc.messageIndex}-${loc.blockIndex}`)
+	);
+
+	// Remove cache_control from selected blocks
+	return messages.map((msg, msgIndex) => {
+		if (!Array.isArray(msg.content)) {
+			return msg;
+		}
+
+		const newContent = msg.content.map((block, blockIndex) => {
+			const key = `${msgIndex}-${blockIndex}`;
+			if (removeSet.has(key) && 'cache_control' in block) {
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars
+				const { cache_control, ...rest } = block;
+				return rest as MessageContentBlock;
+			}
+			return block;
+		});
+
+		return { ...msg, content: newContent };
+	});
+}
+
 interface AssistContext {
 	assistId?: string | null;
 	assistPhase?: 'collecting' | 'confirming' | 'prioritizing' | 'focused' | null;
@@ -1134,20 +1211,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Apply cache breakpoints for Claude models (conversation history caching)
 		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
+		
+		// Final safety check: enforce Anthropic's 4 cache_control block limit
+		const validatedMessages = enforceCacheControlLimit(messagesWithCache, cleanBody.model);
 
 		// Log cache breakpoint application for debugging
 		if (shouldUseCacheControl(cleanBody.model)) {
-			const cachedCount = messagesWithCache.filter(m =>
+			const cachedCount = validatedMessages.filter(m =>
 				Array.isArray(m.content) &&
 				m.content.some((c: MessageContentBlock) => 'cache_control' in c)
 			).length;
-			console.log(`Cache breakpoints: ${cachedCount}/${messagesWithCache.length} messages marked for caching`);
+			console.log(`Cache breakpoints: ${cachedCount}/${validatedMessages.length} messages marked for caching`);
 		}
 
 		// Build request options
 		const requestOptions: typeof cleanBody & { max_tokens?: number } = {
 			...cleanBody,
-			messages: messagesWithCache
+			messages: validatedMessages
 		};
 
 		// Structural constraint: limit response length during ALL of Plan Mode elicitation
@@ -1276,6 +1356,9 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext, focusArea, spaceInfo);
 	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
+	
+	// Final safety check: enforce Anthropic's 4 cache_control block limit
+	const finalMessages = enforceCacheControlLimit(messagesWithSearchContext, body.model);
 
 	// Create a ReadableStream for SSE
 	const stream = new ReadableStream({
@@ -1297,7 +1380,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 				// Build request options with optional max_tokens constraint
 				const toolRequestOptions: typeof body & { max_tokens?: number } = {
 					...body,
-					messages: messagesWithSearchContext,
+					messages: finalMessages,
 					stream: false,
 					tools: getToolsForModel(body.model, hasDocuments)
 				};
@@ -1559,7 +1642,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					// Build the messages with ALL tool results
 					// Anthropic requires: assistant message with tool_calls, then tool messages for EACH tool_call
 					const messagesWithToolResults: ChatCompletionRequest['messages'] = [
-						...messagesWithSearchContext,
+						...finalMessages,
 						{
 							role: 'assistant' as const,
 							content: message.content || null,

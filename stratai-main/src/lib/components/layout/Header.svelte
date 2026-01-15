@@ -12,10 +12,9 @@
 	import ModelBadge from '../ModelBadge.svelte';
 	import PlanningTasksIndicator from '../tasks/PlanningTasksIndicator.svelte';
 	import UserMenu from './UserMenu.svelte';
-	import { SpaceModal } from '../spaces';
+	import { SpaceModal, SpaceNavTabs } from '../spaces';
 	import type { CreateSpaceInput, UpdateSpaceInput, Space } from '$lib/types/spaces';
 	import { MAX_CUSTOM_SPACES } from '$lib/types/spaces';
-	import { getSpaceDisplayName } from '$lib/utils/space-display';
 
 	interface Props {
 		onModelChange?: (model: string) => void;
@@ -34,7 +33,6 @@
 	// Spaces state
 	let showSpaceModal = $state(false);
 	let editingSpace = $state<Space | null>(null);
-	let systemSpaces = $derived(spacesStore.getSystemSpaces());
 	let customSpaces = $derived(spacesStore.getCustomSpaces());
 	let canCreateSpace = $derived(spacesStore.getCustomSpaceCount() < MAX_CUSTOM_SPACES);
 
@@ -208,62 +206,9 @@
 			<span class="font-bold text-lg text-gradient hidden sm:inline">StratAI</span>
 		</a>
 
-		<!-- Spaces Navigation -->
-		<nav class="hidden md:flex items-center gap-1 ml-2">
-			<!-- System Spaces -->
-			{#each systemSpaces as space (space.id)}
-				<a
-					href="/spaces/{space.slug}"
-					class="space-nav-item"
-					class:active={currentSpaceSlug === space.slug}
-					style="--space-color: {space.color}"
-				>
-					{getSpaceDisplayName(space, currentUserId)}
-				</a>
-			{/each}
-
-			<!-- Separator (if there are custom spaces or can create) -->
-			{#if customSpaces.length > 0 || canCreateSpace}
-				<span class="space-nav-separator"></span>
-			{/if}
-
-			<!-- Custom Spaces (with edit on double-click) -->
-			{#each customSpaces as space (space.id)}
-				<a
-					href="/spaces/{space.slug}"
-					class="space-nav-item group"
-					class:active={currentSpaceSlug === space.slug}
-					style="--space-color: {space.color || '#6b7280'}"
-					ondblclick={(e) => { e.preventDefault(); handleEditSpace(space); }}
-					title="Double-click to edit"
-				>
-					{getSpaceDisplayName(space, currentUserId)}
-					<button
-						type="button"
-						class="space-nav-edit"
-						onclick={(e) => { e.preventDefault(); e.stopPropagation(); handleEditSpace(space); }}
-						title="Edit space"
-					>
-						<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-						</svg>
-					</button>
-				</a>
-			{/each}
-
-			<!-- Add Space Button -->
-			{#if canCreateSpace}
-				<button
-					type="button"
-					class="space-nav-add"
-					onclick={handleOpenCreateModal}
-					title="Create custom space"
-				>
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-					</svg>
-				</button>
-			{/if}
+		<!-- Spaces Navigation (Desktop) - Pinned spaces with dropdown -->
+		<div class="hidden md:flex items-center gap-1 ml-2">
+			<SpaceNavTabs {currentUserId} {currentSpaceSlug} />
 
 			<!-- Main Chat Button -->
 			<a
@@ -276,18 +221,7 @@
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
 				</svg>
 			</a>
-
-			<!-- All Spaces Link -->
-			<a
-				href="/spaces"
-				class="space-nav-all"
-				title="View all spaces"
-			>
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-				</svg>
-			</a>
-		</nav>
+		</div>
 
 		<!-- Mobile Chat Button -->
 		<a
@@ -403,68 +337,7 @@
 />
 
 <style>
-	.space-nav-item {
-		display: flex;
-		align-items: center;
-		padding: 0.375rem 0.75rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: rgba(255, 255, 255, 0.6);
-		border-radius: 0.375rem;
-		transition: all 0.15s ease;
-	}
-
-	.space-nav-item:hover {
-		color: rgba(255, 255, 255, 0.9);
-		background: rgba(255, 255, 255, 0.05);
-	}
-
-	.space-nav-item.active {
-		color: var(--space-color, #fff);
-		background: color-mix(in srgb, var(--space-color, #3b82f6) 15%, transparent);
-	}
-
-	.space-nav-separator {
-		width: 1px;
-		height: 1rem;
-		background: rgba(255, 255, 255, 0.15);
-		margin: 0 0.25rem;
-	}
-
-	.space-nav-add {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		color: rgba(255, 255, 255, 0.4);
-		border: 1px dashed rgba(255, 255, 255, 0.2);
-		border-radius: 0.375rem;
-		transition: all 0.15s ease;
-	}
-
-	.space-nav-add:hover {
-		color: rgba(255, 255, 255, 0.8);
-		border-color: rgba(255, 255, 255, 0.4);
-		background: rgba(255, 255, 255, 0.05);
-	}
-
-	.space-nav-all {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		color: rgba(255, 255, 255, 0.4);
-		border-radius: 0.375rem;
-		transition: all 0.15s ease;
-	}
-
-	.space-nav-all:hover {
-		color: rgba(255, 255, 255, 0.8);
-		background: rgba(255, 255, 255, 0.08);
-	}
-
+	/* Main Chat button in nav bar */
 	.space-nav-chat {
 		display: flex;
 		align-items: center;
@@ -474,6 +347,7 @@
 		color: rgba(255, 255, 255, 0.4);
 		border-radius: 0.375rem;
 		transition: all 0.15s ease;
+		margin-left: 0.25rem;
 	}
 
 	.space-nav-chat:hover {
@@ -484,26 +358,5 @@
 	.space-nav-chat.active {
 		color: #3b82f6;
 		background: color-mix(in srgb, #3b82f6 15%, transparent);
-	}
-
-	.space-nav-edit {
-		display: none;
-		align-items: center;
-		justify-content: center;
-		margin-left: 0.25rem;
-		padding: 0.125rem;
-		color: rgba(255, 255, 255, 0.4);
-		border-radius: 0.25rem;
-		transition: all 0.15s ease;
-	}
-
-	.space-nav-item:hover .space-nav-edit,
-	.space-nav-item.active .space-nav-edit {
-		display: flex;
-	}
-
-	.space-nav-edit:hover {
-		color: rgba(255, 255, 255, 0.9);
-		background: rgba(255, 255, 255, 0.1);
 	}
 </style>

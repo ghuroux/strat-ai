@@ -48,6 +48,9 @@ export interface SpaceMembership {
 	invitedBy?: string;
 	createdAt: Date;
 	updatedAt: Date;
+	// Pinning (Phase C: navigation redesign)
+	isPinned?: boolean; // Whether this invited space is pinned to the nav bar
+	displayAlias?: string | null; // Optional user-defined display name (future feature)
 }
 
 export interface SpaceMembershipWithUser extends SpaceMembership {
@@ -81,6 +84,10 @@ export interface SpaceMembershipRow {
 	invitedBy: string | null;
 	createdAt: Date;
 	updatedAt: Date;
+	// Pinning (Phase C: navigation redesign)
+	// postgres.js auto-converts is_pinned → isPinned, display_alias → displayAlias
+	isPinned: boolean | null;
+	displayAlias: string | null;
 }
 
 // ============================================
@@ -100,7 +107,10 @@ export function rowToSpaceMembership(row: SpaceMembershipRow): SpaceMembership {
 		role: row.role,
 		invitedBy: row.invitedBy ?? undefined,
 		createdAt: row.createdAt,
-		updatedAt: row.updatedAt
+		updatedAt: row.updatedAt,
+		// Pinning (Phase C: navigation redesign)
+		isPinned: row.isPinned ?? undefined,
+		displayAlias: row.displayAlias ?? null
 	};
 }
 

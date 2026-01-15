@@ -50,6 +50,8 @@ export interface Space {
 	// Owner info for invited spaces (Phase B: name collision fix)
 	ownerFirstName?: string | null; // Owner's first name (for display when invited)
 	ownerDisplayName?: string | null; // Owner's display name (fallback)
+	// Pinning (Phase C: navigation redesign)
+	isPinned?: boolean; // Whether this space is pinned to the nav bar
 }
 
 /**
@@ -78,6 +80,9 @@ export interface SpaceRow {
 	// Populated via JOIN when fetching accessible spaces
 	ownerFirstName: string | null;
 	ownerDisplayName: string | null;
+	// Pinning (Phase C: navigation redesign)
+	// postgres.js auto-converts is_pinned → isPinned
+	isPinned: boolean | null;
 }
 
 /**
@@ -148,7 +153,9 @@ export function rowToSpace(row: SpaceRow): Space {
 		organizationId: row.organizationId ?? undefined,
 		// Owner info for invited spaces (Phase B: name collision fix)
 		ownerFirstName: row.ownerFirstName ?? null,
-		ownerDisplayName: row.ownerDisplayName ?? null
+		ownerDisplayName: row.ownerDisplayName ?? null,
+		// Pinning (Phase C: navigation redesign)
+		isPinned: row.isPinned ?? undefined
 	};
 }
 

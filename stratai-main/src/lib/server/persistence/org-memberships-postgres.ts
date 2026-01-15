@@ -102,19 +102,37 @@ export const postgresOrgMembershipRepository: OrgMembershipRepository = {
 		`;
 		const membership = rowToOrgMembership(rows[0]);
 
-		// Auto-invite to organization space
+		// Auto-invite to organization space with auto-pin (if under max 6)
 		try {
 			const orgSpaceId = await findOrgSpace(input.organizationId);
 			if (orgSpaceId) {
 				const spaceRole = mapOrgRoleToSpaceRole(input.role || 'member');
+				// Check pinned count to determine if we should auto-pin
+				// Max 6 pinned spaces total (owned + invited)
+				const pinnedResult = await sql<{ count: string }[]>`
+					SELECT COUNT(*) as count FROM (
+						SELECT id FROM spaces
+						WHERE user_id = ${input.userId}::uuid
+							AND deleted_at IS NULL
+							AND is_pinned = true
+						UNION ALL
+						SELECT sm.id FROM space_memberships sm
+						WHERE sm.user_id = ${input.userId}::uuid
+							AND sm.is_pinned = true
+					) pinned
+				`;
+				const pinnedCount = parseInt(pinnedResult[0].count, 10);
+				const shouldAutoPin = pinnedCount < 6;
+
 				await sql`
-					INSERT INTO space_memberships (id, space_id, user_id, role, invited_by, created_at, updated_at)
+					INSERT INTO space_memberships (id, space_id, user_id, role, invited_by, is_pinned, created_at, updated_at)
 					VALUES (
 						${'sm_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9)},
 						${orgSpaceId},
 						${input.userId}::uuid,
 						${spaceRole},
 						${input.invitedBy ? sql`${input.invitedBy}::uuid` : sql`NULL`},
+						${shouldAutoPin},
 						NOW(),
 						NOW()
 					)
