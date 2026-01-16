@@ -260,7 +260,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     
     # Calculate stats
     COMPLETED=$(jq '[.stories[] | select(.status == "complete" or .status == "completed")] | length' "$PRD_FILE")
-    FEATURE=$(jq -r '.feature // "unnamed"' "$PRD_FILE")
+    FEATURE=$(jq -r '.feature_name // .feature // "unnamed"' "$PRD_FILE")
     
     echo "   Feature:    $FEATURE"
     echo "   Completed:  $COMPLETED stories"
@@ -461,12 +461,31 @@ EOF
     # 4. Create final summary commit
     cd "$PROJECT_DIR"
     git add -A
-    git commit -m "feat: complete $FEATURE feature
+    
+    if [ -n "$WORKSPACE_DIR" ]; then
+      git commit -m "feat: complete $FEATURE feature
+
+- Implemented $COMPLETED stories
+- Extracted patterns to AGENTS.md
+- Archived progress to $ARCHIVE_DIR/
+- Cleaned up workspace directory"
+    else
+      git commit -m "feat: complete $FEATURE feature
 
 - Implemented $COMPLETED stories
 - Extracted patterns to AGENTS.md
 - Archived progress to $ARCHIVE_DIR/
 - Reset working files for next feature"
+    fi
+    
+    # 5. Delete workspace directory (now that everything is archived and committed)
+    if [ -n "$WORKSPACE_DIR" ]; then
+      echo ""
+      echo "   🗑️  Removing workspace directory..."
+      cd "$PROJECT_DIR"  # Ensure we're not inside the workspace
+      rm -rf "$WORKSPACE_DIR"
+      echo "   ✅ Workspace deleted"
+    fi
     
     echo ""
     print_success "Feature complete!"
@@ -476,6 +495,9 @@ EOF
     echo "   • Stories completed: $COMPLETED"
     echo "   • Archive: $ARCHIVE_DIR/"
     echo "   • Patterns: Added to AGENTS.md"
+    if [ -n "$WORKSPACE_DIR" ]; then
+      echo "   • Workspace: Cleaned up"
+    fi
     echo ""
     echo "   🚀 Ready for next feature!"
     echo ""
