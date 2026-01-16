@@ -1285,13 +1285,14 @@ export interface PromptLayer {
 
 /**
  * Get system prompt layers for optimal caching
- * Returns [platformLayer, contextLayer] which can be used as separate content blocks
+ * Returns prompt layers which can be used as separate content blocks
  *
  * Cache strategy:
- * - Platform layer: Stable across ALL users using same model family
- * - Context layer: Stable per space/area (changes when user switches context)
+ * - Temporal layer (Layer 0): Changes daily, small (~50 tokens), NOT cached
+ * - Platform layer (Layer 1): Stable across ALL users using same model family, cached
+ * - Context layer (Layer 2): Stable per space/area (changes when user switches context), cached
  *
- * @returns Array of [platformLayer, contextLayer?] - context layer is null if no context
+ * @returns Array of PromptLayer objects in order [temporal, platform, context?]
  */
 export function getSystemPromptLayers(
   model: string,
@@ -1300,9 +1301,19 @@ export function getSystemPromptLayers(
     spaceInfo?: SpaceInfo | null;
     focusArea?: FocusAreaInfo | null;
     focusedTask?: FocusedTaskInfo | null;
+    timezone?: string;
   },
 ): PromptLayer[] {
   const layers: PromptLayer[] = [];
+
+  // Layer 0: Temporal context (changes daily - NOT cached)
+  // Small (~50 tokens) so cache miss is negligible
+  const temporalContext = getTemporalContext(options.timezone);
+  layers.push({
+    name: "temporal",
+    content: temporalContext,
+    shouldCache: false, // Changes daily, don't cache
+  });
 
   // Layer 1: Platform prompt (most stable - cached globally per model family)
   const platformPrompt = getPlatformPrompt(model);
@@ -1313,6 +1324,7 @@ export function getSystemPromptLayers(
   });
 
   // Layer 2: Context (space + area + task) - cached per context
+  // (After temporal Layer 0 and platform Layer 1)
   const contextParts: string[] = [];
 
   // Add space context

@@ -53,7 +53,7 @@
       "id": "US-002",
       "title": "Inject temporal context as Layer 0 in getSystemPromptLayers()",
       "description": "As a user, I want the AI to know the current date and my timezone so it can answer date-relative questions accurately.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": ["US-001"],
       "acceptance_criteria": [
         "getSystemPromptLayers() accepts new timezone option: options.timezone?: string",

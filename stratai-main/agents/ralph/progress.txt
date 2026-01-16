@@ -25,7 +25,7 @@
 | ID | Title | Status |
 |----|-------|--------|
 | US-001 | Create getTemporalContext() function in system-prompts.ts | completed |
-| US-002 | Inject temporal context as Layer 0 in getSystemPromptLayers() | pending |
+| US-002 | Inject temporal context as Layer 0 in getSystemPromptLayers() | completed |
 | US-003 | Add timezone field to UserPreferences type | pending |
 | US-004 | Add timezone validation to preferences API endpoint | pending |
 | US-005 | Detect and sync timezone on app load | pending |
@@ -71,5 +71,36 @@
 - ✅ npm run check - passes (0 errors)
 - ⚠️ npm run lint - skipped (pre-existing missing eslint config)
 - ✅ Prettier formatting applied
+
+---
+
+### US-002: Inject temporal context as Layer 0 (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+- Modified `getSystemPromptLayers()` to accept new `timezone` option parameter
+- Injected temporal layer as the FIRST layer (Layer 0) before platform prompt
+- Temporal layer properties: `name: 'temporal'`, `shouldCache: false`
+- Platform prompt shifted from Layer 1 to Layer 1 (unchanged number, but now after temporal)
+- Context layer is now Layer 2 (after temporal and platform)
+- Updated JSDoc comments to reflect new layer ordering
+
+**Files changed:**
+- `src/lib/config/system-prompts.ts` - Modified getSystemPromptLayers() function (~20 lines added)
+
+**Patterns applied:**
+- Followed existing PromptLayer interface pattern (name, content, shouldCache)
+- Used consistent pattern with `options.timezone` optional parameter
+- Maintained backwards compatibility (timezone defaults to 'Africa/Johannesburg' via getTemporalContext)
+
+**Learnings:**
+1. **Layer ordering matters for prompt caching** - Temporal goes first because it changes most frequently (daily), which means cache invalidation propagates correctly. Putting it at the end would waste caching for stable layers.
+2. **shouldCache: false is correct** - Small layer (~50 tokens), changes daily. Cache miss cost is negligible compared to maintaining cache freshness for time-sensitive content.
+3. **Options object pattern** - Function already used options object, making it easy to add new optional parameters without breaking existing callers.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 errors, only warnings)
+- ⚠️ npm run lint - skipped (pre-existing missing eslint config)
 
 ---
