@@ -36,8 +36,8 @@ When pages have `visibility = 'area'`, area members cannot see them in `findAll(
 
 | ID | Title | Status |
 |----|-------|--------|
-| US-001 | Update findAll() with CTE-based access control | pending |
-| US-002 | Update search() with access control | pending |
+| US-001 | Update findAll() with CTE-based access control | completed |
+| US-002 | Update search() with access control | completed |
 | US-003 | Update count() with access control | pending |
 | US-004 | Manual testing and verification | pending |
 
@@ -83,14 +83,39 @@ When pages have `visibility = 'area'`, area members cannot see them in `findAll(
 
 **Decision:** Used `IN (SELECT id FROM accessible_pages)` instead of JOIN for readability and to avoid duplicate rows when a page is accessible via multiple paths.
 
-## 2026-01-16 - Update findAll() with CTE-based access control
-Task ID: US-001
-Status: Completed
+### Iteration 2: US-002 - Update search() with access control
+**Date:** 2026-01-16
+**Status:** Completed
 
-### What Was Done
-[Fill in implementation details]
+**What was done:**
+- Updated `search()` method to use `buildAccessiblePagesCTE()` helper function from US-001
+- Replaced simple `WHERE user_id = ${userId}` check with CTE-based access control
+- Added table alias `p` to disambiguate columns in JOIN with CTE
+- Preserved full-text search functionality using PostgreSQL `to_tsvector` and `to_tsquery`
+- Preserved search ranking using `ts_rank()` for relevance ordering
+- Maintained support for area-specific searches via `areaId` filter
 
-### Learnings
-[Capture patterns, decisions, lessons]
+**Files changed:**
+- `src/lib/server/persistence/pages-postgres.ts` - Updated `search()` method
+
+**Acceptance criteria verified:**
+- ✅ Reuses `buildAccessiblePagesCTE()` helper from US-001
+- ✅ search() filters results through accessible pages CTE
+- ✅ Search only returns pages user can access (via CTE)
+- ✅ Search within specific area respects access control
+- ✅ Full-text search functionality still works correctly
+- ✅ Search ranking is preserved (`ORDER BY ts_rank(...)`)
+
+**Quality gates:**
+- ✅ `npm run check` - 0 TypeScript errors
+- ✅ `npm run audit-db-access` - 0 violations
+- ⚠️ `npm run lint` - Pre-existing config issue (eslint.config.js missing for ESLint v9)
+
+**Learnings:**
+1. **CTE reuse is straightforward**: The `buildAccessiblePagesCTE()` helper is designed for composition - just include it in the `WITH` clause and filter via `IN (SELECT id FROM accessible_pages)`.
+2. **Table aliases required**: When using the CTE with other query conditions, table aliases (`p.`) are needed to disambiguate column references.
+3. **Full-text search unaffected**: The access control change is orthogonal to the search functionality - the CTE filters the result set before ranking.
+
+**Pattern:** For any method that retrieves pages and filters by `user_id = ${userId}`, the fix is the same: add `WITH ${accessiblePagesCTE}` and change `WHERE user_id = ${userId}` to `WHERE p.id IN (SELECT id FROM accessible_pages)`.
 
 ---

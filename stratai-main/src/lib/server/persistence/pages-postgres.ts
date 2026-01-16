@@ -410,36 +410,53 @@ export const postgresPageRepository: PageRepository = {
 		`;
 	},
 
+	/**
+	 * Search pages accessible to a user
+	 *
+	 * Uses CTE-based access control to only return pages the user can access via:
+	 * - Pages the user owns
+	 * - Private pages shared directly with the user
+	 * - Private pages shared via group membership
+	 * - Area-visible pages in areas the user can access
+	 * - Space-visible pages in spaces the user owns
+	 *
+	 * @param query - Search query string (words joined with & for tsquery)
+	 * @param userId - The user to check access for
+	 * @param areaId - Optional area filter
+	 */
 	async search(query: string, userId: string, areaId?: string): Promise<PageSummary[]> {
 		const searchQuery = query.trim().split(/\s+/).join(' & ');
+		const accessiblePagesCTE = buildAccessiblePagesCTE(userId);
 
 		let rows: PageRow[];
 
 		if (areaId) {
 			rows = await sql<PageRow[]>`
-				SELECT id, area_id, title, page_type, visibility, word_count, task_id, created_at, updated_at
-				FROM pages
-				WHERE user_id = ${userId}
-					AND area_id = ${areaId}
-					AND deleted_at IS NULL
-					AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content_text, ''))
+				WITH ${accessiblePagesCTE}
+				SELECT p.id, p.area_id, p.title, p.page_type, p.visibility, p.word_count, p.task_id, p.created_at, p.updated_at
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.area_id = ${areaId}
+					AND p.deleted_at IS NULL
+					AND to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(p.content_text, ''))
 						@@ to_tsquery('english', ${searchQuery})
 				ORDER BY ts_rank(
-					to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content_text, '')),
+					to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(p.content_text, '')),
 					to_tsquery('english', ${searchQuery})
 				) DESC
 				LIMIT 50
 			`;
 		} else {
 			rows = await sql<PageRow[]>`
-				SELECT id, area_id, title, page_type, visibility, word_count, task_id, created_at, updated_at
-				FROM pages
-				WHERE user_id = ${userId}
-					AND deleted_at IS NULL
-					AND to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content_text, ''))
+				WITH ${accessiblePagesCTE}
+				SELECT p.id, p.area_id, p.title, p.page_type, p.visibility, p.word_count, p.task_id, p.created_at, p.updated_at
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.deleted_at IS NULL
+					AND to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(p.content_text, ''))
 						@@ to_tsquery('english', ${searchQuery})
 				ORDER BY ts_rank(
-					to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content_text, '')),
+					to_tsvector('english', coalesce(p.title, '') || ' ' || coalesce(p.content_text, '')),
 					to_tsquery('english', ${searchQuery})
 				) DESC
 				LIMIT 50

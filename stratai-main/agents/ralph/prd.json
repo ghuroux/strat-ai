@@ -44,7 +44,7 @@
       "id": "US-002",
       "title": "Update search() with access control",
       "description": "As a user, I want search to only return pages I can access so that search results respect sharing permissions.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001"
       ],
