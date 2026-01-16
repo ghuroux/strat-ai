@@ -18,22 +18,33 @@ echo "   Project: $PROJECT_DIR"
 cd "$PROJECT_DIR"
 
 # ═══════════════════════════════════════════════════════════════════
-# 1. Clean Working Directory
+# 1. Clean Working Directory (Allow Ralph Working Files)
 # ═══════════════════════════════════════════════════════════════════
 echo ""
 echo "📁 Checking working directory..."
 
-if [ -n "$(git status --porcelain)" ]; then
+# Check for uncommitted changes, excluding Ralph's working files
+CHANGES=$(git status --porcelain | grep -v "agents/ralph/prd.json" | grep -v "agents/ralph/progress.txt" || true)
+
+if [ -n "$CHANGES" ]; then
   echo "❌ Working directory not clean"
   echo ""
   echo "   Uncommitted changes:"
-  git status --short
+  echo "$CHANGES"
   echo ""
   echo "   Fix: Commit or stash changes before proceeding"
+  echo "   (Ralph working files prd.json and progress.txt are allowed)"
   exit 1
 fi
 
-echo "   ✅ Working directory is clean"
+echo "   ✅ Working directory clean"
+
+# Show Ralph working file status if they're modified
+RALPH_CHANGES=$(git status --porcelain | grep -E "agents/ralph/(prd\.json|progress\.txt)" || true)
+if [ -n "$RALPH_CHANGES" ]; then
+  echo "   📝 Ralph working files modified (allowed):"
+  echo "$RALPH_CHANGES" | sed 's/^/      /'
+fi
 
 # ═══════════════════════════════════════════════════════════════════
 # 2. TypeScript Compilation
