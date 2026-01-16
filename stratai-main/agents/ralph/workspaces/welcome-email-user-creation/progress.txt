@@ -219,3 +219,15 @@ When admins create new users, the system will automatically send a secure welcom
 - `npm run lint`: Known config issue (ESLint 9 migration needed - pre-existing)
 
 ---
+
+## 2026-01-16 - Update admin create user flow to send welcome email
+Task ID: US-005
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---
