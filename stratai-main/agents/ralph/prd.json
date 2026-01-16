@@ -63,7 +63,7 @@
       "id": "US-003",
       "title": "Update count() with access control",
       "description": "As a user, I want page counts to reflect only pages I can access so that UI counters are accurate.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001"
       ],

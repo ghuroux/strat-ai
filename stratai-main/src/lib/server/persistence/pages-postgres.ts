@@ -624,23 +624,39 @@ export const postgresPageRepository: PageRepository = {
 		return this.findById(newId, userId);
 	},
 
+	/**
+	 * Count pages accessible to a user
+	 *
+	 * Uses CTE-based access control to count pages via any access path:
+	 * - Pages the user owns
+	 * - Private pages shared directly with the user
+	 * - Private pages shared via group membership
+	 * - Area-visible pages in areas the user can access
+	 * - Space-visible pages in spaces the user owns
+	 *
+	 * @param userId - The user to check access for
+	 * @param filter - Optional filters for areaId
+	 */
 	async count(userId: string, filter?: PageListFilter): Promise<number> {
+		const accessiblePagesCTE = buildAccessiblePagesCTE(userId);
 		let result;
 
 		if (filter?.areaId) {
 			result = await sql<{ count: string }[]>`
+				WITH ${accessiblePagesCTE}
 				SELECT COUNT(*) as count
-				FROM pages
-				WHERE user_id = ${userId}
-					AND area_id = ${filter.areaId}
-					AND deleted_at IS NULL
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.area_id = ${filter.areaId}
+					AND p.deleted_at IS NULL
 			`;
 		} else {
 			result = await sql<{ count: string }[]>`
+				WITH ${accessiblePagesCTE}
 				SELECT COUNT(*) as count
-				FROM pages
-				WHERE user_id = ${userId}
-					AND deleted_at IS NULL
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.deleted_at IS NULL
 			`;
 		}
 
