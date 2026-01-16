@@ -219,6 +219,65 @@ SELECT * FROM areas WHERE id IN (SELECT id FROM accessible_ids)
 
 ---
 
+### Pattern: Reusable CTE Helper Functions
+
+**When to use:** When the same CTE logic needs to be reused across multiple query methods (findAll, search, count)
+
+**Implementation:**
+```typescript
+import type { PendingQuery, Row } from 'postgres';
+
+/**
+ * Build CTE query fragment for reuse across methods
+ * Returns sql fragment, not executed query
+ */
+function buildAccessiblePagesCTE(userId: string): PendingQuery<Row[]> {
+  return sql`
+    accessible_pages AS (
+      -- Path 1: User owns the resource
+      SELECT p.id FROM pages p WHERE p.user_id = ${userId} AND p.deleted_at IS NULL
+      UNION
+      -- Path 2: Shared with user
+      SELECT p.id FROM pages p
+      JOIN page_user_shares pus ON p.id = pus.page_id
+      WHERE pus.user_id = ${userId} AND p.deleted_at IS NULL
+      -- ... more paths
+    )
+  `;
+}
+
+// Usage in findAll, search, count methods:
+async function findAll(userId: string): Promise<Page[]> {
+  const accessiblePagesCTE = buildAccessiblePagesCTE(userId);
+  return sql<PageRow[]>`
+    WITH ${accessiblePagesCTE}
+    SELECT p.* FROM pages p
+    WHERE p.id IN (SELECT id FROM accessible_pages)
+    ORDER BY p.updated_at DESC
+  `;
+}
+
+async function count(userId: string): Promise<number> {
+  const accessiblePagesCTE = buildAccessiblePagesCTE(userId);
+  const result = await sql`
+    WITH ${accessiblePagesCTE}
+    SELECT COUNT(*) as count FROM pages p
+    WHERE p.id IN (SELECT id FROM accessible_pages)
+  `;
+  return parseInt(result[0]?.count || '0', 10);
+}
+```
+
+**Benefits:**
+- Single source of truth for access control logic
+- Changes to access rules only need one update
+- Consistent behavior across findAll, search, count
+- Uses `IN (SELECT id FROM ...)` to avoid duplicates when multiple access paths match
+
+**See:** `pages-postgres.ts` → `buildAccessiblePagesCTE()`
+
+---
+
 ### Pattern: Defense-in-Depth for Business Rules
 
 **When to use:** Critical invariants that must never be violated (e.g., "General area cannot be restricted")
@@ -497,6 +556,6 @@ Examples:
 
 ---
 
-*Last updated: 2026-01-16 (Intl API pattern added for Temporal Awareness feature)*
+*Last updated: 2026-01-16 (Reusable CTE Helper Functions pattern added for Page Listing Access Control)*
 *Maintainer: Development Team*
 
