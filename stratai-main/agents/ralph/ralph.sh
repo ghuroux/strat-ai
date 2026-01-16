@@ -366,24 +366,105 @@ Read agents/ralph/prompt.md NOW to begin." > "$TEMP_PROMPT_FILE"
   fi
   
   # ─────────────────────────────────────────────────────────────────────────────
-  # Postflight Validation
+  # Postflight Validation with Auto-Fix
   # ─────────────────────────────────────────────────────────────────────────────
   
   print_step "🔒 Postflight Validation"
   
-  if ! "$SCRIPT_DIR/validation/postflight.sh"; then
+  POSTFLIGHT_OUTPUT=$(mktemp)
+  MAX_FIX_ATTEMPTS=2
+  FIX_ATTEMPT=0
+  
+  while true; do
+    # Run postflight and capture output
+    if "$SCRIPT_DIR/validation/postflight.sh" 2>&1 | tee "$POSTFLIGHT_OUTPUT"; then
+      # Success!
+      rm -f "$POSTFLIGHT_OUTPUT"
+      break
+    fi
+    
+    # Postflight failed
     print_error "Postflight failed"
     echo ""
-    echo "   Fix the issues and press Enter to re-validate..."
-    read -r
     
-    # Re-run postflight
-    if ! "$SCRIPT_DIR/validation/postflight.sh"; then
-      print_error "Postflight still failing - story not complete"
-      echo "   Continuing to next iteration..."
-      continue
+    # Check if we've exhausted fix attempts
+    if [ $FIX_ATTEMPT -ge $MAX_FIX_ATTEMPTS ]; then
+      echo "   ❌ Maximum fix attempts ($MAX_FIX_ATTEMPTS) reached"
+      echo ""
+      echo "   Options:"
+      echo "   1. Press Enter to skip this story and continue"
+      echo "   2. Press Ctrl+C to exit and fix manually"
+      echo ""
+      read -r
+      rm -f "$POSTFLIGHT_OUTPUT"
+      continue 2  # Continue to next story in outer loop
     fi
-  fi
+    
+    # Try auto-fix if Claude CLI is available
+    if [ -n "$CLAUDE_CLI" ]; then
+      FIX_ATTEMPT=$((FIX_ATTEMPT + 1))
+      echo "   🔧 Auto-fix attempt $FIX_ATTEMPT of $MAX_FIX_ATTEMPTS..."
+      echo ""
+      
+      # Create fix prompt with error details
+      FIX_PROMPT="You are fixing validation errors for story $STORY_ID.
+
+**CRITICAL: This is a FIX attempt. The story was implemented but validation failed.**
+
+**Validation errors:**
+\`\`\`
+$(cat "$POSTFLIGHT_OUTPUT")
+\`\`\`
+
+**Your task:**
+1. Read the validation errors above carefully
+2. Fix ONLY the specific issues mentioned
+3. Do NOT reimplement the entire story
+4. Run quality gates after fixing
+5. Update progress.txt with what you fixed
+
+**Rules:**
+- Focus ONLY on fixing the errors shown above
+- Do not introduce new changes
+- Test your fixes with npm run check, npm run lint, npm run test
+- If you cannot fix the issue, explain why in progress.txt
+
+Read agents/ralph/prompt.md for context if needed."
+
+      # Invoke fix agent with fresh context
+      set +e
+      if [ -n "$TIMEOUT_CMD" ]; then
+        $TIMEOUT_CMD $CLAUDE_CLI --print \
+          --system-prompt "$AGENT_PROMPT" \
+          --dangerously-skip-permissions \
+          "$(echo "$FIX_PROMPT")"
+      else
+        $CLAUDE_CLI --print \
+          --system-prompt "$AGENT_PROMPT" \
+          --dangerously-skip-permissions \
+          "$(echo "$FIX_PROMPT")"
+      fi
+      FIX_EXIT_CODE=$?
+      set -e
+      
+      if [ $FIX_EXIT_CODE -eq 0 ]; then
+        echo ""
+        echo "   ✅ Fix agent completed - re-running validation..."
+        echo ""
+        # Loop will re-run postflight
+      else
+        echo ""
+        echo "   ⚠️  Fix agent failed (exit code: $FIX_EXIT_CODE)"
+        echo ""
+        # Loop will try again or hit max attempts
+      fi
+    else
+      # No CLI - manual fix required
+      echo "   Fix the issues and press Enter to re-validate..."
+      echo "   (Or press Ctrl+C to exit)"
+      read -r
+    fi
+  done
   
   # ─────────────────────────────────────────────────────────────────────────────
   # Review Phase
