@@ -54,6 +54,11 @@
 			chatStore.refresh();
 		}
 
+		// Detect and sync timezone (silent operation - no UI feedback)
+		if (data.user) {
+			syncTimezone();
+		}
+
 		// Listen for system theme changes when using 'system' preference
 		const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 		const handleChange = () => {
@@ -65,6 +70,39 @@
 		mediaQuery.addEventListener('change', handleChange);
 		return () => mediaQuery.removeEventListener('change', handleChange);
 	});
+
+	/**
+	 * Detect browser timezone and sync to server if different from stored preference.
+	 * Silent operation - no UI feedback unless error.
+	 */
+	async function syncTimezone() {
+		try {
+			// Detect browser timezone using Intl API
+			const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			const storedTimezone = data.user?.preferences?.timezone;
+
+			// Only update if timezone differs from stored preference
+			if (detectedTimezone && detectedTimezone !== storedTimezone) {
+				const response = await fetch('/api/user/preferences', {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ timezone: detectedTimezone })
+				});
+
+				if (response.ok) {
+					// Update local store with new timezone
+					userStore.setPreferences({
+						...userStore.preferences,
+						timezone: detectedTimezone
+					});
+				}
+				// Silent failure - don't show error to user for timezone sync
+			}
+		} catch {
+			// Silent failure - timezone sync is not critical
+			console.debug('Failed to sync timezone');
+		}
+	}
 
 	function applyTheme(theme: ThemePreference) {
 		const root = document.documentElement;

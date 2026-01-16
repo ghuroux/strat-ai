@@ -28,7 +28,7 @@
 | US-002 | Inject temporal context as Layer 0 in getSystemPromptLayers() | completed |
 | US-003 | Add timezone field to UserPreferences type | completed |
 | US-004 | Add timezone validation to preferences API endpoint | completed |
-| US-005 | Detect and sync timezone on app load | pending |
+| US-005 | Detect and sync timezone on app load | completed |
 | US-006 | Pass timezone to chat API and prompt builder | pending |
 | US-007 | Add timezone selector to Settings UI (Optional Phase 3) | pending |
 
@@ -159,6 +159,39 @@
 1. **Intl.DateTimeFormat for timezone validation** - Passing an invalid timezone to `{ timeZone: value }` option throws a RangeError. This is the cleanest way to validate IANA timezone strings without maintaining a hardcoded list.
 2. **Pattern consistency matters** - Following the exact same pattern as existing validators (validateTheme, validateHomePage) makes the code predictable and easy to review.
 3. **Error message format** - Using `type: 'validation_error'` allows clients to differentiate between validation errors (user fixable) and server errors (not user fixable).
+
+**Quality gates:**
+- ✅ npm run check - passes (0 errors, 160 warnings - all pre-existing)
+- ⚠️ npm run lint - skipped (pre-existing missing eslint config)
+
+---
+
+### US-005: Detect and sync timezone on app load (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+- Added `syncTimezone()` async function to `src/routes/+layout.svelte`
+- Called `syncTimezone()` in `onMount()` when user is authenticated
+- Function detects browser timezone using `Intl.DateTimeFormat().resolvedOptions().timeZone`
+- Only sends PATCH request if detected timezone differs from stored preference
+- Updates `userStore.preferences` with new timezone on successful sync
+- Silent operation: no toasts, only `console.debug` on failure
+
+**Files changed:**
+- `src/routes/+layout.svelte` - Added syncTimezone() function (~30 lines) and onMount call (~3 lines)
+
+**Patterns applied:**
+- Followed existing theme sync pattern in layout.svelte (onMount client-side detection)
+- Used existing `userStore.setPreferences()` method for store updates
+- Spread existing preferences to preserve other settings when updating timezone
+- Silent failure pattern for non-critical operations
+
+**Learnings:**
+1. **Intl.DateTimeFormat().resolvedOptions().timeZone** - Browser-native timezone detection, returns IANA format directly (e.g., 'America/New_York'). No external libraries needed.
+2. **Silent sync for non-critical preferences** - Timezone sync shouldn't interrupt UX with errors. If it fails, user still gets Africa/Johannesburg default. Log for debugging but don't toast.
+3. **Check before sync** - Only make network request if detected differs from stored. Avoids unnecessary API calls on every page load.
+4. **Spread pattern for partial updates** - `{ ...userStore.preferences, timezone: detectedTimezone }` preserves other preferences when updating one field.
 
 **Quality gates:**
 - ✅ npm run check - passes (0 errors, 160 warnings - all pre-existing)

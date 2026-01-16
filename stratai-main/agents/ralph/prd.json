@@ -102,7 +102,7 @@
       "id": "US-005",
       "title": "Detect and sync timezone on app load",
       "description": "As a user, I want my timezone automatically detected and saved so the AI knows my location without manual configuration.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-004"
       ],
