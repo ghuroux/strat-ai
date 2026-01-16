@@ -8,8 +8,66 @@
  * - Reasoning models (o1/o3/o4): Prefer minimal prompts; avoid "think step by step"
  */
 
-import type { SpaceType } from '$lib/types/chat';
-import type { TaskContextInfo } from '$lib/utils/context-builder';
+import type { SpaceType } from "$lib/types/chat";
+import type { TaskContextInfo } from "$lib/utils/context-builder";
+
+// ============================================================================
+// TEMPORAL CONTEXT
+// ============================================================================
+// Provides current date and timezone information for AI temporal awareness
+
+/** Default timezone when user preference is not set */
+const DEFAULT_TIMEZONE = "Africa/Johannesburg";
+
+/**
+ * Generate temporal context for injection into system prompts.
+ * This enables the AI to answer date-relative questions accurately.
+ *
+ * @param timezone - IANA timezone string (e.g., 'Africa/Johannesburg', 'America/New_York')
+ *                   Defaults to 'Africa/Johannesburg' (SAST) if not provided
+ * @returns Temporal context wrapped in XML tags for prompt injection
+ *
+ * @example
+ * getTemporalContext() // Uses default Africa/Johannesburg
+ * getTemporalContext('America/New_York') // Uses Eastern Time
+ *
+ * Output format:
+ * <temporal_context>
+ * Current date: Thursday, January 16, 2026
+ * Timezone: South Africa Standard Time
+ * </temporal_context>
+ */
+export function getTemporalContext(timezone?: string): string {
+  const tz = timezone || DEFAULT_TIMEZONE;
+
+  // Get current date in the specified timezone
+  const now = new Date();
+
+  // Format date as "Thursday, January 16, 2026" (long format with day of week)
+  const dateFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const formattedDate = dateFormatter.format(now);
+
+  // Get timezone display name (e.g., "South Africa Standard Time")
+  // Use timeZoneName: 'long' to get the full display name
+  const tzNameFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    timeZoneName: "long",
+  });
+  const tzParts = tzNameFormatter.formatToParts(now);
+  const timeZoneName =
+    tzParts.find((part) => part.type === "timeZoneName")?.value || tz;
+
+  return `<temporal_context>
+Current date: ${formattedDate}
+Timezone: ${timeZoneName}
+</temporal_context>`;
+}
 
 /**
  * Claude 4.x optimized prompt (Opus 4.5, Sonnet 4.5, Haiku 4.5)
@@ -142,72 +200,70 @@ export const GPT_4_PROMPT = `You are a helpful, knowledgeable AI assistant.
  * - Minimal few-shot examples (they degrade performance)
  * - Let the model reason internally without explicit guidance
  */
-export const REASONING_MODEL_PROMPT = 'You are a helpful AI assistant. Be direct and accurate.';
+export const REASONING_MODEL_PROMPT =
+  "You are a helpful AI assistant. Be direct and accurate.";
 
 /**
  * Model family detection utilities
  */
 
-type ModelFamily = 'claude-4' | 'gpt-5' | 'gpt-4' | 'reasoning' | 'other';
+type ModelFamily = "claude-4" | "gpt-5" | "gpt-4" | "reasoning" | "other";
 
 /**
  * Detect the model family from model name
  */
 export function getModelFamily(model: string): ModelFamily {
-	if (!model) return 'other';
-	const lowerModel = model.toLowerCase();
+  if (!model) return "other";
+  const lowerModel = model.toLowerCase();
 
-	// OpenAI Reasoning models (o1, o3, o4 series) - check first
-	// Must exclude gpt-4o which is NOT a reasoning model
-	if (!lowerModel.includes('gpt-4o') && !lowerModel.includes('gpt-5')) {
-		if (
-			lowerModel.startsWith('o1') ||
-			lowerModel.startsWith('o3') ||
-			lowerModel.startsWith('o4') ||
-			lowerModel.includes('/o1') ||
-			lowerModel.includes('/o3') ||
-			lowerModel.includes('/o4')
-		) {
-			return 'reasoning';
-		}
-	}
+  // OpenAI Reasoning models (o1, o3, o4 series) - check first
+  // Must exclude gpt-4o which is NOT a reasoning model
+  if (!lowerModel.includes("gpt-4o") && !lowerModel.includes("gpt-5")) {
+    if (
+      lowerModel.startsWith("o1") ||
+      lowerModel.startsWith("o3") ||
+      lowerModel.startsWith("o4") ||
+      lowerModel.includes("/o1") ||
+      lowerModel.includes("/o3") ||
+      lowerModel.includes("/o4")
+    ) {
+      return "reasoning";
+    }
+  }
 
-	// Claude 4.x models (Opus 4.5, Sonnet 4.5, Haiku 4.5, Sonnet 4, etc.)
-	if (
-		lowerModel.includes('claude-opus-4') ||
-		lowerModel.includes('claude-sonnet-4') ||
-		lowerModel.includes('claude-haiku-4') ||
-		lowerModel.includes('claude-4') ||
-		// Also match claude-3-7 which is part of the 4.x era
-		lowerModel.includes('claude-3-7')
-	) {
-		return 'claude-4';
-	}
+  // Claude 4.x models (Opus 4.5, Sonnet 4.5, Haiku 4.5, Sonnet 4, etc.)
+  if (
+    lowerModel.includes("claude-opus-4") ||
+    lowerModel.includes("claude-sonnet-4") ||
+    lowerModel.includes("claude-haiku-4") ||
+    lowerModel.includes("claude-4") ||
+    // Also match claude-3-7 which is part of the 4.x era
+    lowerModel.includes("claude-3-7")
+  ) {
+    return "claude-4";
+  }
 
-	// GPT-5.x models
-	if (
-		lowerModel.includes('gpt-5') ||
-		lowerModel.includes('gpt5') ||
-		lowerModel.includes('codex-max') ||
-		lowerModel.includes('codex-mini')
-	) {
-		return 'gpt-5';
-	}
+  // GPT-5.x models
+  if (
+    lowerModel.includes("gpt-5") ||
+    lowerModel.includes("gpt5") ||
+    lowerModel.includes("codex-max") ||
+    lowerModel.includes("codex-mini")
+  ) {
+    return "gpt-5";
+  }
 
-	// GPT-4.x models (including gpt-4o, gpt-4.1)
-	if (
-		lowerModel.includes('gpt-4') ||
-		lowerModel.includes('gpt4')
-	) {
-		return 'gpt-4';
-	}
+  // GPT-4.x models (including gpt-4o, gpt-4.1)
+  if (lowerModel.includes("gpt-4") || lowerModel.includes("gpt4")) {
+    return "gpt-4";
+  }
 
-	// Older Claude models (3.5, 3, etc.)
-	if (lowerModel.includes('claude')) {
-		return 'claude-4'; // Use Claude 4 prompt as fallback for older models
-	}
+  // Older Claude models (3.5, 3, etc.)
+  if (lowerModel.includes("claude")) {
+    return "claude-4"; // Use Claude 4 prompt as fallback for older models
+  }
 
-	return 'other';
+  return "other";
 }
 
 /**
@@ -215,54 +271,57 @@ export function getModelFamily(model: string): ModelFamily {
  * Returns model-family-optimized prompt
  */
 export function getPlatformPrompt(model: string): string {
-	const family = getModelFamily(model);
+  const family = getModelFamily(model);
 
-	switch (family) {
-		case 'reasoning':
-			return REASONING_MODEL_PROMPT;
-		case 'claude-4':
-			return CLAUDE_4_PROMPT;
-		case 'gpt-5':
-			return GPT_5_PROMPT;
-		case 'gpt-4':
-			return GPT_4_PROMPT;
-		default:
-			// Default to GPT-4 style for unknown models
-			return GPT_4_PROMPT;
-	}
+  switch (family) {
+    case "reasoning":
+      return REASONING_MODEL_PROMPT;
+    case "claude-4":
+      return CLAUDE_4_PROMPT;
+    case "gpt-5":
+      return GPT_5_PROMPT;
+    case "gpt-4":
+      return GPT_4_PROMPT;
+    default:
+      // Default to GPT-4 style for unknown models
+      return GPT_4_PROMPT;
+  }
 }
 
 /**
  * Check if a model is a reasoning model (o1/o3/o4 series)
  */
 export function isReasoningModel(model: string): boolean {
-	return getModelFamily(model) === 'reasoning';
+  return getModelFamily(model) === "reasoning";
 }
 
 /**
  * Check if a model is Claude 4.x (supports extended thinking, etc.)
  */
 export function isClaude4Model(model: string): boolean {
-	return getModelFamily(model) === 'claude-4';
+  return getModelFamily(model) === "claude-4";
 }
 
 /**
  * Check if a model is GPT-5.x
  */
 export function isGpt5Model(model: string): boolean {
-	return getModelFamily(model) === 'gpt-5';
+  return getModelFamily(model) === "gpt-5";
 }
 
 /**
  * Get prompt metadata for debugging/logging
  */
-export function getPromptInfo(model: string): { family: ModelFamily; promptLength: number } {
-	const family = getModelFamily(model);
-	const prompt = getPlatformPrompt(model);
-	return {
-		family,
-		promptLength: prompt.length
-	};
+export function getPromptInfo(model: string): {
+  family: ModelFamily;
+  promptLength: number;
+} {
+  const family = getModelFamily(model);
+  const prompt = getPlatformPrompt(model);
+  return {
+    family,
+    promptLength: prompt.length,
+  };
 }
 
 /**
@@ -270,7 +329,7 @@ export function getPromptInfo(model: string): { family: ModelFamily; promptLengt
  * These are appended to the platform prompt when the user is in a specific space
  */
 export const SPACE_PROMPT_ADDITIONS: Record<SpaceType, string> = {
-	work: `
+  work: `
 <space_context>
 ## Work Space Context
 You are assisting in a professional work environment. Adjust your responses accordingly:
@@ -282,7 +341,7 @@ You are assisting in a professional work environment. Adjust your responses acco
 - For meeting notes and status updates, structure information clearly
 </space_context>`,
 
-	research: `
+  research: `
 <space_context>
 ## Research Space Context
 You are assisting with research and exploration. Adjust your approach accordingly:
@@ -294,7 +353,7 @@ You are assisting with research and exploration. Adjust your approach accordingl
 - Balance depth with accessibility in explanations
 </space_context>`,
 
-	random: `
+  random: `
 <space_context>
 ## Experimental Space Context
 This is a space for experimentation and casual exploration:
@@ -304,7 +363,7 @@ This is a space for experimentation and casual exploration:
 - Less structure is fine - go with the flow
 </space_context>`,
 
-	personal: `
+  personal: `
 <space_context>
 ## Personal Space Context
 This is a personal, private space for the user:
@@ -312,25 +371,25 @@ This is a personal, private space for the user:
 - Maintain discretion and privacy awareness
 - Adapt to personal preferences over time
 - Balance helpfulness with respect for boundaries
-</space_context>`
+</space_context>`,
 };
 
 /**
  * Space information for custom space context injection
  */
 export interface SpaceInfo {
-	id: string;
-	name: string;
-	slug: string;
-	type: 'system' | 'custom';
-	context?: string; // User-provided markdown context
-	contextDocuments?: Array<{
-		id: string;
-		filename: string;
-		content: string;
-		charCount: number;
-		summary?: string; // ~200 token summary for cost-efficient context
-	}>;
+  id: string;
+  name: string;
+  slug: string;
+  type: "system" | "custom";
+  context?: string; // User-provided markdown context
+  contextDocuments?: Array<{
+    id: string;
+    filename: string;
+    content: string;
+    charCount: number;
+    summary?: string; // ~200 token summary for cost-efficient context
+  }>;
 }
 
 /**
@@ -338,9 +397,11 @@ export interface SpaceInfo {
  * For system spaces, uses the predefined prompts
  * For custom spaces, uses the user-provided context
  */
-export function getSpacePromptAddition(space: SpaceType | null | undefined): string {
-	if (!space) return '';
-	return SPACE_PROMPT_ADDITIONS[space] || '';
+export function getSpacePromptAddition(
+  space: SpaceType | null | undefined,
+): string {
+  if (!space) return "";
+  return SPACE_PROMPT_ADDITIONS[space] || "";
 }
 
 /**
@@ -348,91 +409,99 @@ export function getSpacePromptAddition(space: SpaceType | null | undefined): str
  * Uses document summaries for cost efficiency; full content available via read_document tool
  */
 export function getCustomSpacePrompt(space: SpaceInfo): string {
-	// Check if there's any context to add
-	const hasContext = space.context || (space.contextDocuments && space.contextDocuments.length > 0);
-	if (!hasContext) return '';
+  // Check if there's any context to add
+  const hasContext =
+    space.context ||
+    (space.contextDocuments && space.contextDocuments.length > 0);
+  if (!hasContext) return "";
 
-	let prompt = `
+  let prompt = `
 <space_context>
 ## Space: ${space.name}
 
 You are working within the "${space.name}" space.`;
 
-	// Add text context if present
-	if (space.context) {
-		prompt += `
+  // Add text context if present
+  if (space.context) {
+    prompt += `
 
 ### Space Context
 ${space.context}`;
-	}
+  }
 
-	// Include reference document summaries if any
-	// Full content available via read_document tool for detailed analysis
-	if (space.contextDocuments && space.contextDocuments.length > 0) {
-		prompt += `
+  // Include reference document summaries if any
+  // Full content available via read_document tool for detailed analysis
+  if (space.contextDocuments && space.contextDocuments.length > 0) {
+    prompt += `
 
 ### Reference Documents
 The following document summaries provide context for this space:`;
 
-		for (const doc of space.contextDocuments) {
-			const sizeKb = Math.round(doc.charCount / 1000);
-			prompt += `
+    for (const doc of space.contextDocuments) {
+      const sizeKb = Math.round(doc.charCount / 1000);
+      prompt += `
 
 <document_summary filename="${doc.filename}" size="${sizeKb}k chars">
-${doc.summary || '[Summary pending - use read_document tool to access content]'}
+${doc.summary || "[Summary pending - use read_document tool to access content]"}
 </document_summary>`;
-		}
-	}
+    }
+  }
 
-	prompt += `
+  prompt += `
 
 **Guidelines:**
 - Apply this space context to all responses
-- Reference relevant context when helpful${space.contextDocuments?.length ? '\n- Use **read_document** tool to access full document content when you need specific details or quotes' : ''}
+- Reference relevant context when helpful${space.contextDocuments?.length ? "\n- Use **read_document** tool to access full document content when you need specific details or quotes" : ""}
 - Stay focused on topics relevant to this space
 </space_context>`;
 
-	return prompt;
+  return prompt;
 }
 
 /**
  * Get the full system prompt for a model and optional space context
  * Combines platform-optimized prompt with space-specific additions
  */
-export function getFullSystemPrompt(model: string, space?: SpaceType | null): string {
-	const platformPrompt = getPlatformPrompt(model);
-	const spaceAddition = getSpacePromptAddition(space);
+export function getFullSystemPrompt(
+  model: string,
+  space?: SpaceType | null,
+): string {
+  const platformPrompt = getPlatformPrompt(model);
+  const spaceAddition = getSpacePromptAddition(space);
 
-	if (!spaceAddition) {
-		return platformPrompt;
-	}
+  if (!spaceAddition) {
+    return platformPrompt;
+  }
 
-	return `${platformPrompt}\n${spaceAddition}`;
+  return `${platformPrompt}\n${spaceAddition}`;
 }
 
 /**
  * Get the full system prompt with custom space context
  * Used when a custom space has user-provided context
  */
-export function getFullSystemPromptWithSpace(model: string, space: SpaceInfo): string {
-	const platformPrompt = getPlatformPrompt(model);
+export function getFullSystemPromptWithSpace(
+  model: string,
+  space: SpaceInfo,
+): string {
+  const platformPrompt = getPlatformPrompt(model);
 
-	if (space.type === 'system') {
-		// Use predefined prompts for system spaces
-		const spaceAddition = getSpacePromptAddition(space.slug as SpaceType);
-		if (!spaceAddition) {
-			return platformPrompt;
-		}
-		return `${platformPrompt}\n${spaceAddition}`;
-	}
+  if (space.type === "system") {
+    // Use predefined prompts for system spaces
+    const spaceAddition = getSpacePromptAddition(space.slug as SpaceType);
+    if (!spaceAddition) {
+      return platformPrompt;
+    }
+    return `${platformPrompt}\n${spaceAddition}`;
+  }
 
-	// For custom spaces, use the user-provided context
-	const customSpacePrompt = getCustomSpacePrompt(space);
-	if (!customSpacePrompt) {
-		return platformPrompt;
-	}
+  // For custom spaces, use the user-provided context
+  const customSpacePrompt = getCustomSpacePrompt(space);
+  if (!customSpacePrompt) {
+    return platformPrompt;
+  }
 
-	return `${platformPrompt}\n${customSpacePrompt}`;
+  return `${platformPrompt}\n${customSpacePrompt}`;
 }
 
 /**
@@ -440,11 +509,11 @@ export function getFullSystemPromptWithSpace(model: string, space: SpaceInfo): s
  * Includes optional summary for cost-efficient context (summaries in prompt, full content via tool)
  */
 export interface ContextDocument {
-	id: string;
-	filename: string;
-	content: string;
-	charCount: number;
-	summary?: string; // ~200 token summary for context; use read_document tool for full content
+  id: string;
+  filename: string;
+  content: string;
+  charCount: number;
+  summary?: string; // ~200 token summary for context; use read_document tool for full content
 }
 
 /**
@@ -452,26 +521,26 @@ export interface ContextDocument {
  * Inherits space context while adding specialized context
  */
 export interface FocusAreaInfo {
-	id: string;
-	name: string;
-	context?: string; // Markdown context content
-	contextDocuments?: ContextDocument[]; // Documents attached to this focus area
-	spaceId: string;
+  id: string;
+  name: string;
+  context?: string; // Markdown context content
+  contextDocuments?: ContextDocument[]; // Documents attached to this focus area
+  spaceId: string;
 }
 
 /**
  * Focused task information for context injection
  */
 export interface FocusedTaskInfo {
-	title: string;
-	priority: 'normal' | 'high';
-	dueDate?: string;
-	dueDateType?: 'hard' | 'soft';
-	// Subtask context for injecting planning conversation
-	isSubtask?: boolean;
-	parentTaskTitle?: string;
-	sourceConversationId?: string; // Plan Mode conversation ID for context injection
-	planningConversationSummary?: string; // Summary of the planning conversation (injected by API)
+  title: string;
+  priority: "normal" | "high";
+  dueDate?: string;
+  dueDateType?: "hard" | "soft";
+  // Subtask context for injecting planning conversation
+  isSubtask?: boolean;
+  parentTaskTitle?: string;
+  sourceConversationId?: string; // Plan Mode conversation ID for context injection
+  planningConversationSummary?: string; // Summary of the planning conversation (injected by API)
 }
 
 /**
@@ -480,46 +549,46 @@ export interface FocusedTaskInfo {
  * Uses document summaries for cost efficiency; full content available via read_document tool
  */
 export function getFocusAreaPrompt(focusArea: FocusAreaInfo): string {
-	let prompt = `
+  let prompt = `
 <focus_area_context>
 ## Focus Area: ${focusArea.name}
 You are assisting within a specialized context called "${focusArea.name}".`;
 
-	if (focusArea.context) {
-		prompt += `
+  if (focusArea.context) {
+    prompt += `
 
 ### Background Context
 ${focusArea.context}`;
-	}
+  }
 
-	// Include reference document summaries if any
-	// Full content available via read_document tool for detailed analysis
-	if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
-		prompt += `
+  // Include reference document summaries if any
+  // Full content available via read_document tool for detailed analysis
+  if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
+    prompt += `
 
 ### Reference Documents
 The following document summaries provide context for this focus area:`;
 
-		for (const doc of focusArea.contextDocuments) {
-			const sizeKb = Math.round(doc.charCount / 1000);
-			prompt += `
+    for (const doc of focusArea.contextDocuments) {
+      const sizeKb = Math.round(doc.charCount / 1000);
+      prompt += `
 
 <document_summary filename="${doc.filename}" size="${sizeKb}k chars">
-${doc.summary || '[Summary pending - use read_document tool to access content]'}
+${doc.summary || "[Summary pending - use read_document tool to access content]"}
 </document_summary>`;
-		}
-	}
+    }
+  }
 
-	prompt += `
+  prompt += `
 
 **Your role:**
 - Apply this specialized context to all responses
-- Reference relevant background information when helpful${focusArea.contextDocuments?.length ? '\n- Use **read_document** tool to access full document content when you need specific details or quotes' : ''}
+- Reference relevant background information when helpful${focusArea.contextDocuments?.length ? "\n- Use **read_document** tool to access full document content when you need specific details or quotes" : ""}
 - Stay focused on topics relevant to this context
 - If the user asks about unrelated topics, you can still help but acknowledge it's outside this focus area
 </focus_area_context>`;
 
-	return prompt;
+  return prompt;
 }
 
 /**
@@ -527,7 +596,7 @@ ${doc.summary || '[Summary pending - use read_document tool to access content]'}
  * Uses the focus area's parent space to get the appropriate space context
  */
 export function getSpacePromptForFocusArea(focusArea: FocusAreaInfo): string {
-	return getSpacePromptAddition(focusArea.spaceId as SpaceType);
+  return getSpacePromptAddition(focusArea.spaceId as SpaceType);
 }
 
 /**
@@ -535,14 +604,14 @@ export function getSpacePromptForFocusArea(focusArea: FocusAreaInfo): string {
  * Combines: Platform → Space → Focus Area
  */
 export function getFullSystemPromptWithFocusArea(
-	model: string,
-	focusArea: FocusAreaInfo
+  model: string,
+  focusArea: FocusAreaInfo,
 ): string {
-	const platformPrompt = getPlatformPrompt(model);
-	const spaceAddition = getSpacePromptForFocusArea(focusArea);
-	const focusAreaPrompt = getFocusAreaPrompt(focusArea);
+  const platformPrompt = getPlatformPrompt(model);
+  const spaceAddition = getSpacePromptForFocusArea(focusArea);
+  const focusAreaPrompt = getFocusAreaPrompt(focusArea);
 
-	return `${platformPrompt}${spaceAddition}\n${focusAreaPrompt}`;
+  return `${platformPrompt}${spaceAddition}\n${focusAreaPrompt}`;
 }
 
 /**
@@ -551,20 +620,20 @@ export function getFullSystemPromptWithFocusArea(
  * For subtasks, includes planning conversation context if available
  */
 export function getFocusedTaskPrompt(task: FocusedTaskInfo): string {
-	const priorityNote = task.priority === 'high' ? ' (high priority)' : '';
-	let dueDateNote = '';
+  const priorityNote = task.priority === "high" ? " (high priority)" : "";
+  let dueDateNote = "";
 
-	if (task.dueDate) {
-		const type = task.dueDateType === 'hard' ? 'hard deadline' : 'target';
-		dueDateNote = `\nDue: ${task.dueDate} (${type})`;
-	}
+  if (task.dueDate) {
+    const type = task.dueDateType === "hard" ? "hard deadline" : "target";
+    dueDateNote = `\nDue: ${task.dueDate} (${type})`;
+  }
 
-	// For subtasks, add parent task context and planning conversation summary
-	let subtaskContext = '';
-	if (task.isSubtask && task.parentTaskTitle) {
-		subtaskContext = `\n\nThis is a subtask of: "${task.parentTaskTitle}"`;
-		if (task.planningConversationSummary) {
-			subtaskContext += `
+  // For subtasks, add parent task context and planning conversation summary
+  let subtaskContext = "";
+  if (task.isSubtask && task.parentTaskTitle) {
+    subtaskContext = `\n\nThis is a subtask of: "${task.parentTaskTitle}"`;
+    if (task.planningConversationSummary) {
+      subtaskContext += `
 
 <planning_context>
 ## Context from Task Planning
@@ -572,10 +641,10 @@ The following is a summary of the planning conversation where this subtask was d
 
 ${task.planningConversationSummary}
 </planning_context>`;
-		}
-	}
+    }
+  }
 
-	return `
+  return `
 <focus_context>
 ## Current Task Focus
 The user is focused on: "${task.title}"${priorityNote}${dueDateNote}${subtaskContext}
@@ -586,13 +655,13 @@ The user is focused on: "${task.title}"${priorityNote}${dueDateNote}${subtaskCon
 - Ask clarifying questions only if needed to move forward
 - If they seem stuck, offer a concrete next step
 - Keep responses focused on this task unless they change topics
-${task.isSubtask ? '- Reference the planning context when relevant to show continuity' : ''}
+${task.isSubtask ? "- Reference the planning context when relevant to show continuity" : ""}
 
 **Do NOT:**
 - Ask about other tasks or projects
 - Provide lengthy explanations unless requested
 - Overwhelm with multiple options
-${task.isSubtask ? '- Repeat information already established in the planning conversation' : ''}
+${task.isSubtask ? "- Repeat information already established in the planning conversation" : ""}
 </focus_context>`;
 }
 
@@ -602,111 +671,114 @@ ${task.isSubtask ? '- Repeat information already established in the planning con
  * Used when a user is focused on a specific task, optionally within a focus area
  */
 export function getFullSystemPromptWithTask(
-	model: string,
-	space: SpaceType | null | undefined,
-	focusedTask: FocusedTaskInfo | null | undefined,
-	focusArea?: FocusAreaInfo | null
+  model: string,
+  space: SpaceType | null | undefined,
+  focusedTask: FocusedTaskInfo | null | undefined,
+  focusArea?: FocusAreaInfo | null,
 ): string {
-	let prompt: string;
+  let prompt: string;
 
-	if (focusArea) {
-		// Use focus area context (which includes space context)
-		prompt = getFullSystemPromptWithFocusArea(model, focusArea);
-	} else {
-		// Just platform + space context
-		prompt = getFullSystemPrompt(model, space);
-	}
+  if (focusArea) {
+    // Use focus area context (which includes space context)
+    prompt = getFullSystemPromptWithFocusArea(model, focusArea);
+  } else {
+    // Just platform + space context
+    prompt = getFullSystemPrompt(model, space);
+  }
 
-	if (focusedTask) {
-		prompt += '\n' + getFocusedTaskPrompt(focusedTask);
-	}
+  if (focusedTask) {
+    prompt += "\n" + getFocusedTaskPrompt(focusedTask);
+  }
 
-	return prompt;
+  return prompt;
 }
 
 /**
  * Plan Mode prompts for guided task breakdown
  * Used when user clicks "Help me plan this" on a focused task
  */
-export type PlanModePhase = 'eliciting' | 'proposing' | 'confirming';
+export type PlanModePhase = "eliciting" | "proposing" | "confirming";
 
 /**
  * Task metadata for Plan Mode context
  */
 export interface PlanModeTaskContext {
-	title: string;
-	description?: string; // User-provided background/context for the task
-	priority: 'normal' | 'high';
-	dueDate?: Date | null;
-	dueDateType?: 'hard' | 'soft' | null;
-	createdAt: Date;
+  title: string;
+  description?: string; // User-provided background/context for the task
+  priority: "normal" | "high";
+  dueDate?: Date | null;
+  dueDateType?: "hard" | "soft" | null;
+  createdAt: Date;
 }
 
 /**
  * Format a date in a human-friendly way relative to today
  */
 function formatRelativeDate(date: Date, today: Date): string {
-	const diffMs = date.getTime() - today.getTime();
-	const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const diffMs = date.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-	if (diffDays < 0) {
-		const overdueDays = Math.abs(diffDays);
-		return `${overdueDays} day${overdueDays !== 1 ? 's' : ''} overdue`;
-	} else if (diffDays === 0) {
-		return 'today';
-	} else if (diffDays === 1) {
-		return 'tomorrow';
-	} else if (diffDays <= 7) {
-		return `in ${diffDays} days`;
-	} else if (diffDays <= 14) {
-		return `in about ${Math.ceil(diffDays / 7)} week${diffDays > 7 ? 's' : ''}`;
-	} else {
-		return `in ${diffDays} days (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
-	}
+  if (diffDays < 0) {
+    const overdueDays = Math.abs(diffDays);
+    return `${overdueDays} day${overdueDays !== 1 ? "s" : ""} overdue`;
+  } else if (diffDays === 0) {
+    return "today";
+  } else if (diffDays === 1) {
+    return "tomorrow";
+  } else if (diffDays <= 7) {
+    return `in ${diffDays} days`;
+  } else if (diffDays <= 14) {
+    return `in about ${Math.ceil(diffDays / 7)} week${diffDays > 7 ? "s" : ""}`;
+  } else {
+    return `in ${diffDays} days (${date.toLocaleDateString("en-US", { month: "short", day: "numeric" })})`;
+  }
 }
 
 /**
  * Generate smart opener guidance based on task metadata
  * This helps the AI craft contextually relevant first questions
  */
-function getOpenerGuidance(taskContext: PlanModeTaskContext | undefined, today: Date): string {
-	if (!taskContext) {
-		return `**Opener Focus:** Fresh task - ask what prompted this and what "done" looks like.`;
-	}
+function getOpenerGuidance(
+  taskContext: PlanModeTaskContext | undefined,
+  today: Date,
+): string {
+  if (!taskContext) {
+    return `**Opener Focus:** Fresh task - ask what prompted this and what "done" looks like.`;
+  }
 
-	const taskAge = Math.floor(
-		(today.getTime() - taskContext.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-	);
+  const taskAge = Math.floor(
+    (today.getTime() - taskContext.createdAt.getTime()) / (1000 * 60 * 60 * 24),
+  );
 
-	let daysUntilDue: number | null = null;
-	if (taskContext.dueDate) {
-		daysUntilDue = Math.ceil(
-			(taskContext.dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-		);
-	}
+  let daysUntilDue: number | null = null;
+  if (taskContext.dueDate) {
+    daysUntilDue = Math.ceil(
+      (taskContext.dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+  }
 
-	// Priority order: urgency > overdue > old task > high priority > default
-	if (daysUntilDue !== null && daysUntilDue <= 0) {
-		return `**Opener Focus:** This task is OVERDUE. Acknowledge empathetically, ask if urgency has shifted or if it's still pressing.`;
-	}
+  // Priority order: urgency > overdue > old task > high priority > default
+  if (daysUntilDue !== null && daysUntilDue <= 0) {
+    return `**Opener Focus:** This task is OVERDUE. Acknowledge empathetically, ask if urgency has shifted or if it's still pressing.`;
+  }
 
-	if (daysUntilDue !== null && daysUntilDue <= 1) {
-		return `**Opener Focus:** Due ${daysUntilDue === 0 ? 'TODAY' : 'TOMORROW'}. Be crisp - ask what the ONE essential deliverable is.`;
-	}
+  if (daysUntilDue !== null && daysUntilDue <= 1) {
+    return `**Opener Focus:** Due ${daysUntilDue === 0 ? "TODAY" : "TOMORROW"}. Be crisp - ask what the ONE essential deliverable is.`;
+  }
 
-	if (daysUntilDue !== null && daysUntilDue <= 3) {
-		return `**Opener Focus:** Due in ${daysUntilDue} days. Ask what "done" looks like and what's already in progress.`;
-	}
+  if (daysUntilDue !== null && daysUntilDue <= 3) {
+    return `**Opener Focus:** Due in ${daysUntilDue} days. Ask what "done" looks like and what's already in progress.`;
+  }
 
-	if (taskAge >= 7) {
-		return `**Opener Focus:** Task created ${taskAge} days ago. Ask what's been the blocker - complexity, other priorities, or unclear scope?`;
-	}
+  if (taskAge >= 7) {
+    return `**Opener Focus:** Task created ${taskAge} days ago. Ask what's been the blocker - complexity, other priorities, or unclear scope?`;
+  }
 
-	if (taskContext.priority === 'high') {
-		return `**Opener Focus:** Marked as high priority. Ask what's driving that - impact, visibility, or downstream dependencies?`;
-	}
+  if (taskContext.priority === "high") {
+    return `**Opener Focus:** Marked as high priority. Ask what's driving that - impact, visibility, or downstream dependencies?`;
+  }
 
-	return `**Opener Focus:** Ask what prompted this task and what success looks like.`;
+  return `**Opener Focus:** Ask what prompted this task and what success looks like.`;
 }
 
 /**
@@ -719,56 +791,61 @@ function getOpenerGuidance(taskContext: PlanModeTaskContext | undefined, today: 
  * - confirming: Await user confirmation (minimal AI involvement)
  */
 export function getPlanModePrompt(
-	taskTitle: string,
-	phase: PlanModePhase,
-	taskContext?: PlanModeTaskContext,
-	exchangeCount: number = 0
+  taskTitle: string,
+  phase: PlanModePhase,
+  taskContext?: PlanModeTaskContext,
+  exchangeCount: number = 0,
 ): string {
-	const today = new Date();
-	const todayStr = today.toLocaleDateString('en-US', {
-		weekday: 'long',
-		year: 'numeric',
-		month: 'long',
-		day: 'numeric'
-	});
+  const today = new Date();
+  const todayStr = today.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
-	// Build task metadata section
-	let taskMetadata = '';
-	if (taskContext) {
-		const parts: string[] = [];
+  // Build task metadata section
+  let taskMetadata = "";
+  if (taskContext) {
+    const parts: string[] = [];
 
-		// Priority
-		if (taskContext.priority === 'high') {
-			parts.push('**Priority:** High (flagged as important)');
-		}
+    // Priority
+    if (taskContext.priority === "high") {
+      parts.push("**Priority:** High (flagged as important)");
+    }
 
-		// Due date with relative context
-		if (taskContext.dueDate) {
-			const relativeDate = formatRelativeDate(taskContext.dueDate, today);
-			const deadlineType =
-				taskContext.dueDateType === 'hard' ? '(hard deadline - cannot slip)' : '(target date - flexible)';
-			parts.push(`**Due:** ${relativeDate} ${deadlineType}`);
-		}
+    // Due date with relative context
+    if (taskContext.dueDate) {
+      const relativeDate = formatRelativeDate(taskContext.dueDate, today);
+      const deadlineType =
+        taskContext.dueDateType === "hard"
+          ? "(hard deadline - cannot slip)"
+          : "(target date - flexible)";
+      parts.push(`**Due:** ${relativeDate} ${deadlineType}`);
+    }
 
-		// Task age
-		const taskAge = Math.floor((today.getTime() - taskContext.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-		if (taskAge > 0) {
-			parts.push(`**Created:** ${taskAge} day${taskAge !== 1 ? 's' : ''} ago`);
-		} else {
-			parts.push('**Created:** Today');
-		}
+    // Task age
+    const taskAge = Math.floor(
+      (today.getTime() - taskContext.createdAt.getTime()) /
+        (1000 * 60 * 60 * 24),
+    );
+    if (taskAge > 0) {
+      parts.push(`**Created:** ${taskAge} day${taskAge !== 1 ? "s" : ""} ago`);
+    } else {
+      parts.push("**Created:** Today");
+    }
 
-		if (parts.length > 0) {
-			taskMetadata = `\n${parts.join('\n')}`;
-		}
-	}
+    if (parts.length > 0) {
+      taskMetadata = `\n${parts.join("\n")}`;
+    }
+  }
 
-	// Build description section if provided
-	const descriptionSection = taskContext?.description
-		? `\n\n**User's Background/Context:**\n${taskContext.description}`
-		: '';
+  // Build description section if provided
+  const descriptionSection = taskContext?.description
+    ? `\n\n**User's Background/Context:**\n${taskContext.description}`
+    : "";
 
-	const baseContext = `
+  const baseContext = `
 <plan_mode>
 ## Planning Mode
 
@@ -779,14 +856,14 @@ export function getPlanModePrompt(
 You are a planning partner helping the user break down this task into focused, manageable pieces. Your goal is to reduce their cognitive load - make planning feel effortless, not overwhelming.
 </plan_mode>`;
 
-	switch (phase) {
-		case 'eliciting':
-			// Generate smart opener guidance based on task metadata
-			const openerGuidance = getOpenerGuidance(taskContext, today);
+  switch (phase) {
+    case "eliciting":
+      // Generate smart opener guidance based on task metadata
+      const openerGuidance = getOpenerGuidance(taskContext, today);
 
-			// For exchanges 2+, use softer prompt that allows offering to propose
-			if (exchangeCount >= 2) {
-				return `${baseContext}
+      // For exchanges 2+, use softer prompt that allows offering to propose
+      if (exchangeCount >= 2) {
+        return `${baseContext}
 
 <understanding_rules>
 ## Building Understanding (Exchange ${exchangeCount})
@@ -817,10 +894,10 @@ You've had ${exchangeCount} exchange(s) with the user. You're making progress.
 
 **Tone:** Efficient colleague who respects their time.
 </understanding_rules>`;
-			}
+      }
 
-			// First 1-2 exchanges: strict elicitation prompt
-			return `${baseContext}
+      // First 1-2 exchanges: strict elicitation prompt
+      return `${baseContext}
 
 <brief_response_format>
 ## Elicitation Phase - Understand Before Proposing
@@ -868,23 +945,24 @@ Write exactly three parts in flowing prose (not a list):
 </checklist_before_responding>
 </brief_response_format>`;
 
-		case 'proposing':
-			// Adjust guidance based on deadline urgency
-			let urgencyGuidance = '';
-			if (taskContext?.dueDate) {
-				const diffDays = Math.ceil(
-					(taskContext.dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-				);
-				if (diffDays <= 1 && taskContext.dueDateType === 'hard') {
-					urgencyGuidance = `\n**URGENT:** This is due ${diffDays <= 0 ? 'TODAY' : 'TOMORROW'} with a hard deadline. Focus on the absolute minimum viable deliverables. Suggest 2-3 critical subtasks only.`;
-				} else if (diffDays <= 3) {
-					urgencyGuidance = `\n**Time-sensitive:** Due in ${diffDays} days. Keep the breakdown focused and actionable. 3-4 subtasks max.`;
-				} else if (diffDays > 30) {
-					urgencyGuidance = `\n**Longer timeline:** You have ${diffDays} days. You can suggest a more thorough breakdown with 5-7 subtasks if the task warrants it.`;
-				}
-			}
+    case "proposing":
+      // Adjust guidance based on deadline urgency
+      let urgencyGuidance = "";
+      if (taskContext?.dueDate) {
+        const diffDays = Math.ceil(
+          (taskContext.dueDate.getTime() - today.getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+        if (diffDays <= 1 && taskContext.dueDateType === "hard") {
+          urgencyGuidance = `\n**URGENT:** This is due ${diffDays <= 0 ? "TODAY" : "TOMORROW"} with a hard deadline. Focus on the absolute minimum viable deliverables. Suggest 2-3 critical subtasks only.`;
+        } else if (diffDays <= 3) {
+          urgencyGuidance = `\n**Time-sensitive:** Due in ${diffDays} days. Keep the breakdown focused and actionable. 3-4 subtasks max.`;
+        } else if (diffDays > 30) {
+          urgencyGuidance = `\n**Longer timeline:** You have ${diffDays} days. You can suggest a more thorough breakdown with 5-7 subtasks if the task warrants it.`;
+        }
+      }
 
-			return `${baseContext}
+      return `${baseContext}
 
 <numbered_list_output>
 ## PROPOSAL PHASE - Generate Subtask List
@@ -932,8 +1010,8 @@ Would you like to adjust any of these?
 </checklist_before_responding>
 </numbered_list_output>`;
 
-		case 'confirming':
-			return `${baseContext}
+    case "confirming":
+      return `${baseContext}
 
 <confirmation_rules>
 ## Confirmation Phase
@@ -950,7 +1028,7 @@ The user is reviewing and editing the proposed subtasks in the UI panel on the r
 
 **Tone:** Supportive, minimal. The focus shifts to their execution.
 </confirmation_rules>`;
-	}
+  }
 }
 
 /**
@@ -964,42 +1042,47 @@ The user is reviewing and editing the proposed subtasks in the UI panel on the r
  * (NOT: Platform + Full Focus Area Documents + Plan Mode at the end)
  */
 export function getFullSystemPromptForPlanMode(
-	model: string,
-	space: SpaceType | null | undefined,
-	taskTitle: string,
-	phase: PlanModePhase,
-	focusArea?: FocusAreaInfo | null,
-	taskContext?: PlanModeTaskContext,
-	exchangeCount: number = 0
+  model: string,
+  space: SpaceType | null | undefined,
+  taskTitle: string,
+  phase: PlanModePhase,
+  focusArea?: FocusAreaInfo | null,
+  taskContext?: PlanModeTaskContext,
+  exchangeCount: number = 0,
 ): string {
-	// Start with platform prompt only (not full focus area with documents)
-	const platformPrompt = getPlatformPrompt(model);
+  // Start with platform prompt only (not full focus area with documents)
+  const platformPrompt = getPlatformPrompt(model);
 
-	// Get Plan Mode instructions (these are critical and must come early)
-	const planModePrompt = getPlanModePrompt(taskTitle, phase, taskContext, exchangeCount);
+  // Get Plan Mode instructions (these are critical and must come early)
+  const planModePrompt = getPlanModePrompt(
+    taskTitle,
+    phase,
+    taskContext,
+    exchangeCount,
+  );
 
-	// Add minimal context reference with document tool instructions
-	let contextNote = '';
-	if (focusArea) {
-		contextNote = `\n<context_note>
+  // Add minimal context reference with document tool instructions
+  let contextNote = "";
+  if (focusArea) {
+    contextNote = `\n<context_note>
 Working within focus area: "${focusArea.name}"
-${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea.context.length > 300 ? '...' : ''}` : ''}`;
+${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea.context.length > 300 ? "..." : ""}` : ""}`;
 
-		// List available documents (content accessible via tool)
-		if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
-			contextNote += `\n\n**Available Reference Documents:**`;
-			for (const doc of focusArea.contextDocuments) {
-				const sizeKb = Math.round(doc.charCount / 1000);
-				contextNote += `\n- ${doc.filename} (${sizeKb}k chars)`;
-			}
-			contextNote += `\n\nUse the **read_document** tool to read documents. **On your FIRST response, read available documents** to understand the user's preparation. Reference document details in your opening.`;
-		}
-		contextNote += `\n</context_note>`;
-	}
+    // List available documents (content accessible via tool)
+    if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
+      contextNote += `\n\n**Available Reference Documents:**`;
+      for (const doc of focusArea.contextDocuments) {
+        const sizeKb = Math.round(doc.charCount / 1000);
+        contextNote += `\n- ${doc.filename} (${sizeKb}k chars)`;
+      }
+      contextNote += `\n\nUse the **read_document** tool to read documents. **On your FIRST response, read available documents** to understand the user's preparation. Reference document details in your opening.`;
+    }
+    contextNote += `\n</context_note>`;
+  }
 
-	// Structure: Platform → Plan Mode Instructions → Minimal Context Note
-	// Plan Mode rules come BEFORE any heavy context to prevent being ignored
-	return `${platformPrompt}\n${planModePrompt}${contextNote}`;
+  // Structure: Platform → Plan Mode Instructions → Minimal Context Note
+  // Plan Mode rules come BEFORE any heavy context to prevent being ignored
+  return `${platformPrompt}\n${planModePrompt}${contextNote}`;
 }
 
 /**
@@ -1021,76 +1104,82 @@ ${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea
  * @param taskMetadata - Optional task metadata (priority, due date, etc.)
  */
 export function getFullSystemPromptForPlanModeWithContext(
-	model: string,
-	space: SpaceType | null | undefined,
-	taskTitle: string,
-	phase: PlanModePhase,
-	linkedContext?: TaskContextInfo | null,
-	focusArea?: FocusAreaInfo | null,
-	taskMetadata?: PlanModeTaskContext,
-	exchangeCount: number = 0
+  model: string,
+  space: SpaceType | null | undefined,
+  taskTitle: string,
+  phase: PlanModePhase,
+  linkedContext?: TaskContextInfo | null,
+  focusArea?: FocusAreaInfo | null,
+  taskMetadata?: PlanModeTaskContext,
+  exchangeCount: number = 0,
 ): string {
-	// Start with platform prompt only (not full focus area with documents)
-	const platformPrompt = getPlatformPrompt(model);
+  // Start with platform prompt only (not full focus area with documents)
+  const platformPrompt = getPlatformPrompt(model);
 
-	// Get Plan Mode instructions (these are critical and must come early)
-	const planModePrompt = getPlanModePrompt(taskTitle, phase, taskMetadata, exchangeCount);
+  // Get Plan Mode instructions (these are critical and must come early)
+  const planModePrompt = getPlanModePrompt(
+    taskTitle,
+    phase,
+    taskMetadata,
+    exchangeCount,
+  );
 
-	// Build minimal context summary with document tool instructions
-	let contextSummary = '';
+  // Build minimal context summary with document tool instructions
+  let contextSummary = "";
 
-	// Focus area summary with document listing
-	if (focusArea) {
-		contextSummary += `\n<context_note>
+  // Focus area summary with document listing
+  if (focusArea) {
+    contextSummary += `\n<context_note>
 Working within focus area: "${focusArea.name}"
-${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea.context.length > 300 ? '...' : ''}` : ''}`;
+${focusArea.context ? `Background: ${focusArea.context.slice(0, 300)}${focusArea.context.length > 300 ? "..." : ""}` : ""}`;
 
-		// List focus area documents (content accessible via tool)
-		if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
-			contextSummary += `\n\n**Focus Area Reference Documents:**`;
-			for (const doc of focusArea.contextDocuments) {
-				const sizeKb = Math.round(doc.charCount / 1000);
-				contextSummary += `\n- ${doc.filename} (${sizeKb}k chars)`;
-			}
-		}
-		contextSummary += `\n</context_note>`;
-	}
+    // List focus area documents (content accessible via tool)
+    if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
+      contextSummary += `\n\n**Focus Area Reference Documents:**`;
+      for (const doc of focusArea.contextDocuments) {
+        const sizeKb = Math.round(doc.charCount / 1000);
+        contextSummary += `\n- ${doc.filename} (${sizeKb}k chars)`;
+      }
+    }
+    contextSummary += `\n</context_note>`;
+  }
 
-	// Task-linked context summary (documents and related tasks - just list, no content)
-	if (linkedContext) {
-		const docCount = linkedContext.documents?.length || 0;
-		const taskCount = linkedContext.relatedTasks?.length || 0;
+  // Task-linked context summary (documents and related tasks - just list, no content)
+  if (linkedContext) {
+    const docCount = linkedContext.documents?.length || 0;
+    const taskCount = linkedContext.relatedTasks?.length || 0;
 
-		if (docCount > 0 || taskCount > 0) {
-			contextSummary += `\n<task_materials>
+    if (docCount > 0 || taskCount > 0) {
+      contextSummary += `\n<task_materials>
 **Task-Linked Materials:**`;
-			if (docCount > 0) {
-				contextSummary += `\nDocuments:`;
-				for (const doc of linkedContext.documents!) {
-					const sizeKb = Math.round(doc.charCount / 1000);
-					contextSummary += `\n- ${doc.filename} (${sizeKb}k chars)`;
-				}
-			}
-			if (taskCount > 0) {
-				contextSummary += `\nRelated Tasks:`;
-				for (const task of linkedContext.relatedTasks!) {
-					contextSummary += `\n- ${task.title} (${task.status})`;
-				}
-			}
-			contextSummary += `\n</task_materials>`;
-		}
-	}
+      if (docCount > 0) {
+        contextSummary += `\nDocuments:`;
+        for (const doc of linkedContext.documents!) {
+          const sizeKb = Math.round(doc.charCount / 1000);
+          contextSummary += `\n- ${doc.filename} (${sizeKb}k chars)`;
+        }
+      }
+      if (taskCount > 0) {
+        contextSummary += `\nRelated Tasks:`;
+        for (const task of linkedContext.relatedTasks!) {
+          contextSummary += `\n- ${task.title} (${task.status})`;
+        }
+      }
+      contextSummary += `\n</task_materials>`;
+    }
+  }
 
-	// Add tool instruction if any documents are available
-	const hasDocuments =
-		(focusArea?.contextDocuments?.length ?? 0) > 0 || (linkedContext?.documents?.length ?? 0) > 0;
-	if (hasDocuments) {
-		contextSummary += `\n\n**Document Access:** Use the **read_document** tool to read documents. **IMPORTANT:** On your FIRST response, read available documents to understand the user's preparation. Reference specific details from documents in your opening - this shows you've engaged with their materials and lets you ask informed questions.`;
-	}
+  // Add tool instruction if any documents are available
+  const hasDocuments =
+    (focusArea?.contextDocuments?.length ?? 0) > 0 ||
+    (linkedContext?.documents?.length ?? 0) > 0;
+  if (hasDocuments) {
+    contextSummary += `\n\n**Document Access:** Use the **read_document** tool to read documents. **IMPORTANT:** On your FIRST response, read available documents to understand the user's preparation. Reference specific details from documents in your opening - this shows you've engaged with their materials and lets you ask informed questions.`;
+  }
 
-	// Structure: Platform → Plan Mode Instructions → Minimal Context Summary
-	// Plan Mode rules come BEFORE any context to prevent being ignored
-	return `${platformPrompt}\n${planModePrompt}${contextSummary}`;
+  // Structure: Platform → Plan Mode Instructions → Minimal Context Summary
+  // Plan Mode rules come BEFORE any context to prevent being ignored
+  return `${platformPrompt}\n${planModePrompt}${contextSummary}`;
 }
 
 /**
@@ -1147,8 +1236,10 @@ reason: You mentioned needing to complete this by end of week
  * Get the task detection prompt addition
  * Returns the prompt if task detection should be enabled, empty string otherwise
  */
-export function getTaskDetectionPrompt(enableTaskDetection: boolean = false): string {
-	return enableTaskDetection ? TASK_DETECTION_PROMPT : '';
+export function getTaskDetectionPrompt(
+  enableTaskDetection: boolean = false,
+): string {
+  return enableTaskDetection ? TASK_DETECTION_PROMPT : "";
 }
 
 /**
@@ -1156,14 +1247,14 @@ export function getTaskDetectionPrompt(enableTaskDetection: boolean = false): st
  * Combines: Platform → Focus Area → Task Detection
  */
 export function getAreaSystemPrompt(
-	model: string,
-	focusArea: FocusAreaInfo,
-	enableTaskDetection: boolean = true
+  model: string,
+  focusArea: FocusAreaInfo,
+  enableTaskDetection: boolean = true,
 ): string {
-	const basePrompt = getFullSystemPromptWithFocusArea(model, focusArea);
-	const taskDetection = getTaskDetectionPrompt(enableTaskDetection);
+  const basePrompt = getFullSystemPromptWithFocusArea(model, focusArea);
+  const taskDetection = getTaskDetectionPrompt(enableTaskDetection);
 
-	return taskDetection ? `${basePrompt}\n${taskDetection}` : basePrompt;
+  return taskDetection ? `${basePrompt}\n${taskDetection}` : basePrompt;
 }
 
 // Re-export types for convenience
@@ -1184,12 +1275,12 @@ export type { TaskContextInfo };
  * Each layer can have its own cache_control for optimal caching
  */
 export interface PromptLayer {
-	/** Identifier for debugging/logging */
-	name: string;
-	/** The prompt content */
-	content: string;
-	/** Whether to mark this layer with cache_control */
-	shouldCache: boolean;
+  /** Identifier for debugging/logging */
+  name: string;
+  /** The prompt content */
+  content: string;
+  /** Whether to mark this layer with cache_control */
+  shouldCache: boolean;
 }
 
 /**
@@ -1203,71 +1294,77 @@ export interface PromptLayer {
  * @returns Array of [platformLayer, contextLayer?] - context layer is null if no context
  */
 export function getSystemPromptLayers(
-	model: string,
-	options: {
-		space?: SpaceType | null;
-		spaceInfo?: SpaceInfo | null;
-		focusArea?: FocusAreaInfo | null;
-		focusedTask?: FocusedTaskInfo | null;
-	}
+  model: string,
+  options: {
+    space?: SpaceType | null;
+    spaceInfo?: SpaceInfo | null;
+    focusArea?: FocusAreaInfo | null;
+    focusedTask?: FocusedTaskInfo | null;
+  },
 ): PromptLayer[] {
-	const layers: PromptLayer[] = [];
+  const layers: PromptLayer[] = [];
 
-	// Layer 1: Platform prompt (most stable - cached globally per model family)
-	const platformPrompt = getPlatformPrompt(model);
-	layers.push({
-		name: 'platform',
-		content: platformPrompt,
-		shouldCache: true // Always cache platform prompt
-	});
+  // Layer 1: Platform prompt (most stable - cached globally per model family)
+  const platformPrompt = getPlatformPrompt(model);
+  layers.push({
+    name: "platform",
+    content: platformPrompt,
+    shouldCache: true, // Always cache platform prompt
+  });
 
-	// Layer 2: Context (space + area + task) - cached per context
-	const contextParts: string[] = [];
+  // Layer 2: Context (space + area + task) - cached per context
+  const contextParts: string[] = [];
 
-	// Add space context
-	if (options.focusArea) {
-		// Focus area provides space context via its spaceId
-		const spaceAddition = getSpacePromptForFocusArea(options.focusArea);
-		if (spaceAddition) {
-			contextParts.push(spaceAddition);
-		}
-		// Add focus area prompt
-		contextParts.push(getFocusAreaPrompt(options.focusArea));
-	} else if (options.spaceInfo && options.spaceInfo.type === 'custom' && options.spaceInfo.context) {
-		// Custom space with user-provided context
-		const customSpacePrompt = getCustomSpacePrompt(options.spaceInfo);
-		if (customSpacePrompt) {
-			contextParts.push(customSpacePrompt);
-		}
-	} else if (options.spaceInfo && options.spaceInfo.type === 'system') {
-		// System space
-		const spaceAddition = getSpacePromptAddition(options.spaceInfo.slug as SpaceType);
-		if (spaceAddition) {
-			contextParts.push(spaceAddition);
-		}
-	} else if (options.space) {
-		// Fallback to space type
-		const spaceAddition = getSpacePromptAddition(options.space);
-		if (spaceAddition) {
-			contextParts.push(spaceAddition);
-		}
-	}
+  // Add space context
+  if (options.focusArea) {
+    // Focus area provides space context via its spaceId
+    const spaceAddition = getSpacePromptForFocusArea(options.focusArea);
+    if (spaceAddition) {
+      contextParts.push(spaceAddition);
+    }
+    // Add focus area prompt
+    contextParts.push(getFocusAreaPrompt(options.focusArea));
+  } else if (
+    options.spaceInfo &&
+    options.spaceInfo.type === "custom" &&
+    options.spaceInfo.context
+  ) {
+    // Custom space with user-provided context
+    const customSpacePrompt = getCustomSpacePrompt(options.spaceInfo);
+    if (customSpacePrompt) {
+      contextParts.push(customSpacePrompt);
+    }
+  } else if (options.spaceInfo && options.spaceInfo.type === "system") {
+    // System space
+    const spaceAddition = getSpacePromptAddition(
+      options.spaceInfo.slug as SpaceType,
+    );
+    if (spaceAddition) {
+      contextParts.push(spaceAddition);
+    }
+  } else if (options.space) {
+    // Fallback to space type
+    const spaceAddition = getSpacePromptAddition(options.space);
+    if (spaceAddition) {
+      contextParts.push(spaceAddition);
+    }
+  }
 
-	// Add focused task context
-	if (options.focusedTask) {
-		contextParts.push(getFocusedTaskPrompt(options.focusedTask));
-	}
+  // Add focused task context
+  if (options.focusedTask) {
+    contextParts.push(getFocusedTaskPrompt(options.focusedTask));
+  }
 
-	// Create context layer if there's any context
-	if (contextParts.length > 0) {
-		layers.push({
-			name: 'context',
-			content: contextParts.join('\n'),
-			shouldCache: true // Cache the combined context
-		});
-	}
+  // Create context layer if there's any context
+  if (contextParts.length > 0) {
+    layers.push({
+      name: "context",
+      content: contextParts.join("\n"),
+      shouldCache: true, // Cache the combined context
+    });
+  }
 
-	return layers;
+  return layers;
 }
 
 /**
@@ -1275,6 +1372,6 @@ export function getSystemPromptLayers(
  * Only Claude models support explicit cache_control
  */
 export function supportsLayeredCaching(model: string): boolean {
-	const lowerModel = model.toLowerCase();
-	return lowerModel.includes('claude') || lowerModel.includes('anthropic');
+  const lowerModel = model.toLowerCase();
+  return lowerModel.includes("claude") || lowerModel.includes("anthropic");
 }

@@ -24,7 +24,7 @@
 
 | ID | Title | Status |
 |----|-------|--------|
-| US-001 | Create getTemporalContext() function in system-prompts.ts | pending |
+| US-001 | Create getTemporalContext() function in system-prompts.ts | completed |
 | US-002 | Inject temporal context as Layer 0 in getSystemPromptLayers() | pending |
 | US-003 | Add timezone field to UserPreferences type | pending |
 | US-004 | Add timezone validation to preferences API endpoint | pending |
@@ -37,5 +37,39 @@
 ## Iteration Log
 
 (Each iteration appends a section below)
+
+---
+
+### US-001: Create getTemporalContext() function (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+- Created `getTemporalContext(timezone?: string)` function in `src/lib/config/system-prompts.ts`
+- Function generates temporal context with current date and timezone for AI prompt injection
+- Date formatted as "Thursday, January 16, 2026" using `Intl.DateTimeFormat` with long format
+- Timezone display name retrieved using `formatToParts()` to extract timezone name (e.g., "South Africa Standard Time")
+- Output wrapped in `<temporal_context>` XML tags as required by acceptance criteria
+- Defaults to 'Africa/Johannesburg' when no timezone provided
+- Added `DEFAULT_TIMEZONE` constant for consistency
+
+**Files changed:**
+- `src/lib/config/system-prompts.ts` - Added getTemporalContext() function (~55 lines)
+
+**Patterns applied:**
+- Used `Intl.DateTimeFormat` for internationalization-friendly date/time formatting
+- Used `formatToParts()` to extract specific parts (timeZoneName) without parsing strings
+- Added JSDoc with examples for clear API documentation
+- Followed existing code style with explicit type annotations
+
+**Learnings:**
+1. **Intl.DateTimeFormat.formatToParts()** - More robust than parsing formatted strings when you need specific parts like timezone name
+2. **timeZoneName: 'long'** option gives full timezone display name (e.g., "South Africa Standard Time" vs just "SAST")
+3. **ESLint config missing** - Project has no eslint.config.js file, so `npm run lint` fails. Pre-existing issue, not introduced by this change.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 errors)
+- ⚠️ npm run lint - skipped (pre-existing missing eslint config)
+- ✅ Prettier formatting applied
 
 ---

@@ -36,7 +36,7 @@
       "id": "US-001",
       "title": "Create getTemporalContext() function in system-prompts.ts",
       "description": "As a developer, I need a function that generates temporal context strings with current date and timezone for injection into system prompts.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "Function getTemporalContext(timezone?: string) exists in src/lib/config/system-prompts.ts",
