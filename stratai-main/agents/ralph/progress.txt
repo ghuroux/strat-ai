@@ -23,6 +23,7 @@
 | ID | Title | Status |
 |----|-------|--------|
 | US-003 | Create space invitation email template | completed |
+| US-004 | Create space invitation email sending service | completed |
 
 ---
 
@@ -56,6 +57,50 @@
 3. **Expiration handling**: Always consider singular/plural for time units in user-facing text
 4. **Database sync**: TypeScript types and database constraints must be kept in sync - the EmailType enum comment references the CHECK constraint
 5. **Link structure**: Using `/invites/space?token=` pattern allows for dedicated acceptance page that can handle both existing and new users
+
+**Quality gates:**
+- ✅ npm run check - passes (0 errors, 160 warnings pre-existing)
+- ⚠️ npm run lint - ESLint config missing (pre-existing issue, not from this change)
+
+---
+
+### US-004: Create space invitation email sending service (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+- Created new `src/lib/server/email/space-invitation.ts` service file
+- Implemented `sendSpaceInvitationEmail()` function that:
+  - Accepts userId, spaceId, spaceSlug, spaceName, role, invitedByUserId parameters
+  - Fetches user details (firstName, email) from `postgresUserRepository`
+  - Fetches inviter details (displayName, firstName) from `postgresUserRepository`
+  - Falls back to 'A team member' if inviter not found
+  - Falls back to 'there' if user has no firstName
+  - Creates direct space link using `createSpaceLink()` helper
+  - Calls `sendEmail()` with proper email type and metadata
+- Implemented `createSpaceLink(spaceSlug)` helper for generating direct space URLs
+- Exported `sendSpaceInvitationEmail` and `createSpaceLink` from barrel file
+
+**Files changed:**
+- `src/lib/server/email/space-invitation.ts` - New service file with core logic
+- `src/lib/server/email/index.ts` - Added exports for new functions
+
+**Patterns applied:**
+- Service Layer Pattern: Separate business logic from API endpoint
+- Repository Access Pattern: Use existing repository for data fetching
+- Fallback Chain Pattern: Graceful degradation for missing data
+
+**Design decisions:**
+1. **Reused existing template**: Used `getSpaceInviteEmail()` from US-003 even though it's designed for pending invitations. The "expires" messaging isn't ideal for direct additions but works for now. Added code comments noting this.
+2. **Direct space links**: For users who are already added to a space, we use `/spaces/{slug}` direct links instead of token-based invite links.
+3. **Return boolean**: Function returns `true` for success, `false` for failure (rather than throwing) to make it easy for callers to handle failures gracefully.
+4. **Comprehensive logging**: Added `[SPACE_INVITE_EMAIL]` prefix to all log messages for easy filtering.
+
+**Learnings:**
+1. **Template reuse trade-offs**: Sometimes it's pragmatic to reuse an existing template even if messaging isn't perfect, rather than creating a new one. Document the trade-off in comments.
+2. **Null-safe property access**: Use `inviter?.displayName ?? inviter?.firstName ?? 'A team member'` pattern for cascading fallbacks.
+3. **Service isolation**: The email sending service should be isolated from the API layer. It handles its own data fetching and error handling.
+4. **Metadata for debugging**: Include relevant IDs (spaceId, role, invitedByUserId) in email metadata for debugging and audit trail.
 
 **Quality gates:**
 - ✅ npm run check - passes (0 errors, 160 warnings pre-existing)

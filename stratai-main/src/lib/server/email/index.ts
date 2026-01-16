@@ -12,3 +12,4 @@ export {
 	getSpaceInviteEmail,
 	createSpaceInviteLink
 } from './templates';
+export { sendSpaceInvitationEmail, createSpaceLink } from './space-invitation';
