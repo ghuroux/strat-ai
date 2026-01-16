@@ -264,30 +264,69 @@ for i in $(seq 1 $MAX_ITERATIONS); do
 
 **Start by reading agents/ralph/prompt.md to understand the full context.**"
 
-    # Invoke Claude in non-interactive mode
+    # Invoke Claude CLI
     cd "$PROJECT_DIR" || exit 1
     
-    if $CLAUDE_CLI --print \
+    # Create a temporary prompt file
+    TEMP_PROMPT_FILE=$(mktemp)
+    echo "Implement user story $STORY_ID: $STORY_TITLE
+
+Start by reading agents/ralph/prompt.md for full instructions and context.
+
+You MUST:
+1. Implement ALL acceptance criteria
+2. Run quality gates (npm run check, npm run lint)
+3. Update agents/ralph/progress.txt with learnings
+4. Commit your changes
+
+Read agents/ralph/prompt.md NOW to begin." > "$TEMP_PROMPT_FILE"
+    
+    echo "   Invoking Claude CLI (this may take 2-5 minutes)..."
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    
+    # Run with timeout and show output
+    set +e  # Don't exit on error
+    timeout 600 $CLAUDE_CLI --print \
       --system-prompt "$AGENT_PROMPT" \
       --dangerously-skip-permissions \
-      "Implement user story $STORY_ID. Start by reading agents/ralph/prompt.md for full context and instructions." 2>&1; then
-      
+      --verbose \
+      "$(cat "$TEMP_PROMPT_FILE")"
+    
+    CLAUDE_EXIT_CODE=$?
+    set -e  # Re-enable exit on error
+    
+    # Clean up temp file
+    rm -f "$TEMP_PROMPT_FILE"
+    
+    echo ""
+    echo "───────────────────────────────────────────────────────────────"
+    
+    if [ $CLAUDE_EXIT_CODE -eq 124 ]; then
+      # Timeout
       echo ""
-      echo "═══════════════════════════════════════════════════════════════"
+      echo "   ⏱️  Agent timed out (10 minute limit)"
+      echo ""
+      echo "   The agent may have completed work. Proceeding to validation..."
+      echo "   If validation fails, you can manually continue the work."
+      echo ""
+    elif [ $CLAUDE_EXIT_CODE -ne 0 ]; then
+      # Error
+      echo ""
+      echo "   ⚠️  Agent exited with code: $CLAUDE_EXIT_CODE"
+      echo ""
+      echo "   Options:"
+      echo "   1. Press Enter to continue to validation anyway"
+      echo "   2. Press Ctrl+C to exit and investigate"
+      echo ""
+      read -r
+    else
+      # Success
+      echo ""
       echo "   ✅ Agent completed"
       echo ""
       echo "   Proceeding to postflight validation..."
       echo ""
-    else
-      echo ""
-      echo "═══════════════════════════════════════════════════════════════"
-      echo "   ⚠️  Agent invocation failed or incomplete"
-      echo ""
-      echo "   Options:"
-      echo "   1. Fix any issues and press Enter to continue to validation"
-      echo "   2. Press Ctrl+C to exit"
-      echo ""
-      read -r
     fi
     
   else
