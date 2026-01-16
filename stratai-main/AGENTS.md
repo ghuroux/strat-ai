@@ -243,6 +243,51 @@ Layer 4: UI Prevention (hide/disable control)
 
 ---
 
+### Pattern: Intl API for Timezone and Date Formatting
+
+**When to use:** Any timezone detection, validation, or date/time formatting
+
+**Implementation:**
+```typescript
+// Detect browser timezone
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// Returns: 'America/New_York', 'Europe/London', etc. (IANA format)
+
+// Validate timezone string
+function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false; // RangeError thrown for invalid timezone
+  }
+}
+
+// Format date with timezone
+const formatter = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  timeZone: 'Africa/Johannesburg'
+});
+const dateStr = formatter.format(new Date()); // "Thursday, January 16, 2026"
+
+// Extract specific parts (e.g., timezone name)
+const parts = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Africa/Johannesburg',
+  timeZoneName: 'long'
+}).formatToParts(new Date());
+const tzName = parts.find(p => p.type === 'timeZoneName')?.value;
+// Returns: "South Africa Standard Time"
+```
+
+**Why:** Browser-native, no external libraries, works with IANA timezone database, consistent across platforms.
+
+**See:** `src/lib/config/system-prompts.ts` → `getTemporalContext()`
+
+---
+
 ### Pattern: PostgreSQL CHECK Constraints
 
 **When to use:** Enforcing business rules at database level
@@ -452,6 +497,6 @@ Examples:
 
 ---
 
-*Last updated: 2026-01-15 (Phase B patterns added)*
+*Last updated: 2026-01-16 (Intl API pattern added for Temporal Awareness feature)*
 *Maintainer: Development Team*
 
