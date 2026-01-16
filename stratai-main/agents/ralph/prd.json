@@ -121,7 +121,7 @@
       "id": "US-006",
       "title": "Pass timezone to chat API and prompt builder",
       "description": "As a user, I want my timezone used in every AI conversation so responses are temporally accurate.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-002",
         "US-005"

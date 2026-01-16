@@ -12,6 +12,7 @@ import { postgresSpaceRepository } from '$lib/server/persistence/spaces-postgres
 import { getToolCacheRepository, hashParams } from '$lib/server/persistence/tool-cache-postgres';
 import { postgresUsageRepository } from '$lib/server/persistence/usage-postgres';
 import { postgresRoutingDecisionsRepository } from '$lib/server/persistence/routing-decisions-postgres';
+import { postgresUserRepository } from '$lib/server/persistence/users-postgres';
 import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists';
 import { estimateCost } from '$lib/config/model-pricing';
 import type { SpaceType } from '$lib/types/chat';
@@ -389,7 +390,8 @@ function injectPlatformPrompt(
 	focusedTask?: FocusedTaskInfo | null,
 	planModeContext?: PlanModeContext | null,
 	focusArea?: FocusAreaInfo | null,
-	spaceInfo?: SpaceInfo | null
+	spaceInfo?: SpaceInfo | null,
+	timezone?: string
 ): ChatMessage[] {
 	// Plan Mode takes precedence - use specialized Plan Mode prompts
 	if (planModeContext) {
@@ -466,7 +468,8 @@ function injectPlatformPrompt(
 			space,
 			spaceInfo,
 			focusArea,
-			focusedTask: focusedTask && !assistContext?.assistFocusedTask ? focusedTask : null
+			focusedTask: focusedTask && !assistContext?.assistFocusedTask ? focusedTask : null,
+			timezone
 		});
 
 		// Check for existing user-provided system message
@@ -743,6 +746,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Capture userId for use throughout the handler
 	const sessionUserId = locals.session.userId;
+
+	// Fetch user timezone from preferences for temporal context in prompts
+	// Falls back to 'Africa/Johannesburg' if not set (handled by getTemporalContext)
+	let userTimezone: string | undefined;
+	try {
+		const preferences = await postgresUserRepository.getPreferences(sessionUserId);
+		userTimezone = (preferences.timezone as string) || undefined;
+	} catch {
+		// Non-critical - temporal context will use default timezone
+		console.debug('[Chat API] Failed to fetch user timezone, using default');
+	}
 
 	// Parse request body
 	let body: ChatCompletionRequest;
@@ -1201,11 +1215,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const needsToolHandling = searchEnabled || hasReferenceDocuments;
 
 		if (needsToolHandling) {
-			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision);
+			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision, userTimezone);
 		}
 
 		// Inject platform system prompt with space + focus area + custom space context (before cache breakpoints so it gets cached)
-		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext);
+		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, userTimezone);
 
 		// Apply cache breakpoints for Claude models (conversation history caching)
 		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
@@ -1307,7 +1321,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string, routingDecision?: RoutingDecision | null): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string, routingDecision?: RoutingDecision | null, timezone?: string): Promise<Response> {
 	const encoder = new TextEncoder();
 
 	// Build usage context for tracking (if we have the required data)
@@ -1351,7 +1365,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	const hasDocuments = availableDocuments.size > 0;
 
 	// Inject platform prompt with space + focus area + custom space context (and assist if active), then cache breakpoints, then search context
-	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext, focusArea, spaceInfo);
+	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext, focusArea, spaceInfo, timezone);
 	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
 	
