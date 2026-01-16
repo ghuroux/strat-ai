@@ -194,7 +194,7 @@ Read agents/ralph/progress.txt for the feature implementation details."
     # 3. Reset working files for next feature
     echo "   🔄 Resetting working files..."
     
-    # Reset progress.txt to template
+    # Reset progress.txt to self-documenting template
     cat > "$PROGRESS_FILE" << 'EOF'
 # Ralph Progress Log
 
@@ -205,35 +205,111 @@ Read agents/ralph/progress.txt for the feature implementation details."
 
 ## Decisions Made During PRD Creation
 
-(Captured during PRD creation phase)
+- **Decision 1**: [What was decided] - [Rationale]
+- **Decision 2**: [What was decided] - [Rationale]
+
+(Filled by PRD creator during research phase)
 
 ## Codebase Patterns Discovered
 
-(Patterns discovered during research)
+- **Pattern 1**: [Pattern name] - [Where it's used]
+- **Pattern 2**: [Pattern name] - [Where it's used]
+
+(Filled by PRD creator during research phase)
 
 ## Stories
 
 | ID | Title | Status |
 |----|-------|--------|
+| US-001 | [Story title] | pending |
+| US-002 | [Story title] | pending |
 
 ---
 
 ## Iteration Log
 
-(Each iteration appends a section below)
+(Each story implementation appends a section below)
+
+**Example format:**
+```
+### US-001: [Story Title] (YYYY-MM-DD)
+
+**Status:** Completed
+
+**What was done:**
+- [Implementation detail 1]
+- [Implementation detail 2]
+
+**Files changed:**
+- [file path] - [what changed]
+
+**Patterns applied:**
+- [Pattern name from AGENTS.md]
+
+**Learnings:**
+1. [Learning 1]
+2. [Learning 2]
+
+**Quality gates:**
+- ✅ npm run check - passes
+- ✅ npm run lint - passes
+- ✅ npm run test - passes
 
 ---
+```
 
 EOF
     
-    # Reset prd.json to empty template
+    # Reset prd.json to self-documenting template with full structure
     cat > "$PRD_FILE" << 'EOF'
 {
-  "feature": "",
-  "created": "",
-  "parent_task_id": "",
-  "research": {},
-  "stories": []
+  "_comment": "See agents/ralph/skills/prd-creator.md for full documentation",
+  "feature": "Feature Name Here",
+  "created": "YYYY-MM-DD",
+  "parent_task_id": "matching-value-from-parent-task-id.txt",
+  "research": {
+    "similar_patterns": [
+      "src/path/to/similar-file.ts - brief description"
+    ],
+    "docs_reviewed": [
+      "docs/database/ENTITY_MODEL.md",
+      "docs/database/SCHEMA_REFERENCE.md",
+      "CLAUDE.md"
+    ],
+    "decisions_made": [
+      {
+        "question": "Where to store X?",
+        "decision": "Store in Y location",
+        "rationale": "Because of Z reason"
+      }
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Story title (clear, action-oriented)",
+      "description": "As a [role], I need [what] so that [why].",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Specific, testable criterion 1",
+        "Specific, testable criterion 2",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Another story title",
+      "description": "As a [role], I need [what] so that [why].",
+      "status": "pending",
+      "dependencies": ["US-001"],
+      "acceptance_criteria": [
+        "Criterion 1",
+        "Criterion 2"
+      ]
+    }
+  ]
 }
 EOF
     
