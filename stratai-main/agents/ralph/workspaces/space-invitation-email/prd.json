@@ -77,7 +77,7 @@
       "id": "US-004",
       "title": "Create space invitation email sending service",
       "description": "As a developer, I need a service to send space invitation emails so that the API can trigger emails when members are added.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-003"
       ],

@@ -38,7 +38,7 @@ WHERE sm.id = fmu.id
 -- Some spaces were created before General area auto-creation was added
 -- This ensures every non-deleted space has a General area
 
-INSERT INTO focus_areas (id, space_id, name, slug, color, description, is_general, order_index, created_at, updated_at)
+INSERT INTO areas (id, space_id, name, slug, color, description, is_general, order_index, created_at, updated_at)
 SELECT
     'area_' || substr(md5(random()::text), 1, 20),
     s.id,
@@ -53,7 +53,7 @@ SELECT
 FROM spaces s
 WHERE s.deleted_at IS NULL
   AND NOT EXISTS (
-    SELECT 1 FROM focus_areas fa
+    SELECT 1 FROM areas fa
     WHERE fa.space_id = s.id AND fa.is_general = true
   );
 
