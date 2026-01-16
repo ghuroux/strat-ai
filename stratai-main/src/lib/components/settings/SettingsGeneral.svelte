@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { userStore } from '$lib/stores/user.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { HomePagePreference, HomePageType } from '$lib/types/user';
@@ -28,6 +29,46 @@
 	let selectedSpaceId = $state<string | null>(userStore.homePage.spaceId ?? null);
 	let selectedAreaId = $state<string | null>(userStore.homePage.areaId ?? null);
 	let isSaving = $state(false);
+
+	// Timezone state
+	let selectedTimezone = $state<string>(userStore.preferences?.timezone ?? 'Africa/Johannesburg');
+	let detectedTimezone = $state<string>('');
+	let isSavingTimezone = $state(false);
+
+	// Common timezones list
+	const commonTimezones = [
+		{ value: 'Africa/Johannesburg', label: 'South Africa (SAST)' },
+		{ value: 'Europe/London', label: 'London (GMT/BST)' },
+		{ value: 'Europe/Paris', label: 'Paris (CET/CEST)' },
+		{ value: 'Europe/Berlin', label: 'Berlin (CET/CEST)' },
+		{ value: 'America/New_York', label: 'New York (EST/EDT)' },
+		{ value: 'America/Chicago', label: 'Chicago (CST/CDT)' },
+		{ value: 'America/Denver', label: 'Denver (MST/MDT)' },
+		{ value: 'America/Los_Angeles', label: 'Los Angeles (PST/PDT)' },
+		{ value: 'Asia/Tokyo', label: 'Tokyo (JST)' },
+		{ value: 'Asia/Shanghai', label: 'Shanghai (CST)' },
+		{ value: 'Asia/Singapore', label: 'Singapore (SGT)' },
+		{ value: 'Asia/Dubai', label: 'Dubai (GST)' },
+		{ value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },
+		{ value: 'Pacific/Auckland', label: 'Auckland (NZST/NZDT)' }
+	];
+
+	// Detect browser timezone on mount
+	onMount(() => {
+		try {
+			detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		} catch {
+			detectedTimezone = 'Africa/Johannesburg';
+		}
+	});
+
+	// Sync timezone with user store
+	$effect(() => {
+		const storedTimezone = userStore.preferences?.timezone;
+		if (storedTimezone) {
+			selectedTimezone = storedTimezone;
+		}
+	});
 
 	// Derived values
 	let selectedSpace = $derived(spaces.find((s) => s.id === selectedSpaceId));
@@ -132,6 +173,38 @@
 	function handleAreaChange(areaId: string) {
 		selectedAreaId = areaId;
 		savePreference();
+	}
+
+	async function saveTimezone(timezone: string) {
+		if (isSavingTimezone) return;
+
+		selectedTimezone = timezone;
+		isSavingTimezone = true;
+
+		try {
+			const response = await fetch('/api/user/preferences', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ timezone })
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to save timezone');
+			}
+
+			const result = await response.json();
+			userStore.setPreferences(result.preferences);
+			toastStore.success('Timezone preference saved');
+		} catch (error) {
+			console.error('Failed to save timezone:', error);
+			toastStore.error('Failed to save timezone preference');
+		} finally {
+			isSavingTimezone = false;
+		}
+	}
+
+	function handleTimezoneChange(timezone: string) {
+		saveTimezone(timezone);
 	}
 </script>
 
@@ -360,6 +433,44 @@
 	{/if}
 </div>
 
+<!-- Timezone Section -->
+<div class="settings-section timezone-section">
+	<div class="settings-section-header">
+		<h2 class="settings-section-title">Timezone</h2>
+		<p class="settings-section-desc">Set your timezone for accurate date and time in AI conversations</p>
+	</div>
+
+	<div class="timezone-selector">
+		<div class="timezone-field">
+			<label class="timezone-label" for="timezone-select">Your Timezone</label>
+			<select
+				id="timezone-select"
+				class="timezone-select"
+				value={selectedTimezone}
+				onchange={(e) => handleTimezoneChange(e.currentTarget.value)}
+				disabled={isSavingTimezone}
+			>
+				{#each commonTimezones as tz (tz.value)}
+					<option value={tz.value}>{tz.label}</option>
+				{/each}
+			</select>
+		</div>
+
+		{#if detectedTimezone}
+			<p class="timezone-detected">
+				<svg class="timezone-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+				</svg>
+				Auto-detected: <span class="detected-value">{detectedTimezone}</span>
+			</p>
+		{/if}
+	</div>
+
+	{#if isSavingTimezone}
+		<p class="save-status">Saving...</p>
+	{/if}
+</div>
+
 <style>
 	.settings-section {
 		max-width: 600px;
@@ -546,5 +657,76 @@
 		.option-details.two-col {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	/* Timezone section styles */
+	.timezone-section {
+		margin-top: 2.5rem;
+		padding-top: 2rem;
+		border-top: 1px solid rgb(var(--color-surface-800));
+	}
+
+	.timezone-selector {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.timezone-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.timezone-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: rgb(var(--color-surface-400));
+	}
+
+	.timezone-select {
+		padding: 0.75rem 1rem;
+		font-size: 0.9375rem;
+		background: rgb(var(--color-surface-800));
+		border: 1px solid rgb(var(--color-surface-700));
+		border-radius: 0.5rem;
+		color: rgb(var(--color-surface-100));
+		cursor: pointer;
+		transition: all 0.15s ease;
+		max-width: 300px;
+	}
+
+	.timezone-select:hover {
+		border-color: rgb(var(--color-surface-600));
+	}
+
+	.timezone-select:focus {
+		outline: none;
+		border-color: rgb(var(--color-primary-500));
+		box-shadow: 0 0 0 2px rgb(var(--color-primary-500) / 0.2);
+	}
+
+	.timezone-select:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.timezone-detected {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.8125rem;
+		color: rgb(var(--color-surface-500));
+	}
+
+	.timezone-icon {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
+	}
+
+	.detected-value {
+		color: rgb(var(--color-surface-400));
+		font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
 	}
 </style>

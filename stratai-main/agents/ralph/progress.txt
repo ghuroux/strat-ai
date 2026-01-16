@@ -30,7 +30,7 @@
 | US-004 | Add timezone validation to preferences API endpoint | completed |
 | US-005 | Detect and sync timezone on app load | completed |
 | US-006 | Pass timezone to chat API and prompt builder | completed |
-| US-007 | Add timezone selector to Settings UI (Optional Phase 3) | pending |
+| US-007 | Add timezone selector to Settings UI (Optional Phase 3) | completed |
 
 ---
 
@@ -230,5 +230,59 @@
 **Quality gates:**
 - ✅ npm run check - passes (0 errors, 160 warnings - all pre-existing)
 - ⚠️ npm run lint - skipped (pre-existing missing eslint config)
+
+---
+
+### US-007: Add timezone selector to Settings UI (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+- Added timezone selector section to `src/lib/components/settings/SettingsGeneral.svelte`
+- Created dropdown with 14 common timezones (South Africa, Europe, Americas, Asia, Australia, Pacific)
+- Shows auto-detected timezone as help text below the dropdown
+- Connected to PATCH `/api/user/preferences` for saving
+- Updates `userStore` with new preferences after successful save
+- Added visual feedback with toast notifications (success/error)
+- Styled consistently with existing settings sections
+
+**Files changed:**
+- `src/lib/components/settings/SettingsGeneral.svelte` - Added timezone selector section (~120 lines)
+
+**Patterns applied:**
+- **Section separation** - Used `border-top` and `margin-top` to visually separate timezone from home page section
+- **Existing save pattern** - Followed same fetch → update store → toast pattern used by home page preference
+- **onMount for detection** - Used `onMount` to detect browser timezone (client-side only)
+- **$effect for sync** - Used `$effect` to sync state when user store changes
+- **Graceful fallback** - Falls back to 'Africa/Johannesburg' if timezone detection fails
+
+**Learnings:**
+1. **Reuse existing patterns** - Settings page already had a great pattern for saving preferences (fetch, update store, toast). Following it made implementation quick and consistent.
+2. **Client-side detection** - Timezone detection must happen in `onMount` since `Intl` APIs are browser-only (not available during SSR)
+3. **Common timezone list** - Hardcoded list is fine for MVP. Could expand later with full IANA list or searchable dropdown if users request.
+4. **Separate sections visually** - Using `border-top` and `margin-top` creates clear visual hierarchy between unrelated settings sections.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 errors, only warnings - all pre-existing)
+- ⚠️ npm run lint - skipped (pre-existing missing eslint config)
+
+---
+
+## Feature Complete: Temporal Awareness
+
+**All 7 stories completed!**
+
+### Summary
+- Created `getTemporalContext()` function for generating temporal context strings
+- Injected temporal context as Layer 0 in system prompt (shouldCache: false)
+- Added timezone to UserPreferences type and API validation
+- Implemented auto-detection and sync on app load
+- Threaded timezone through chat API to prompt builder
+- Added timezone selector to Settings UI for manual override
+
+### Next Steps
+- Run feature cleanup procedure per prompt.md
+- Update AGENTS.md with reusable learnings
+- Reset ralph working files for next feature
 
 ---

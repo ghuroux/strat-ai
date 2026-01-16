@@ -141,7 +141,7 @@
       "id": "US-007",
       "title": "Add timezone selector to Settings UI (Optional Phase 3)",
       "description": "As a user, I want to manually override my detected timezone in Settings if the auto-detection is wrong.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-005"
       ],
