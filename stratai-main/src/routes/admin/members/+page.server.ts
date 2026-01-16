@@ -2,17 +2,22 @@
  * Admin Members Page Server
  *
  * Handles user management: listing, creating, updating, and password resets.
+ * User creation sends a welcome email with a secure set-password link.
  */
 
 import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import {
 	postgresUserRepository,
-	postgresOrgMembershipRepository
+	postgresOrgMembershipRepository,
+	postgresOrganizationRepository
 } from '$lib/server/persistence';
 import { postgresGroupsRepository } from '$lib/server/persistence/groups-postgres';
+import { postgresPasswordResetTokenRepository } from '$lib/server/persistence/password-reset-tokens-postgres';
 import { hashPassword, generateTempPassword } from '$lib/server/auth';
 import { sql } from '$lib/server/persistence/db';
+import { sendEmail } from '$lib/server/email/sendgrid';
+import { getWelcomeEmail, createSetPasswordLink } from '$lib/server/email/templates';
 
 interface GroupMemberRow {
 	userId: string;
@@ -84,7 +89,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	/**
-	 * Create a new user
+	 * Create a new user and send welcome email
+	 *
+	 * User is created with a placeholder password hash (cannot login).
+	 * A welcome email is sent with a secure link to set their password.
+	 * If email fails, user creation is rolled back.
 	 */
 	create: async ({ request, locals }) => {
 		if (!locals.session) {
@@ -96,12 +105,11 @@ export const actions: Actions = {
 		const username = formData.get('username')?.toString().trim();
 		const firstName = formData.get('firstName')?.toString().trim() || null;
 		const lastName = formData.get('lastName')?.toString().trim() || null;
-		const password = formData.get('password')?.toString();
 		const role = formData.get('role')?.toString() as 'owner' | 'admin' | 'member';
 
-		// Validation
-		if (!email || !username || !password) {
-			return fail(400, { error: 'Email, username, and password are required' });
+		// Validation - password no longer required, welcome email handles it
+		if (!email || !username) {
+			return fail(400, { error: 'Email and username are required' });
 		}
 
 		if (!['owner', 'admin', 'member'].includes(role)) {
@@ -121,12 +129,20 @@ export const actions: Actions = {
 			return fail(400, { error: 'Username already exists in this organization' });
 		}
 
-		try {
-			// Hash password
-			const passwordHash = hashPassword(password);
+		// Get organization name for welcome email
+		const org = await postgresOrganizationRepository.findById(orgId);
+		const organizationName = org?.name ?? 'your organization';
 
-			// Create user
-			const user = await postgresUserRepository.create({
+		let user;
+
+		try {
+			// Create a random placeholder password hash that cannot be used to login
+			// This is a hash of a random 64-byte string - virtually impossible to guess
+			const placeholderPassword = generateTempPassword() + generateTempPassword() + Date.now();
+			const passwordHash = hashPassword(placeholderPassword);
+
+			// Create user with placeholder password
+			user = await postgresUserRepository.create({
 				organizationId: orgId,
 				email,
 				username,
@@ -143,9 +159,56 @@ export const actions: Actions = {
 				role
 			});
 
-			return { success: true, userId: user.id };
+			// Create welcome token (7 days expiry)
+			const token = await postgresPasswordResetTokenRepository.createByEmail(email, 'welcome');
+
+			if (!token) {
+				// Token creation failed - shouldn't happen since we just created the user
+				throw new Error('Failed to create welcome token');
+			}
+
+			// Build welcome email
+			const setPasswordLink = createSetPasswordLink(token);
+			const welcomeEmail = getWelcomeEmail({
+				firstName: firstName || username,
+				organizationName,
+				setPasswordLink,
+				email,
+				expiresInDays: 7
+			});
+
+			// Send welcome email
+			const emailResult = await sendEmail({
+				to: email,
+				subject: welcomeEmail.subject,
+				html: welcomeEmail.html,
+				text: welcomeEmail.text,
+				orgId,
+				userId: user.id,
+				emailType: 'welcome',
+				metadata: { role, invitedBy: locals.session.userId }
+			});
+
+			if (!emailResult.success) {
+				// Email failed - roll back user creation
+				console.error('Failed to send welcome email, rolling back user creation:', emailResult.error);
+				await postgresUserRepository.delete(user.id);
+				return fail(500, { error: 'Failed to send welcome email. Please try again or check email configuration.' });
+			}
+
+			return { success: true, userId: user.id, welcomeEmailSent: true, email };
 		} catch (error) {
 			console.error('Failed to create user:', error);
+
+			// If user was created but something else failed, clean up
+			if (user) {
+				try {
+					await postgresUserRepository.delete(user.id);
+				} catch (cleanupError) {
+					console.error('Failed to clean up user after error:', cleanupError);
+				}
+			}
+
 			return fail(500, { error: 'Failed to create user' });
 		}
 	},

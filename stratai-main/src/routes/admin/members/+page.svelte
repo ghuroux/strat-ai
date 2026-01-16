@@ -48,7 +48,6 @@
 		username: '',
 		firstName: '',
 		lastName: '',
-		password: '',
 		role: 'member' as 'owner' | 'admin' | 'member'
 	});
 
@@ -112,7 +111,6 @@
 			username: '',
 			firstName: '',
 			lastName: '',
-			password: '',
 			role: 'member'
 		};
 	}
@@ -205,7 +203,9 @@
 
 	{#if form?.success}
 		<div class="alert alert-success" transition:fly={{ y: -10, duration: 200 }}>
-			{#if form.tempPassword}
+			{#if form.welcomeEmailSent}
+				User created. Welcome email sent to {form.email}
+			{:else if form.tempPassword}
 				User created! Temporary password: <code>{form.tempPassword}</code>
 			{:else}
 				Operation completed successfully
@@ -392,16 +392,18 @@
 						</div>
 					</div>
 					<div class="form-group">
-						<label for="create-password">Password</label>
-						<input type="text" id="create-password" name="password" bind:value={createForm.password} required placeholder="Enter password" />
-					</div>
-					<div class="form-group">
 						<label for="create-role">Role</label>
 						<select id="create-role" name="role" bind:value={createForm.role}>
 							<option value="member">Member</option>
 							<option value="admin">Admin</option>
 							<option value="owner">Owner</option>
 						</select>
+					</div>
+					<div class="info-message">
+						<svg class="info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+						</svg>
+						<span>A welcome email will be sent with a link to set password</span>
 					</div>
 				</div>
 				<div class="modal-footer">
@@ -899,6 +901,32 @@
 	.mt-4 { margin-top: 1rem; }
 	.text-error-400 { color: var(--color-error-400); }
 	.text-success-400 { color: var(--color-success-400); }
+
+	/* Info message for welcome email */
+	.info-message {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 1rem;
+		padding: 0.75rem 1rem;
+		background: rgba(59, 130, 246, 0.1);
+		border: 1px solid rgba(59, 130, 246, 0.25);
+		border-radius: 0.5rem;
+		color: #93c5fd;
+		font-size: 0.8125rem;
+	}
+
+	.info-icon {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
+	}
+
+	:global(html.light) .info-message {
+		background: rgba(59, 130, 246, 0.08);
+		border-color: rgba(59, 130, 246, 0.2);
+		color: #2563eb;
+	}
 
 	/* Page description */
 	.page-description {

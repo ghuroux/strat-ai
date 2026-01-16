@@ -104,7 +104,7 @@
       "id": "US-005",
       "title": "Update admin create user flow to send welcome email",
       "description": "As an admin, I want user creation to automatically send a welcome email so that new users receive secure access without me manually sharing passwords.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-002",
         "US-003",
