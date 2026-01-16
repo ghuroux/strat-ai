@@ -1,24 +1,62 @@
 # Ralph Progress Log
 
-## Feature: [Not started]
-**Parent Task:** [Not set]
-**Started:** [Not started]
-**Status:** Ready for next feature
+## Feature: [Feature Name]
+**Parent Task:** [parent-task-id]
+**Started:** [YYYY-MM-DD]
+**Status:** Ready to begin
+
+## Decisions Made During PRD Creation
+
+- **Decision 1**: [What was decided] - [Rationale]
+- **Decision 2**: [What was decided] - [Rationale]
+
+(Filled by PRD creator during research phase)
+
+## Codebase Patterns Discovered
+
+- **Pattern 1**: [Pattern name] - [Where it's used]
+- **Pattern 2**: [Pattern name] - [Where it's used]
+
+(Filled by PRD creator during research phase)
+
+## Stories
+
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | [Story title] | pending |
+| US-002 | [Story title] | pending |
 
 ---
 
 ## Iteration Log
 
-(Each iteration appends a section below)
+(Each story implementation appends a section below)
 
-## 2026-01-16 - Manual testing and verification
-Task ID: US-004
-Status: Completed
+**Example format:**
+```
+### US-001: [Story Title] (YYYY-MM-DD)
 
-### What Was Done
-[Fill in implementation details]
+**Status:** Completed
 
-### Learnings
-[Capture patterns, decisions, lessons]
+**What was done:**
+- [Implementation detail 1]
+- [Implementation detail 2]
+
+**Files changed:**
+- [file path] - [what changed]
+
+**Patterns applied:**
+- [Pattern name from AGENTS.md]
+
+**Learnings:**
+1. [Learning 1]
+2. [Learning 2]
+
+**Quality gates:**
+- ✅ npm run check - passes
+- ✅ npm run lint - passes
+- ✅ npm run test - passes
 
 ---
+```
+

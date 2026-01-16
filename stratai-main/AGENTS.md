@@ -278,6 +278,102 @@ async function count(userId: string): Promise<number> {
 
 ---
 
+### Pattern: CTE Fragment Composition with postgres.js
+
+**When to use:** Creating reusable SQL fragments for complex queries
+
+**Implementation:**
+```typescript
+import type { PendingQuery, Row } from 'postgres';
+
+// Return type allows composition in template literals
+function buildAccessibleCTE(userId: string): PendingQuery<Row[]> {
+  return sql`
+    accessible_items AS (
+      SELECT id FROM items WHERE user_id = ${userId}
+      UNION
+      SELECT item_id FROM shares WHERE shared_with = ${userId}
+    )
+  `;
+}
+
+// Compose into queries - postgres.js handles interpolation correctly
+const cte = buildAccessibleCTE(userId);
+const result = await sql`
+  WITH ${cte}
+  SELECT * FROM items WHERE id IN (SELECT id FROM accessible_items)
+`;
+```
+
+**Why:** The `PendingQuery<Row[]>` type from postgres.js allows SQL fragments to be composed safely while maintaining type safety. Parameters are properly bound.
+
+**See:** `pages-postgres.ts` → `buildAccessiblePagesCTE()`
+
+---
+
+### Pattern: E2E Test Script for Database Logic
+
+**When to use:** Testing complex query logic that's hard to unit test through the application
+
+**Implementation:**
+```typescript
+// test-feature.ts - Standalone test script
+import postgres from 'postgres';
+
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://...';
+
+// 1. Create standalone connection WITH same transform as app
+const sql = postgres(DATABASE_URL, {
+  transform: {
+    column: {
+      to: postgres.fromCamel,  // JS → DB: camelCase to snake_case
+      from: postgres.toCamel   // DB → JS: snake_case to camelCase
+    }
+  }
+});
+
+// 2. Setup realistic test data
+async function setupTestData() {
+  const user = await sql`INSERT INTO users (email) VALUES ('test@test.com') RETURNING *`;
+  // ... create related entities
+  return { user };
+}
+
+// 3. Run assertions
+async function runTests(testData: TestData) {
+  const results = await yourQueryFunction(testData.user.id);
+  if (!results.includes(expectedId)) {
+    throw new Error('Test failed: expected page not found');
+  }
+}
+
+// 4. Always cleanup
+async function cleanup(testData: TestData) {
+  await sql`DELETE FROM users WHERE id = ${testData.user.id}`;
+  // ... delete in reverse order of creation
+}
+
+// 5. Run with cleanup guarantee
+const testData = await setupTestData();
+try {
+  await runTests(testData);
+  console.log('✅ All tests passed');
+} finally {
+  await cleanup(testData);
+  await sql.end();
+}
+```
+
+**Benefits:**
+- Tests actual SQL execution, not mocks
+- Validates postgres.js transform behavior
+- Catches schema mismatches early
+- Fast iteration without full app startup
+
+**See:** `test-page-listing-access-control.ts`
+
+---
+
 ### Pattern: Defense-in-Depth for Business Rules
 
 **When to use:** Critical invariants that must never be violated (e.g., "General area cannot be restricted")
@@ -494,6 +590,40 @@ if (!existingMember) {
 
 ---
 
+### Gotcha: Table Alias Required When Using CTEs
+
+**Issue:** Column references become ambiguous when CTE is added to query
+
+**Symptom:** SQL error "column reference X is ambiguous" after adding CTE
+
+**Root cause:** Without table alias, SQL doesn't know if column refers to main table or CTE
+
+**Fix:** Add table alias when using CTE:
+```typescript
+// ❌ Wrong - ambiguous column references
+const result = await sql`
+  WITH ${accessiblePagesCTE}
+  SELECT id, title FROM pages
+  WHERE id IN (SELECT id FROM accessible_pages)
+    AND deleted_at IS NULL
+`;
+
+// ✅ Correct - use table alias 'p'
+const result = await sql`
+  WITH ${accessiblePagesCTE}
+  SELECT p.id, p.title FROM pages p
+  WHERE p.id IN (SELECT id FROM accessible_pages)
+    AND p.deleted_at IS NULL
+`;
+```
+
+**Pattern:** When converting from simple query to CTE-based:
+1. Add `WITH ${cte}` clause
+2. Add table alias (e.g., `FROM pages p`)
+3. Prefix ALL column references with alias (e.g., `p.id`, `p.title`)
+
+---
+
 ### Gotcha: JSONB Column Casting
 
 **Issue:** JSONB columns come through as `object` type, need explicit casting
@@ -556,6 +686,6 @@ Examples:
 
 ---
 
-*Last updated: 2026-01-16 (Reusable CTE Helper Functions pattern added for Page Listing Access Control)*
+*Last updated: 2026-01-16 (Added CTE composition, E2E test, and table alias patterns from Page Listing Access Control)*
 *Maintainer: Development Team*
 
