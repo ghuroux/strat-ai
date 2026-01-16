@@ -1,6 +1,12 @@
 ---
 name: creating-components
-description: Creates Svelte 5 components following StratAI patterns. Use when creating new UI components, modals, panels, or form components.
+description: |
+  Use when creating ANY new Svelte component (.svelte file) in src/lib/components/.
+  MANDATORY for: modals, panels, forms, cards, lists, layouts.
+  READ THIS SKILL before writing component code.
+  Covers: Svelte 5 runes, prop patterns, modal/form templates, Tailwind styling.
+globs:
+  - "src/lib/components/**/*.svelte"
 ---
 
 # Creating Svelte Components
@@ -372,9 +378,422 @@ interface Props {
 <div in:fly={{ y: 20 }} out:fade>
 ```
 
+## Icons
+
+**Standard:** Use `lucide-svelte` for all icons in new components.
+
+**Why:** Provides consistency, tree-shaking, maintainability, and typed props.
+
+```svelte
+<script lang="ts">
+    import { X, Check, AlertCircle, Loader2, Info, Lock, Unlock } from 'lucide-svelte';
+</script>
+
+<!-- Basic icon -->
+<button onclick={onClose}>
+    <X size={20} />
+    Close
+</button>
+
+<!-- Loading state -->
+{#if isLoading}
+    <Loader2 class="animate-spin" size={20} />
+{/if}
+
+<!-- Conditional icon -->
+<button>
+    {#if isValid}
+        <Check size={16} class="text-green-500" />
+    {:else}
+        <AlertCircle size={16} class="text-red-500" />
+    {/if}
+    Submit
+</button>
+
+<!-- Icon with custom classes -->
+<Info size={18} class="text-blue-400 flex-shrink-0" />
+
+<!-- Dynamic sizing -->
+<X size={iconSize} strokeWidth={2} />
+```
+
+**Common icons:**
+- `X` - Close buttons
+- `Check` - Success states
+- `AlertCircle` - Errors/warnings
+- `Info` - Information messages
+- `Loader2` - Loading spinners (with `animate-spin`)
+- `Lock`, `Unlock` - Access control
+- `ChevronDown`, `ChevronUp` - Dropdowns
+- `Plus`, `Minus` - Add/remove actions
+- `Trash2` - Delete actions
+- `Edit` - Edit actions
+- `Search`, `Filter` - Search/filter UI
+- `Settings`, `User` - Settings/profile
+
+**Props reference:**
+- `size` - Number (default: 24)
+- `color` - String (default: 'currentColor')
+- `strokeWidth` - Number (default: 2)
+- `class` - String for Tailwind classes
+
+### When Inline SVG is Acceptable
+
+**Only use inline SVG for:**
+1. Custom brand icons not available in lucide
+2. Complex illustrations with unique animations
+3. One-off designs that won't be reused
+
+```svelte
+<!-- Custom brand logo (not in lucide) -->
+<svg viewBox="0 0 100 100" class="w-8 h-8" aria-label="Company logo">
+    <path d="M..." fill="currentColor" />
+</svg>
+```
+
+**Note:** ~124 legacy components use inline SVG. When refactoring existing components, consider migrating to `lucide-svelte` for consistency.
+
+## Data Loading Pattern
+
+Components that load data should handle loading, error, and empty states.
+
+```svelte
+<script lang="ts">
+    import { onMount } from 'svelte';
+    import { Loader2, AlertCircle } from 'lucide-svelte';
+    import type { Entity } from '$lib/types/entity';
+
+    interface Props {
+        entityId: string;
+    }
+
+    let { entityId }: Props = $props();
+
+    let data = $state<Entity | null>(null);
+    let isLoading = $state(true);
+    let error = $state<string | null>(null);
+
+    onMount(async () => {
+        try {
+            const response = await fetch(`/api/entities/${entityId}`);
+            if (!response.ok) {
+                throw new Error('Failed to load entity');
+            }
+            data = await response.json();
+        } catch (e) {
+            error = e instanceof Error ? e.message : 'Unknown error';
+        } finally {
+            isLoading = false;
+        }
+    });
+</script>
+
+<!-- Loading state -->
+{#if isLoading}
+    <div class="flex items-center justify-center p-8">
+        <Loader2 class="animate-spin text-zinc-400" size={24} />
+    </div>
+
+<!-- Error state -->
+{:else if error}
+    <div class="flex items-center gap-2 text-red-400 p-4 bg-red-950/20 rounded">
+        <AlertCircle size={20} />
+        <span>{error}</span>
+    </div>
+
+<!-- Empty state -->
+{:else if !data}
+    <div class="text-zinc-400 text-center p-8">
+        No data available
+    </div>
+
+<!-- Data loaded -->
+{:else}
+    <div class="p-4">
+        <h2>{data.title}</h2>
+        <p>{data.description}</p>
+    </div>
+{/if}
+```
+
+### Reactive Data Loading
+
+For data that depends on props:
+
+```svelte
+<script lang="ts">
+    import { onMount } from 'svelte';
+
+    interface Props {
+        userId: string;
+    }
+
+    let { userId }: Props = $props();
+
+    let data = $state<User | null>(null);
+    let isLoading = $state(false);
+
+    // Reactive effect - runs when userId changes
+    $effect(() => {
+        loadUser(userId);
+    });
+
+    async function loadUser(id: string) {
+        isLoading = true;
+        try {
+            const response = await fetch(`/api/users/${id}`);
+            data = await response.json();
+        } finally {
+            isLoading = false;
+        }
+    }
+</script>
+```
+
+## Click-Outside Detection
+
+For dropdowns, modals, and context menus that close when clicking outside.
+
+```svelte
+<script lang="ts">
+    interface Props {
+        isOpen: boolean;
+        onClose: () => void;
+    }
+
+    let { isOpen, onClose }: Props = $props();
+
+    let buttonRef: HTMLButtonElement | undefined = $state();
+    let menuRef: HTMLDivElement | undefined = $state();
+
+    function handleClickOutside(e: MouseEvent) {
+        if (
+            isOpen &&
+            buttonRef &&
+            menuRef &&
+            !buttonRef.contains(e.target as Node) &&
+            !menuRef.contains(e.target as Node)
+        ) {
+            onClose();
+        }
+    }
+
+    function handleKeydown(e: KeyboardEvent) {
+        if (e.key === 'Escape' && isOpen) {
+            onClose();
+        }
+    }
+</script>
+
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+
+<button bind:this={buttonRef} onclick={() => isOpen = !isOpen}>
+    Toggle Menu
+</button>
+
+{#if isOpen}
+    <div bind:this={menuRef} class="dropdown-menu">
+        <!-- Menu content -->
+    </div>
+{/if}
+```
+
+**Key points:**
+- Use `bind:this` to get DOM references
+- Check if refs exist before using
+- Type refs as `HTMLElement | undefined` for safety
+- Use `contains()` to check if click is inside
+
+## Context Menu Pattern
+
+For right-click menus (advanced pattern).
+
+```svelte
+<script lang="ts">
+    import type { Space } from '$lib/types/spaces';
+
+    let showContextMenu = $state(false);
+    let contextMenuSpace = $state<Space | null>(null);
+    let contextMenuX = $state(0);
+    let contextMenuY = $state(0);
+
+    function handleContextMenu(e: MouseEvent, space: Space) {
+        e.preventDefault(); // Prevent browser context menu
+        contextMenuSpace = space;
+        contextMenuX = e.clientX;
+        contextMenuY = e.clientY;
+        showContextMenu = true;
+    }
+
+    function closeContextMenu() {
+        showContextMenu = false;
+        contextMenuSpace = null;
+    }
+
+    function handleClickOutside() {
+        if (showContextMenu) {
+            closeContextMenu();
+        }
+    }
+
+    async function handleAction() {
+        if (contextMenuSpace) {
+            // Perform action with contextMenuSpace
+            await doSomething(contextMenuSpace);
+        }
+        closeContextMenu();
+    }
+</script>
+
+<svelte:window onclick={handleClickOutside} />
+
+<!-- Item with right-click -->
+<div oncontextmenu={(e) => handleContextMenu(e, space)}>
+    Space Item
+</div>
+
+<!-- Context menu -->
+{#if showContextMenu}
+    <div
+        class="context-menu"
+        style="position: fixed; left: {contextMenuX}px; top: {contextMenuY}px;"
+    >
+        <button onclick={handleAction}>
+            Action
+        </button>
+    </div>
+{/if}
+```
+
+## Import Organization
+
+Follow this order for clean, consistent imports:
+
+```typescript
+// 1. Svelte core
+import { onMount } from 'svelte';
+import { goto } from '$app/navigation';
+import { page } from '$app/stores';
+
+// 2. Transitions and animations
+import { fly, fade } from 'svelte/transition';
+
+// 3. Icons
+import { X, Check, Loader2 } from 'lucide-svelte';
+
+// 4. Types
+import type { Space } from '$lib/types/spaces';
+import type { User } from '$lib/types/user';
+
+// 5. Stores
+import { spacesStore } from '$lib/stores/spaces.svelte';
+import { userStore } from '$lib/stores/user.svelte';
+
+// 6. Utils
+import { getDisplayName } from '$lib/utils/display';
+
+// 7. Child components
+import ChildModal from './ChildModal.svelte';
+import ListItem from './ListItem.svelte';
+```
+
+## Advanced Patterns
+
+### Conditional Classes
+
+```svelte
+<script lang="ts">
+    let isActive = $state(false);
+    let isDisabled = $state(false);
+    let variant = $state<'primary' | 'secondary'>('primary');
+</script>
+
+<!-- Single condition -->
+<div class:active={isActive}>
+
+<!-- Multiple conditions -->
+<button 
+    class:active={isActive}
+    class:disabled={isDisabled}
+    class:primary={variant === 'primary'}
+>
+
+<!-- Derived condition -->
+<div class:valid={form.title.length >= 3}>
+```
+
+### Slots with Fallbacks
+
+```svelte
+<!-- Component definition -->
+<div class="card">
+    <div class="card-header">
+        <slot name="header">
+            <!-- Fallback if no header slot provided -->
+            <h2>Default Title</h2>
+        </slot>
+    </div>
+    
+    <div class="card-body">
+        <slot>
+            <!-- Default content -->
+            <p>No content provided</p>
+        </slot>
+    </div>
+    
+    <div class="card-footer">
+        <slot name="footer" />
+    </div>
+</div>
+
+<!-- Usage -->
+<Card>
+    <svelte:fragment slot="header">
+        <h1>Custom Header</h1>
+    </svelte:fragment>
+    
+    <p>Main content</p>
+    
+    <svelte:fragment slot="footer">
+        <button>OK</button>
+    </svelte:fragment>
+</Card>
+```
+
+### Props with Callback Composition
+
+```svelte
+<script lang="ts">
+    interface Props {
+        onSave: (data: FormData) => Promise<void>;
+        onError?: (error: Error) => void;
+        onSuccess?: () => void;
+    }
+
+    let { onSave, onError, onSuccess }: Props = $props();
+
+    async function handleSubmit() {
+        try {
+            await onSave(formData);
+            onSuccess?.(); // Optional callback
+        } catch (error) {
+            if (onError) {
+                onError(error);
+            } else {
+                // Default error handling
+                console.error(error);
+            }
+        }
+    }
+</script>
+```
+
 ## File Reference
 
 - `src/lib/components/tasks/DeleteTaskModal.svelte` - Modal example
 - `src/lib/components/tasks/TaskPanel.svelte` - Complex panel
 - `src/lib/components/chat/SecondOpinionPanel.svelte` - Side panel
 - `src/lib/components/ModelSelector.svelte` - Dropdown component
+- `src/lib/components/spaces/AllSpacesDropdown.svelte` - Dropdown with click-outside
+- `src/lib/components/spaces/SpaceNavTabs.svelte` - Context menu example
+- `src/lib/components/areas/ShareAreaModal.svelte` - Data loading example

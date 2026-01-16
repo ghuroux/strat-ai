@@ -1,140 +1,79 @@
-# API Endpoint Patterns
+# API Endpoint Patterns - Quick Reference
 
-SvelteKit API endpoints in `src/routes/api/`.
+> **⚠️ For comprehensive API patterns, see the `creating-endpoints` skill**
+>
+> This document provides quick examples. The `creating-endpoints` skill has:
+> - ✅ Secure authentication patterns
+> - ✅ JSDoc documentation standards
+> - ✅ Role-based access control
+> - ✅ Comprehensive error handling
+> - ✅ CRUD templates
+> - ✅ Streaming patterns
 
-## Basic CRUD Endpoint
+---
+
+## Basic Endpoint Structure
 
 ```typescript
-// src/routes/api/tasks/+server.ts
+// src/routes/api/items/+server.ts
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
+import { postgresItemRepository } from '$lib/server/persistence/items-postgres';
 
-// GET /api/tasks
-export const GET: RequestHandler = async ({ locals }) => {
-    const userId = locals.userId ?? 'admin';
+/**
+ * Items API - Collection Operations
+ * 
+ * GET /api/items - List all items
+ * POST /api/items - Create a new item
+ */
+
+// GET /api/items
+export const GET: RequestHandler = async ({ locals, url }) => {
+    // ⚠️ SECURITY: Always check authentication first
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
+
+    const userId = locals.session.userId;
 
     try {
-        const tasks = await postgresTaskRepository.findAll(userId);
-        return json({ tasks });
+        // Parse query parameters
+        const spaceId = url.searchParams.get('spaceId');
+        const items = await postgresItemRepository.findAll(userId, { spaceId });
+        
+        return json({ items });
     } catch (error) {
-        console.error('[GET /api/tasks] Error:', error);
+        console.error('Failed to fetch items:', error);
         return json(
-            { error: 'Failed to fetch tasks' },
+            { error: 'Failed to fetch items', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         );
     }
 };
 
-// POST /api/tasks
+// POST /api/items
 export const POST: RequestHandler = async ({ request, locals }) => {
-    const userId = locals.userId ?? 'admin';
+    // ⚠️ SECURITY: Always check authentication first
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
+
+    const userId = locals.session.userId;
 
     try {
         const body = await request.json();
 
         // Validate required fields
-        if (!body.title || !body.spaceId) {
-            return json(
-                { error: 'title and spaceId are required' },
-                { status: 400 }
-            );
+        if (!body.title?.trim()) {
+            return json({ error: 'title is required' }, { status: 400 });
         }
 
-        const task = await postgresTaskRepository.create(body, userId);
-        return json({ task }, { status: 201 });
+        const item = await postgresItemRepository.create(body, userId);
+        return json({ item }, { status: 201 });
     } catch (error) {
-        console.error('[POST /api/tasks] Error:', error);
+        console.error('Failed to create item:', error);
         return json(
-            { error: 'Failed to create task' },
-            { status: 500 }
-        );
-    }
-};
-```
-
-## Dynamic Route Endpoint
-
-```typescript
-// src/routes/api/tasks/[id]/+server.ts
-import { json } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
-
-// GET /api/tasks/:id
-export const GET: RequestHandler = async ({ params, locals }) => {
-    const userId = locals.userId ?? 'admin';
-    const { id } = params;
-
-    try {
-        const task = await postgresTaskRepository.findById(id, userId);
-
-        if (!task) {
-            return json(
-                { error: 'Task not found' },
-                { status: 404 }
-            );
-        }
-
-        return json({ task });
-    } catch (error) {
-        console.error(`[GET /api/tasks/${id}] Error:`, error);
-        return json(
-            { error: 'Failed to fetch task' },
-            { status: 500 }
-        );
-    }
-};
-
-// PATCH /api/tasks/:id
-export const PATCH: RequestHandler = async ({ params, request, locals }) => {
-    const userId = locals.userId ?? 'admin';
-    const { id } = params;
-
-    try {
-        const body = await request.json();
-        const task = await postgresTaskRepository.update(id, body, userId);
-
-        if (!task) {
-            return json(
-                { error: 'Task not found' },
-                { status: 404 }
-            );
-        }
-
-        return json({ task });
-    } catch (error) {
-        console.error(`[PATCH /api/tasks/${id}] Error:`, error);
-        return json(
-            { error: 'Failed to update task' },
-            { status: 500 }
-        );
-    }
-};
-
-// DELETE /api/tasks/:id
-export const DELETE: RequestHandler = async ({ params, locals, url }) => {
-    const userId = locals.userId ?? 'admin';
-    const { id } = params;
-
-    // Query parameters for cascade options
-    const deleteConversations = url.searchParams.get('deleteConversations') === 'true';
-
-    try {
-        const deleted = await postgresTaskRepository.delete(id, userId);
-
-        if (!deleted) {
-            return json(
-                { error: 'Task not found' },
-                { status: 404 }
-            );
-        }
-
-        return json({ success: true });
-    } catch (error) {
-        console.error(`[DELETE /api/tasks/${id}] Error:`, error);
-        return json(
-            { error: 'Failed to delete task' },
+            { error: 'Failed to create item', details: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         );
     }
@@ -143,16 +82,13 @@ export const DELETE: RequestHandler = async ({ params, locals, url }) => {
 
 ## Streaming Response (SSE)
 
-For chat endpoints that stream responses:
+For chat endpoints that stream LLM responses:
 
 ```typescript
 // src/routes/api/chat/+server.ts
-import type { RequestHandler } from './$types';
-
 export const POST: RequestHandler = async ({ request }) => {
     const body = await request.json();
 
-    // Create a readable stream
     const stream = new ReadableStream({
         async start(controller) {
             const encoder = new TextEncoder();
@@ -161,8 +97,7 @@ export const POST: RequestHandler = async ({ request }) => {
                 // Stream from LLM
                 for await (const chunk of llmStream(body)) {
                     // SSE format: data: <json>\n\n
-                    const data = JSON.stringify(chunk);
-                    controller.enqueue(encoder.encode(`data: ${data}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
                 }
 
                 // Signal completion
@@ -189,101 +124,60 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 ```
 
-## Client-Side Stream Consumption
-
-```typescript
-// In component or page
-async function streamChat(messages: Message[]) {
-    const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model: 'claude-sonnet-4-20250514' })
-    });
-
-    if (!response.body) throw new Error('No response body');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const text = decoder.decode(value);
-        const lines = text.split('\n');
-
-        for (const line of lines) {
-            if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') return;
-
-                const chunk = JSON.parse(data);
-                // Handle chunk (append to message, update UI, etc.)
-            }
-        }
-    }
-}
-```
-
 ## Error Response Pattern
 
-Consistent error format:
-
 ```typescript
-// Client errors (4xx)
-return json({ error: 'Validation failed: title is required' }, { status: 400 });
-return json({ error: 'Unauthorized' }, { status: 401 });
-return json({ error: 'Resource not found' }, { status: 404 });
+// 400 Bad Request - Client error
+return json({ error: 'title is required' }, { status: 400 });
 
-// Server errors (5xx)
-return json({ error: 'Failed to process request' }, { status: 500 });
+// 401 Unauthorized - Not authenticated
+return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
 
-// With details (for debugging)
-return json({
-    error: 'Validation failed',
-    details: {
-        field: 'title',
-        message: 'Title must be at least 3 characters'
-    }
-}, { status: 400 });
+// 403 Forbidden - Authenticated but not authorized
+return json({ error: 'Insufficient permissions. Owner access required.' }, { status: 403 });
+
+// 404 Not Found
+return json({ error: 'Item not found' }, { status: 404 });
+
+// 500 Internal Server Error
+return json(
+    { error: 'Failed to process request', details: error.message },
+    { status: 500 }
+);
 ```
 
-## Request Validation
+## Status Codes Quick Reference
 
-```typescript
-interface CreateTaskBody {
-    title: string;
-    spaceId: string;
-    priority?: 'normal' | 'high';
-    dueDate?: string;
-}
+| Code | Meaning | When to Use |
+|------|---------|-------------|
+| 200 | OK | Successful GET, PATCH, DELETE |
+| 201 | Created | Successful POST (create) |
+| 400 | Bad Request | Validation error, missing fields |
+| 401 | Unauthorized | No session (not logged in) |
+| 403 | Forbidden | Has session but lacks permissions |
+| 404 | Not Found | Resource doesn't exist |
+| 409 | Conflict | Duplicate, state conflict |
+| 500 | Server Error | Catch block errors |
 
-function validateCreateTask(body: unknown): body is CreateTaskBody {
-    if (!body || typeof body !== 'object') return false;
-    const b = body as Record<string, unknown>;
+---
 
-    if (typeof b.title !== 'string' || b.title.length < 1) return false;
-    if (typeof b.spaceId !== 'string') return false;
-    if (b.priority && !['normal', 'high'].includes(b.priority as string)) return false;
+## For Complete Patterns, See:
 
-    return true;
-}
-
-// Usage
-export const POST: RequestHandler = async ({ request }) => {
-    const body = await request.json();
-
-    if (!validateCreateTask(body)) {
-        return json({ error: 'Invalid request body' }, { status: 400 });
-    }
-
-    // body is now typed as CreateTaskBody
-};
-```
+**`creating-endpoints` skill** - Comprehensive guide covering:
+- Authentication patterns (session checks, fail-fast)
+- Authorization patterns (role-based, access control)
+- JSDoc documentation standards
+- Request validation
+- CRUD templates (collection + individual resources)
+- Streaming endpoints
+- Error handling strategies
+- Security best practices
 
 ## File Reference
 
-- `src/routes/api/chat/+server.ts` - Streaming chat endpoint
-- `src/routes/api/tasks/+server.ts` - CRUD example
-- `src/routes/api/tasks/[id]/+server.ts` - Dynamic route example
-- `src/routes/api/conversations/+server.ts` - Another CRUD example
+Production examples:
+- `src/routes/api/spaces/[id]/pin/+server.ts` - Clean auth, great JSDoc
+- `src/routes/api/areas/[id]/+server.ts` - Role-based access control
+- `src/routes/api/tasks/+server.ts` - Query parameters, bulk operations
+- `src/routes/api/chat/+server.ts` - Streaming pattern
+- `src/hooks.server.ts` - Where `locals.session` is set

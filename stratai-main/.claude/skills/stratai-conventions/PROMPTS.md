@@ -47,63 +47,110 @@ const PLATFORM_PROMPTS: Record<string, string> = {
 
 ## Layer 2: Space Prompt
 
-Space-specific tone and focus:
+Space type and custom context with document summaries:
 
 ```typescript
-const SPACE_PROMPT_ADDITIONS: Record<SpaceType, string> = {
-    work: `
-<work_context>
-You are in the WORK space. Be:
-- Concise and action-oriented
-- Professional in tone
-- Focused on actionable outcomes
-</work_context>`,
+// Current space types (as of 2026)
+export type SpaceType = 'personal' | 'organization' | 'project';
 
-    research: `
-<research_context>
-You are in the RESEARCH space. Be:
-- Thorough and multi-perspective
-- Academic in approach
-- Willing to explore tangents
-</research_context>`,
+// Space context includes user-provided text + document summaries
+function getCustomSpacePrompt(space: SpaceInfo): string {
+    let prompt = `
+<space_context>
+## Space: ${space.name}
 
-    random: `
-<random_context>
-You are in the RANDOM space. Be:
-- Playful and experimental
-- Creative and spontaneous
-</random_context>`,
+You are working within the "${space.name}" space.`;
 
-    personal: `
-<personal_context>
-You are in the PERSONAL space. Be:
-- Supportive and conversational
-- Empathetic and patient
-</personal_context>`,
-};
+    // User-provided text context
+    if (space.context) {
+        prompt += `
+
+### Space Context
+${space.context}`;
+    }
+
+    // Document SUMMARIES (not full content - for token efficiency)
+    if (space.contextDocuments?.length > 0) {
+        prompt += `
+
+### Reference Documents
+The following document summaries provide context for this space:`;
+
+        for (const doc of space.contextDocuments) {
+            const sizeKb = Math.round(doc.charCount / 1000);
+            prompt += `
+
+<document_summary filename="${doc.filename}" size="${sizeKb}k chars">
+${doc.summary || '[Summary pending - use read_document tool to access content]'}
+</document_summary>`;
+        }
+    }
+
+    prompt += `
+
+**Guidelines:**
+- Apply this space context to all responses
+- Reference relevant context when helpful
+- Use **read_document** tool to access full document content when you need specific details or quotes
+- Stay focused on topics relevant to this space
+</space_context>`;
+
+    return prompt;
+}
 ```
+
+**Key Pattern**: Document **summaries** in prompts, full content via `read_document` tool.
 
 ## Layer 3: Focus Area Prompt
 
-User-defined context within a space:
+User-defined context within a space (with document summaries):
 
 ```typescript
 function getFocusAreaPrompt(focusArea: FocusAreaInfo): string {
-    return `
-<focus_area>
-<name>${focusArea.name}</name>
-<description>${focusArea.description}</description>
+    let prompt = `
+<focus_area_context>
+## Focus Area: ${focusArea.name}
+You are assisting within a specialized context called "${focusArea.name}".`;
 
-${focusArea.context ? `<context>
-${focusArea.context}
-</context>` : ''}
+    // User-provided text context
+    if (focusArea.context) {
+        prompt += `
 
-${focusArea.role ? `<role>
-You are acting as: ${focusArea.role}
-</role>` : ''}
-</focus_area>`;
+### Background Context
+${focusArea.context}`;
+    }
+
+    // Document SUMMARIES (not full content)
+    if (focusArea.contextDocuments?.length > 0) {
+        prompt += `
+
+### Reference Documents
+The following document summaries provide context for this focus area:`;
+
+        for (const doc of focusArea.contextDocuments) {
+            const sizeKb = Math.round(doc.charCount / 1000);
+            prompt += `
+
+<document_summary filename="${doc.filename}" size="${sizeKb}k chars">
+${doc.summary || '[Summary pending - use read_document tool to access content]'}
+</document_summary>`;
+        }
+    }
+
+    prompt += `
+
+**Your role:**
+- Apply this specialized context to all responses
+- Reference relevant background information when helpful
+- Use **read_document** tool to access full document content when you need specific details or quotes
+- Stay focused on topics relevant to this context
+</focus_area_context>`;
+
+    return prompt;
 }
 ```
+
+**Key Pattern**: Same as spaces - summaries in prompt, tool for full content.
 
 ## Layer 4: Task Prompt
 
@@ -146,6 +193,7 @@ function getFocusedTaskPrompt(task: FocusedTaskInfo): string {
 Linked documents and related tasks:
 
 ```typescript
+// NOTE: Task-linked documents also use SUMMARIES, not full content
 function buildTaskContextPrompt(context: TaskContextInfo): string {
     const parts: string[] = ['<task_context>'];
 
@@ -161,25 +209,26 @@ function buildTaskContextPrompt(context: TaskContextInfo): string {
         parts.push('</related_tasks>');
     }
 
-    // Reference documents
+    // Document summaries (consistent with space/area pattern)
     if (context.documents?.length) {
         parts.push('<reference_documents>');
         for (const doc of context.documents) {
-            parts.push(`<document name="${doc.filename}" role="${doc.role}">`);
-            // Truncate if too long
-            const content = doc.content.length > 10000
-                ? doc.content.slice(0, 10000) + '\n[...truncated]'
-                : doc.content;
-            parts.push(content);
-            parts.push('</document>');
+            parts.push(`<document_summary filename="${doc.filename}" role="${doc.role}">`);
+            // Use summary if available, otherwise note that tool should be used
+            const summary = doc.summary || '[Use read_document tool to access content]';
+            parts.push(summary);
+            parts.push('</document_summary>');
         }
         parts.push('</reference_documents>');
+        parts.push('Use **read_document** tool for full content when needed.');
     }
 
     parts.push('</task_context>');
     return parts.join('\n');
 }
 ```
+
+**Key Pattern**: Document summaries throughout all layers.
 
 ## Plan Mode Prompts
 
@@ -271,17 +320,56 @@ function buildSystemPrompt(options: PromptOptions): string {
 }
 ```
 
+## Document Summary Pattern (NEW - 2026)
+
+**Key Architecture Change**: Use document **summaries** in prompts, full content via `read_document` tool.
+
+### Why Summaries?
+
+1. **Token Efficiency**: 100KB doc → 500 char summary = 99% token reduction
+2. **Tool Integration**: AI can request full content only when needed
+3. **Layered Caching**: Summaries cache well, full docs accessed on-demand
+4. **Better UX**: Faster first response (summaries load quickly)
+
+### Implementation Pattern
+
+```typescript
+// In ALL layers (space, area, task context)
+<document_summary filename="${doc.filename}" size="${sizeKb}k chars">
+${doc.summary || '[Summary pending - use read_document tool to access content]'}
+</document_summary>
+
+// Always provide tool guidance
+prompt += '- Use **read_document** tool to access full document content when you need specific details or quotes';
+```
+
+### Plan Mode Exception
+
+In Plan Mode, prompt restructuring prevents "lost in the middle":
+
+```typescript
+// Structure: Platform → Plan Mode Instructions → Minimal Context
+// Plan Mode rules come FIRST, before any context
+return `${platformPrompt}\n${planModePrompt}${minimalContextNote}`;
+```
+
+**Why**: Heavy document context can cause AI to ignore Plan Mode instructions if they come at the end.
+
 ## Best Practices
 
-1. **Behavior rules first**: Place constraints before heavy context to prevent "lost in the middle"
+1. **Document summaries everywhere**: Never embed full document content in prompts (use tool)
 
-2. **XML tags for structure**: Claude responds well to XML-tagged sections
+2. **Behavior rules first**: Place constraints before heavy context to prevent "lost in the middle"
 
-3. **Budget awareness**: Always truncate/summarize large documents
+3. **XML tags for structure**: Claude responds well to XML-tagged sections
 
-4. **Model-specific adaptation**: Reasoning models need minimal guidance; conversational models need more structure
+4. **Budget awareness**: Summaries for prompt, tool for full content
 
-5. **Progressive specificity**: Each layer adds more specific constraints
+5. **Model-specific adaptation**: Reasoning models need minimal guidance; conversational models need more structure
+
+6. **Progressive specificity**: Each layer adds more specific constraints
+
+7. **Tool integration**: Always mention `read_document` tool availability when documents are present
 
 ## File Reference
 

@@ -24,7 +24,9 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 
 **Strategic Documents:**
 - `stratai-main/ENTITY_MODEL.md` - **Authoritative data architecture** (implementation source of truth)
-- `stratai-main/docs/DATABASE_STANDARDIZATION_PROJECT.md` - **🔴 CRITICAL: Database standardization** (snake_case vs camelCase, postgres.js guide, reference for all DB work)
+- `stratai-main/docs/DATABASE_STANDARDIZATION_PROJECT.md` - **Database standardization** (snake_case vs camelCase, postgres.js guide)
+- `stratai-main/docs/database/POSTGRES_JS_GUIDE.md` - **✅ MUST READ for DB work** (postgres.js transformation, patterns, anti-patterns)
+- `stratai-main/docs/database/SCHEMA_REFERENCE.md` - **Auto-generated schema** (32 tables, all columns with camelCase mapping)
 - `stratai-main/docs/DOCUMENT_SYSTEM.md` - **Pages system** (AI-native created content - Area-level, TipTap editor)
 - `stratai-main/docs/DOCUMENT_SHARING.md` - **Document sharing** (uploaded files - Space storage, Area-level sharing)
 - `stratai-main/docs/GUIDED_CREATION.md` - **Guided creation system** (templates as data schemas, Meeting Notes first)
@@ -82,6 +84,156 @@ npm run check            # TypeScript check
 npm run build            # Production build
 docker-compose up -d     # Start LiteLLM
 ```
+
+---
+
+## Agent Skills & Commands
+
+Claude Code has access to specialized skills and commands. **Before working on related tasks, READ the relevant skill file.**
+
+### Available Skills
+
+| Task | Skill Location | Trigger Condition |
+|------|----------------|-------------------|
+| Creating Svelte components | `stratai-main/.claude/skills/creating-components/SKILL.md` | Any new `.svelte` file in `src/lib/components/` |
+| Creating API endpoints | `stratai-main/.claude/skills/creating-endpoints/SKILL.md` | Any new `+server.ts` file in `src/routes/api/` |
+| Working with PostgreSQL | `stratai-main/.claude/skills/working-with-postgres/SKILL.md` | Any `*-postgres.ts` file or SQL query work |
+| Managing Svelte 5 stores | `stratai-main/.claude/skills/managing-state/SKILL.md` | Any `.svelte.ts` file in `src/lib/stores/` |
+| StratAI conventions | `stratai-main/.claude/skills/stratai-conventions/SKILL.md` | General coding, bug fixes, refactoring, architecture |
+
+**Quick references within StratAI conventions skill:**
+- `SVELTE5.md` - Svelte 5 runes patterns (stores, components, reactivity)
+- `POSTGRES.md` - Database patterns (camelCase access, query building)
+- `API-PATTERNS.md` - API endpoint patterns (streaming, error handling)
+- `PROMPTS.md` - Prompt engineering patterns (layered prompts, context)
+
+### Quick Commands
+
+| Command | Purpose | How to Use |
+|---------|---------|------------|
+| `check` | TypeScript type check | See `.claude/commands/check.md` |
+| `dev` | Start dev server | See `.claude/commands/dev.md` |
+| `build` | Production build | See `.claude/commands/build.md` |
+| `db-migrate` | Run database migration | See `.claude/commands/db-migrate.md` |
+| `session-log` | Update session log | See `.claude/commands/session-log.md` |
+
+### Mandatory Skill Usage
+
+**BEFORE creating or modifying:**
+- A Svelte component → **READ** `creating-components/SKILL.md`
+- An API endpoint → **READ** `creating-endpoints/SKILL.md`
+- Database code → **READ** `working-with-postgres/SKILL.md`
+- A Svelte 5 store → **READ** `managing-state/SKILL.md`
+- Any StratAI code → **REFERENCE** `stratai-conventions/SKILL.md`
+
+**ALWAYS check** `stratai-conventions/SKILL.md` for:
+- Svelte 5 runes (NOT Svelte 4 patterns)
+- postgres.js camelCase transformation
+- Store patterns with `SvelteMap`
+- File naming conventions
+- Common gotchas
+
+### Agent Systems
+
+StratAI has two complementary agent systems:
+
+| System | Location | Purpose | When to Use |
+|--------|----------|---------|-------------|
+| **Claude Code Skills** | `stratai-main/.claude/skills/` | Code patterns & conventions | Implementation details, component/endpoint creation |
+| **Ralph Agent Loop** | `stratai-main/agents/ralph/` | Feature development workflow | PRD creation, multi-story features, validation pipeline |
+
+For **feature development**: Use Ralph loop (see `agents/ralph/prompt.md` and `agents/ralph/skills/`)  
+For **implementation details**: Use Claude Code skills (patterns, conventions, templates)
+
+---
+
+## Failure Handling
+
+When encountering ambiguity or missing information, follow these protocols:
+
+### When to Ask for Clarification
+
+1. **Missing requirements**: Ask before implementing rather than assuming
+2. **Ambiguous behavior**: Present options with trade-offs, recommend one
+3. **Conflicting guidance**: Flag the conflict, cite sources, ask for resolution
+4. **Schema uncertainty**: Reference `docs/database/SCHEMA_REFERENCE.md` first, then ask if unclear
+5. **Pattern uncertainty**: Search existing code for similar implementations, follow established patterns
+
+### How to Express Uncertainty
+
+Instead of guessing or hallucinating:
+- Say: "I need clarification on X before proceeding"
+- Say: "I found two approaches in the codebase; which should I follow?"
+- Say: "This conflicts with Y pattern; how should I resolve this?"
+
+### Resolution Hierarchy
+
+When multiple sources conflict, this file takes precedence:
+
+1. **CLAUDE.md** (this file) - highest authority
+2. **Strategic Documents** (ENTITY_MODEL, DATABASE_STANDARDIZATION, etc.)
+3. **Skills** (.claude/skills/* and agents/ralph/skills/*)
+4. **Existing code patterns** (established conventions)
+5. **Comments in code** (implementation notes)
+
+### Error Recovery
+
+If you make a mistake:
+1. Acknowledge it explicitly
+2. Explain what went wrong
+3. Propose the correct solution
+4. Implement the fix immediately
+5. Update relevant documentation if the mistake revealed a gap
+
+Never assume. When uncertain, **ask**.
+
+---
+
+## Quality Gates
+
+Before marking work complete, ensure all applicable gates pass:
+
+### Code Quality
+
+| Gate | Command | Pass Criteria |
+|------|---------|---------------|
+| **TypeScript** | `npm run check` | 0 errors (warnings acceptable if pre-existing) |
+| **Lint** | `npm run lint` | 0 errors (or no worse than before) |
+| **Build** | `npm run build` | Successful production build |
+
+### Pattern Compliance
+
+| Pattern | Check | Pass Criteria |
+|---------|-------|---------------|
+| **Svelte 5 Runes** | Manual review | Uses `$state`, `$derived`, `$effect` (NOT Svelte 4 `writable`, `derived`) |
+| **Database Access** | Manual review | Uses camelCase access (`row.userId` NOT `row.user_id`) |
+| **File Naming** | Manual review | Components: PascalCase, Stores: camelCase + `.svelte.ts`, Routes: lowercase |
+| **Store Patterns** | Manual review | Uses `SvelteMap` for reactive collections, `_version` counter for fine-grained updates |
+
+### Database Work
+
+| Gate | Tool | Pass Criteria |
+|------|------|---------------|
+| **CamelCase Access** | `npm run audit-db-access` | 0 snake_case access violations |
+| **Schema Alignment** | Manual review | Matches `docs/database/SCHEMA_REFERENCE.md` |
+| **Migration Safety** | Manual review | Includes rollback plan, tested locally |
+
+### Documentation
+
+| Gate | Check | Pass Criteria |
+|------|-------|---------------|
+| **Strategic Docs** | Manual review | Updated if architecture/data model changed |
+| **Session Log** | Manual review | Updated if significant work completed |
+| **Decision Log** | Manual review | Updated if architectural decision made |
+
+### Before Committing
+
+✅ All relevant quality gates pass  
+✅ No new linter errors introduced  
+✅ Follows established patterns from skills  
+✅ Documentation updated if needed  
+
+If any gate fails, **fix before proceeding**. Do not commit broken code.
 
 ---
 
@@ -145,7 +297,9 @@ Don't revisit without good reason:
 
 ## Known Issues
 
-- [ ] **🔴 Database snake_case/camelCase confusion** - ACTIVE PROJECT. Multiple repository files use snake_case access (returns undefined). See `DATABASE_STANDARDIZATION_PROJECT.md` for ongoing fix plan.
+- [x] **✅ Database snake_case/camelCase - RESOLVED** - All 22 *-postgres.ts files now use correct camelCase access. Audit script: `npm run audit-db-access`. Docs: `docs/database/`
+- [ ] **Icon inconsistency** - ~124 components use inline SVG, ~46 use `lucide-svelte`. Standard is `lucide-svelte` for new work. Migrate gradually as components are touched. See `.claude/skills/creating-components/SKILL.md`
+- [x] **✅ 🔴 CRITICAL SECURITY FIX (2026-01-16)** - `creating-endpoints` skill taught insecure auth pattern. **FIXED** - Now teaches correct `locals.session` pattern. Audit confirmed 0 production endpoints affected.
 - [ ] **Mobile responsiveness** - App-wide issue; layouts break on small screens (Arena, Spaces, Chat). Needs systematic review.
 - [ ] **localStorage quota exceeded** - Chat store hitting storage limits. **Addressed by CONTEXT_STRATEGY.md Phase 1** (server-side persistence)
 - [ ] localStorage keys use `strathost-` prefix (will lose POC data on rename)
@@ -217,367 +371,6 @@ Don't revisit without good reason:
 - Phase 2: Fix all repositories to use camelCase consistently
 - Phase 3: Generate schema docs, relationships, access patterns
 - See DATABASE_STANDARDIZATION_PROJECT.md for full roadmap
-
-### Previous: 2026-01-14 (Graph-Ready Architecture & AI Retrieval Documentation)
-
-**Completed:**
-
-*Graph-Ready Architecture (ENTITY_MODEL.md - Section 9):*
-- Added new Section 9: Relationship Modeling (Graph-Ready Architecture)
-- Designed `entity_relationships` table for typed relationship capture
-- Defined relationship vocabulary: attended, produced, informed_by, owns, etc.
-- PostgreSQL query patterns: expertise discovery, decision provenance, impact analysis
-- Future graph DB migration path documented (Neo4j/Neptune when CTEs >500ms)
-- Updated Complete Schema (Section 12.7) with full table definition + indexes
-- Added 2 decision log entries for graph-ready approach
-
-*AI Retrieval Architecture (docs/AI_RETRIEVAL_ARCHITECTURE.md):*
-- New comprehensive document explaining how AI accesses organizational knowledge
-- The "Intelligence Triangle": Semantic (pgvector) + Hierarchical (tree) + Relational (graph)
-- Detailed retrieval patterns: AI-initiated tool calling vs System-initiated suggestions
-- Tool definitions for context retrieval (find_experts, get_decision_provenance, etc.)
-- Query composition strategies and optimization patterns
-- Privacy/permission-aware retrieval and audit logging
-- Performance considerations: latency budgets, caching strategy, query limits
-
-*Azure App Registration Instructions:*
-- Created step-by-step DevOps instructions for Microsoft Graph API setup
-- Required permissions: Calendars.ReadWrite, OnlineMeetings.ReadWrite, etc.
-- OAuth redirect URI configuration
-- Security notes for credential handling
-
-**Key Insights:**
-- AI doesn't "know" org data - it retrieves via tools and reasons over results
-- Relationship data must be captured at creation time (irreversible decision)
-- Graph-ready in PostgreSQL now; dedicated graph DB only when patterns justify
-- Three query types (semantic + hierarchical + relational) are complementary, not competing
-
-**Files Created:**
-- `docs/AI_RETRIEVAL_ARCHITECTURE.md` - Complete retrieval mechanics documentation
-
-**Files Modified:**
-- `ENTITY_MODEL.md` - New Section 9 (Relationship Modeling), Section 12.7 (entity_relationships table), updated numbering, 2 decision log entries
-- `CLAUDE.md` - Strategic doc reference, 3 decision log entries, session log
-
-**Next Steps:**
-- Azure App Registration (waiting on DevOps)
-- Phase 1 Foundation: Database migration, OAuth flow implementation
-- Consider adding `entity_relationships` migration alongside meeting lifecycle migration
-
-### Previous: 2026-01-13 (Meeting Lifecycle System - Complete Specification)
-
-**Completed:**
-
-*Strategic Research - Microsoft Outlook Calendar Integration:*
-- Researched MCP ecosystem for Microsoft 365 (found 3+ production-ready servers)
-- Analyzed Microsoft Graph API capabilities (Calendar, Teams, Transcripts)
-- Evaluated integration patterns from leading tools (Slack, Otter.ai, Fireflies, Copilot)
-- Decision: Direct Microsoft Graph API for control; MCP for future multi-integration
-
-*Meeting Lifecycle Specification (docs/MEETING_LIFECYCLE.md):*
-- Complete 2,200+ line specification document
-- End-to-end flow: Create → Schedule → Meet → Capture → Process → Confirm → Context
-- Database schema: 8 tables (meetings, agenda_items, expected_outcomes, attendees, decisions, action_items, key_points, calendar_connections)
-- Microsoft Graph OAuth integration design with token refresh strategy
-- AI-guided creation flow: 4-step wizard (Context, Outcomes, Agenda, Attendees)
-- Intelligent scheduling: Free/busy query for internal, propose times for external
-- Post-meeting capture: Teams transcript API, manual upload, quick notes fallback
-- AI extraction: Decisions, action items, key points with confidence scoring
-- Gap-filling UI: Human confirms ownership before finalization
-- Context integration: Minutes Page + Tasks + Area decisions (flywheel)
-- 7-phase implementation roadmap (15-22 weeks total)
-- Graceful degradation levels (full integration → manual only)
-- ASCII wireframes for all major UI flows
-
-*Key Insights:*
-- Transcript retrieval depends on Teams admin policies (manual upload as fallback)
-- External attendee free/busy not queryable (propose times pattern)
-- AI extraction with human confirmation (never auto-commit)
-- Meetings are context generators, not just calendar events
-
-**Files Created:**
-- `docs/MEETING_LIFECYCLE.md` - Complete specification
-
-**Files Modified:**
-- `CLAUDE.md` - Added strategic doc reference, 5 decision log entries
-
-**Next Steps:**
-- Phase 1 Foundation: Azure App Registration, OAuth flow, database migration
-- Test transcript API with StratGroup tenant to determine auto-pull feasibility
-
-### Previous: 2026-01-13 (Page Sharing Phase 1 - Backend Complete)
-
-**Completed:**
-
-*Page Sharing Phase 1 - Backend Infrastructure (8 Sub-Phases):*
-- Database migration 029: 3 tables (page_user_shares, page_group_shares, audit_events), 10 indexes
-- Complete type system: page-sharing.ts, audit.ts with converters and UI metadata
-- page-sharing-postgres.ts: 4-tier access control algorithm (owner → user_share → group_share → area → space)
-- audit-postgres.ts: Event logging repository with JSONB metadata, filtering, pagination
-- Updated pages-postgres.ts: Permission checks in findById/update, visibility change handling
-- 4 API endpoints: share management + audit log query with admin permission checks
-- All repositories exported (including previously missing postgresPageRepository)
-- 23/23 automated verification checks passed (100%)
-- 0 TypeScript errors, all 54 backend acceptance criteria met
-
-*Key Features:*
-- 3-tier permissions: Viewer (read), Editor (edit), Admin (share)
-- Smart access model: Private pages can invite anyone; area/space pages are member-only
-- Auto-cleanup: Specific shares removed when changing private → area/space visibility
-- Comprehensive audit trail: All sharing operations logged with metadata
-- Area role mapping: owner/admin/member → editor, viewer → viewer
-
-**Files Created (11):**
-- `src/lib/server/persistence/migrations/029-page-sharing-audit.sql`
-- `src/lib/types/page-sharing.ts`
-- `src/lib/types/audit.ts`
-- `src/lib/server/persistence/page-sharing-postgres.ts`
-- `src/lib/server/persistence/audit-postgres.ts`
-- `src/routes/api/pages/[id]/share/+server.ts`
-- `src/routes/api/pages/[id]/share/users/[userId]/+server.ts`
-- `src/routes/api/pages/[id]/share/groups/[groupId]/+server.ts`
-- `src/routes/api/pages/[id]/audit/+server.ts`
-- `verify-migration-029.ts`
-- `verify-phase1-complete.ts`
-
-**Files Modified (6):**
-- `src/lib/server/persistence/pages-postgres.ts`
-- `src/lib/server/persistence/index.ts`
-- `src/lib/types/index.ts`
-- `src/lib/types/page.ts`
-- `src/lib/components/pages/PageHeader.svelte`
-- `src/lib/components/pages/DeletePageModal.svelte`
-
-**Commits Made:**
-- `97aef43` - Page Sharing Phase 1 Backend Infrastructure
-
-**Next Steps:**
-- Phase 2: Frontend (SharePageModal, PagePermissionSelector, PagePermissionBadge)
-- Phase 3: Audit UI (PageAuditLog, read-only editor enforcement)
-
-### Previous: 2026-01-13 (Area Sharing Phase 4 Complete + Page Sharing Architecture)
-
-**Completed:**
-
-*Area Sharing Phase 4 - Visual Integration & Polish:*
-- AreaAvatarStack component: Overlapping member avatars (3 + "+N more") in area headers
-- AreaSharedIndicator component: Compact badges on area cards (blue for open, red for restricted)
-- Context menu integration: "Share" option added to area card three-dot menu
-- Dashboard integration: Member counts, share modal wiring in SpaceDashboard
-- Mobile optimization: Full-screen modal on <768px with fixed header and search
-- Staggered animations: Member list items fade in with 50ms delay
-- Accessibility: prefers-reduced-motion support in app.css
-- Role color system: CSS variables for all permission levels (owner/admin/member/viewer)
-- Avatar stack in area page headers (clickable to open share modal)
-- Shared indicator clickable (opens share modal, stops propagation)
-- Touch target enhancements: 44x44px minimum for mobile
-- Light/dark mode support throughout
-
-*Page Sharing with Permissions & Audit - Complete Architecture:*
-- Comprehensive documentation: `docs/page-sharing-permissions-audit.md` (2,239 lines)
-- 3-tier permission model: Viewer (read), Editor (edit), Admin (share)
-- Smart access model: Private pages can invite anyone; area/space pages are member-only
-- Complete 3-week implementation roadmap (Backend → Frontend → Audit UI)
-- Database schemas: page_user_shares, page_group_shares, audit_events tables
-- Access control algorithm with permission inheritance from area roles
-- Audit logging design: View sampling (first per day), 1-year retention
-- Read-only editor enforcement: Viewer permission grays out editor with indicator
-- 194 acceptance criteria across 3 phases (54 backend, 88 frontend, 52 audit)
-- Strategic context: "Context remains current through collaboration"
-
-**Files Created:**
-- `docs/page-sharing-permissions-audit.md`
-- `src/lib/components/areas/AreaAvatarStack.svelte`
-- `src/lib/components/areas/AreaSharedIndicator.svelte`
-
-**Files Modified:**
-- `src/app.css`
-- `src/lib/components/areas/AreaMemberList.svelte`
-- `src/lib/components/areas/ShareAreaModal.svelte`
-- `src/lib/components/spaces/AreaCard.svelte`
-- `src/lib/components/spaces/SpaceDashboard.svelte`
-- `src/routes/spaces/[space]/[area]/+page.svelte`
-
-**Commits Made:**
-- `1463c86` - feat: Complete Area Sharing UI Phase 4 and document Page Sharing architecture
-
-**Next Steps:**
-- Manual testing of Area Sharing complete flow
-- Implement Page Sharing (3-week roadmap documented)
-
-### Previous: 2026-01-12 (SendGrid Email Integration + Area Sharing + UX Improvements)
-
-**Completed:**
-
-*SendGrid Email Integration (All 10 Phases):*
-- Secure password reset flow with SHA256 token hashing
-- Rate limiting: 5 attempts/email, 10 attempts/IP per 15min
-- Email service with SendGrid API integration
-- Beautiful HTML email templates (password reset, future extensible)
-- Email audit logging with deliverability tracking
-- Timing attack and email enumeration prevention
-- Forgot-password and reset-password UI flows
-- Database migrations: email_logs, password_reset_tokens tables
-- Successfully tested end-to-end (email sent to gabriel@stratech.co.za)
-
-*Area Sharing Implementation (Phases 0-5):*
-- Database schema: area_memberships table, is_restricted flag on focus_areas
-- Repository layer with full access control (CanAccessArea, AddMember, RemoveMember, UpdateRole)
-- Complete component suite: AreaAccessToggle, AreaMemberList, ShareAreaModal
-- Search with debounce for adding members
-- API endpoints with authorization: /api/areas/[id]/members (GET/POST/PATCH/DELETE)
-- UX integration: Area header toggle, sliding member panel
-- Rate limiting and error handling
-
-*UX Improvements:*
-- Main chat navigation button in header (desktop + mobile) with active state
-- Login redirects to user's preferred home URL (main-chat, space, area, task-dashboard)
-
-*Bug Fixes:*
-- Fixed groups-postgres.ts column name mismatch (u.name → u.display_name)
-
-**Files Created (29 new files):**
-- Database: migrations/027-area-sharing.sql, 028-email-system.sql
-- Types: area-memberships.ts, email.ts
-- Repositories: area-memberships-postgres.ts, email-logs-postgres.ts, password-reset-tokens-postgres.ts
-- Email Service: src/lib/server/email/ (sendgrid.ts, templates.ts, index.ts)
-- Components: src/lib/components/areas/ (9 components)
-- API Endpoints: api/auth/forgot-password, api/auth/reset-password, api/areas/[id]/members
-- UI Pages: forgot-password/+page.svelte, reset-password/+page.svelte
-- Utils: debounce.ts
-- Documentation: area-sharing-ux.md, run-migration.ts
-
-**Files Modified (19 files):**
-- users-postgres.ts - Added findByEmailGlobal(), updatePassword()
-- areas-postgres.ts - Added findByIdWithMemberships(), updateIsRestricted()
-- persistence/types.ts - Updated UserRepository interface
-- persistence/index.ts - Exported new repositories
-- hooks.server.ts - Added password reset routes to PUBLIC_ROUTES
-- Header.svelte - Added main chat navigation button
-- login/+page.server.ts - Respects home URL preference
-- login/+page.svelte - Added "Forgot password?" link
-- areas.svelte.ts - Added member management state
-- user.svelte.ts - Updated homeUrl handling
-- .env.example - Added SendGrid configuration section
-- docs/SENDGRID_EMAIL_INTEGRATION.md - Complete roadmap with 17 email types prioritized
-
-**Key Decisions:**
-- Area-level sharing (not Space-level) for collaboration precision
-- Email templates built extensible for 17 future notification types
-- Rate limiting at both email and IP level for abuse prevention
-- Member search debounce (300ms) for UX performance
-
-**Next Steps:**
-- Document sharing implementation (upload, activate, share flows)
-- Admin portal enhancements (group management, usage analytics)
-- Email notification system expansion (invites, activity digests)
-
-### Previous: 2026-01-12 (Document Sharing Architecture & ENTITY_MODEL Reconciliation)
-
-**Completed:**
-
-*Documents vs Pages Clarification:*
-- Identified naming confusion between uploaded Documents and created Pages
-- Documents = uploaded files (PDFs, specs) at Space-level for deduplication
-- Pages = created content (meeting notes, proposals) at Area-level
-- Updated ENTITY_MODEL.md Section 7.5 with complete distinction
-- Added new Section 7.6 for Pages schema
-- Updated DOCUMENT_SYSTEM.md → renamed to Pages System with terminology note
-
-*Document Sharing Architecture - Deep Design:*
-- Collaborative ultrathink sessions defining the mental model
-- Key insight: **Stored at Space-level (dedup), shared at Area-level (precision)**
-- Prevents Slack/Teams anti-pattern where same doc gets uploaded multiple times
-- Visibility levels: private → areas (granular) → space (rare)
-- Upload context matters: Area upload prompts "Share with Area?"
-- Unshare auto-deactivates document from Area's contextDocumentIds
-
-*DOCUMENT_SHARING.md Implementation Specification (~900 lines):*
-- Complete mental model documentation
-- Database schema: documents (with visibility), document_area_shares, document_references (V2)
-- Access control algorithms: CanSeeDocument, CanShareDocument, CanActivateDocumentForArea
-- Detailed UX flows with ASCII wireframes: upload, share modal, document views, unshare
-- 8 implementation phases with acceptance tests per phase
-- Edge cases: unshare handling, ownership transfer, duplicate detection
-- V2 cross-Space references design (for future)
-
-**Key Decisions:**
-- Documents stored at Space, shared at Area (no noise for irrelevant Areas)
-- Area-level sharing instead of Space-level (precision)
-- Unshare auto-deactivates from contextDocumentIds (clean break)
-- V1: "Copy to My Space" creates duplicate; V2: References with sync
-
-**Files Created:**
-- `stratai-main/docs/DOCUMENT_SHARING.md` - Complete implementation specification
-
-**Files Modified:**
-- `stratai-main/ENTITY_MODEL.md` - Section 7.5 updated, Section 7.6 added, Complete Schema updated, Decision Log
-- `stratai-main/docs/DOCUMENT_SYSTEM.md` - Renamed to Pages System, added terminology note
-- `stratai-main/docs/CONTEXT_STRATEGY.md` - Added Related Documents references
-- `CLAUDE.md` - Strategic doc reference, Decision Log entries
-
-**Next Steps:**
-- Area sharing implementation (separate track)
-- Document sharing Phase 1: Migration (024-document-sharing.sql)
-- Document sharing Phase 2: Repository layer
-
-### Previous: 2026-01-12 (Guided Creation System Design)
-
-**Completed:**
-
-*Environment Setup (fresh pull):*
-- Ran database migrations 018-023 (groups, pages, routing_decisions, user_preferences)
-- Database now has 21 tables (up from 15)
-- Installed TipTap dependencies, TypeScript compiles cleanly
-
-*Guided Creation System - Comprehensive Design:*
-- Deep UX analysis of template-based document creation
-- Key insight: **Templates as data schemas**, not just layouts
-- Guided interview collects structured JSON → renders to TipTap + creates entities
-- Progressive disclosure: Card-based steps, skip always available, context does heavy lifting
-
-*Meeting Notes as First Implementation:*
-- 5-step flow: Basics → Attendees → Context → Outcomes → Actions
-- Attendees: Internal (from Space/Area members) + External (freeform)
-- Decisions with owner + rationale (feeds context hierarchy)
-- Action items with "Create as Task" toggle → automatic Task creation
-- Area context can be included in document
-
-*GUIDED_CREATION.md Specification (~1600 lines):*
-- Complete architecture with component structure
-- Core type definitions (TemplateSchema, StepDefinition, FieldDefinition)
-- Meeting Notes data schema with full field definitions
-- 6 implementation phases with clear acceptance tests
-- Template renderer design (JSON → TipTap)
-- Entity creation service design (action items → Tasks)
-- Context Strategy integration (decisions → Area memory)
-- Future templates outlined (Decision Record, Proposal, Project Brief, Weekly Update)
-- Admin Template Editor vision (future)
-
-**Files Created:**
-- `stratai-main/docs/GUIDED_CREATION.md` - Complete specification
-
-### Previous: 2026-01-11 (Phase 5 Research & Area Sharing Analysis)
-
-**Completed:**
-- AUTO Model Routing Phase 5: DEFERRED with metrics gate (override rate >10% or low confidence >30%)
-- Area Sharing gap analysis vs ENTITY_MODEL.md
-
-**Gaps Identified:**
-- `area_memberships` table not implemented
-- `is_restricted` flag on focus_areas missing
-- CanAccessArea algorithm not built
-
-### Previous: 2026-01-11 (Document System & AUTO Routing)
-
-**Completed:**
-- AI-Native Document System: TipTap editor, document types, discussion panel, export
-- Apply Button fix for cross-formatting text
-- AUTO Model Routing: complexity analysis, context-aware, tier-based selection
-- Layered System Prompt Caching
-- Settings pages infrastructure
-
-**Key Files:** `src/lib/components/pages/`, `src/lib/services/model-router/`, `src/routes/admin/routing/`
 
 ---
 

@@ -11,7 +11,7 @@ Run the TypeScript type checker to verify the codebase has no type errors.
 ## Command
 
 ```bash
-cd /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main && npm run check
+cd /Users/ghuroux/Documents/Coding/strat-ai/stratai-main && npm run check
 ```
 
 ## Expected Output

@@ -1,6 +1,13 @@
 ---
 name: working-with-postgres
-description: PostgreSQL database patterns and postgres.js gotchas for StratAI. Use when writing database queries, creating schemas, or debugging database issues.
+description: |
+  Use when working with ANY database code: repositories (*-postgres.ts), queries, or migrations.
+  MANDATORY for: Writing SQL queries, creating/modifying repositories, database schema work.
+  READ THIS SKILL before database work - covers critical camelCase transformation pattern.
+  Covers: postgres.js patterns, camelCase access, query building, transactions, migrations.
+globs:
+  - "src/lib/server/persistence/**/*-postgres.ts"
+  - "src/lib/server/persistence/migrations/**/*.sql"
 ---
 
 # Working with PostgreSQL
@@ -73,6 +80,55 @@ export const postgresItemRepository: ItemRepository = {
 };
 ```
 
+## Transactions
+
+Use transactions when multiple operations must succeed or fail together (data integrity).
+
+```typescript
+// Pattern: sql.begin(async (tx) => { ... })
+await sql.begin(async (tx) => {
+    // Use tx instead of sql for all operations
+    
+    // Insert main record
+    const [battle] = await tx<BattleRow[]>`
+        INSERT INTO battles (id, prompt, user_id)
+        VALUES (${id}, ${prompt}, ${userId})
+        RETURNING *
+    `;
+    
+    // Insert related records
+    for (const model of models) {
+        await tx`
+            INSERT INTO battle_models (battle_id, model_id)
+            VALUES (${battle.id}, ${model.id})
+        `;
+    }
+    
+    // If any operation fails, entire transaction rolls back automatically
+});
+```
+
+**When to use transactions:**
+- Creating parent + child records (battle + models, space + general area)
+- Updating multiple related tables
+- Operations that must maintain referential integrity
+- Complex business logic that spans multiple tables
+
+**Error handling:**
+```typescript
+try {
+    await sql.begin(async (tx) => {
+        // Operations here
+    });
+} catch (error) {
+    // Transaction rolled back automatically
+    console.error('Transaction failed:', error);
+    throw error; // Re-throw for API to return 500
+}
+```
+
+**See**: `arena-postgres.ts` → `create()`, `recordBattleResult()`
+
 ## Query Patterns
 
 ### Basic SELECT
@@ -112,6 +168,105 @@ const items = await sql<ItemRow[]>`
 `;
 ```
 
+### JOINs and Related Data
+
+Fetch related data in a single query instead of N+1 queries.
+
+```typescript
+// LEFT JOIN with conditional column selection
+const spaces = await sql<SpaceRow[]>`
+    SELECT
+        s.*,
+        -- Only fetch owner info for spaces user doesn't own
+        CASE WHEN s.user_id != ${userId}::uuid
+             THEN owner_user.first_name
+        END as owner_first_name,
+        CASE WHEN s.user_id != ${userId}::uuid
+             THEN owner_user.display_name
+        END as owner_display_name
+    FROM spaces s
+    LEFT JOIN users owner_user ON s.user_id = owner_user.id
+    WHERE s.deleted_at IS NULL
+`;
+```
+
+**INNER JOIN** - Only rows with matching records:
+```typescript
+// Get areas with their space names
+const areas = await sql<AreaWithSpaceRow[]>`
+    SELECT a.*, s.name as space_name
+    FROM areas a
+    INNER JOIN spaces s ON a.space_id = s.id
+    WHERE a.user_id = ${userId}
+`;
+```
+
+**Multiple JOINs**:
+```typescript
+// Get tasks with area and space info
+const tasks = await sql<TaskDetailRow[]>`
+    SELECT
+        t.*,
+        a.name as area_name,
+        s.name as space_name
+    FROM tasks t
+    LEFT JOIN areas a ON t.area_id = a.id
+    LEFT JOIN spaces s ON t.space_id = s.id
+    WHERE t.user_id = ${userId}
+`;
+```
+
+**See**: `spaces-postgres.ts` → `findAllAccessible()`, `usage-postgres.ts`
+
+### CTEs (WITH clauses)
+
+Use CTEs for complex access control queries or reusable subqueries.
+
+```typescript
+// Pattern: CTE with UNIONs for multiple access paths
+const areas = await sql<AreaRow[]>`
+    WITH accessible_ids AS (
+        -- Path 1: User owns the space
+        SELECT a.id
+        FROM areas a
+        JOIN spaces s ON a.space_id = s.id
+        WHERE s.user_id = ${userId}
+        
+        UNION
+        
+        -- Path 2: User has explicit area membership
+        SELECT am.area_id as id
+        FROM area_memberships am
+        WHERE am.user_id = ${userId}
+        
+        UNION
+        
+        -- Path 3: General areas in member spaces
+        SELECT a.id
+        FROM areas a
+        JOIN spaces s ON a.space_id = s.id
+        JOIN space_memberships sm ON s.id = sm.space_id
+        WHERE a.is_general = true
+          AND sm.user_id = ${userId}
+    )
+    SELECT a.*
+    FROM areas a
+    WHERE a.id IN (SELECT id FROM accessible_ids)
+      AND a.deleted_at IS NULL
+    ORDER BY a.created_at DESC
+`;
+```
+
+**When to use CTEs:**
+- Complex access control (multiple permission paths)
+- Reusable subqueries referenced multiple times
+- Improving query readability for complex logic
+- Avoiding N+1 queries for hierarchical data
+
+**Performance note:** CTEs are materialized once, then reused. More efficient than subqueries when result is used multiple times.
+
+**See**: `areas-postgres.ts` → `findAllAccessible()`, `space-memberships-postgres.ts`, `AGENTS.md`
+
 ### INSERT with RETURNING
 
 ```typescript
@@ -146,6 +301,55 @@ if (!item) {
     return null; // Not found
 }
 ```
+
+### UPSERT (ON CONFLICT)
+
+Insert or update if record already exists (idempotent operations).
+
+```typescript
+// Insert new record or update if exists
+await sql`
+    INSERT INTO conversations (
+        id, title, messages, user_id, created_at, updated_at
+    ) VALUES (
+        ${id}, ${title}, ${sql.json(messages)}, ${userId}, NOW(), NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+        title = EXCLUDED.title,
+        messages = EXCLUDED.messages,
+        updated_at = EXCLUDED.updated_at,
+        deleted_at = NULL  -- Restore if soft-deleted
+`;
+```
+
+**ON CONFLICT DO NOTHING** - Ignore duplicates:
+```typescript
+// Ensure model ranking exists (don't fail if already there)
+await sql`
+    INSERT INTO model_rankings (user_id, model_id, elo_rating)
+    VALUES (${userId}, ${modelId}, 1500)
+    ON CONFLICT (user_id, model_id) DO NOTHING
+`;
+```
+
+**Conditional UPDATE** - Only update certain fields:
+```typescript
+await sql`
+    INSERT INTO settings (user_id, key, value)
+    VALUES (${userId}, ${key}, ${value})
+    ON CONFLICT (user_id, key) DO UPDATE SET
+        value = EXCLUDED.value
+    WHERE settings.value != EXCLUDED.value  -- Only if changed
+`;
+```
+
+**When to use UPSERT:**
+- Idempotent API endpoints (safe to retry)
+- Sync operations (restore soft-deleted records)
+- Ensuring records exist before operations
+- Upserting cached/derived data
+
+**See**: `postgres.ts` → `create()` (conversations), `arena-postgres.ts` → `recordBattleResult()`
 
 ### Soft DELETE
 
@@ -288,10 +492,26 @@ export interface ItemRow {
 
 ## Debugging Tips
 
-1. **Column not found?** Check camelCase transformation
-2. **JSONB undefined?** Check if it's returned as string
+1. **Column not found?** Check camelCase transformation (most common issue)
+2. **JSONB undefined?** Check if it's returned as string, use parseJsonb helper
 3. **Insert fails silently?** Add RETURNING * to see result
 4. **Query returns empty?** Check deleted_at IS NULL filter
+5. **Transaction fails mysteriously?** Check all operations use `tx` not `sql`
+6. **CTE returns wrong rows?** Verify UNION includes all access paths
+7. **JOIN missing rows?** Use LEFT JOIN instead of INNER JOIN
+8. **UPSERT not updating?** Check ON CONFLICT constraint name matches unique constraint
+
+## Common Patterns Reference
+
+| Pattern | When to Use | Example File |
+|---------|-------------|--------------|
+| Basic CRUD | Simple operations | `tasks-postgres.ts` |
+| Transactions | Multi-step integrity | `arena-postgres.ts` |
+| CTEs | Complex access control | `areas-postgres.ts` |
+| JOINs | Related data fetching | `spaces-postgres.ts` |
+| UPSERT | Idempotent operations | `postgres.ts` (conversations) |
+| JSONB operations | Flexible schema | `postgres.ts` (messages) |
+| Soft deletes | Recoverable deletion | All repositories |
 
 ## File Reference
 

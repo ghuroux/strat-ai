@@ -1,6 +1,13 @@
 ---
 name: creating-endpoints
-description: Creates SvelteKit API endpoints following StratAI patterns. Use when creating new API routes, backend endpoints, or modifying existing API handlers.
+description: |
+  Use when creating or modifying ANY API endpoint (+server.ts files) in src/routes/api/.
+  MANDATORY for: REST endpoints, streaming (SSE) endpoints, WebSocket handlers.
+  READ THIS SKILL before writing API code.
+  Covers: Request handling, authentication, error responses, streaming patterns, database transactions.
+globs:
+  - "src/routes/api/**/*+server.ts"
+  - "src/routes/**/+server.ts"
 ---
 
 # Creating API Endpoints
@@ -27,28 +34,150 @@ src/routes/api/
 └── spaces/         # Space CRUD
 ```
 
+## Authentication Pattern
+
+⚠️ **SECURITY: ALL endpoints MUST authenticate using this exact pattern**
+
+```typescript
+// ✅ CORRECT - Fail-fast authentication check
+if (!locals.session) {
+    return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+}
+
+const userId = locals.session.userId;
+```
+
+**Why this pattern?**
+- `locals.session` is set by `hooks.server.ts` after validating the session token
+- `locals.userId` does NOT exist - it's nested in `locals.session.userId`
+- Always fail fast - check auth before any processing
+- Return 401 with structured error for consistent client handling
+
+**For admin endpoints, also extract organizationId:**
+```typescript
+if (!locals.session) {
+    return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+}
+
+const { userId, organizationId } = locals.session;
+```
+
+❌ **NEVER use these insecure patterns:**
+```typescript
+// WRONG: locals.userId doesn't exist
+const userId = locals.userId;
+
+// WRONG: Fallback bypasses authentication entirely
+const userId = locals.userId ?? 'admin';
+
+// WRONG: No early return allows processing to continue
+const userId = locals.session?.userId || 'anonymous';
+```
+
+## JSDoc Documentation Pattern
+
+**ALWAYS document endpoints with JSDoc.** This helps with code navigation, maintenance, and AI-assisted development.
+
+```typescript
+/**
+ * API Endpoint Name
+ *
+ * GET /api/resource - Brief description of what this endpoint does
+ * POST /api/resource - Brief description
+ *
+ * Constraints:
+ * - List any business rules or limitations
+ * - Maximum values, required roles, etc.
+ */
+```
+
+**For methods with parameters:**
+```typescript
+/**
+ * GET /api/items/:id
+ * Returns a single item with its related data
+ * 
+ * Path params:
+ * - id: Item UUID
+ * 
+ * Requires: Item owner or space member access
+ */
+export const GET: RequestHandler = async ({ params, locals }) => {
+    // ...
+};
+
+/**
+ * PATCH /api/items/:id
+ * Update an item
+ * 
+ * Path params:
+ * - id: Item UUID
+ * 
+ * Body: { title?, status?, priority? }
+ * 
+ * Requires: Item owner or space admin access
+ */
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+    // ...
+};
+```
+
+**For endpoints with query parameters:**
+```typescript
+/**
+ * GET /api/items
+ * List items with optional filtering
+ * 
+ * Query params:
+ * - spaceId: Filter by space ID or slug (optional)
+ * - status: Filter by status (active, completed) - comma-separated (optional)
+ * - includeDeleted: Include soft-deleted items (default: false)
+ */
+export const GET: RequestHandler = async ({ url, locals }) => {
+    // ...
+};
+```
+
 ## CRUD Endpoint Template
 
 ### Collection Endpoint (`+server.ts`)
 
 ```typescript
-// src/routes/api/items/+server.ts
+/**
+ * Items API - Collection Operations
+ *
+ * GET /api/items - List all items for the current user
+ * POST /api/items - Create a new item
+ *
+ * Constraints:
+ * - Users can only access their own items or items in spaces they belong to
+ */
+
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresItemRepository } from '$lib/server/persistence/items-postgres';
 
 /**
  * GET /api/items
- * List all items for the current user
+ * List all items with optional filtering
+ * 
+ * Query params:
+ * - spaceId: Filter by space (optional)
+ * - status: Filter by status (optional)
  */
 export const GET: RequestHandler = async ({ locals, url }) => {
-    const userId = locals.userId ?? 'admin';
+    // ⚠️ SECURITY: Always check authentication first
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
 
-    // Optional query params
-    const spaceId = url.searchParams.get('spaceId');
-    const status = url.searchParams.get('status');
+    const userId = locals.session.userId;
 
     try {
+        // Parse query parameters
+        const spaceId = url.searchParams.get('spaceId');
+        const status = url.searchParams.get('status');
+
         const filter = {
             ...(spaceId && { spaceId }),
             ...(status && { status })
@@ -57,17 +186,27 @@ export const GET: RequestHandler = async ({ locals, url }) => {
         const items = await postgresItemRepository.findAll(userId, filter);
         return json({ items });
     } catch (error) {
-        console.error('[GET /api/items] Error:', error);
-        return json({ error: 'Failed to fetch items' }, { status: 500 });
+        console.error('Failed to fetch items:', error);
+        return json(
+            { error: 'Failed to fetch items', details: error instanceof Error ? error.message : 'Unknown error' },
+            { status: 500 }
+        );
     }
 };
 
 /**
  * POST /api/items
  * Create a new item
+ * 
+ * Body: { title: string, spaceId: string, priority?: string, metadata?: object }
  */
 export const POST: RequestHandler = async ({ request, locals }) => {
-    const userId = locals.userId ?? 'admin';
+    // ⚠️ SECURITY: Always check authentication first
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
+
+    const userId = locals.session.userId;
 
     try {
         const body = await request.json();
@@ -89,8 +228,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
         return json({ item }, { status: 201 });
     } catch (error) {
-        console.error('[POST /api/items] Error:', error);
-        return json({ error: 'Failed to create item' }, { status: 500 });
+        console.error('Failed to create item:', error);
+        return json(
+            { error: 'Failed to create item', details: error instanceof Error ? error.message : 'Unknown error' },
+            { status: 500 }
+        );
     }
 };
 ```
@@ -98,20 +240,38 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 ### Individual Resource Endpoint (`[id]/+server.ts`)
 
 ```typescript
-// src/routes/api/items/[id]/+server.ts
+/**
+ * Items API - Individual Operations
+ *
+ * GET /api/items/[id] - Get a specific item
+ * PATCH /api/items/[id] - Update an item
+ * DELETE /api/items/[id] - Delete an item
+ *
+ * Constraints:
+ * - User must have access to the item's space
+ */
+
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresItemRepository } from '$lib/server/persistence/items-postgres';
 
 /**
  * GET /api/items/:id
+ * Returns a single item with its metadata
+ * 
+ * Path params:
+ * - id: Item UUID
  */
 export const GET: RequestHandler = async ({ params, locals }) => {
-    const userId = locals.userId ?? 'admin';
-    const { id } = params;
+    // ⚠️ SECURITY: Always check authentication first
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
+
+    const userId = locals.session.userId;
 
     try {
-        const item = await postgresItemRepository.findById(id, userId);
+        const item = await postgresItemRepository.findById(params.id, userId);
 
         if (!item) {
             return json({ error: 'Item not found' }, { status: 404 });
@@ -119,22 +279,35 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 
         return json({ item });
     } catch (error) {
-        console.error(`[GET /api/items/${id}] Error:`, error);
-        return json({ error: 'Failed to fetch item' }, { status: 500 });
+        console.error('Failed to fetch item:', error);
+        return json(
+            { error: 'Failed to fetch item', details: error instanceof Error ? error.message : 'Unknown error' },
+            { status: 500 }
+        );
     }
 };
 
 /**
  * PATCH /api/items/:id
+ * Update an item's properties
+ * 
+ * Path params:
+ * - id: Item UUID
+ * 
+ * Body: { title?, status?, priority? }
  */
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
-    const userId = locals.userId ?? 'admin';
-    const { id } = params;
+    // ⚠️ SECURITY: Always check authentication first
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
+
+    const userId = locals.session.userId;
 
     try {
         const body = await request.json();
 
-        // Only include fields that were provided
+        // Build updates object from provided fields only
         const updates: Record<string, unknown> = {};
         if (body.title !== undefined) updates.title = body.title.trim();
         if (body.status !== undefined) updates.status = body.status;
@@ -144,7 +317,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
             return json({ error: 'No valid fields to update' }, { status: 400 });
         }
 
-        const item = await postgresItemRepository.update(id, updates, userId);
+        const item = await postgresItemRepository.update(params.id, updates, userId);
 
         if (!item) {
             return json({ error: 'Item not found' }, { status: 404 });
@@ -152,28 +325,40 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
         return json({ item });
     } catch (error) {
-        console.error(`[PATCH /api/items/${id}] Error:`, error);
-        return json({ error: 'Failed to update item' }, { status: 500 });
+        console.error('Failed to update item:', error);
+        return json(
+            { error: 'Failed to update item', details: error instanceof Error ? error.message : 'Unknown error' },
+            { status: 500 }
+        );
     }
 };
 
 /**
  * DELETE /api/items/:id
+ * Soft delete an item
+ * 
+ * Path params:
+ * - id: Item UUID
+ * 
+ * Query params:
+ * - cascade: If true, also delete related entities (default: false)
  */
 export const DELETE: RequestHandler = async ({ params, locals, url }) => {
-    const userId = locals.userId ?? 'admin';
-    const { id } = params;
+    // ⚠️ SECURITY: Always check authentication first
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
 
-    // Optional cascade options via query params
+    const userId = locals.session.userId;
     const cascade = url.searchParams.get('cascade') === 'true';
 
     try {
         if (cascade) {
             // Delete related entities first
-            await postgresItemRepository.deleteRelated(id, userId);
+            await postgresItemRepository.deleteRelated(params.id, userId);
         }
 
-        const deleted = await postgresItemRepository.delete(id, userId);
+        const deleted = await postgresItemRepository.delete(params.id, userId);
 
         if (!deleted) {
             return json({ error: 'Item not found' }, { status: 404 });
@@ -181,8 +366,11 @@ export const DELETE: RequestHandler = async ({ params, locals, url }) => {
 
         return json({ success: true });
     } catch (error) {
-        console.error(`[DELETE /api/items/${id}] Error:`, error);
-        return json({ error: 'Failed to delete item' }, { status: 500 });
+        console.error('Failed to delete item:', error);
+        return json(
+            { error: 'Failed to delete item', details: error instanceof Error ? error.message : 'Unknown error' },
+            { status: 500 }
+        );
     }
 };
 ```
@@ -248,6 +436,98 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 ```
 
+## Access Control (Authorization)
+
+**Authentication vs Authorization:**
+- **Authentication** (401): Is the user logged in? → Check `locals.session`
+- **Authorization** (403): Is the user allowed to do this? → Check roles and permissions
+
+### Role-Based Access Control
+
+```typescript
+/**
+ * PATCH /api/areas/:id
+ * Requires owner or admin role
+ */
+export const PATCH: RequestHandler = async ({ params, request, locals }) => {
+    // Step 1: Authentication
+    if (!locals.session) {
+        return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
+    }
+
+    const userId = locals.session.userId;
+
+    // Step 2: Check if user has access
+    const access = await postgresAreaMembershipsRepository.canAccessArea(userId, params.id);
+    if (!access.hasAccess) {
+        return json({ error: 'Access denied' }, { status: 403 });
+    }
+
+    // Step 3: Check if user has required role
+    if (!['owner', 'admin'].includes(access.role)) {
+        return json({ error: 'Insufficient permissions. Owner or admin access required.' }, { status: 403 });
+    }
+
+    // Proceed with update...
+};
+```
+
+### Admin-Only Endpoints
+
+For organization admin endpoints:
+
+```typescript
+/**
+ * Admin Groups API
+ * Requires organization owner or admin role
+ */
+export const GET: RequestHandler = async ({ locals }) => {
+    // Step 1: Authentication
+    if (!locals.session) {
+        return json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { userId, organizationId } = locals.session;
+
+    // Step 2: Check organization role
+    const memberships = await postgresOrgMembershipRepository.findByUserId(userId);
+    const membership = memberships.find(m => m.organizationId === organizationId);
+
+    if (!membership || membership.role === 'member') {
+        return json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Proceed with admin operation...
+};
+```
+
+### Common Authorization Patterns
+
+```typescript
+// Space owner check
+const space = await postgresSpaceRepository.findById(spaceId, userId);
+if (space.userId !== userId) {
+    return json({ error: 'Only space owner can perform this action' }, { status: 403 });
+}
+
+// Area access check (returns role and access source)
+const access = await postgresAreaMembershipsRepository.canAccessArea(userId, areaId);
+if (!access.hasAccess) {
+    return json({ error: 'Access denied' }, { status: 403 });
+}
+
+// Document activation check (can user activate doc in this area?)
+const canActivate = await postgresDocumentSharingRepository.canActivateDocument(
+    userId,
+    documentId,
+    areaId,
+    spaceId
+);
+if (!canActivate) {
+    return json({ error: 'Cannot activate document not visible to this area' }, { status: 400 });
+}
+```
+
 ## Request Validation
 
 ```typescript
@@ -287,28 +567,37 @@ if (!isValidCreateItem(body)) {
 
 ## Error Response Patterns
 
+**Use appropriate status codes and structured error messages:**
+
 ```typescript
-// 400 Bad Request - Client error
+// 400 Bad Request - Client error (validation, missing required fields)
 return json({ error: 'title is required' }, { status: 400 });
 
-// 401 Unauthorized - Not logged in
-return json({ error: 'Authentication required' }, { status: 401 });
+// 401 Unauthorized - Not authenticated (no session)
+return json({ error: { message: 'Unauthorized', type: 'auth_error' } }, { status: 401 });
 
-// 403 Forbidden - Logged in but not allowed
-return json({ error: 'Permission denied' }, { status: 403 });
+// 403 Forbidden - Authenticated but not authorized (insufficient permissions)
+return json({ error: 'Insufficient permissions. Owner access required.' }, { status: 403 });
+return json({ error: 'Access denied' }, { status: 403 });
 
-// 404 Not Found - Resource doesn't exist
+// 404 Not Found - Resource doesn't exist or user can't access it
 return json({ error: 'Item not found' }, { status: 404 });
 
-// 500 Internal Server Error - Server error
-return json({ error: 'Failed to process request' }, { status: 500 });
+// 409 Conflict - Resource already exists or state conflict
+return json({ error: 'An item with this name already exists in this space' }, { status: 409 });
 
-// With details for debugging
-return json({
-    error: 'Validation failed',
-    details: { field: 'priority', message: 'Must be "normal" or "high"' }
-}, { status: 400 });
+// 500 Internal Server Error - Server error (catch block)
+return json(
+    { error: 'Failed to process request', details: error instanceof Error ? error.message : 'Unknown error' },
+    { status: 500 }
+);
 ```
+
+**Security considerations:**
+- Don't leak sensitive information in error messages
+- For 404, don't reveal if resource exists but user lacks access
+- Keep 500 error details minimal in production
+- Use structured errors for client parsing (especially 401)
 
 ## Repository Integration
 
@@ -326,19 +615,205 @@ const deleted = await repo.delete(id, userId);
 
 ## Checklist for New Endpoints
 
-1. [ ] Create file at correct path (`src/routes/api/...`)
-2. [ ] Import types from `./$types`
-3. [ ] Import repository from persistence layer
-4. [ ] Get userId from `locals.userId ?? 'admin'`
-5. [ ] Validate request body for POST/PATCH
-6. [ ] Handle 404 for non-existent resources
-7. [ ] Wrap in try/catch with console.error logging
-8. [ ] Return proper status codes (201 for create, 200 for others)
-9. [ ] Test with curl or API client
+### Security (MANDATORY)
+- [ ] ⚠️ Authentication check first: `if (!locals.session) return 401`
+- [ ] Extract userId: `const userId = locals.session.userId`
+- [ ] Authorization check if needed (roles, ownership, access)
+- [ ] Return 403 for insufficient permissions
+
+### Documentation
+- [ ] Add JSDoc comment at top of file describing the endpoint
+- [ ] Document each handler method (GET, POST, PATCH, DELETE)
+- [ ] Document path params, query params, and request body
+- [ ] Document any constraints or business rules
+
+### Implementation
+- [ ] Create file at correct path (`src/routes/api/...`)
+- [ ] Import types from `./$types`
+- [ ] Import repository from persistence layer
+- [ ] Validate request body for POST/PATCH
+- [ ] Handle 404 for non-existent resources
+- [ ] Wrap in try/catch with console.error logging
+- [ ] Return proper status codes:
+  - 200 for successful GET/PATCH/DELETE
+  - 201 for successful POST (create)
+  - 400 for validation errors
+  - 401 for authentication failures
+  - 403 for authorization failures
+  - 404 for not found
+  - 500 for server errors
+
+### Testing
+- [ ] Test unauthenticated access (should return 401)
+- [ ] Test unauthorized access (should return 403)
+- [ ] Test with valid credentials
+- [ ] Test error cases (missing fields, invalid IDs)
+
+## Debugging Endpoints
+
+### Common Issues & Quick Fixes
+
+**🔴 Getting 401 when you expect 200**
+```typescript
+// Check: Is locals.session being set?
+console.log('Session:', locals.session);  // Should not be null
+
+// Check: Are you in the right context?
+// → If testing in browser, ensure you're logged in
+// → If testing with curl, include session cookie
+```
+
+**🔴 Getting 403 when you have access**
+```typescript
+// Check: Access control logic
+const access = await postgresAreaMembershipsRepository.canAccessArea(userId, areaId);
+console.log('Access result:', access);  // { hasAccess: true/false, role: '...', source: '...' }
+
+// Check: Role requirements
+console.log('User role:', access.role);  // Should be 'owner', 'admin', or 'member'
+console.log('Required roles:', ['owner', 'admin']);  // Does user role match?
+```
+
+**🔴 Getting 404 when resource exists**
+```typescript
+// Check 1: Is resource soft-deleted?
+const item = await sql`SELECT * FROM items WHERE id = ${id}`;  // Remove deleted_at filter temporarily
+console.log('Found (including deleted):', item);
+
+// Check 2: Access control preventing visibility?
+console.log('User ID:', userId);
+console.log('Resource user_id:', item.userId);
+// If they don't match, check if user should have access via other means (space membership, etc.)
+
+// Check 3: Is userId being extracted correctly?
+console.log('locals.session:', locals.session);
+console.log('userId:', userId);  // Should be a valid UUID
+```
+
+**🔴 Repository method returns null unexpectedly**
+```typescript
+// Debug: Check the SQL query result
+const rows = await sql`SELECT * FROM items WHERE id = ${id} AND user_id = ${userId}`;
+console.log('Raw query result:', rows);  // Empty array? Check user_id match
+console.log('Row count:', rows.length);
+
+// Common issue: camelCase mismatch
+console.log('Row userId:', rows[0]?.userId);  // Should use camelCase, not snake_case
+```
+
+**🔴 TypeScript error: Property doesn't exist on locals**
+```typescript
+// Fix: Check type definition in src/app.d.ts
+// Should have:
+declare namespace App {
+  interface Locals {
+    session: {
+      userId: string;
+      organizationId: string;
+      // ... other fields
+    } | null;
+  }
+}
+
+// Not:
+interface Locals {
+  userId?: string;  // ❌ Wrong structure
+}
+```
+
+**🔴 Request body is undefined**
+```typescript
+// Check: Did you parse the JSON?
+const body = await request.json();  // Required!
+console.log('Parsed body:', body);
+
+// Check: Content-Type header in request
+// Should be: 'Content-Type': 'application/json'
+```
+
+**🔴 Query parameters are null**
+```typescript
+// Check: Using correct API
+const spaceId = url.searchParams.get('spaceId');  // From URL object
+console.log('Query params:', Object.fromEntries(url.searchParams));  // All params
+
+// Not:
+const spaceId = params.spaceId;  // ❌ This is for path params like [id]
+```
+
+**🔴 CORS errors in development**
+```typescript
+// Check: Are you hitting the right port?
+// SvelteKit dev server: http://localhost:5173
+// API routes: http://localhost:5173/api/...
+
+// Not: http://localhost:4000 (that's LiteLLM proxy)
+```
+
+### Debug Helper Function
+
+Add this to your endpoint during development:
+
+```typescript
+function debugEndpoint(label: string, data: Record<string, unknown>): void {
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[${label}]`, JSON.stringify(data, null, 2));
+  }
+}
+
+// Usage in endpoint
+export const GET: RequestHandler = async ({ params, locals, url }) => {
+  debugEndpoint('GET /api/items/:id - Start', {
+    params,
+    session: locals.session,
+    query: Object.fromEntries(url.searchParams)
+  });
+  
+  // ... your logic ...
+  
+  debugEndpoint('GET /api/items/:id - Result', { item, found: !!item });
+  
+  return json({ item });
+};
+```
+
+### Testing Endpoints
+
+**With curl:**
+```bash
+# GET request
+curl http://localhost:5173/api/items
+
+# POST request
+curl -X POST http://localhost:5173/api/items \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Test Item","spaceId":"space-123"}'
+
+# With session cookie (copy from browser dev tools)
+curl http://localhost:5173/api/items \
+  -H "Cookie: session=your-session-token-here"
+```
+
+**In browser console:**
+```javascript
+// Authenticated request (uses existing session)
+const response = await fetch('/api/items', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ title: 'Test', spaceId: 'space-123' })
+});
+const data = await response.json();
+console.log(data);
+```
 
 ## File Reference
 
-- `src/routes/api/tasks/+server.ts` - CRUD collection
-- `src/routes/api/tasks/[id]/+server.ts` - CRUD individual
-- `src/routes/api/chat/+server.ts` - Streaming endpoint
-- `src/routes/api/documents/+server.ts` - File handling
+**Excellent examples to learn from:**
+- `src/routes/api/spaces/[id]/pin/+server.ts` - Clean auth, great JSDoc
+- `src/routes/api/areas/[id]/+server.ts` - Role-based access control, multi-method JSDoc
+- `src/routes/api/tasks/+server.ts` - Query parameter handling, bulk operations
+- `src/routes/api/admin/groups/+server.ts` - Organization admin checks
+- `src/routes/api/chat/+server.ts` - Streaming endpoint patterns
+
+**Authentication source:**
+- `src/hooks.server.ts` - Where `locals.session` is set

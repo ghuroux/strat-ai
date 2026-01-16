@@ -1,6 +1,14 @@
 ---
 name: stratai-conventions
-description: StratAI codebase conventions, architecture patterns, and common gotchas. Use when working on StratAI code, creating new features, fixing bugs, or understanding the codebase structure.
+description: |
+  Use for ALL StratAI development work: features, bugs, refactoring, architecture decisions.
+  MANDATORY reference for: Understanding codebase structure, common patterns, avoiding gotchas.
+  READ THIS SKILL at session start and reference throughout development.
+  Covers: Architecture overview, Svelte 5 runes, postgres.js camelCase, API streaming, prompt layering, store patterns, file naming, quality standards.
+globs:
+  - "src/**/*.ts"
+  - "src/**/*.svelte"
+  - "src/**/*.js"
 ---
 
 # StratAI Codebase Conventions
@@ -52,7 +60,7 @@ See [SVELTE5.md](SVELTE5.md) for detailed patterns.
 
 ### 2. postgres.js CamelCase Transformation
 
-postgres.js auto-transforms column names to camelCase:
+**CRITICAL**: postgres.js auto-transforms column names to camelCase:
 
 ```typescript
 // SQL: SELECT MAX(subtask_order) as max_order FROM tasks
@@ -66,14 +74,16 @@ const maxOrder = result[0]?.maxOrder ?? 0;  // camelCase!
 const maxOrder = result[0]?.max_order;  // undefined!
 ```
 
-See [POSTGRES.md](POSTGRES.md) for database patterns.
+**For comprehensive database patterns** (transactions, CTEs, JOINs, UPSERT), see the **`working-with-postgres`** skill. [POSTGRES.md](POSTGRES.md) has quick examples.
 
-### 3. API Streaming Pattern
+### 3. API Endpoint Patterns
 
-Chat endpoints use Server-Sent Events (SSE) for streaming:
+**IMPORTANT**: For comprehensive API endpoint patterns (authentication, authorization, JSDoc, error handling), see the **`creating-endpoints`** skill.
+
+Quick reference for streaming:
 
 ```typescript
-// Return a streaming response
+// Chat endpoints use Server-Sent Events (SSE)
 return new Response(stream, {
     headers: {
         'Content-Type': 'text/event-stream',
@@ -83,16 +93,18 @@ return new Response(stream, {
 });
 ```
 
-See [API-PATTERNS.md](API-PATTERNS.md) for endpoint patterns.
+See `creating-endpoints` skill for full patterns. [API-PATTERNS.md](API-PATTERNS.md) has quick examples.
 
 ### 4. Layered Prompt Architecture
 
 System prompts are composed in layers:
 1. Platform prompt (model-specific)
-2. Space prompt (Work/Research tone)
-3. Focus area prompt (specialized context)
+2. Space prompt (personal/organization/project context)
+3. Focus area prompt (specialized context with document summaries)
 4. Task prompt (current work context)
 5. Task context (linked documents/tasks)
+
+**Key pattern**: Document **summaries** in prompts, full content via `read_document` tool for token efficiency.
 
 See [PROMPTS.md](PROMPTS.md) for prompt engineering patterns.
 
@@ -125,7 +137,10 @@ class MyStore {
     isLoading = $state(false);
 
     // Derived values
-    itemList = $derived.by(() => Array.from(this.items.values()));
+    itemList = $derived.by(() => {
+        const _ = this._version;  // Subscribe to version changes
+        return Array.from(this.items.values());
+    });
 
     // Version counter for fine-grained updates
     _version = $state(0);
@@ -134,11 +149,14 @@ class MyStore {
     async loadItems(): Promise<void> {
         this.isLoading = true;
         // ...
+        this._version++;  // Trigger derived updates
     }
 }
 
 export const myStore = new MyStore();
 ```
+
+**For comprehensive store patterns**, see the **`managing-state`** skill.
 
 ## File Naming Conventions
 
@@ -171,7 +189,14 @@ export const myStore = new MyStore();
 
 ## Reference Files
 
+**In this skill:**
 - [SVELTE5.md](SVELTE5.md) - Svelte 5 runes patterns
-- [POSTGRES.md](POSTGRES.md) - Database patterns
-- [API-PATTERNS.md](API-PATTERNS.md) - API endpoint patterns
-- [PROMPTS.md](PROMPTS.md) - Prompt engineering patterns
+- [PROMPTS.md](PROMPTS.md) - Prompt engineering patterns (document summaries, layering)
+- [POSTGRES.md](POSTGRES.md) - Quick database reference
+- [API-PATTERNS.md](API-PATTERNS.md) - Quick API reference
+
+**For comprehensive patterns, see these skills:**
+- **`creating-components`** - Complete component patterns (icons, forms, data loading)
+- **`creating-endpoints`** - Complete API patterns (auth, JSDoc, access control, debugging)
+- **`working-with-postgres`** - Complete database patterns (transactions, CTEs, JOINs)
+- **`managing-state`** - Complete state management patterns (Svelte 5 stores, reactivity)
