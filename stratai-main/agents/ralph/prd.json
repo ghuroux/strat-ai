@@ -1,206 +1,147 @@
 {
-  "feature": "Phase C: Navigation Redesign with Space Pinning",
-  "created": "2026-01-15",
-  "parent_task_id": "phase-c-nav-pinning",
+  "feature": "Temporal Awareness",
+  "created": "2026-01-16",
+  "parent_task_id": "temporal-awareness",
   "research": {
     "similar_patterns": [
-      "src/lib/server/persistence/spaces-postgres.ts",
-      "src/lib/server/persistence/space-memberships-postgres.ts",
-      "src/lib/stores/spaces.svelte.ts",
-      "src/lib/components/layout/Header.svelte",
-      "src/lib/utils/space-display.ts"
+      "src/lib/config/system-prompts.ts - getSystemPromptLayers() function and PromptLayer interface",
+      "src/lib/types/user.ts - UserPreferences interface pattern",
+      "src/routes/api/user/preferences/+server.ts - validation pattern for preferences (theme, homePage)",
+      "src/routes/+layout.svelte - onMount pattern for client-side detection (theme sync)"
     ],
     "docs_reviewed": [
-      "docs/database/ENTITY_MODEL.md",
-      "docs/features/phase-c-nav-pinning.md",
+      "docs/features/TEMPORAL_AWARENESS.md",
       "CLAUDE.md"
     ],
     "decisions_made": [
       {
-        "question": "Migration number",
-        "decision": "Use 034 instead of spec's 032",
-        "rationale": "Migrations 032 and 033 already exist in codebase"
+        "question": "Where to store timezone?",
+        "decision": "In UserPreferences JSON field (not a schema change)",
+        "rationale": "Follows existing pattern for theme and homePage; no migration needed"
       },
       {
-        "question": "Auto-pin when at max 6",
-        "decision": "Skip auto-pin when at max",
-        "rationale": "Avoid confusion by not auto-unpinning user choices; new spaces start unpinned if at max"
+        "question": "Default timezone",
+        "decision": "Africa/Johannesburg (SAST)",
+        "rationale": "Current user base is South Africa; spec explicitly states this"
+      },
+      {
+        "question": "Cache Layer 0?",
+        "decision": "shouldCache: false",
+        "rationale": "Temporal context changes daily; small (~50 tokens) so cache miss negligible"
       }
     ]
   },
   "stories": [
     {
       "id": "US-001",
-      "title": "Create space pinning database migration",
-      "description": "As a developer, I need the database schema changes to support space pinning (is_pinned columns on spaces and space_memberships tables).",
-      "status": "completed",
+      "title": "Create getTemporalContext() function in system-prompts.ts",
+      "description": "As a developer, I need a function that generates temporal context strings with current date and timezone for injection into system prompts.",
+      "status": "pending",
       "dependencies": [],
       "acceptance_criteria": [
-        "Migration 034-space-pinning.sql exists",
-        "spaces table has is_pinned BOOLEAN column with DEFAULT true",
-        "space_memberships table has is_pinned BOOLEAN column with DEFAULT false",
-        "space_memberships table has display_alias VARCHAR(100) column (optional feature)",
-        "Index idx_spaces_pinned created on spaces(user_id, is_pinned) WHERE deleted_at IS NULL AND is_pinned = true",
-        "Index idx_space_memberships_pinned created on space_memberships(user_id, is_pinned) WHERE is_pinned = true",
+        "Function getTemporalContext(timezone?: string) exists in src/lib/config/system-prompts.ts",
+        "Returns date formatted as 'Thursday, January 16, 2026' with day of week",
+        "Returns timezone display name (e.g., 'South Africa Standard Time')",
+        "Output wrapped in <temporal_context> XML tags",
+        "Defaults to 'Africa/Johannesburg' when no timezone provided",
+        "Function is exported from the module",
         "npm run check passes",
         "npm run lint passes"
       ]
     },
     {
       "id": "US-002",
-      "title": "Update Space and SpaceMembership types with pinning fields",
-      "description": "As a developer, I need the TypeScript types updated to include isPinned and displayAlias fields for both owned and invited spaces.",
-      "status": "completed",
+      "title": "Inject temporal context as Layer 0 in getSystemPromptLayers()",
+      "description": "As a user, I want the AI to know the current date and my timezone so it can answer date-relative questions accurately.",
+      "status": "pending",
       "dependencies": ["US-001"],
       "acceptance_criteria": [
-        "Space interface in src/lib/types/spaces.ts includes isPinned?: boolean",
-        "SpaceRow interface includes isPinned: boolean | null",
-        "rowToSpace converter handles isPinned field correctly",
-        "SpaceMembership interface in src/lib/types/space-memberships.ts includes isPinned?: boolean and displayAlias?: string | null",
-        "SpaceMembershipRow interface includes isPinned: boolean | null and displayAlias: string | null",
-        "rowToSpaceMembership converter handles new fields",
+        "getSystemPromptLayers() accepts new timezone option: options.timezone?: string",
+        "Temporal layer inserted as first layer (Layer 0) before platform prompt",
+        "Temporal layer has name: 'temporal', shouldCache: false",
+        "Platform prompt becomes Layer 1 (shifts all subsequent layers)",
+        "Temporal context uses timezone from options, falls back to 'Africa/Johannesburg'",
         "npm run check passes",
         "npm run lint passes"
       ]
     },
     {
       "id": "US-003",
-      "title": "Add pin/unpin repository methods to spaces-postgres.ts",
-      "description": "As a developer, I need repository methods to pin/unpin spaces and query pinned count for enforcement.",
-      "status": "completed",
-      "dependencies": ["US-002"],
+      "title": "Add timezone field to UserPreferences type",
+      "description": "As a developer, I need the UserPreferences type to include timezone so it can be stored and retrieved from the database.",
+      "status": "pending",
+      "dependencies": [],
       "acceptance_criteria": [
-        "pinSpace(spaceId, userId) method added - updates spaces.is_pinned for owned, space_memberships.is_pinned for invited",
-        "unpinSpace(spaceId, userId) method added - same pattern as pin",
-        "getPinnedCount(userId) method added - returns count of pinned owned + invited spaces",
-        "findAllAccessible query updated to include isPinned field in results",
-        "Uses camelCase access pattern (row.isPinned not row.is_pinned)",
+        "UserPreferences interface in src/lib/types/user.ts includes timezone?: string",
+        "Type uses IANA timezone format (e.g., 'Africa/Johannesburg', 'America/New_York')",
         "npm run check passes",
         "npm run lint passes"
       ]
     },
     {
       "id": "US-004",
-      "title": "Create pin/unpin API endpoints",
-      "description": "As a developer, I need API endpoints to pin and unpin spaces with max 6 enforcement.",
-      "status": "completed",
+      "title": "Add timezone validation to preferences API endpoint",
+      "description": "As a developer, I need the preferences API to accept and validate timezone updates.",
+      "status": "pending",
       "dependencies": ["US-003"],
       "acceptance_criteria": [
-        "POST /api/spaces/[id]/pin endpoint created in src/routes/api/spaces/[id]/pin/+server.ts",
-        "POST /api/spaces/[id]/unpin endpoint created in src/routes/api/spaces/[id]/unpin/+server.ts",
-        "Pin endpoint checks getPinnedCount < 6 before pinning",
-        "Pin endpoint returns 400 with error message when at max",
-        "Both endpoints verify user has access to the space",
-        "Both endpoints return updated space data",
+        "validateTimezone() function added to src/routes/api/user/preferences/+server.ts",
+        "Validates timezone is a non-empty string (Intl API validates at runtime)",
+        "PATCH handler accepts body.timezone and calls validateTimezone()",
+        "Valid timezone added to updates object",
+        "Invalid timezone returns 400 with validation_error",
         "npm run check passes",
         "npm run lint passes"
       ]
     },
     {
       "id": "US-005",
-      "title": "Update spaces store with pin/unpin actions and derived states",
-      "description": "As a developer, I need the spaces store to support pinning state management with derived states for pinned/unpinned spaces.",
-      "status": "completed",
+      "title": "Detect and sync timezone on app load",
+      "description": "As a user, I want my timezone automatically detected and saved so the AI knows my location without manual configuration.",
+      "status": "pending",
       "dependencies": ["US-004"],
       "acceptance_criteria": [
-        "getPinnedSpaces() derived state returns spaces where isPinned=true, max 6",
-        "getUnpinnedOwnedSpaces() derived state returns unpinned owned spaces",
-        "getUnpinnedSharedSpaces() derived state returns unpinned shared spaces (userId != currentUserId)",
-        "pinSpace(spaceId) async action calls API and updates local state",
-        "unpinSpace(spaceId) async action calls API and updates local state",
-        "Pin action checks count < 6 before calling API, sets error if at max",
-        "Stores updated when API calls succeed",
+        "Timezone detection code added to src/routes/+layout.svelte onMount()",
+        "Uses Intl.DateTimeFormat().resolvedOptions().timeZone for detection",
+        "Only updates if detected timezone differs from stored preference",
+        "Calls PATCH /api/user/preferences with { timezone: detectedTimezone }",
+        "Updates userStore.preferences with new timezone",
+        "Silent operation - no toast or UI feedback unless error",
         "npm run check passes",
         "npm run lint passes"
       ]
     },
     {
       "id": "US-006",
-      "title": "Create AllSpacesDropdown component",
-      "description": "As a user, I want a dropdown showing all my spaces organized by section (Pinned, Your Spaces, Shared With You) so I can access any space and manage pinning.",
-      "status": "completed",
-      "dependencies": ["US-005"],
+      "title": "Pass timezone to chat API and prompt builder",
+      "description": "As a user, I want my timezone used in every AI conversation so responses are temporally accurate.",
+      "status": "pending",
+      "dependencies": ["US-002", "US-005"],
       "acceptance_criteria": [
-        "AllSpacesDropdown.svelte component created in src/lib/components/spaces/",
-        "Shows PINNED TO NAV section with star icon and X (unpin) buttons",
-        "Shows YOUR SPACES section with unpinned owned spaces and pin buttons",
-        "Shows SHARED WITH YOU section with unpinned invited spaces and pin buttons",
-        "Shows footer with Maximum 6 pinned and remaining count",
-        "Pin buttons disabled with tooltip when at max 6",
-        "Uses getSpaceDisplayName() for space names with owner context",
-        "Click outside closes dropdown",
-        "Escape key closes dropdown",
-        "Smooth open/close animation",
+        "Chat API endpoint reads timezone from session or user preferences",
+        "Falls back to 'Africa/Johannesburg' if not set",
+        "Passes timezone to getSystemPromptLayers() call",
+        "Temporal context appears in system prompt sent to LLM",
         "npm run check passes",
-        "npm run lint passes"
+        "npm run lint passes",
+        "Manual verification: Ask 'What is today's date?' and receive correct answer",
+        "Manual verification: Ask 'What day of the week is it?' and receive correct answer"
       ]
     },
     {
       "id": "US-007",
-      "title": "Create SpaceNavTabs component",
-      "description": "As a user, I want to see my pinned spaces as tabs in the nav bar with quick access to all spaces via dropdown.",
-      "status": "completed",
-      "dependencies": ["US-006"],
+      "title": "Add timezone selector to Settings UI (Optional Phase 3)",
+      "description": "As a user, I want to manually override my detected timezone in Settings if the auto-detection is wrong.",
+      "status": "pending",
+      "dependencies": ["US-005"],
       "acceptance_criteria": [
-        "SpaceNavTabs.svelte component created in src/lib/components/spaces/",
-        "Shows pinned spaces as tab links with active state",
-        "Right-click on tab shows context menu with Unpin from navigation option",
-        "Integrates AllSpacesDropdown as the All button",
-        "Uses getSpaceDisplayName() for space names",
-        "Tab styling matches existing space-nav-item pattern from Header.svelte",
+        "Timezone dropdown added to Settings > General page (src/lib/components/settings/SettingsGeneral.svelte or similar)",
+        "Shows common timezones: Africa/Johannesburg, Europe/London, America/New_York, America/Los_Angeles, Asia/Tokyo, etc.",
+        "Shows auto-detected timezone as help text",
+        "Selecting new timezone calls PATCH /api/user/preferences",
+        "Updates local state after successful save",
         "npm run check passes",
         "npm run lint passes"
-      ]
-    },
-    {
-      "id": "US-008",
-      "title": "Integrate SpaceNavTabs into Header component",
-      "description": "As a user, I want the Header to show pinned spaces with the All dropdown instead of listing all spaces as tabs.",
-      "status": "completed",
-      "dependencies": ["US-007"],
-      "acceptance_criteria": [
-        "Header.svelte updated to use SpaceNavTabs instead of current space tab loop",
-        "Existing system/custom space loops replaced with single SpaceNavTabs component",
-        "Space add button moved to AllSpacesDropdown or kept in header (design decision)",
-        "Mobile navigation updated appropriately",
-        "Main Chat and Arena links remain unchanged",
-        "npm run check passes",
-        "npm run lint passes",
-        "Manual verification: pinned spaces appear as tabs",
-        "Manual verification: All button opens dropdown",
-        "Manual verification: pin/unpin works correctly"
-      ]
-    },
-    {
-      "id": "US-009",
-      "title": "Implement auto-pin rules on space creation and org join",
-      "description": "As a user, I want new spaces I create and org spaces I join to be auto-pinned (if under max 6) so they appear in my nav immediately.",
-      "status": "completed",
-      "dependencies": ["US-003"],
-      "acceptance_criteria": [
-        "Space creation in spaces-postgres.ts sets is_pinned=true if user has < 6 pinned",
-        "Org space auto-pins when user joins org (if under max)",
-        "Invited spaces start with is_pinned=false in space_memberships",
-        "Auto-pin skips if user already at max 6 (no auto-unpin)",
-        "npm run check passes",
-        "npm run lint passes"
-      ]
-    },
-    {
-      "id": "US-010",
-      "title": "Handle edge cases and cleanup",
-      "description": "As a developer, I need to ensure edge cases are handled: 0 spaces, deleted pinned spaces, leaving shared spaces.",
-      "status": "completed",
-      "dependencies": ["US-008", "US-009"],
-      "acceptance_criteria": [
-        "User with 0 spaces sees empty dropdown with helpful message",
-        "User with 1-6 spaces: all auto-pinned by default, dropdown still accessible",
-        "Deleting a pinned space removes it from nav immediately",
-        "Leaving a shared space removes it from nav if pinned",
-        "Dropdown footer count updates correctly after pin/unpin",
-        "npm run check passes",
-        "npm run lint passes",
-        "Manual verification of all edge cases listed"
       ]
     }
   ]
