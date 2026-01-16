@@ -20,7 +20,7 @@
       "id": "US-001",
       "title": "Update findAll() with CTE-based access control",
       "description": "As an area member, I want to see pages shared with my area in the page list so that I can access all pages I have permission to view.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "Create buildAccessiblePagesQuery() helper that returns CTE SQL for accessible page IDs",

@@ -5,6 +5,7 @@
  * - User scoping on all queries
  * - Soft deletes via deleted_at column
  * - TEXT IDs with page_${timestamp}_${random} format
+ * - CTE-based access control for shared pages (Phase 1: Page Sharing)
  */
 
 import type {
@@ -31,6 +32,7 @@ import {
 } from '$lib/types/page';
 import { sql, type JSONValue } from './db';
 import type { PagePermission } from '$lib/types/page-sharing';
+import type { PendingQuery, Row } from 'postgres';
 
 /**
  * Generate unique page ID
@@ -51,6 +53,104 @@ function generatePageVersionId(): string {
  */
 function generatePageConversationId(): string {
 	return `pc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Build CTE query fragment for accessible page IDs
+ *
+ * Returns all page IDs that a user can access via any of these paths:
+ * - Path 1: User owns the page (user_id = userId)
+ * - Path 2: Private page with direct user share
+ * - Path 3: Private page with group share (user is in shared group)
+ * - Path 4: Area-visible page where user has area access
+ * - Path 5: Space-visible page where user owns the space
+ *
+ * This mirrors the access control logic in page-sharing-postgres.ts canAccessPage()
+ *
+ * @param userId - The user ID to check access for
+ * @returns SQL fragment for use in WITH clause
+ */
+function buildAccessiblePagesCTE(userId: string): PendingQuery<Row[]> {
+	return sql`
+		accessible_pages AS (
+			-- Path 1: User owns the page
+			SELECT p.id
+			FROM pages p
+			WHERE p.user_id = ${userId}
+				AND p.deleted_at IS NULL
+
+			UNION
+
+			-- Path 2: Private page with direct user share
+			SELECT p.id
+			FROM pages p
+			JOIN page_user_shares pus ON p.id = pus.page_id
+			WHERE pus.user_id = ${userId}
+				AND p.visibility = 'private'
+				AND p.deleted_at IS NULL
+
+			UNION
+
+			-- Path 3: Private page with group share (user in shared group)
+			SELECT p.id
+			FROM pages p
+			JOIN page_group_shares pgs ON p.id = pgs.page_id
+			JOIN group_memberships gm ON pgs.group_id = gm.group_id
+			WHERE gm.user_id = ${userId}::uuid
+				AND p.visibility = 'private'
+				AND p.deleted_at IS NULL
+
+			UNION
+
+			-- Path 4: Area-visible page where user has area access
+			-- Mirrors canAccessArea logic: owner, membership, group, or space fallthrough
+			SELECT p.id
+			FROM pages p
+			JOIN areas a ON p.area_id = a.id
+			LEFT JOIN spaces s ON a.space_id = s.id
+			LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
+			LEFT JOIN area_memberships am ON a.id = am.area_id AND am.user_id = ${userId}
+			LEFT JOIN (
+				-- Group membership for area access
+				SELECT DISTINCT am_grp.area_id
+				FROM area_memberships am_grp
+				JOIN group_memberships gm ON am_grp.group_id = gm.group_id
+				WHERE gm.user_id = ${userId}::uuid
+			) grp_access ON a.id = grp_access.area_id
+			WHERE p.visibility = 'area'
+				AND p.deleted_at IS NULL
+				AND a.deleted_at IS NULL
+				AND (
+					-- User created the area
+					a.user_id = ${userId} OR a.created_by = ${userId}
+					-- OR user has direct area membership
+					OR am.user_id IS NOT NULL
+					-- OR user has area access via group
+					OR grp_access.area_id IS NOT NULL
+					-- OR user owns the space
+					OR s.user_id = ${userId}
+					-- OR non-restricted area with space membership (non-guest)
+					OR (
+						COALESCE(a.is_restricted, false) = false
+						AND sm.user_id IS NOT NULL
+						AND sm.role IN ('owner', 'admin', 'member')
+					)
+				)
+
+			UNION
+
+			-- Path 5: Space-visible page where user owns the space
+			SELECT p.id
+			FROM pages p
+			JOIN areas a ON p.area_id = a.id
+			JOIN spaces s ON a.space_id = s.id
+			WHERE p.visibility = 'space'
+				AND s.user_id = ${userId}
+				AND p.deleted_at IS NULL
+				AND a.deleted_at IS NULL
+				AND s.deleted_at IS NULL
+		)
+	`;
 }
 
 /**
@@ -94,44 +194,63 @@ export interface PageRepository {
  * PostgreSQL implementation of PageRepository
  */
 export const postgresPageRepository: PageRepository = {
+	/**
+	 * Find all pages accessible to a user
+	 *
+	 * Uses CTE-based access control to return pages via any access path:
+	 * - Pages the user owns
+	 * - Private pages shared directly with the user
+	 * - Private pages shared via group membership
+	 * - Area-visible pages in areas the user can access
+	 * - Space-visible pages in spaces the user owns
+	 *
+	 * @param userId - The user to check access for
+	 * @param filter - Optional filters for areaId, pageType, or taskId
+	 */
 	async findAll(userId: string, filter?: PageListFilter): Promise<Page[]> {
+		const accessiblePagesCTE = buildAccessiblePagesCTE(userId);
+
 		let rows: PageRow[];
 
 		if (filter?.areaId && filter?.pageType) {
 			rows = await sql<PageRow[]>`
-				SELECT *
-				FROM pages
-				WHERE user_id = ${userId}
-					AND area_id = ${filter.areaId}
-					AND page_type = ${filter.pageType}
-					AND deleted_at IS NULL
-				ORDER BY updated_at DESC
+				WITH ${accessiblePagesCTE}
+				SELECT p.*
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.area_id = ${filter.areaId}
+					AND p.page_type = ${filter.pageType}
+					AND p.deleted_at IS NULL
+				ORDER BY p.updated_at DESC
 			`;
 		} else if (filter?.areaId) {
 			rows = await sql<PageRow[]>`
-				SELECT *
-				FROM pages
-				WHERE user_id = ${userId}
-					AND area_id = ${filter.areaId}
-					AND deleted_at IS NULL
-				ORDER BY updated_at DESC
+				WITH ${accessiblePagesCTE}
+				SELECT p.*
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.area_id = ${filter.areaId}
+					AND p.deleted_at IS NULL
+				ORDER BY p.updated_at DESC
 			`;
 		} else if (filter?.taskId) {
 			rows = await sql<PageRow[]>`
-				SELECT *
-				FROM pages
-				WHERE user_id = ${userId}
-					AND task_id = ${filter.taskId}
-					AND deleted_at IS NULL
-				ORDER BY updated_at DESC
+				WITH ${accessiblePagesCTE}
+				SELECT p.*
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.task_id = ${filter.taskId}
+					AND p.deleted_at IS NULL
+				ORDER BY p.updated_at DESC
 			`;
 		} else {
 			rows = await sql<PageRow[]>`
-				SELECT *
-				FROM pages
-				WHERE user_id = ${userId}
-					AND deleted_at IS NULL
-				ORDER BY updated_at DESC
+				WITH ${accessiblePagesCTE}
+				SELECT p.*
+				FROM pages p
+				WHERE p.id IN (SELECT id FROM accessible_pages)
+					AND p.deleted_at IS NULL
+				ORDER BY p.updated_at DESC
 			`;
 		}
 

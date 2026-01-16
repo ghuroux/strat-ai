@@ -46,3 +46,39 @@ When pages have `visibility = 'area'`, area members cannot see them in `findAll(
 ## Iteration Log
 
 (Each iteration appends a section below)
+
+### Iteration 1: US-001 - Update findAll() with CTE-based access control
+**Date:** 2026-01-16
+**Status:** Completed
+
+**What was done:**
+- Created `buildAccessiblePagesCTE()` helper function that returns a PostgreSQL CTE for accessible page IDs
+- The CTE implements 5 access paths via UNION:
+  1. Path 1: User owns the page (`user_id = userId`)
+  2. Path 2: Private page with direct user share (via `page_user_shares`)
+  3. Path 3: Private page with group share (via `page_group_shares` + `group_memberships`)
+  4. Path 4: Area-visible page where user has area access (mirrors `canAccessArea` logic)
+  5. Path 5: Space-visible page where user owns the space
+- Updated `findAll()` to use the CTE with all filter combinations (areaId, pageType, taskId)
+- Added proper JSDoc documentation to the function
+
+**Files changed:**
+- `src/lib/server/persistence/pages-postgres.ts` - Added CTE helper and updated `findAll()`
+
+**Patterns applied:**
+- CTE with UNION pattern from `areas-postgres.ts` → `findAllAccessible()`
+- postgres.js camelCase transformation (all column access uses camelCase)
+- Access control mirrors `page-sharing-postgres.ts` → `canAccessPage()` algorithm
+
+**Quality gates:**
+- ✅ `npm run check` - 0 TypeScript errors
+- ✅ `npm run audit-db-access` - 0 violations
+- ⚠️ `npm run lint` - Pre-existing config issue (eslint.config.js missing for ESLint v9)
+
+**Learnings:**
+1. **CTE composition with postgres.js**: The `PendingQuery<Row[]>` type allows creating reusable SQL fragments that can be composed with template literals. Import from `postgres`.
+2. **Area access is complex**: Path 4 (area visibility) required handling 5 different ways a user can access an area: creator, direct membership, group membership, space owner, or non-restricted area with space membership.
+3. **Deleted area handling**: The CTE checks `a.deleted_at IS NULL` in Path 4 to prevent showing pages from deleted areas (owners already have access via Path 1).
+4. **Guest role exclusion**: Non-restricted areas only grant access to space members with role IN ('owner', 'admin', 'member'), excluding 'guest'.
+
+**Decision:** Used `IN (SELECT id FROM accessible_pages)` instead of JOIN for readability and to avoid duplicate rows when a page is accessible via multiple paths.
