@@ -1,0 +1,39 @@
+# Ralph Progress Log
+
+## Feature: Welcome Email on User Creation
+**Parent Task:** welcome-email-user-creation
+**Started:** 2026-01-16
+**Status:** Ready to begin
+
+## Summary
+When admins create new users, the system will automatically send a secure welcome email with a "Set Password" link instead of requiring the admin to share passwords manually. This improves security and user experience.
+
+## Key Implementation Notes
+- Reuses existing password_reset_tokens infrastructure with new token_type column
+- Welcome tokens expire in 7 days (vs 1 hour for password reset)
+- Email failure blocks user creation (atomic operation)
+- Invitations tab shows pending users who haven't set their password yet
+
+## Codebase Patterns Discovered
+- Password reset tokens: src/lib/server/persistence/password-reset-tokens-postgres.ts
+- Email templates: src/lib/server/email/templates.ts (getPasswordResetEmail pattern)
+- SendGrid service: src/lib/server/email/sendgrid.ts (with audit logging)
+- Admin members page: src/routes/admin/members/ (+page.server.ts, +page.svelte)
+- Migration numbering: 039 is next available
+
+## Stories
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Add token_type column to password_reset_tokens table | pending |
+| US-002 | Create welcome email template | pending |
+| US-003 | Update token repository to support token types and variable expiration | pending |
+| US-004 | Create set-password page for welcome emails | pending |
+| US-005 | Update admin create user flow to send welcome email | pending |
+| US-006 | Add resend welcome email action | pending |
+| US-007 | Populate Invitations tab with pending invitations | pending |
+
+---
+
+## Execution Log
+
+[Entries will be added as stories are completed]

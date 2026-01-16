@@ -1,0 +1,158 @@
+{
+  "feature_name": "Welcome Email on User Creation",
+  "parent_task_id": "welcome-email-user-creation",
+  "created": "2026-01-16",
+  "research": {
+    "similar_patterns": [
+      "src/lib/server/persistence/password-reset-tokens-postgres.ts",
+      "src/lib/server/email/templates.ts",
+      "src/lib/server/email/sendgrid.ts",
+      "src/routes/admin/members/+page.server.ts"
+    ],
+    "related_migrations": [
+      "028-email-system.sql"
+    ],
+    "docs_reviewed": [
+      "docs/features/WELCOME_EMAIL_ON_USER_CREATION.md",
+      "docs/SENDGRID_EMAIL_INTEGRATION.md"
+    ],
+    "existing_infrastructure": {
+      "password_reset_tokens_table": "Already exists with token_hash, expires_at, used_at columns",
+      "sendgrid_integration": "Fully functional with audit logging",
+      "email_templates": "Pattern established in templates.ts",
+      "admin_members_page": "Has Invitations tab placeholder showing (0)"
+    }
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Add token_type column to password_reset_tokens table",
+      "description": "As a developer, I need to distinguish between password reset tokens and welcome tokens so that different expiration times and flows can be applied.",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Migration 039-welcome-tokens.sql creates token_type column with CHECK constraint for 'reset' and 'welcome' values",
+        "Existing tokens default to 'reset' type",
+        "Index created on token_type column for efficient lookup",
+        "Migration is idempotent (IF NOT EXISTS / IF EXISTS patterns)",
+        "email_logs_type_check constraint updated to include 'welcome' email type",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Create welcome email template",
+      "description": "As a system, I need a professional welcome email template so that new users receive a branded, informative email with their set password link.",
+      "status": "pending",
+      "dependencies": ["US-001"],
+      "acceptance_criteria": [
+        "getWelcomeEmail() function added to templates.ts",
+        "Template includes: greeting with firstName, organization name, set password button, email reminder, 7-day expiration note",
+        "Both HTML and plain text versions provided",
+        "createSetPasswordLink() helper function created",
+        "Template matches existing password reset email styling (purple gradient header)",
+        "Subject line: 'Welcome to StratAI - Set Your Password'",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Update token repository to support token types and variable expiration",
+      "description": "As a developer, I need the token repository to support different token types with their own expiration times so that welcome tokens can expire in 7 days while reset tokens expire in 1 hour.",
+      "status": "pending",
+      "dependencies": ["US-001"],
+      "acceptance_criteria": [
+        "TOKEN_EXPIRY_MINUTES constant replaced with TOKEN_EXPIRY_MINUTES object: { reset: 60, welcome: 10080 }",
+        "create() method accepts optional tokenType parameter (defaults to 'reset')",
+        "create() uses correct expiration based on tokenType",
+        "verify() method accepts optional expectedType parameter to validate token type matches",
+        "PasswordResetTokenRow interface updated to include tokenType field",
+        "rowToToken() converter updated to include tokenType",
+        "createByEmail() method added for welcome tokens (creates token by email, not userId)",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Create set-password page for welcome emails",
+      "description": "As a new user, I need a dedicated set-password page so that I can set my password after receiving a welcome email.",
+      "status": "pending",
+      "dependencies": ["US-003"],
+      "acceptance_criteria": [
+        "Route created at /set-password with +page.svelte and +page.server.ts",
+        "Page validates token on load via URL parameter",
+        "Invalid/expired/used token shows appropriate error message with contact administrator guidance",
+        "Form has password and confirm password fields with validation",
+        "Passwords must match validation",
+        "On successful submission: password set, token marked as used, redirect to /login with success message",
+        "Route added to PUBLIC_ROUTES in hooks.server.ts",
+        "Page styling matches existing reset-password page",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Update admin create user flow to send welcome email",
+      "description": "As an admin, I want user creation to automatically send a welcome email so that new users receive secure access without me manually sharing passwords.",
+      "status": "pending",
+      "dependencies": ["US-002", "US-003", "US-004"],
+      "acceptance_criteria": [
+        "Password field removed from create user form in +page.svelte",
+        "Info message added: 'A welcome email will be sent with a link to set password'",
+        "Create action in +page.server.ts: removes password from required fields",
+        "Create action: creates user with random placeholder password hash (cannot be used to login)",
+        "Create action: creates welcome token using createByEmail()",
+        "Create action: sends welcome email via sendEmail()",
+        "Create action: if email fails, rolls back user creation and returns error",
+        "Success message shows 'User created. Welcome email sent to {email}'",
+        "createForm state in +page.svelte no longer includes password field",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Add resend welcome email action",
+      "description": "As an admin, I need to resend welcome emails for users who haven't set their password yet so that they can receive a fresh link if the original expired.",
+      "status": "pending",
+      "dependencies": ["US-005"],
+      "acceptance_criteria": [
+        "resendWelcome action added to +page.server.ts",
+        "Action validates user has never logged in (lastLoginAt IS NULL)",
+        "Action creates new welcome token (invalidates any existing tokens)",
+        "Action sends new welcome email",
+        "Action is rate limited: max 3 resends per user per hour",
+        "Resend button visible in user actions menu for users with lastLoginAt === null",
+        "Success message: 'Welcome email resent to {email}'",
+        "Error message if rate limited: 'Please wait before resending'",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Populate Invitations tab with pending invitations",
+      "description": "As an admin, I want to see pending invitations in the Invitations tab so that I can track who hasn't set up their account yet and take action.",
+      "status": "pending",
+      "dependencies": ["US-005", "US-006"],
+      "acceptance_criteria": [
+        "Load function queries pending invitations: users with lastLoginAt IS NULL",
+        "Query joins with password_reset_tokens to get welcome token status (pending/expired)",
+        "Invitations tab shows count: 'Invitations ({count})'",
+        "Table displays: Email, Invited date (user created_at), Expires (token expires_at), Status (pending/expired), Actions",
+        "Status shows 'Pending' if valid token exists, 'Expired' if token expired or missing",
+        "Resend button sends new welcome email",
+        "Revoke button deletes user entirely (with confirmation modal)",
+        "Users with lastLoginAt NOT shown in Invitations tab",
+        "Users move from Invitations to Members after setting password and logging in",
+        "Members tab filters out users who appear in Invitations tab",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    }
+  ]
+}
