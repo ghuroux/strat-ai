@@ -287,11 +287,29 @@ Read agents/ralph/prompt.md NOW to begin." > "$TEMP_PROMPT_FILE"
     
     # Run with timeout and show output
     set +e  # Don't exit on error
-    timeout 600 $CLAUDE_CLI --print \
-      --system-prompt "$AGENT_PROMPT" \
-      --dangerously-skip-permissions \
-      --verbose \
-      "$(cat "$TEMP_PROMPT_FILE")"
+    
+    # macOS doesn't have timeout by default, use gtimeout if available
+    TIMEOUT_CMD=""
+    if command -v timeout &> /dev/null; then
+      TIMEOUT_CMD="timeout 600"
+    elif command -v gtimeout &> /dev/null; then
+      TIMEOUT_CMD="gtimeout 600"
+    fi
+    
+    if [ -n "$TIMEOUT_CMD" ]; then
+      $TIMEOUT_CMD $CLAUDE_CLI --print \
+        --system-prompt "$AGENT_PROMPT" \
+        --dangerously-skip-permissions \
+        --verbose \
+        "$(cat "$TEMP_PROMPT_FILE")"
+    else
+      # No timeout available - run without it
+      $CLAUDE_CLI --print \
+        --system-prompt "$AGENT_PROMPT" \
+        --dangerously-skip-permissions \
+        --verbose \
+        "$(cat "$TEMP_PROMPT_FILE")"
+    fi
     
     CLAUDE_EXIT_CODE=$?
     set -e  # Re-enable exit on error
