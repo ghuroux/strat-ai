@@ -63,7 +63,7 @@
       "id": "US-003",
       "title": "Update token repository to support token types and variable expiration",
       "description": "As a developer, I need the token repository to support different token types with their own expiration times so that welcome tokens can expire in 7 days while reset tokens expire in 1 hour.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001"
       ],

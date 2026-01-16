@@ -1,15 +1,23 @@
 /**
  * Password Reset Token Repository
  *
- * Secure token management for password reset flow.
+ * Secure token management for password reset and welcome flows.
  * See: docs/SENDGRID_EMAIL_INTEGRATION.md
  */
 
 import { createHash, randomBytes } from 'crypto';
 import { sql } from './db';
-import type { PasswordResetToken } from '$lib/types/email';
+import type { PasswordResetToken, TokenType } from '$lib/types/email';
 
-const TOKEN_EXPIRY_MINUTES = 60; // 1 hour
+/**
+ * Token expiry times by type (in minutes)
+ * - reset: 60 minutes (1 hour) for password reset
+ * - welcome: 10080 minutes (7 days) for new user welcome emails
+ */
+const TOKEN_EXPIRY_MINUTES: Record<TokenType, number> = {
+	reset: 60,
+	welcome: 10080
+};
 
 /**
  * Hash token using SHA256
@@ -23,6 +31,7 @@ interface PasswordResetTokenRow {
 	id: string;
 	userId: string;
 	tokenHash: string;
+	tokenType: TokenType;
 	expiresAt: Date;
 	usedAt: Date | null;
 	createdAt: Date;
@@ -36,6 +45,7 @@ function rowToToken(row: PasswordResetTokenRow): PasswordResetToken {
 		id: row.id,
 		userId: row.userId,
 		tokenHash: row.tokenHash,
+		tokenType: row.tokenType,
 		expiresAt: row.expiresAt,
 		usedAt: row.usedAt,
 		createdAt: row.createdAt
@@ -46,35 +56,78 @@ export const postgresPasswordResetTokenRepository = {
 	/**
 	 * Create a new password reset token
 	 * Returns the plain token (to send in email) - we only store the hash
+	 *
+	 * @param userId - The user ID to create the token for
+	 * @param tokenType - The token type: 'reset' (1 hour) or 'welcome' (7 days). Defaults to 'reset'.
 	 */
-	async create(userId: string): Promise<string> {
-		// Invalidate any existing tokens for this user
+	async create(userId: string, tokenType: TokenType = 'reset'): Promise<string> {
+		// Invalidate any existing tokens for this user of the same type
 		await sql`
 			UPDATE password_reset_tokens
 			SET used_at = NOW()
-			WHERE user_id = ${userId} AND used_at IS NULL
+			WHERE user_id = ${userId} AND used_at IS NULL AND token_type = ${tokenType}
 		`;
 
 		// Generate secure random token (32 bytes = 64 hex chars)
 		const token = randomBytes(32).toString('hex');
 		const tokenHash = hashToken(token);
-		const expiresAt = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000);
+		const expiryMinutes = TOKEN_EXPIRY_MINUTES[tokenType];
+		const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
 		await sql`
-			INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-			VALUES (${userId}, ${tokenHash}, ${expiresAt})
+			INSERT INTO password_reset_tokens (user_id, token_hash, token_type, expires_at)
+			VALUES (${userId}, ${tokenHash}, ${tokenType}, ${expiresAt})
 		`;
 
 		return token; // Return plain token for email
 	},
 
 	/**
-	 * Verify a token and return the associated user ID if valid
-	 * Returns null if token is invalid, expired, or already used
+	 * Create a token by email address (looks up user ID first)
+	 * Useful for welcome tokens where we have the email but not the user ID
+	 *
+	 * @param email - The email address to look up
+	 * @param tokenType - The token type: 'reset' (1 hour) or 'welcome' (7 days). Defaults to 'welcome'.
+	 * @returns The plain token if user exists, null if no user found with that email
 	 */
-	async verify(token: string): Promise<string | null> {
+	async createByEmail(email: string, tokenType: TokenType = 'welcome'): Promise<string | null> {
+		// Look up user by email
+		const userRows = await sql<{ id: string }[]>`
+			SELECT id FROM users WHERE email = ${email}
+		`;
+
+		if (userRows.length === 0) {
+			return null; // No user found
+		}
+
+		const userId = userRows[0].id;
+		return this.create(userId, tokenType);
+	},
+
+	/**
+	 * Verify a token and return the associated user ID if valid
+	 * Returns null if token is invalid, expired, already used, or wrong type
+	 *
+	 * @param token - The plain token to verify
+	 * @param expectedType - Optional token type to validate. If provided, token must match this type.
+	 */
+	async verify(token: string, expectedType?: TokenType): Promise<string | null> {
 		const tokenHash = hashToken(token);
 
+		// Build query based on whether we're checking token type
+		if (expectedType) {
+			const rows = await sql<{ userId: string }[]>`
+				SELECT user_id as "userId"
+				FROM password_reset_tokens
+				WHERE token_hash = ${tokenHash}
+				  AND used_at IS NULL
+				  AND expires_at > NOW()
+				  AND token_type = ${expectedType}
+			`;
+			return rows[0]?.userId ?? null;
+		}
+
+		// No type check - accept any valid token
 		const rows = await sql<{ userId: string }[]>`
 			SELECT user_id as "userId"
 			FROM password_reset_tokens
@@ -83,7 +136,7 @@ export const postgresPasswordResetTokenRepository = {
 			  AND expires_at > NOW()
 		`;
 
-		return rows[0]?.userId || null;
+		return rows[0]?.userId ?? null;
 	},
 
 	/**

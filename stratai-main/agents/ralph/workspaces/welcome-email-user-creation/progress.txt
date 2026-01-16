@@ -26,7 +26,7 @@ When admins create new users, the system will automatically send a secure welcom
 |----|-------|--------|
 | US-001 | Add token_type column to password_reset_tokens table | **completed** |
 | US-002 | Create welcome email template | **completed** |
-| US-003 | Update token repository to support token types and variable expiration | pending |
+| US-003 | Update token repository to support token types and variable expiration | **completed** |
 | US-004 | Create set-password page for welcome emails | pending |
 | US-005 | Update admin create user flow to send welcome email | pending |
 | US-006 | Add resend welcome email action | pending |
@@ -96,16 +96,42 @@ When admins create new users, the system will automatically send a secure welcom
 - `npm run check`: Passed (only pre-existing warnings)
 - `npm run lint`: Known config issue (baseline shows 0 errors expected)
 
----
+### US-003: Update token repository to support token types and variable expiration
+**Status:** Completed
+**Date:** 2026-01-16
 
-## 2026-01-16 - Create welcome email template
-Task ID: US-002
-Status: Completed
+**What was done:**
+- Updated `TOKEN_EXPIRY_MINUTES` from a single number to an object with `reset: 60` and `welcome: 10080` values
+- Updated `PasswordResetTokenRow` interface to include `tokenType: TokenType` field
+- Updated `rowToToken()` converter to map the `tokenType` field
+- Updated `create()` method to accept optional `tokenType` parameter (defaults to 'reset')
+- Updated `create()` to use correct expiration based on token type and only invalidate tokens of the same type
+- Updated `verify()` method to accept optional `expectedType` parameter for type validation
+- Added `createByEmail()` method that looks up user by email and creates token (defaults to 'welcome' type)
+- Updated `PasswordResetToken` interface in email.ts to include `tokenType: TokenType` field
+- Added `TokenType` type ('reset' | 'welcome') to email.ts
+- Added 'welcome' to `EmailType` union type
 
-### What Was Done
-[Fill in implementation details]
+**Files changed:**
+- `src/lib/server/persistence/password-reset-tokens-postgres.ts` (modified - all repository changes)
+- `src/lib/types/email.ts` (modified - added TokenType, updated EmailType and PasswordResetToken)
 
-### Learnings
-[Capture patterns, decisions, lessons]
+**Patterns applied:**
+- Default parameter values for backward compatibility (`tokenType = 'reset'`)
+- Record type for mapping token types to expiry values (`Record<TokenType, number>`)
+- Separate invalidation by token type (welcome tokens don't invalidate reset tokens)
+- Method chaining with `this.create()` in `createByEmail()` for code reuse
+- Null coalescing (`??`) instead of OR (`||`) for proper null handling
+
+**Learnings:**
+- Token type filtering in queries prevents unintended invalidation across different flows
+- The `createByEmail()` method provides a clean interface for welcome flow where we have email but not userId
+- Using default parameter values maintains backward compatibility - existing `create(userId)` calls continue to work
+- Query with optional type checking avoids code duplication while maintaining type safety
+
+**Quality gates:**
+- `npm run check`: Passed (0 errors, 160 pre-existing warnings)
+- `npm run lint`: Known config issue (ESLint 9 migration needed - pre-existing)
+- `npm run audit-db-access`: Passed (0 violations)
 
 ---
