@@ -23,8 +23,17 @@ cd "$PROJECT_DIR"
 echo ""
 echo "📁 Checking working directory..."
 
-# Check for uncommitted changes, excluding Ralph's working files
-CHANGES=$(git status --porcelain | grep -v "agents/ralph/prd.json" | grep -v "agents/ralph/progress.txt" || true)
+# Check for uncommitted changes, excluding Ralph's working files and workspace files
+# Exclude patterns:
+# - agents/ralph/workspaces/    (all workspace files - for parallel execution)
+# - agents/ralph/.ralph-*       (baseline/state files)
+# - agents/ralph/prd.json       (legacy working file)
+# - agents/ralph/progress.txt   (legacy working file)
+CHANGES=$(git status --porcelain | \
+  grep -v "agents/ralph/workspaces/" | \
+  grep -v "agents/ralph/.ralph-" | \
+  grep -v "agents/ralph/prd.json" | \
+  grep -v "agents/ralph/progress.txt" || true)
 
 if [ -n "$CHANGES" ]; then
   echo "❌ Working directory not clean"
@@ -33,14 +42,14 @@ if [ -n "$CHANGES" ]; then
   echo "$CHANGES"
   echo ""
   echo "   Fix: Commit or stash changes before proceeding"
-  echo "   (Ralph working files prd.json and progress.txt are allowed)"
+  echo "   (Ralph workspace and working files are allowed)"
   exit 1
 fi
 
-echo "   ✅ Working directory clean"
+echo "   ✅ Working directory clean (Ralph workspaces ignored)"
 
-# Show Ralph working file status if they're modified
-RALPH_CHANGES=$(git status --porcelain | grep -E "agents/ralph/(prd\.json|progress\.txt)" || true)
+# Show Ralph working file status if they're modified (informational only)
+RALPH_CHANGES=$(git status --porcelain | grep -E "agents/ralph/(workspaces/|\.ralph-|prd\.json|progress\.txt)" || true)
 if [ -n "$RALPH_CHANGES" ]; then
   echo "   📝 Ralph working files modified (allowed):"
   echo "$RALPH_CHANGES" | sed 's/^/      /'
