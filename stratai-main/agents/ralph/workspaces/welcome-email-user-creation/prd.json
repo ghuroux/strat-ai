@@ -28,7 +28,7 @@
       "id": "US-001",
       "title": "Add token_type column to password_reset_tokens table",
       "description": "As a developer, I need to distinguish between password reset tokens and welcome tokens so that different expiration times and flows can be applied.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "Migration 039-welcome-tokens.sql creates token_type column with CHECK constraint for 'reset' and 'welcome' values",

@@ -24,7 +24,7 @@ When admins create new users, the system will automatically send a secure welcom
 ## Stories
 | ID | Title | Status |
 |----|-------|--------|
-| US-001 | Add token_type column to password_reset_tokens table | pending |
+| US-001 | Add token_type column to password_reset_tokens table | **completed** |
 | US-002 | Create welcome email template | pending |
 | US-003 | Update token repository to support token types and variable expiration | pending |
 | US-004 | Create set-password page for welcome emails | pending |
@@ -36,4 +36,30 @@ When admins create new users, the system will automatically send a secure welcom
 
 ## Execution Log
 
-[Entries will be added as stories are completed]
+### US-001: Add token_type column to password_reset_tokens table
+**Status:** Completed
+**Date:** 2026-01-16
+
+**What was done:**
+- Created migration 039-welcome-tokens.sql
+- Added `token_type` column to `password_reset_tokens` table with CHECK constraint ('reset', 'welcome')
+- Default value is 'reset' so existing tokens continue to work
+- Added index on `token_type` column for efficient lookups
+- Updated `email_logs_type_check` constraint to include 'welcome' email type
+
+**Files changed:**
+- `src/lib/server/persistence/migrations/039-welcome-tokens.sql` (created)
+
+**Patterns applied:**
+- Idempotent migration using `IF NOT EXISTS` and `DROP CONSTRAINT IF EXISTS` patterns
+- CHECK constraints for enum-like values (consistent with existing email_logs_type_check pattern)
+- Column comments for documentation
+
+**Learnings:**
+- Used DO $$ block for conditional column addition (more robust than raw IF NOT EXISTS on ALTER TABLE)
+- The password_reset_tokens table already uses proper camelCase in repository (userId, tokenHash, etc.)
+- ESLint config is missing (mid-migration) - lint baseline shows 0 as acceptable
+
+**Quality gates:**
+- `npm run check`: Passed (only pre-existing warnings)
+- `npm run lint`: Known config issue (baseline shows 0 errors expected)
