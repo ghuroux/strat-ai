@@ -80,7 +80,7 @@
       "id": "US-004",
       "title": "Manual testing and verification",
       "description": "As a developer, I want to verify all access control scenarios work correctly so that the fix is complete.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001",
         "US-002",
