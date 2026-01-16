@@ -83,7 +83,7 @@
       "id": "US-004",
       "title": "Create set-password page for welcome emails",
       "description": "As a new user, I need a dedicated set-password page so that I can set my password after receiving a welcome email.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-003"
       ],

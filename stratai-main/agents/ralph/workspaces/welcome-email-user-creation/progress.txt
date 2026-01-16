@@ -27,7 +27,7 @@ When admins create new users, the system will automatically send a secure welcom
 | US-001 | Add token_type column to password_reset_tokens table | **completed** |
 | US-002 | Create welcome email template | **completed** |
 | US-003 | Update token repository to support token types and variable expiration | **completed** |
-| US-004 | Create set-password page for welcome emails | pending |
+| US-004 | Create set-password page for welcome emails | **completed** |
 | US-005 | Update admin create user flow to send welcome email | pending |
 | US-006 | Add resend welcome email action | pending |
 | US-007 | Populate Invitations tab with pending invitations | pending |
@@ -136,14 +136,45 @@ When admins create new users, the system will automatically send a secure welcom
 
 ---
 
-## 2026-01-16 - Update token repository to support token types and variable expiration
-Task ID: US-003
-Status: Completed
+### US-004: Create set-password page for welcome emails
+**Status:** Completed
+**Date:** 2026-01-16
 
-### What Was Done
-[Fill in implementation details]
+**What was done:**
+- Created `/set-password` route with `+page.svelte` and `+page.server.ts`
+- Implemented server-side token validation on page load (validates welcome tokens specifically)
+- Created `/api/auth/set-password` API endpoint for password submission
+- Added `/set-password` to PUBLIC_ROUTES in `hooks.server.ts`
+- Implemented comprehensive error handling for invalid/expired/used tokens
+- Added clear guidance to contact administrator when token issues occur
+- Password validation: minimum 8 characters, confirmation must match
+- On success: redirects to `/login?message=password_set` after 2 seconds
 
-### Learnings
-[Capture patterns, decisions, lessons]
+**Files created:**
+- `src/routes/set-password/+page.svelte` - Password set form UI
+- `src/routes/set-password/+page.server.ts` - Server-side token validation
+- `src/routes/api/auth/set-password/+server.ts` - API endpoint for setting password
+
+**Files modified:**
+- `src/hooks.server.ts` - Added `/set-password` to PUBLIC_ROUTES
+
+**Patterns applied:**
+- Server-side token validation on page load (security best practice - don't waste user time on invalid tokens)
+- Followed existing `reset-password` page styling and structure for consistency
+- Svelte 5 runes: `$props()`, `$state()`, `$derived()` for reactive state management
+- API endpoint validates token type specifically ('welcome' vs 'reset') for security isolation
+- Token validation returns discriminated union type for clear state handling
+
+**Learnings:**
+- Server-side validation on load (`+page.server.ts`) provides better UX than client-side validation - user sees appropriate error immediately
+- Welcome and reset flows share infrastructure but need type isolation for security (prevent reset token being used for welcome flow and vice versa)
+- The `verify(token, 'welcome')` call in repository ensures only welcome tokens work on set-password page
+- Using TypeScript discriminated union (`TokenValidationState`) makes state handling in template clear and type-safe
+- Existing `reset-password` page doesn't have server-side validation - our approach is an improvement
+
+**Quality gates:**
+- `npm run check`: Passed (0 errors, 160 pre-existing warnings)
+- `npm run lint`: Known config issue (ESLint 9 migration needed - pre-existing)
+- `npm run audit-db-access`: Passed (0 violations)
 
 ---
