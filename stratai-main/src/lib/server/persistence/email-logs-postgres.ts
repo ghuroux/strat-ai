@@ -137,5 +137,30 @@ export const postgresEmailLogRepository = {
 			WHERE id = ${id}
 		`;
 		return rows.length > 0 ? rowToEmailLog(rows[0]) : null;
+	},
+
+	/**
+	 * Count recent emails of a specific type for a user
+	 * Used for rate limiting resend operations
+	 *
+	 * @param userId - User ID to check
+	 * @param emailType - Type of email to count
+	 * @param windowMinutes - Time window in minutes (default 60)
+	 * @returns Number of emails sent within the window
+	 */
+	async countRecentByUserAndType(
+		userId: string,
+		emailType: EmailType,
+		windowMinutes = 60
+	): Promise<number> {
+		const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000);
+		const result = await sql<{ count: string }[]>`
+			SELECT COUNT(*)::text as count
+			FROM email_logs
+			WHERE user_id = ${userId}
+			  AND email_type = ${emailType}
+			  AND created_at > ${cutoff}
+		`;
+		return parseInt(result[0]?.count ?? '0', 10);
 	}
 };

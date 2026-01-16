@@ -10,7 +10,8 @@ import { fail } from '@sveltejs/kit';
 import {
 	postgresUserRepository,
 	postgresOrgMembershipRepository,
-	postgresOrganizationRepository
+	postgresOrganizationRepository,
+	postgresEmailLogRepository
 } from '$lib/server/persistence';
 import { postgresGroupsRepository } from '$lib/server/persistence/groups-postgres';
 import { postgresPasswordResetTokenRepository } from '$lib/server/persistence/password-reset-tokens-postgres';
@@ -315,6 +316,100 @@ export const actions: Actions = {
 		} catch (error) {
 			console.error('Failed to reset password:', error);
 			return fail(500, { error: 'Failed to reset password' });
+		}
+	},
+
+	/**
+	 * Resend welcome email for users who haven't set their password yet
+	 *
+	 * Only works for users who have never logged in (lastLoginAt IS NULL).
+	 * Rate limited to max 3 resends per user per hour.
+	 */
+	resendWelcome: async ({ request, locals }) => {
+		if (!locals.session) {
+			return fail(401, { error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const userId = formData.get('userId')?.toString();
+
+		if (!userId) {
+			return fail(400, { error: 'User ID is required' });
+		}
+
+		const orgId = locals.session.organizationId;
+
+		try {
+			// Get user details
+			const user = await postgresUserRepository.findById(userId);
+
+			if (!user) {
+				return fail(404, { error: 'User not found' });
+			}
+
+			// Verify user is in the same organization
+			if (user.organizationId !== orgId) {
+				return fail(403, { error: 'Cannot resend welcome email for users in other organizations' });
+			}
+
+			// Verify user has never logged in (hasn't set their password)
+			if (user.lastLoginAt !== null) {
+				return fail(400, { error: 'User has already set their password and logged in' });
+			}
+
+			// Rate limiting: max 3 welcome emails per user per hour
+			const recentCount = await postgresEmailLogRepository.countRecentByUserAndType(
+				userId,
+				'welcome',
+				60 // 1 hour window
+			);
+
+			if (recentCount >= 3) {
+				return fail(429, { error: 'Please wait before resending. Maximum 3 welcome emails per hour.' });
+			}
+
+			// Get organization name for welcome email
+			const org = await postgresOrganizationRepository.findById(orgId);
+			const organizationName = org?.name ?? 'your organization';
+
+			// Create new welcome token (this also invalidates any existing welcome tokens)
+			const token = await postgresPasswordResetTokenRepository.createByEmail(user.email, 'welcome');
+
+			if (!token) {
+				return fail(500, { error: 'Failed to create welcome token' });
+			}
+
+			// Build welcome email
+			const setPasswordLink = createSetPasswordLink(token);
+			const welcomeEmail = getWelcomeEmail({
+				firstName: user.firstName ?? user.username,
+				organizationName,
+				setPasswordLink,
+				email: user.email,
+				expiresInDays: 7
+			});
+
+			// Send welcome email
+			const emailResult = await sendEmail({
+				to: user.email,
+				subject: welcomeEmail.subject,
+				html: welcomeEmail.html,
+				text: welcomeEmail.text,
+				orgId,
+				userId,
+				emailType: 'welcome',
+				metadata: { resentBy: locals.session.userId, resendCount: recentCount + 1 }
+			});
+
+			if (!emailResult.success) {
+				console.error('Failed to resend welcome email:', emailResult.error);
+				return fail(500, { error: 'Failed to send welcome email. Please try again.' });
+			}
+
+			return { success: true, welcomeEmailResent: true, email: user.email };
+		} catch (error) {
+			console.error('Failed to resend welcome email:', error);
+			return fail(500, { error: 'Failed to resend welcome email' });
 		}
 	}
 };

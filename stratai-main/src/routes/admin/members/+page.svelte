@@ -205,6 +205,8 @@
 		<div class="alert alert-success" transition:fly={{ y: -10, duration: 200 }}>
 			{#if form.welcomeEmailSent}
 				User created. Welcome email sent to {form.email}
+			{:else if form.welcomeEmailResent}
+				Welcome email resent to {form.email}
 			{:else if form.tempPassword}
 				User created! Temporary password: <code>{form.tempPassword}</code>
 			{:else}
@@ -276,11 +278,34 @@
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
 										</svg>
 									</button>
-									<button class="btn-icon" onclick={() => openResetPasswordModal(user)} title="Reset password">
-										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-										</svg>
-									</button>
+									{#if user.lastLoginAt === null}
+										<form
+											method="POST"
+											action="?/resendWelcome"
+											use:enhance={() => {
+												return async ({ update }) => {
+													await update();
+												};
+											}}
+										>
+											<input type="hidden" name="userId" value={user.id} />
+											<button
+												type="submit"
+												class="btn-icon text-primary-400"
+												title="Resend welcome email"
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+												</svg>
+											</button>
+										</form>
+									{:else}
+										<button class="btn-icon" onclick={() => openResetPasswordModal(user)} title="Reset password">
+											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+											</svg>
+										</button>
+									{/if}
 									{#if user.id !== data.currentUserId}
 										<form
 											method="POST"
@@ -901,6 +926,7 @@
 	.mt-4 { margin-top: 1rem; }
 	.text-error-400 { color: var(--color-error-400); }
 	.text-success-400 { color: var(--color-success-400); }
+	.text-primary-400 { color: var(--color-primary-400); }
 
 	/* Info message for welcome email */
 	.info-message {

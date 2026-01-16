@@ -128,7 +128,7 @@
       "id": "US-006",
       "title": "Add resend welcome email action",
       "description": "As an admin, I need to resend welcome emails for users who haven't set their password yet so that they can receive a fresh link if the original expired.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-005"
       ],
