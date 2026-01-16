@@ -86,6 +86,32 @@ echo "BASELINE_VIOLATIONS=$BASELINE" > "$RALPH_DIR/.ralph-state"
 echo "   Baseline violations: $BASELINE"
 
 # ═══════════════════════════════════════════════════════════════════
+# 4.5. Capture Test Baseline
+# ═══════════════════════════════════════════════════════════════════
+echo ""
+echo "🧪 Capturing test baseline..."
+
+# Run tests to capture baseline failures
+set +e
+TEST_OUTPUT=$(npm run test 2>&1)
+TEST_EXIT_CODE=$?
+set -e
+
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+  echo "   ✅ All tests pass (0 failures)"
+  echo "0" > "$RALPH_DIR/.ralph-test-baseline"
+elif echo "$TEST_OUTPUT" | grep -q "No test files found"; then
+  echo "   ⚠️  No tests found"
+  echo "0" > "$RALPH_DIR/.ralph-test-baseline"
+else
+  # Extract number of failed tests
+  BASELINE_FAILURES=$(echo "$TEST_OUTPUT" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' | head -1 || echo "0")
+  echo "   ⚠️  Baseline test failures: $BASELINE_FAILURES"
+  echo "   (Will not accept NEW failures during this iteration)"
+  echo "$BASELINE_FAILURES" > "$RALPH_DIR/.ralph-test-baseline"
+fi
+
+# ═══════════════════════════════════════════════════════════════════
 # 5. Check Required Files
 # ═══════════════════════════════════════════════════════════════════
 echo ""

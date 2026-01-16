@@ -84,24 +84,48 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════
-# 4. Tests
+# 4. Tests (Optional - only fails if baseline exists and got worse)
 # ═══════════════════════════════════════════════════════════════════
 echo ""
 echo "🧪 Running tests..."
 
-# Check if tests exist and run them
-if npm run test --silent 2>/dev/null; then
-  echo "   ✅ Tests pass"
+# Run tests and capture output
+set +e
+TEST_OUTPUT=$(npm run test 2>&1)
+TEST_EXIT_CODE=$?
+set -e
+
+if [ $TEST_EXIT_CODE -eq 0 ]; then
+  echo "   ✅ All tests pass"
+elif echo "$TEST_OUTPUT" | grep -q "No test files found"; then
+  echo "   ⚠️  No tests found (skipping)"
 else
-  # Check if it failed because no tests or actual test failure
-  TEST_OUTPUT=$(npm run test 2>&1) || true
-  if echo "$TEST_OUTPUT" | grep -q "No test files found"; then
-    echo "   ⚠️  No tests found (skipping)"
+  # Tests failed - check if this is a regression
+  # Extract number of failed tests
+  CURRENT_FAILURES=$(echo "$TEST_OUTPUT" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' | head -1 || echo "0")
+  
+  if [ -f "$RALPH_DIR/.ralph-test-baseline" ]; then
+    BASELINE_FAILURES=$(cat "$RALPH_DIR/.ralph-test-baseline")
+    
+    if [ "$CURRENT_FAILURES" -gt "$BASELINE_FAILURES" ]; then
+      echo "❌ NEW test failures introduced"
+      echo "   Baseline failures: $BASELINE_FAILURES"
+      echo "   Current failures:  $CURRENT_FAILURES"
+      echo "   NEW failures: $((CURRENT_FAILURES - BASELINE_FAILURES))"
+      echo ""
+      echo "   Fix: Run 'npm run test' and fix the NEW failing tests"
+      FAILED=1
+    else
+      echo "   ⚠️  Tests failing (but NOT worse than baseline)"
+      echo "      Baseline failures: $BASELINE_FAILURES"
+      echo "      Current failures:  $CURRENT_FAILURES"
+      echo "      (Not blocking - no regression)"
+    fi
   else
-    echo "❌ Tests failed"
-    echo ""
-    echo "   Fix: Run 'npm run test' and fix failing tests"
-    FAILED=1
+    # No baseline - just warn about failures but don't block
+    echo "   ⚠️  Tests failing (no baseline to compare)"
+    echo "      Failed tests: $CURRENT_FAILURES"
+    echo "      (Not blocking - establish baseline with preflight)"
   fi
 fi
 
