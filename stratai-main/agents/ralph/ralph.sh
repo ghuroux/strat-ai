@@ -145,29 +145,140 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "   Completed:  $COMPLETED stories"
     echo ""
     
-    # Archive progress
+    # ═════════════════════════════════════════════════════════════════════════════
+    # Feature Cleanup Automation
+    # ═════════════════════════════════════════════════════════════════════════════
+    
+    print_step "🧹 Feature Cleanup"
+    
     DATE=$(date +%Y-%m-%d)
     ARCHIVE_DIR="$SCRIPT_DIR/archive/$DATE-$(echo "$FEATURE" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
     
+    # 1. Archive progress
     if [ -f "$PROGRESS_FILE" ]; then
       mkdir -p "$ARCHIVE_DIR"
       cp "$PROGRESS_FILE" "$ARCHIVE_DIR/"
-      echo "   Archived progress to: $ARCHIVE_DIR/"
+      cp "$PRD_FILE" "$ARCHIVE_DIR/"
+      echo "   📦 Archived progress to: $ARCHIVE_DIR/"
     fi
+    
+    # 2. Extract patterns to AGENTS.md (if Claude CLI available)
+    if [ -n "$CLAUDE_CLI" ]; then
+      echo "   🔍 Extracting reusable patterns..."
+      
+      EXTRACT_PROMPT="Review the completed feature in agents/ralph/progress.txt and extract:
+
+1. **New Codebase Patterns** - Reusable code patterns discovered
+2. **Architectural Decisions** - Important design choices made
+3. **Common Gotchas** - Non-obvious issues found and fixed
+
+Add these to AGENTS.md following the existing format. Only add genuinely reusable insights.
+
+Read agents/ralph/progress.txt for the feature implementation details."
+
+      set +e
+      if [ -n "$TIMEOUT_CMD" ]; then
+        $TIMEOUT_CMD $CLAUDE_CLI --print \
+          --dangerously-skip-permissions \
+          "$EXTRACT_PROMPT" > /dev/null 2>&1
+      else
+        $CLAUDE_CLI --print \
+          --dangerously-skip-permissions \
+          "$EXTRACT_PROMPT" > /dev/null 2>&1
+      fi
+      set -e
+      
+      echo "   ✅ Patterns extracted to AGENTS.md"
+    fi
+    
+    # 3. Reset working files for next feature
+    echo "   🔄 Resetting working files..."
+    
+    # Reset progress.txt to template
+    cat > "$PROGRESS_FILE" << 'EOF'
+# Ralph Progress Log
+
+## Feature: [Feature Name]
+**Parent Task:** [parent-task-id]
+**Started:** [YYYY-MM-DD]
+**Status:** Ready to begin
+
+## Decisions Made During PRD Creation
+
+(Captured during PRD creation phase)
+
+## Codebase Patterns Discovered
+
+(Patterns discovered during research)
+
+## Stories
+
+| ID | Title | Status |
+|----|-------|--------|
+
+---
+
+## Iteration Log
+
+(Each iteration appends a section below)
+
+---
+
+EOF
+    
+    # Reset prd.json to empty template
+    cat > "$PRD_FILE" << 'EOF'
+{
+  "feature": "",
+  "created": "",
+  "parent_task_id": "",
+  "research": {},
+  "stories": []
+}
+EOF
+    
+    # Clear parent task ID
+    > "$SCRIPT_DIR/parent-task-id.txt"
+    
+    echo "   ✅ Working files reset for next feature"
+    
+    # 4. Create final summary commit
+    cd "$PROJECT_DIR"
+    git add -A
+    git commit -m "feat: complete $FEATURE feature
+
+- Implemented $COMPLETED stories
+- Extracted patterns to AGENTS.md
+- Archived progress to $ARCHIVE_DIR/
+- Reset working files for next feature"
     
     echo ""
     print_success "Feature complete!"
     echo ""
-    echo "   Next steps:"
-    echo "   1. Review the implementation"
-    echo "   2. Extract reusable patterns to AGENTS.md"
-    echo "   3. Create PR for review"
+    echo "   📊 Summary:"
+    echo "   • Feature: $FEATURE"
+    echo "   • Stories completed: $COMPLETED"
+    echo "   • Archive: $ARCHIVE_DIR/"
+    echo "   • Patterns: Added to AGENTS.md"
+    echo ""
+    echo "   🚀 Ready for next feature!"
     echo ""
     exit 0
   fi
   
   STORY_TITLE=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .title' "$PRD_FILE")
   STORY_DESC=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .description' "$PRD_FILE")
+  STORY_STATUS=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .status' "$PRD_FILE")
+  
+  # ───────────────────────────────────────────────────────────────────────────────
+  # Resume Capability: Skip completed stories
+  # ───────────────────────────────────────────────────────────────────────────────
+  
+  if [ "$STORY_STATUS" == "completed" ] || [ "$STORY_STATUS" == "complete" ]; then
+    echo ""
+    echo "✅ Story $STORY_ID already completed - skipping"
+    continue
+  fi
   
   echo ""
   echo "📋 Story: $STORY_ID"
@@ -514,19 +625,23 @@ Read agents/ralph/prompt.md for context if needed."
   echo "---" >> "$PROGRESS_FILE"
   
   # ─────────────────────────────────────────────────────────────────────────────
-  # Commit
+  # Auto-Commit Story
   # ─────────────────────────────────────────────────────────────────────────────
   
   print_step "💾 Committing changes..."
   
   cd "$PROJECT_DIR"
   
-  echo ""
-  echo "   Ready to commit. Suggested message:"
-  echo "   feat($STORY_ID): $STORY_TITLE"
-  echo ""
-  echo "   Run: git add -A && git commit -m 'feat($STORY_ID): $STORY_TITLE'"
-  echo ""
+  # Auto-commit this story's changes
+  if git add -A && git commit -m "feat($STORY_ID): $STORY_TITLE"; then
+    echo ""
+    echo "   ✅ Committed: feat($STORY_ID): $STORY_TITLE"
+    echo ""
+  else
+    echo ""
+    echo "   ⚠️  Commit failed (possibly nothing to commit)"
+    echo ""
+  fi
   
   # ─────────────────────────────────────────────────────────────────────────────
   # Summary
