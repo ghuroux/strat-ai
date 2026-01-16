@@ -7,9 +7,11 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
+import { postgresSpaceMembershipsRepository, postgresUserRepository } from '$lib/server/persistence';
 import { canManageSpaceMembers, type SpaceRole, type SpaceMembershipWithUser } from '$lib/types/space-memberships';
 import { sql } from '$lib/server/persistence/db';
+import { sendEmail } from '$lib/server/email/sendgrid';
+import { getSpaceInvitationEmail } from '$lib/server/email/templates';
 
 /**
  * GET /api/spaces/[id]/members
@@ -154,10 +156,58 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 			);
 		}
 
+		// Get space details for email (need name, slug, type)
+		const spaceRows = await sql<{ name: string; slug: string; type: string }[]>`
+			SELECT name, slug, type FROM spaces WHERE id = ${spaceId} AND deleted_at IS NULL
+		`;
+		const space = spaceRows[0];
+
+		if (!space) {
+			return json({ error: 'Space not found' }, { status: 404 });
+		}
+
 		// Add the member (upsert pattern - updates role if already exists)
 		const membership = targetUserId
 			? await postgresSpaceMembershipsRepository.addUserMember(spaceId, targetUserId, role, userId)
 			: await postgresSpaceMembershipsRepository.addGroupMember(spaceId, groupId, role, userId);
+
+		// Send space invitation email (only for user memberships, not group or org spaces)
+		// Don't send if: org space, self-add, or group membership
+		if (targetUserId && space.type !== 'organization' && targetUserId !== userId) {
+			try {
+				// Get target user details
+				const targetUser = await postgresUserRepository.findById(targetUserId);
+				// Get inviter details
+				const inviter = await postgresUserRepository.findById(userId);
+
+				if (targetUser?.email) {
+					const inviterName = inviter?.displayName || inviter?.firstName || inviter?.email || 'A team member';
+					const firstName = targetUser.firstName || targetUser.displayName || 'there';
+
+					const emailContent = getSpaceInvitationEmail({
+						firstName,
+						inviterName,
+						spaceName: space.name,
+						spaceSlug: space.slug,
+						role: role as 'admin' | 'member' | 'guest'
+					});
+
+					await sendEmail({
+						to: targetUser.email,
+						subject: emailContent.subject,
+						html: emailContent.html,
+						text: emailContent.text,
+						orgId: locals.session.organizationId,
+						userId: targetUserId,
+						emailType: 'space_invite',
+						metadata: { spaceId, spaceName: space.name, role, invitedBy: userId }
+					});
+				}
+			} catch (emailError) {
+				// Log but don't fail - membership was created successfully
+				console.error('Failed to send space invitation email:', emailError);
+			}
+		}
 
 		return json(membership, { status: 201 });
 	} catch (error) {

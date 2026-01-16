@@ -160,7 +160,7 @@
 			class:active={activeTab === 'invitations'}
 			onclick={() => (activeTab = 'invitations')}
 		>
-			Invitations (0)
+			Invitations ({data.invitations.length})
 		</button>
 	</div>
 
@@ -337,13 +337,98 @@
 			</div>
 		{/if}
 	{:else}
-		<div class="empty-state">
-			<svg class="w-12 h-12 text-surface-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-			</svg>
-			<p>No pending invitations</p>
-			<p class="text-sm text-surface-500">Invitations feature coming soon</p>
-		</div>
+		<!-- Invitations Tab -->
+		{#if data.invitations.length > 0}
+			<div class="table-container">
+				<table class="data-table">
+					<thead>
+						<tr>
+							<th>User</th>
+							<th>Email</th>
+							<th>Status</th>
+							<th>Invited</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each data.invitations as invitation (invitation.id)}
+							<tr>
+								<td class="user-cell">
+									<div class="user-info">
+										<span class="user-name">{invitation.displayName || invitation.username || 'New User'}</span>
+										{#if invitation.username}
+											<span class="user-username">@{invitation.username}</span>
+										{/if}
+									</div>
+								</td>
+								<td>{invitation.email}</td>
+								<td>
+									<span class="badge {invitation.status === 'pending' ? 'badge-yellow' : 'badge-red'}">
+										{invitation.status === 'pending' ? 'Pending' : 'Expired'}
+									</span>
+								</td>
+								<td class="date-cell">{formatDate(invitation.invitedAt)}</td>
+								<td class="actions-cell">
+									<form
+											method="POST"
+											action="?/resendWelcome"
+											use:enhance={() => {
+												return async ({ update }) => {
+													await update();
+												};
+											}}
+										>
+											<input type="hidden" name="userId" value={invitation.id} />
+											<button
+												type="submit"
+												class="btn-icon"
+												title="Resend welcome email"
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+												</svg>
+											</button>
+										</form>
+										<form
+											method="POST"
+											action="?/revokeInvitation"
+											use:enhance={() => {
+												return async ({ update }) => {
+													await update();
+												};
+											}}
+										>
+											<input type="hidden" name="userId" value={invitation.id} />
+											<button
+												type="submit"
+												class="btn-icon text-error-400"
+												title="Revoke invitation"
+												onclick={(e) => {
+													if (!confirm('Are you sure you want to revoke this invitation? The user will be deleted.')) {
+														e.preventDefault();
+													}
+												}}
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+												</svg>
+											</button>
+										</form>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<div class="empty-state">
+				<svg class="w-12 h-12 text-surface-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+				</svg>
+				<p>No pending invitations</p>
+				<span class="text-sm text-surface-500">Users who haven't logged in yet will appear here</span>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -772,6 +857,12 @@
 		background: rgba(239, 68, 68, 0.15);
 		border-color: rgba(239, 68, 68, 0.3);
 		color: #fca5a5;
+	}
+
+	.badge-yellow {
+		background: rgba(234, 179, 8, 0.15);
+		border-color: rgba(234, 179, 8, 0.3);
+		color: #fde047;
 	}
 
 	.date-cell {
@@ -1310,5 +1401,11 @@
 		background: rgba(239, 68, 68, 0.1);
 		border-color: rgba(239, 68, 68, 0.2);
 		color: #dc2626;
+	}
+
+	:global(html.light) .badge-yellow {
+		background: rgba(234, 179, 8, 0.1);
+		border-color: rgba(234, 179, 8, 0.2);
+		color: #ca8a04;
 	}
 </style>

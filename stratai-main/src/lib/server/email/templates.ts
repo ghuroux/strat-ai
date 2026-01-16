@@ -118,7 +118,12 @@ export function getWelcomeEmail(data: WelcomeEmailTemplateData) {
 	<div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
 		<h2 style="margin-top: 0;">Welcome to StratAI!</h2>
 		<p>Hi ${firstName},</p>
-		<p>You've been invited to join <strong>${organizationName}</strong> on StratAI. To get started, please set up your password by clicking the button below:</p>
+		<p>You've been invited to join <strong>${organizationName}</strong> on StratAI.</p>
+		<p>Once you set your password, you'll have access to:</p>
+		<ul style="color: #374151; margin: 10px 0 20px 0; padding-left: 20px;">
+			<li>The <strong>${organizationName}</strong> workspace - your team's shared space for collaboration</li>
+		</ul>
+		<p>Click the button below to get started:</p>
 		<div style="text-align: center; margin: 30px 0;">
 			<a href="${setPasswordLink}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Set Your Password</a>
 		</div>
@@ -135,7 +140,12 @@ export function getWelcomeEmail(data: WelcomeEmailTemplateData) {
 
 Hi ${firstName},
 
-You've been invited to join ${organizationName} on StratAI. To get started, please set up your password by visiting the link below:
+You've been invited to join ${organizationName} on StratAI.
+
+Once you set your password, you'll have access to:
+• The ${organizationName} workspace - your team's shared space for collaboration
+
+Click the link below to get started:
 
 ${setPasswordLink}
 
@@ -149,6 +159,123 @@ If you weren't expecting this invitation, you can safely ignore this email.
 
 	return {
 		subject: 'Welcome to StratAI - Set Your Password',
+		html,
+		text
+	};
+}
+
+/**
+ * Create space link for invitation emails
+ */
+export function createSpaceLink(spaceSlug: string): string {
+	return `${getBaseUrl()}/spaces/${spaceSlug}`;
+}
+
+/**
+ * Get display name for a role (with article)
+ */
+function getRoleDisplayName(role: string): string {
+	const names: Record<string, string> = {
+		admin: 'an Admin',
+		member: 'a Member',
+		guest: 'a Guest'
+	};
+	return names[role] || 'a Member';
+}
+
+/**
+ * Get permissions list for a role
+ */
+function getRolePermissions(role: string): string[] {
+	const permissions: Record<string, string[]> = {
+		admin: [
+			'View all areas and content',
+			'Create and edit content',
+			'Manage space members'
+		],
+		member: [
+			'View all areas and content',
+			'Create and edit content',
+			'Collaborate with the team'
+		],
+		guest: [
+			'View areas shared with you',
+			'Collaborate on shared content'
+		]
+	};
+	return permissions[role] || permissions.member;
+}
+
+interface SpaceInvitationTemplateData {
+	firstName: string;
+	inviterName: string;
+	spaceName: string;
+	spaceSlug: string;
+	role: 'admin' | 'member' | 'guest';
+}
+
+/**
+ * Generate space invitation email content
+ */
+export function getSpaceInvitationEmail(data: SpaceInvitationTemplateData) {
+	const { firstName, inviterName, spaceName, spaceSlug, role } = data;
+	const spaceLink = createSpaceLink(spaceSlug);
+	const roleDisplay = getRoleDisplayName(role);
+	const permissions = getRolePermissions(role);
+
+	const permissionsHtml = permissions
+		.map(p => `<li style="margin: 5px 0;">${p}</li>`)
+		.join('\n');
+
+	const permissionsText = permissions
+		.map(p => `• ${p}`)
+		.join('\n');
+
+	const html = `
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>You've been added to ${spaceName}</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 8px 8px 0 0;">
+		<h1 style="color: white; margin: 0; font-size: 24px;">StratAI</h1>
+	</div>
+	<div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
+		<h2 style="margin-top: 0;">You've been added to a space!</h2>
+		<p>Hi ${firstName},</p>
+		<p><strong>${inviterName}</strong> added you to the <strong>"${spaceName}"</strong> space as ${roleDisplay}.</p>
+		<p>As ${roleDisplay}, you can:</p>
+		<ul style="color: #374151; margin: 10px 0 20px 0; padding-left: 20px;">
+			${permissionsHtml}
+		</ul>
+		<div style="text-align: center; margin: 30px 0;">
+			<a href="${spaceLink}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">View ${spaceName}</a>
+		</div>
+		<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+		<p style="color: #9ca3af; font-size: 12px;">If the button doesn't work, copy and paste this link into your browser:<br><a href="${spaceLink}" style="color: #667eea; word-break: break-all;">${spaceLink}</a></p>
+	</div>
+</body>
+</html>`;
+
+	const text = `You've been added to a space!
+
+Hi ${firstName},
+
+${inviterName} added you to the "${spaceName}" space as ${roleDisplay}.
+
+As ${roleDisplay}, you can:
+${permissionsText}
+
+View the space here:
+${spaceLink}
+
+- The StratAI Team`;
+
+	return {
+		subject: `You've been added to ${spaceName}`,
 		html,
 		text
 	};

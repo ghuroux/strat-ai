@@ -15,6 +15,7 @@ export type EmailType =
 	| 'password_reset'
 	| 'email_verification'
 	| 'team_invite'
+	| 'space_invite'
 	| 'notification'
 	| 'welcome';
 

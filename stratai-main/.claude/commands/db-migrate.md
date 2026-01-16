@@ -27,7 +27,13 @@ src/lib/server/persistence/
 Run each schema file against the database:
 
 ```bash
-psql -d stratai -f src/lib/server/persistence/[schema-file].sql
+/opt/homebrew/opt/postgresql@18/bin/psql -d stratai -f src/lib/server/persistence/[schema-file].sql
+```
+
+For migrations:
+
+```bash
+/opt/homebrew/opt/postgresql@18/bin/psql -d stratai -f src/lib/server/persistence/migrations/[migration-file].sql
 ```
 
 ## Notes
