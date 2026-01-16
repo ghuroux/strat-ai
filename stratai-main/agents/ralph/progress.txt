@@ -1,0 +1,61 @@
+# Ralph Progress Log
+
+## Feature: Space Invitation Email - Verification
+**Parent Task:** US-006
+**Started:** 2026-01-16
+**Status:** Completed
+
+---
+
+## Iteration Log
+
+### US-006: Manual testing and verification (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+1. **CRITICAL FIX**: US-001 was marked "completed" but never implemented! Added full returnUrl support:
+   - Created `src/routes/login/+page.ts` with `validateReturnUrl()` function
+   - Updated `src/routes/login/+page.svelte` to pass returnUrl to form action
+   - Updated `src/routes/login/+page.server.ts` to use returnUrl after login
+   - Updated `src/hooks.server.ts` to include returnUrl when redirecting to login
+
+2. **Verified all email scenarios in code:**
+   - Add existing user to space - email sent (line 163-214 in API)
+   - Add user to org space - no email (line 184 checks spaceType)
+   - Add yourself to space - no email (line 165 checks targetUserId !== userId)
+   - Add group to space - no email (line 165 checks targetUserId exists)
+   - Click email link while logged in - direct `/spaces/{slug}` link
+   - Click email link while logged out - now redirects with returnUrl
+   - Invalid returnUrl - validateReturnUrl() rejects, falls back to user preferences
+
+3. **Email template review:**
+   - HTML and plain text versions consistent
+   - Proper styling with brand colors
+   - Role capitalization and expiration handling correct
+
+**Files changed:**
+- `src/routes/login/+page.ts` - NEW: Load returnUrl from query params, validateReturnUrl()
+- `src/routes/login/+page.svelte` - Pass returnUrl to form action
+- `src/routes/login/+page.server.ts` - Use returnUrl after login if valid
+- `src/hooks.server.ts` - Include returnUrl when redirecting to login
+
+**Critical finding:**
+US-001 was listed as "completed" in prd.json but had NO implementation. Verification stories are essential for catching this type of issue where status doesn't match reality.
+
+**Patterns applied:**
+- **Security-first URL validation**: Multiple checks (starts with /, no //, no javascript:, no data:)
+- **Defense in depth**: Validate on page load AND on server action
+- **Graceful fallback**: Invalid returnUrl falls back to user preferences, not error
+
+**Learnings:**
+1. **Verification stories catch gaps**: This story caught that US-001 was never actually implemented despite being marked complete.
+2. **Full-stack returnUrl**: Proper implementation requires hooks.server.ts (redirect), +page.ts (load), +page.svelte (form), +page.server.ts (action).
+3. **Security validation patterns**: URL validation should check multiple attack vectors (protocol-relative, javascript:, data:).
+4. **URL encoding matters**: Use `encodeURIComponent()` when embedding URLs in query params, `decodeURIComponent()` when reading them.
+
+**Quality gates:**
+- npm run check - passes (0 errors, 162 warnings pre-existing)
+- npm run lint - ESLint config missing (pre-existing issue)
+
+---

@@ -1,0 +1,37 @@
+{
+  "feature": "Space Invitation Email",
+  "created": "2026-01-16",
+  "parent_task_id": "space-invitation-email",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Add returnUrl support to login page",
+      "status": "completed"
+    },
+    {
+      "id": "US-002",
+      "title": "Update welcome email to mention org workspace",
+      "status": "completed"
+    },
+    {
+      "id": "US-003",
+      "title": "Create space invitation email template",
+      "status": "completed"
+    },
+    {
+      "id": "US-004",
+      "title": "Create space invitation email sending service",
+      "status": "completed"
+    },
+    {
+      "id": "US-005",
+      "title": "Send invitation email when user added to space",
+      "status": "completed"
+    },
+    {
+      "id": "US-006",
+      "title": "Manual testing and verification",
+      "status": "completed"
+    }
+  ]
+}
