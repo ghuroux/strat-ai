@@ -211,26 +211,102 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo ""
   echo "   Agent implementing: $STORY_ID - $STORY_TITLE"
   echo ""
-  echo "   ┌────────────────────────────────────────────────────────────┐"
-  echo "   │  AGENT IMPLEMENTATION REQUIRED                            │"
-  echo "   │                                                            │"
-  echo "   │  This is where the agent (Claude Code) implements the     │"
-  echo "   │  story. In practice:                                      │"
-  echo "   │                                                            │"
-  echo "   │  1. Read prompt.md for context                            │"
-  echo "   │  2. Implement the story                                   │"
-  echo "   │  3. Run quality gates                                     │"
-  echo "   │  4. Update progress.txt                                   │"
-  echo "   │  5. Invoke ralph skill to continue                        │"
-  echo "   │                                                            │"
-  echo "   └────────────────────────────────────────────────────────────┘"
-  echo ""
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Try to invoke Claude agent automatically
+  # ─────────────────────────────────────────────────────────────────────────────
   
-  # In a real implementation, this would invoke the agent
-  # For now, we pause and let the user/agent take over
+  CLAUDE_CLI=""
+  if command -v claude &> /dev/null; then
+    CLAUDE_CLI="claude"
+  elif [ -x "/Users/ghuroux/.npm-global/bin/claude" ]; then
+    CLAUDE_CLI="/Users/ghuroux/.npm-global/bin/claude"
+  fi
   
-  echo "   Press Enter when story is implemented, or Ctrl+C to exit..."
-  read -r
+  if [ -n "$CLAUDE_CLI" ]; then
+    echo "   ┌────────────────────────────────────────────────────────────┐"
+    echo "   │  🤖 INVOKING CLAUDE AGENT AUTOMATICALLY                   │"
+    echo "   └────────────────────────────────────────────────────────────┘"
+    echo ""
+    echo "   📋 Story: $STORY_ID - $STORY_TITLE"
+    echo "   📁 Context: prompt.md, prd.json, progress.txt, AGENTS.md"
+    echo ""
+    echo "   Agent will:"
+    echo "   1. Read prompt.md for instructions"
+    echo "   2. Implement the story"
+    echo "   3. Run quality gates"
+    echo "   4. Update progress.txt"
+    echo ""
+    echo "   Starting agent..."
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    
+    # Build the agent prompt
+    AGENT_PROMPT="You are implementing a user story in the Ralph compound engineering loop.
+
+**Current Story:** $STORY_ID - $STORY_TITLE
+
+**Your Task:**
+1. Read and follow the instructions in \`agents/ralph/prompt.md\`
+2. Read the current story details from \`agents/ralph/prd.json\`
+3. Review existing patterns in \`AGENTS.md\`
+4. Review current feature context in \`agents/ralph/progress.txt\`
+5. Implement the story following ALL acceptance criteria
+6. Run quality gates: \`npm run check\`, \`npm run lint\`
+7. Update \`agents/ralph/progress.txt\` with your learnings
+8. Commit your changes with a descriptive message
+
+**Critical Rules:**
+- Follow the patterns in AGENTS.md (especially camelCase for DB access)
+- Do NOT skip any acceptance criteria
+- Do NOT skip quality gates
+- Do NOT skip updating progress.txt
+- Commit your work when done
+
+**Start by reading agents/ralph/prompt.md to understand the full context.**"
+
+    # Invoke Claude in non-interactive mode
+    cd "$PROJECT_DIR" || exit 1
+    
+    if $CLAUDE_CLI --print \
+      --system-prompt "$AGENT_PROMPT" \
+      --dangerously-skip-permissions \
+      "Implement user story $STORY_ID. Start by reading agents/ralph/prompt.md for full context and instructions." 2>&1; then
+      
+      echo ""
+      echo "═══════════════════════════════════════════════════════════════"
+      echo "   ✅ Agent completed"
+      echo ""
+      echo "   Proceeding to postflight validation..."
+      echo ""
+    else
+      echo ""
+      echo "═══════════════════════════════════════════════════════════════"
+      echo "   ⚠️  Agent invocation failed or incomplete"
+      echo ""
+      echo "   Options:"
+      echo "   1. Fix any issues and press Enter to continue to validation"
+      echo "   2. Press Ctrl+C to exit"
+      echo ""
+      read -r
+    fi
+    
+  else
+    # Fallback to manual mode
+    echo "   ┌────────────────────────────────────────────────────────────┐"
+    echo "   │  ⚠️  MANUAL IMPLEMENTATION REQUIRED                        │"
+    echo "   │                                                            │"
+    echo "   │  Claude CLI not found. Please implement manually:         │"
+    echo "   │                                                            │"
+    echo "   │  1. Read prompt.md for context                            │"
+    echo "   │  2. Implement the story                                   │"
+    echo "   │  3. Run quality gates                                     │"
+    echo "   │  4. Update progress.txt                                   │"
+    echo "   │                                                            │"
+    echo "   └────────────────────────────────────────────────────────────┘"
+    echo ""
+    echo "   Press Enter when story is implemented, or Ctrl+C to exit..."
+    read -r
+  fi
   
   # ─────────────────────────────────────────────────────────────────────────────
   # Postflight Validation
