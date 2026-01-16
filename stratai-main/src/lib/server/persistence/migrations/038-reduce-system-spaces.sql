@@ -56,7 +56,7 @@ WHERE c.space_id IN (
       AND slug IN ('work', 'research', 'random')
       AND deleted_at IS NOT NULL
 )
-AND c.user_id = personal_space.user_id;
+AND c.user_id::text = personal_space.user_id::text;
 
 -- ============================================
 -- 4. MOVE DOCUMENTS FROM DELETED SPACES TO PERSONAL
@@ -77,7 +77,7 @@ WHERE d.space_id IN (
       AND slug IN ('work', 'research', 'random')
       AND deleted_at IS NOT NULL
 )
-AND d.user_id = personal_space.user_id;
+AND d.user_id::text = personal_space.user_id::text;
 
 -- ============================================
 -- 5. MOVE TASKS FROM DELETED SPACES TO PERSONAL
@@ -98,28 +98,24 @@ WHERE t.space_id IN (
       AND slug IN ('work', 'research', 'random')
       AND deleted_at IS NOT NULL
 )
-AND t.user_id = personal_space.user_id;
+AND t.user_id::text = personal_space.user_id::text;
 
 -- ============================================
--- 6. MOVE FOCUS AREAS FROM DELETED SPACES TO PERSONAL
+-- 6. SOFT-DELETE AREAS FROM DELETED SPACES
 -- ============================================
+-- Instead of moving areas (which could cause slug conflicts),
+-- we soft-delete them along with their parent spaces.
+-- Content in these areas (conversations) was already moved in step 3.
 
-UPDATE focus_areas fa
-SET space_id = personal_space.id,
-    updated_at = NOW()
-FROM (
-    SELECT id, user_id FROM spaces
-    WHERE type = 'system'
-      AND slug = 'personal'
-      AND deleted_at IS NULL
-) personal_space
-WHERE fa.space_id IN (
+UPDATE areas
+SET deleted_at = NOW(), updated_at = NOW()
+WHERE space_id IN (
     SELECT id FROM spaces
     WHERE type = 'system'
       AND slug IN ('work', 'research', 'random')
       AND deleted_at IS NOT NULL
 )
-AND fa.user_id = personal_space.user_id;
+AND deleted_at IS NULL;
 
 -- ============================================
 -- VERIFICATION QUERIES (run after migration)

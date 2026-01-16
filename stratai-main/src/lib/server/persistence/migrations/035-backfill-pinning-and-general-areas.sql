@@ -38,16 +38,16 @@ WHERE sm.id = fmu.id
 -- Some spaces were created before General area auto-creation was added
 -- This ensures every non-deleted space has a General area
 
-INSERT INTO areas (id, space_id, name, slug, color, description, is_general, order_index, created_at, updated_at)
+INSERT INTO areas (id, space_id, name, slug, color, is_general, order_index, user_id, created_at, updated_at)
 SELECT
     'area_' || substr(md5(random()::text), 1, 20),
     s.id,
     'General',
     'general',
     COALESCE(s.color, '#6366f1'),
-    'General discussion area for this space',
     true,
     0,
+    s.user_id,
     NOW(),
     NOW()
 FROM spaces s

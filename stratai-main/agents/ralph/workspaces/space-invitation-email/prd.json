@@ -97,7 +97,7 @@
       "id": "US-005",
       "title": "Send invitation email when user added to space",
       "description": "As a space admin, I want users to receive an email when I add them to a space so that they know they have access.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001",
         "US-004"

@@ -212,3 +212,15 @@ Status: Completed
 - [x] npm run lint passes (baseline - config issue pre-existing)
 
 ---
+
+## 2026-01-16 - Send invitation email when user added to space
+Task ID: US-005
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---
