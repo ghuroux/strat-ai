@@ -6,4 +6,9 @@
  */
 
 export { sendEmail } from './sendgrid';
-export { getPasswordResetEmail, createPasswordResetLink } from './templates';
+export {
+	getPasswordResetEmail,
+	createPasswordResetLink,
+	getSpaceInviteEmail,
+	createSpaceInviteLink
+} from './templates';

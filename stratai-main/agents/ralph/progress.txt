@@ -1,62 +1,64 @@
 # Ralph Progress Log
 
-## Feature: [Feature Name]
-**Parent Task:** [parent-task-id]
-**Started:** [YYYY-MM-DD]
-**Status:** Ready to begin
+## Feature: Space Invitation Emails
+**Parent Task:** (single story implementation)
+**Started:** 2026-01-16
+**Status:** In Progress
 
 ## Decisions Made During PRD Creation
 
-- **Decision 1**: [What was decided] - [Rationale]
-- **Decision 2**: [What was decided] - [Rationale]
-
-(Filled by PRD creator during research phase)
+- **Email Template Structure**: Follow existing password reset template pattern - consistent branding, same styling, HTML+text versions
+- **Role Display**: Capitalize role for user-friendly display (member → Member)
+- **Expiration Format**: Use plural-aware text ("1 day" vs "7 days")
 
 ## Codebase Patterns Discovered
 
-- **Pattern 1**: [Pattern name] - [Where it's used]
-- **Pattern 2**: [Pattern name] - [Where it's used]
-
-(Filled by PRD creator during research phase)
+- **Email Template Pattern**: `templates.ts` - HTML email with text fallback, return object with {subject, html, text}
+- **Base URL Helper**: `getBaseUrl()` function for generating links in emails
+- **Interface-first Design**: Define template data interface before implementing template function
+- **Database Constraint Updates**: Must update CHECK constraints when adding new enum values
 
 ## Stories
 
 | ID | Title | Status |
 |----|-------|--------|
-| US-001 | [Story title] | pending |
-| US-002 | [Story title] | pending |
+| US-003 | Create space invitation email template | completed |
 
 ---
 
 ## Iteration Log
 
-(Each story implementation appends a section below)
-
-**Example format:**
-```
-### US-001: [Story Title] (YYYY-MM-DD)
+### US-003: Create space invitation email template (2026-01-16)
 
 **Status:** Completed
 
 **What was done:**
-- [Implementation detail 1]
-- [Implementation detail 2]
+- Added `space_invite` to EmailType enum in `src/lib/types/email.ts`
+- Created `SpaceInviteTemplateData` interface in `templates.ts` with documented fields
+- Implemented `getSpaceInviteEmail()` function following password reset pattern
+- Implemented `createSpaceInviteLink()` helper for generating invitation URLs
+- Created migration `039-add-space-invite-email-type.sql` to update database constraint
+- Exported new functions from `index.ts` barrel file
 
 **Files changed:**
-- [file path] - [what changed]
+- `src/lib/types/email.ts` - Added `space_invite` to EmailType union
+- `src/lib/server/email/templates.ts` - Added interface and two template functions
+- `src/lib/server/email/index.ts` - Added exports for new functions
+- `src/lib/server/persistence/migrations/039-add-space-invite-email-type.sql` - New migration
 
 **Patterns applied:**
-- [Pattern name from AGENTS.md]
+- Email Template Pattern from AGENTS.md
+- Database Constraint pattern for extending enums
 
 **Learnings:**
-1. [Learning 1]
-2. [Learning 2]
+1. **Email templates have two versions**: HTML for modern clients, plain text for fallback. Both must be maintained.
+2. **Subject line personalization**: Using dynamic inviter name and space name makes emails more engaging
+3. **Expiration handling**: Always consider singular/plural for time units in user-facing text
+4. **Database sync**: TypeScript types and database constraints must be kept in sync - the EmailType enum comment references the CHECK constraint
+5. **Link structure**: Using `/invites/space?token=` pattern allows for dedicated acceptance page that can handle both existing and new users
 
 **Quality gates:**
-- ✅ npm run check - passes
-- ✅ npm run lint - passes
-- ✅ npm run test - passes
+- ✅ npm run check - passes (0 errors, 160 warnings pre-existing)
+- ⚠️ npm run lint - ESLint config missing (pre-existing issue, not from this change)
 
 ---
-```
-
