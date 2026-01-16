@@ -71,8 +71,8 @@ export interface ChatCompletionRequest {
 	provider?: 'anthropic' | 'openai' | 'google'; // Preferred provider for AUTO mode
 	currentModel?: string; // Model used in previous turns (for cache coherence)
 	conversationTurn?: number; // Turn count in conversation
-	// Space context for space-aware prompts
-	space?: 'work' | 'research' | 'random' | 'personal' | null;
+	// Space context for space-aware prompts (system or custom space slug)
+	space?: string | null;
 	// Assist context for assist-specific system prompts
 	assistId?: string | null;
 	// Assist phase and task context

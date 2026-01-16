@@ -631,9 +631,8 @@ export async function analyzeSystemPrompt(
 			context.spaceId = space.id;
 			context.spaceName = space.name;
 
-			// Determine if system or custom space
-			const systemSpaces = ['work', 'research', 'random', 'personal'];
-			const isSystemSpace = systemSpaces.includes(space.slug);
+			// Determine if system or custom space (only 'personal' is system now)
+			const isSystemSpace = space.slug === 'personal';
 
 			if (isSystemSpace) {
 				context.spaceType = 'system';

@@ -109,11 +109,11 @@ export function rowToFocusArea(row: FocusAreaRow): FocusArea {
 }
 
 /**
- * System space IDs (for type safety until we migrate to spaces table)
+ * System space IDs (only Personal is a system space now)
  */
-export type SystemSpaceId = 'work' | 'research' | 'random' | 'personal';
+export type SystemSpaceId = 'personal';
 
-export const SYSTEM_SPACES: SystemSpaceId[] = ['work', 'research', 'random', 'personal'];
+export const SYSTEM_SPACES: SystemSpaceId[] = ['personal'];
 
 export function isSystemSpace(id: string): id is SystemSpaceId {
 	return SYSTEM_SPACES.includes(id as SystemSpaceId);

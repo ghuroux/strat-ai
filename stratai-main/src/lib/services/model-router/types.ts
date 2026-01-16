@@ -35,8 +35,8 @@ export interface RoutingContext {
 	thinkingEnabled: boolean;
 	userTier: 'free' | 'pro' | 'team' | 'enterprise';
 
-	// StratAI context
-	spaceType: 'work' | 'research' | 'random' | 'personal' | null;
+	// StratAI context (spaceType is now just the slug - 'personal' is system, others are custom)
+	spaceType: string | null;
 	spaceSlug: string | null;
 	areaId: string | null;
 	areaHasDocs: boolean;

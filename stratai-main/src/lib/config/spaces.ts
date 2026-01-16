@@ -3,33 +3,11 @@ import type { SpaceType, SpaceConfig } from '$lib/types/chat';
 /**
  * Space configurations for productivity environments
  *
- * Each space has:
- * - Visual identity (icon, accent color)
- * - Description for the selector
- * - Future: default model, system prompt additions, templates
+ * NOTE: This is legacy configuration. The actual system spaces are now
+ * defined in src/lib/types/spaces.ts (SYSTEM_SPACES).
+ * Only 'personal' is a true system space; all other spaces are custom.
  */
-export const SPACES: Record<SpaceType, SpaceConfig> = {
-	work: {
-		id: 'work',
-		name: 'Work',
-		icon: '💼',
-		accentColor: 'blue',
-		description: 'Professional tasks, meetings, emails, and status updates'
-	},
-	research: {
-		id: 'research',
-		name: 'Research',
-		icon: '🔬',
-		accentColor: 'purple',
-		description: 'Explore topics, synthesize findings, and analyze information'
-	},
-	random: {
-		id: 'random',
-		name: 'Random',
-		icon: '🎲',
-		accentColor: 'orange',
-		description: 'Experimental ideas and casual exploration'
-	},
+export const SPACES: Record<string, SpaceConfig> = {
 	personal: {
 		id: 'personal',
 		name: 'Personal',
@@ -41,30 +19,27 @@ export const SPACES: Record<SpaceType, SpaceConfig> = {
 
 /**
  * System spaces enabled for the application
- * All four system spaces are now available
+ * Only Personal is a system space; users create custom spaces for other contexts
  */
-export const ENABLED_SPACES: SpaceType[] = ['work', 'research', 'random', 'personal'];
+export const ENABLED_SPACES: SpaceType[] = ['personal'];
 
 /**
  * Get space config by ID, returns undefined if not found or not enabled
  */
 export function getSpaceConfig(spaceId: string): SpaceConfig | undefined {
-	if (!ENABLED_SPACES.includes(spaceId as SpaceType)) {
-		return undefined;
-	}
-	return SPACES[spaceId as SpaceType];
+	return SPACES[spaceId];
 }
 
 /**
- * Check if a space ID is valid and enabled
+ * Check if a space ID is a system space
  */
-export function isValidSpace(spaceId: string): spaceId is SpaceType {
-	return ENABLED_SPACES.includes(spaceId as SpaceType);
+export function isValidSpace(spaceId: string): boolean {
+	return spaceId === 'personal';
 }
 
 /**
  * Get all enabled space configs
  */
 export function getEnabledSpaces(): SpaceConfig[] {
-	return ENABLED_SPACES.map(id => SPACES[id]);
+	return Object.values(SPACES);
 }

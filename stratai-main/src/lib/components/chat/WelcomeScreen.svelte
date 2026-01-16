@@ -1,14 +1,13 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
-	import type { SpaceType } from '$lib/types/chat';
 	import type { Assist } from '$lib/types/assists';
 	import { ASSIST_ICONS } from '$lib/config/assists';
 
 	interface Props {
 		hasModel: boolean;
 		onNewChat: () => void;
-		space?: SpaceType | null;
+		space?: string | null;
 		activeAssist?: Assist | null;
 	}
 
@@ -19,59 +18,8 @@
 		return ASSIST_ICONS[iconName] || ASSIST_ICONS.tasks;
 	}
 
-	// Space-specific content
-	const spaceContent = {
-		work: {
-			title: 'Your Work Space',
-			subtitle: 'A dedicated corner for your professional life. Draft emails, prep for meetings, or think through that tricky problem—all in one place.',
-			buttonText: 'Start a Work Chat',
-			features: [
-				{
-					title: 'Stays Organized',
-					description: 'Your work conversations kept separate and easy to find',
-					icon: 'folder'
-				},
-				{
-					title: 'Pick Up Anytime',
-					description: 'Context preserved so you can dive right back in',
-					icon: 'clock'
-				}
-			]
-		},
-		research: {
-			title: 'Your Research Space',
-			subtitle: 'A place to explore ideas, dig into topics, and make sense of complex information. Follow your curiosity wherever it leads.',
-			buttonText: 'Start Exploring',
-			features: [
-				{
-					title: 'Go Deep',
-					description: 'Explore topics thoroughly without distraction',
-					icon: 'search'
-				},
-				{
-					title: 'Build Understanding',
-					description: 'Your research threads stay organized and accessible',
-					icon: 'layers'
-				}
-			]
-		},
-		random: {
-			title: 'Your Experimental Space',
-			subtitle: 'A sandbox for wild ideas, random thoughts, and creative exploration. No rules, just curiosity.',
-			buttonText: 'Start Something',
-			features: [
-				{
-					title: 'No Pressure',
-					description: 'Experiment freely without expectations',
-					icon: 'sparkle'
-				},
-				{
-					title: 'Capture Ideas',
-					description: 'A home for thoughts that don\'t fit elsewhere',
-					icon: 'lightbulb'
-				}
-			]
-		},
+	// Space-specific content (only Personal is a system space now)
+	const spaceContent: Record<string, { title: string; subtitle: string; buttonText: string; features: { title: string; description: string; icon: string }[] }> = {
 		personal: {
 			title: 'Your Personal Space',
 			subtitle: 'A private corner just for you. Personal projects, private thoughts, things you\'re working through.',
@@ -91,7 +39,26 @@
 		}
 	};
 
-	let content = $derived(space ? spaceContent[space] : null);
+	// Default content for custom spaces
+	const defaultContent = {
+		title: 'Your Space',
+		subtitle: 'A dedicated space for your work. Start a conversation to get going.',
+		buttonText: 'Start a Chat',
+		features: [
+			{
+				title: 'Stays Organized',
+				description: 'Conversations kept separate and easy to find',
+				icon: 'folder'
+			},
+			{
+				title: 'Pick Up Anytime',
+				description: 'Context preserved so you can dive right back in',
+				icon: 'clock'
+			}
+		]
+	};
+
+	let content = $derived(space ? (spaceContent[space] || defaultContent) : null);
 </script>
 
 <div class="h-full flex items-center justify-center min-h-[60vh]" in:fade={{ duration: 300 }}>

@@ -1,12 +1,12 @@
 /**
  * Spaces Types
  *
- * Types for both system spaces (Work, Research, Random, Personal)
- * and custom user-created spaces.
+ * Types for the Personal system space and custom user-created spaces.
+ * New users get: Personal (system) + Org Space (via membership).
  */
 
 export type SpaceKind = 'system' | 'custom';
-export type SystemSpaceSlug = 'work' | 'research' | 'random' | 'personal';
+export type SystemSpaceSlug = 'personal';
 
 /**
  * Space type for collaboration model:
@@ -118,13 +118,10 @@ export interface SystemSpaceDefinition {
 }
 
 export const SYSTEM_SPACES: Record<SystemSpaceSlug, SystemSpaceDefinition> = {
-	work: { name: 'Work', color: '#3b82f6', icon: 'briefcase' },
-	research: { name: 'Research', color: '#a855f7', icon: 'beaker' },
-	random: { name: 'Random', color: '#f97316', icon: 'sparkles' },
 	personal: { name: 'Personal', color: '#22c55e', icon: 'user' }
 };
 
-export const SYSTEM_SPACE_SLUGS: SystemSpaceSlug[] = ['work', 'research', 'random', 'personal'];
+export const SYSTEM_SPACE_SLUGS: SystemSpaceSlug[] = ['personal'];
 
 /**
  * Maximum number of custom spaces per user

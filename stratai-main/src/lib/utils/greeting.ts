@@ -6,7 +6,6 @@
  */
 
 import type { Task, GreetingData } from '$lib/types/tasks';
-import type { SpaceType } from '$lib/types/chat';
 
 /**
  * Get time-based greeting
@@ -82,10 +81,9 @@ function isOverdue(date: Date): boolean {
  */
 export function generateGreeting(
 	tasks: Task[],
-	space: SpaceType
+	space: string | null
 ): GreetingData | null {
-	// Only show greetings in work space for now
-	if (space !== 'work') return null;
+	// Show greetings in any space (removed work-only restriction)
 
 	// Filter to active tasks only
 	const activeTasks = tasks.filter(t => t.status === 'active');

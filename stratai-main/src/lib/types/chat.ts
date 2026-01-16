@@ -59,7 +59,8 @@ export interface StructuredSummary {
 }
 
 // Space types for productivity environments
-export type SpaceType = 'work' | 'research' | 'random' | 'personal';
+// Note: Only 'personal' is a system space; others are custom or org spaces
+export type SpaceType = 'personal' | string;
 
 export interface SpaceConfig {
 	id: SpaceType;

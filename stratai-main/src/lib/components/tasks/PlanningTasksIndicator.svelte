@@ -34,7 +34,7 @@
 		isOpen = false;
 		// Find the space for this task
 		const space = spacesStore.getSpaceById(task.spaceId);
-		const spaceSlug = space?.slug || 'work';
+		const spaceSlug = space?.slug || 'personal';
 		goto(`/spaces/${spaceSlug}/task/${task.id}`);
 	}
 

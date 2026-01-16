@@ -105,8 +105,9 @@
 		selectedType = type;
 
 		if ((type === 'space' || type === 'task-dashboard' || type === 'area') && !selectedSpaceId) {
-			const workSpace = spaces.find((s) => s.slug === 'work');
-			selectedSpaceId = workSpace?.id ?? spaces[0]?.id ?? null;
+			// Default to Personal space or first available space
+			const personalSpace = spaces.find((s) => s.slug === 'personal');
+			selectedSpaceId = personalSpace?.id ?? spaces[0]?.id ?? null;
 		}
 
 		if (type === 'area' && selectedSpaceId && !selectedAreaId) {

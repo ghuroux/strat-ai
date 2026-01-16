@@ -1074,11 +1074,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					: '')
 			: '';
 
-		// Map space type to routing context space type
+		// Map space to routing context - now accepts any space slug
 		const mapSpaceType = (s: typeof space): RoutingContext['spaceType'] => {
-			if (!s) return null;
-			if (s === 'work' || s === 'research' || s === 'random' || s === 'personal') return s;
-			return null;
+			return s || null;
 		};
 
 		// Fetch recent complexity scores for cache coherence (non-blocking if fails)

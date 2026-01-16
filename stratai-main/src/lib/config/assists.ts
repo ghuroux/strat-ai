@@ -17,7 +17,7 @@ export const ASSISTS: Record<string, Assist> = {
 		name: "What's on your plate?",
 		description: 'Break down what you need to do into clear, actionable tasks',
 		icon: 'tasks',
-		spaces: ['work'],
+		spaces: [], // Available in all spaces
 		category: 'productivity',
 		pattern: 'dump',
 		systemPromptAddition: `<assist_context>

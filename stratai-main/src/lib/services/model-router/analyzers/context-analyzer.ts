@@ -27,26 +27,10 @@ export function analyzeContext(context: RoutingContext): ContextAnalysisResult {
 	// SPACE TYPE INFLUENCE
 	// ============================================
 
-	switch (context.spaceType) {
-		case 'research':
-			// Research spaces typically need deeper analysis
-			adjustment += 15;
-			signals.push({ name: 'research_space', weight: 15, matched: true });
-			break;
-		case 'work':
-			// Work spaces slightly elevate complexity (professional use)
-			adjustment += 5;
-			signals.push({ name: 'work_space', weight: 5, matched: true });
-			break;
-		case 'random':
-			// Casual spaces can use simpler models
-			adjustment -= 10;
-			signals.push({ name: 'casual_space', weight: -10, matched: true });
-			break;
-		case 'personal':
-			// Personal spaces are neutral
-			signals.push({ name: 'personal_space', weight: 0, matched: true });
-			break;
+	// Space type influence - all spaces now treated neutrally
+	// (Future: could use space context or custom space settings to influence routing)
+	if (context.spaceType) {
+		signals.push({ name: 'space_context', weight: 0, matched: true });
 	}
 
 	// ============================================
