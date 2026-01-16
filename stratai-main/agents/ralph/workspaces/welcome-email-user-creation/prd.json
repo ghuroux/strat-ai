@@ -44,7 +44,7 @@
       "id": "US-002",
       "title": "Create welcome email template",
       "description": "As a system, I need a professional welcome email template so that new users receive a branded, informative email with their set password link.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001"
       ],

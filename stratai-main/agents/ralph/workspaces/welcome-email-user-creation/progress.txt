@@ -25,7 +25,7 @@ When admins create new users, the system will automatically send a secure welcom
 | ID | Title | Status |
 |----|-------|--------|
 | US-001 | Add token_type column to password_reset_tokens table | **completed** |
-| US-002 | Create welcome email template | pending |
+| US-002 | Create welcome email template | **completed** |
 | US-003 | Update token repository to support token types and variable expiration | pending |
 | US-004 | Create set-password page for welcome emails | pending |
 | US-005 | Update admin create user flow to send welcome email | pending |
@@ -64,14 +64,36 @@ When admins create new users, the system will automatically send a secure welcom
 - `npm run check`: Passed (only pre-existing warnings)
 - `npm run lint`: Known config issue (baseline shows 0 errors expected)
 
-## 2026-01-16 - Add token_type column to password_reset_tokens table
-Task ID: US-001
-Status: Completed
+### US-002: Create welcome email template
+**Status:** Completed
+**Date:** 2026-01-16
 
-### What Was Done
-[Fill in implementation details]
+**What was done:**
+- Added `getWelcomeEmail()` function to `src/lib/server/email/templates.ts`
+- Created `WelcomeEmailTemplateData` interface with: firstName, organizationName, setPasswordLink, email, expiresInDays
+- Template includes all required elements: greeting with firstName, organization name, set password button, email reminder, 7-day expiration note
+- Added both HTML and plain text versions
+- Added `createSetPasswordLink()` helper function for generating set-password URLs
+- Matched existing password reset email styling (purple gradient header, button styling, layout)
+- Subject line: 'Welcome to StratAI - Set Your Password'
 
-### Learnings
-[Capture patterns, decisions, lessons]
+**Files changed:**
+- `src/lib/server/email/templates.ts` (modified - added getWelcomeEmail and createSetPasswordLink)
+
+**Patterns applied:**
+- Followed existing getPasswordResetEmail() pattern for consistency
+- Used same HTML structure and inline styles as password reset email
+- Reused getBaseUrl() helper for URL generation
+- Interface-driven template data (explicit contract)
+
+**Learnings:**
+- Email templates use inline styles (no external CSS) for maximum email client compatibility
+- The purple gradient header (#667eea to #764ba2) is the StratAI brand styling for emails
+- Link expiration displayed in days for welcome emails (vs minutes for password reset)
+- Both HTML and plain text versions are required for accessibility and email client compatibility
+
+**Quality gates:**
+- `npm run check`: Passed (only pre-existing warnings)
+- `npm run lint`: Known config issue (baseline shows 0 errors expected)
 
 ---
