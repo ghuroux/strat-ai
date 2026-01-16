@@ -1,28 +1,48 @@
 # Ralph Progress Log
 
-## Feature: [Next Feature Name]
-**Parent Task:** [task-id]
-**Started:** [date]
-**Status:** Not started
+## Feature: Page Listing Access Control Fix
+**Parent Task:** page-listing-access-fix
+**Started:** 2026-01-16
+**Status:** Ready to begin
+
+## Problem Statement
+
+When pages have `visibility = 'area'`, area members cannot see them in `findAll()` because the query only checks `user_id = ${userId}`. However, `findById()` works correctly because it uses `canAccessPage()` for full access control.
 
 ## Decisions Made During PRD Creation
 
-(To be filled during PRD creation phase)
+- No blockers or clarifications needed - spec is complete and detailed
+- Solution: Use CTE-based query pattern (same as areas-postgres.ts findAllAccessible)
+- No database schema changes required - query logic fix only
+- Estimated effort: 1-1.5 hours total
 
 ## Codebase Patterns Discovered
 
-(To be filled during research phase)
+- **CTE pattern:** `areas-postgres.ts` → `findAllAccessible()` uses exact same pattern with UNION for multiple access paths
+- **Access control algorithm:** `page-sharing-postgres.ts` → `canAccessPage()` defines the 5 access pathways that must be replicated
+- **postgres.js conventions:** All column access uses camelCase (e.g., `row.userId` not `row.user_id`)
+
+## Access Paths to Implement (from spec)
+
+| Priority | Condition | Permission Source |
+|----------|-----------|-------------------|
+| 1 | User owns page (`user_id = userId`) | owner |
+| 2 | `visibility = 'private'` + direct user share | user_share |
+| 3 | `visibility = 'private'` + group share | group_share |
+| 4 | `visibility = 'area'` + user has area access | area |
+| 5 | `visibility = 'space'` + user owns space | space |
 
 ## Stories
 
 | ID | Title | Status |
 |----|-------|--------|
-| | | |
+| US-001 | Update findAll() with CTE-based access control | pending |
+| US-002 | Update search() with access control | pending |
+| US-003 | Update count() with access control | pending |
+| US-004 | Manual testing and verification | pending |
 
 ---
 
 ## Iteration Log
 
 (Each iteration appends a section below)
-
----
