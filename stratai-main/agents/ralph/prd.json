@@ -54,7 +54,9 @@
       "title": "Inject temporal context as Layer 0 in getSystemPromptLayers()",
       "description": "As a user, I want the AI to know the current date and my timezone so it can answer date-relative questions accurately.",
       "status": "completed",
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "acceptance_criteria": [
         "getSystemPromptLayers() accepts new timezone option: options.timezone?: string",
         "Temporal layer inserted as first layer (Layer 0) before platform prompt",
@@ -69,7 +71,7 @@
       "id": "US-003",
       "title": "Add timezone field to UserPreferences type",
       "description": "As a developer, I need the UserPreferences type to include timezone so it can be stored and retrieved from the database.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "UserPreferences interface in src/lib/types/user.ts includes timezone?: string",
@@ -83,7 +85,9 @@
       "title": "Add timezone validation to preferences API endpoint",
       "description": "As a developer, I need the preferences API to accept and validate timezone updates.",
       "status": "pending",
-      "dependencies": ["US-003"],
+      "dependencies": [
+        "US-003"
+      ],
       "acceptance_criteria": [
         "validateTimezone() function added to src/routes/api/user/preferences/+server.ts",
         "Validates timezone is a non-empty string (Intl API validates at runtime)",
@@ -99,7 +103,9 @@
       "title": "Detect and sync timezone on app load",
       "description": "As a user, I want my timezone automatically detected and saved so the AI knows my location without manual configuration.",
       "status": "pending",
-      "dependencies": ["US-004"],
+      "dependencies": [
+        "US-004"
+      ],
       "acceptance_criteria": [
         "Timezone detection code added to src/routes/+layout.svelte onMount()",
         "Uses Intl.DateTimeFormat().resolvedOptions().timeZone for detection",
@@ -116,7 +122,10 @@
       "title": "Pass timezone to chat API and prompt builder",
       "description": "As a user, I want my timezone used in every AI conversation so responses are temporally accurate.",
       "status": "pending",
-      "dependencies": ["US-002", "US-005"],
+      "dependencies": [
+        "US-002",
+        "US-005"
+      ],
       "acceptance_criteria": [
         "Chat API endpoint reads timezone from session or user preferences",
         "Falls back to 'Africa/Johannesburg' if not set",
@@ -133,7 +142,9 @@
       "title": "Add timezone selector to Settings UI (Optional Phase 3)",
       "description": "As a user, I want to manually override my detected timezone in Settings if the auto-detection is wrong.",
       "status": "pending",
-      "dependencies": ["US-005"],
+      "dependencies": [
+        "US-005"
+      ],
       "acceptance_criteria": [
         "Timezone dropdown added to Settings > General page (src/lib/components/settings/SettingsGeneral.svelte or similar)",
         "Shows common timezones: Africa/Johannesburg, Europe/London, America/New_York, America/Los_Angeles, Asia/Tokyo, etc.",

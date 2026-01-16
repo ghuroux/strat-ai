@@ -26,7 +26,7 @@
 |----|-------|--------|
 | US-001 | Create getTemporalContext() function in system-prompts.ts | completed |
 | US-002 | Inject temporal context as Layer 0 in getSystemPromptLayers() | completed |
-| US-003 | Add timezone field to UserPreferences type | pending |
+| US-003 | Add timezone field to UserPreferences type | completed |
 | US-004 | Add timezone validation to preferences API endpoint | pending |
 | US-005 | Detect and sync timezone on app load | pending |
 | US-006 | Pass timezone to chat API and prompt builder | pending |
@@ -101,6 +101,36 @@
 
 **Quality gates:**
 - ✅ npm run check - passes (0 errors, only warnings)
+- ⚠️ npm run lint - skipped (pre-existing missing eslint config)
+
+---
+
+---
+
+### US-003: Add timezone field to UserPreferences type (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+- Added `timezone?: string` field to the `UserPreferences` interface in `src/lib/types/user.ts`
+- Added JSDoc documentation explaining the IANA timezone format and usage
+- Examples in JSDoc: 'Africa/Johannesburg', 'America/New_York', 'Europe/London'
+
+**Files changed:**
+- `src/lib/types/user.ts` - Added timezone field to UserPreferences interface (~6 lines)
+
+**Patterns applied:**
+- Followed existing optional field pattern from `theme`, `homePage`, `defaultModel`
+- Used JSDoc with examples to document the expected format (IANA timezone strings)
+- Kept the change minimal - just the type definition, no database changes needed since UserPreferences is stored as JSONB
+
+**Learnings:**
+1. **UserPreferences stored as JSONB** - No migration needed for new preference fields since they're stored in a JSON column. Just add to the TypeScript interface.
+2. **IANA timezone format** - Industry standard format (e.g., 'Africa/Johannesburg') used by JavaScript's `Intl` APIs. Browser-detectable via `Intl.DateTimeFormat().resolvedOptions().timeZone`.
+3. **Simple stories matter** - Even a 6-line change is a discrete unit of work that can be tested and committed independently. Sets up foundation for US-004 (validation) and US-005 (detection).
+
+**Quality gates:**
+- ✅ npm run check - passes (0 errors, 160 warnings - all pre-existing)
 - ⚠️ npm run lint - skipped (pre-existing missing eslint config)
 
 ---

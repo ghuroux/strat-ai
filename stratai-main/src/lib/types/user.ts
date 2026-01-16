@@ -31,6 +31,12 @@ export interface UserPreferences {
 	homePage?: HomePagePreference;
 	theme?: ThemePreference;
 	defaultModel?: string | null;
+	/**
+	 * User's timezone in IANA format (e.g., 'Africa/Johannesburg', 'America/New_York', 'Europe/London').
+	 * Used for temporal context in AI conversations.
+	 * Auto-detected from browser on app load, can be manually overridden in Settings.
+	 */
+	timezone?: string;
 }
 
 export interface UserData {
