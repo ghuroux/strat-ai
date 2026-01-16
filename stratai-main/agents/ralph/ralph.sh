@@ -3,14 +3,17 @@
 # ralph.sh - Compound Engineering Loop for StratAI
 # ═══════════════════════════════════════════════════════════════════════════════
 #
-# Usage: ./ralph.sh [max_iterations]
+# Usage: 
+#   ./ralph.sh workspaces/{feature-id}  # Run with workspace (recommended)
+#   ./ralph.sh --list                   # List all workspaces
+#   ./ralph.sh --status {workspace}     # Show workspace status
+#   ./ralph.sh [max_iterations]         # Legacy mode (backward compatible)
 #
 # This script orchestrates the compound engineering loop:
 #   1. Research → Plan → Work → Review → Compound → (repeat)
 #
 # Prerequisites:
-#   - prd.json with stories defined
-#   - parent-task-id.txt with current feature scope
+#   - Workspace with prd.json, progress.txt, parent-task-id.txt
 #   - AGENTS.md for long-term memory
 #
 # The actual implementation work is done by the agent (Claude Code).
@@ -20,13 +23,131 @@
 
 set -e
 
-# Configuration
+# Base configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
-PRD_FILE="$SCRIPT_DIR/prd.json"
-PROGRESS_FILE="$SCRIPT_DIR/progress.txt"
-PARENT_ID_FILE="$SCRIPT_DIR/parent-task-id.txt"
-MAX_ITERATIONS=${1:-10}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Parse Arguments & Setup Workspace
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Handle commands
+if [ "$1" = "--list" ]; then
+  echo "📋 Available Workspaces:"
+  echo ""
+  if [ -d "$SCRIPT_DIR/workspaces" ]; then
+    for workspace in "$SCRIPT_DIR/workspaces"/*/ ; do
+      if [ -d "$workspace" ]; then
+        name=$(basename "$workspace")
+        if [ -f "$workspace/prd.json" ]; then
+          total=$(jq '[.stories[]] | length' "$workspace/prd.json" 2>/dev/null || echo "?")
+          completed=$(jq '[.stories[] | select(.status == "completed" or .status == "complete")] | length' "$workspace/prd.json" 2>/dev/null || echo "0")
+          if [ -f "$workspace/.completed" ]; then
+            echo "  ✅ $name ($completed/$total stories) - COMPLETED"
+          elif [ "$completed" -gt 0 ]; then
+            echo "  🔄 $name ($completed/$total stories) - IN PROGRESS"
+          else
+            echo "  ⏳ $name ($completed/$total stories) - PENDING"
+          fi
+        else
+          echo "  ❓ $name (no PRD)"
+        fi
+      fi
+    done
+  else
+    echo "  (no workspaces yet)"
+  fi
+  echo ""
+  exit 0
+fi
+
+if [ "$1" = "--status" ]; then
+  if [ -z "$2" ]; then
+    echo "❌ Usage: ./ralph.sh --status workspaces/{feature-id}"
+    exit 1
+  fi
+  workspace_path="$SCRIPT_DIR/$2"
+  if [ ! -d "$workspace_path" ]; then
+    echo "❌ Workspace not found: $2"
+    exit 1
+  fi
+  if [ ! -f "$workspace_path/prd.json" ]; then
+    echo "❌ No PRD found in workspace: $2"
+    exit 1
+  fi
+  
+  echo "📊 Workspace Status"
+  echo ""
+  echo "Workspace: $2"
+  echo "Feature: $(jq -r '.feature // "unknown"' "$workspace_path/prd.json")"
+  echo ""
+  total=$(jq '[.stories[]] | length' "$workspace_path/prd.json")
+  completed=$(jq '[.stories[] | select(.status == "completed" or .status == "complete")] | length' "$workspace_path/prd.json")
+  echo "Progress: $completed/$total stories ($(( completed * 100 / total ))%)"
+  echo ""
+  if [ -f "$workspace_path/.completed" ]; then
+    echo "Status: ✅ COMPLETED"
+    echo "Completed at: $(cat "$workspace_path/.completed")"
+  elif [ "$completed" -gt 0 ]; then
+    echo "Status: 🔄 IN PROGRESS"
+    current=$(jq -r '[.stories[] | select(.status == "pending")] | .[0].id // "none"' "$workspace_path/prd.json")
+    if [ "$current" != "none" ]; then
+      echo "Next story: $current"
+    fi
+  else
+    echo "Status: ⏳ PENDING (not started)"
+  fi
+  echo ""
+  exit 0
+fi
+
+# Determine workspace directory
+WORKSPACE_DIR=""
+MAX_ITERATIONS=10
+
+if [ -n "$1" ] && [ -d "$SCRIPT_DIR/$1" ]; then
+  # Workspace mode
+  WORKSPACE_DIR="$SCRIPT_DIR/$1"
+  MAX_ITERATIONS=${2:-10}
+  echo "🎯 Workspace Mode: $1"
+  echo ""
+elif [ -n "$1" ] && [[ "$1" =~ ^[0-9]+$ ]]; then
+  # Legacy mode with max iterations
+  WORKSPACE_DIR="$SCRIPT_DIR"
+  MAX_ITERATIONS=$1
+  echo "⚠️  Legacy Mode (no workspace isolation)"
+  echo "   For parallel execution, use: ./ralph.sh workspaces/{feature-id}"
+  echo "   Create workspace: Use PRD creator interactive skill"
+  echo ""
+elif [ -z "$1" ]; then
+  # Legacy mode default
+  WORKSPACE_DIR="$SCRIPT_DIR"
+  echo "⚠️  Legacy Mode (no workspace isolation)"
+  echo "   For parallel execution, use: ./ralph.sh workspaces/{feature-id}"
+  echo "   Create workspace: Use PRD creator interactive skill"
+  echo ""
+else
+  # Invalid workspace
+  echo "❌ Workspace not found: $1"
+  echo ""
+  echo "Available workspaces:"
+  if [ -d "$SCRIPT_DIR/workspaces" ]; then
+    ls -1 "$SCRIPT_DIR/workspaces/" 2>/dev/null || echo "  (none)"
+  else
+    echo "  (none)"
+  fi
+  echo ""
+  echo "Usage:"
+  echo "  ./ralph.sh workspaces/{feature-id}  # Run with workspace"
+  echo "  ./ralph.sh --list                   # List workspaces"
+  echo "  ./ralph.sh --status {workspace}     # Show status"
+  exit 1
+fi
+
+# Configure paths based on workspace
+PRD_FILE="$WORKSPACE_DIR/prd.json"
+PROGRESS_FILE="$WORKSPACE_DIR/progress.txt"
+PARENT_ID_FILE="$WORKSPACE_DIR/parent-task-id.txt"
 
 # Colors for output
 RED='\033[0;31m'
@@ -154,13 +275,24 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     DATE=$(date +%Y-%m-%d)
     ARCHIVE_DIR="$SCRIPT_DIR/archive/$DATE-$(echo "$FEATURE" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
     
-    # 1. Archive progress
+    # 1. Archive to central location
     if [ -f "$PROGRESS_FILE" ]; then
       mkdir -p "$ARCHIVE_DIR"
       cp "$PROGRESS_FILE" "$ARCHIVE_DIR/"
       cp "$PRD_FILE" "$ARCHIVE_DIR/"
-      echo "   📦 Archived progress to: $ARCHIVE_DIR/"
+      cp "$PARENT_ID_FILE" "$ARCHIVE_DIR/" 2>/dev/null || true
+      echo "   📦 Archived to: $ARCHIVE_DIR/"
     fi
+    
+    # 2. Mark workspace as completed
+    COMPLETION_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    echo "$COMPLETION_TIME" > "$WORKSPACE_DIR/.completed"
+    
+    # Update prd.json with completion metadata
+    jq --arg time "$COMPLETION_TIME" '.completed_at = $time' "$PRD_FILE" > "$PRD_FILE.tmp"
+    mv "$PRD_FILE.tmp" "$PRD_FILE"
+    
+    echo "   ✅ Workspace marked as completed"
     
     # 2. Extract patterns to AGENTS.md (if Claude CLI available)
     if [ -n "$CLAUDE_CLI" ]; then
@@ -191,10 +323,13 @@ Read agents/ralph/progress.txt for the feature implementation details."
       echo "   ✅ Patterns extracted to AGENTS.md"
     fi
     
-    # 3. Reset working files for next feature
-    echo "   🔄 Resetting working files..."
-    
-    # Reset progress.txt to self-documenting template
+    # 3. Reset working files ONLY in legacy mode
+    # In workspace mode, keep files for reference
+    if [ "$WORKSPACE_DIR" = "$SCRIPT_DIR" ]; then
+      # Legacy mode - reset for next feature
+      echo "   🔄 Resetting working files (legacy mode)..."
+      
+      # Reset progress.txt to self-documenting template
     cat > "$PROGRESS_FILE" << 'EOF'
 # Ralph Progress Log
 
@@ -313,10 +448,15 @@ EOF
 }
 EOF
     
-    # Clear parent task ID
-    > "$SCRIPT_DIR/parent-task-id.txt"
-    
-    echo "   ✅ Working files reset for next feature"
+      # Clear parent task ID
+      > "$SCRIPT_DIR/parent-task-id.txt"
+      
+      echo "   ✅ Working files reset for next feature"
+    else
+      # Workspace mode - keep files intact
+      echo "   📦 Workspace preserved at: $WORKSPACE_DIR/"
+      echo "   ⚠️  Use cleanup script to remove old workspaces"
+    fi
     
     # 4. Create final summary commit
     cd "$PROJECT_DIR"

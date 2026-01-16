@@ -263,22 +263,79 @@ Add to the `research` section of prd.json:
 
 ---
 
-## Phase 5: Confirmation
+## Phase 5: Workspace Setup
 
-After completing Phase 4 (using the standard PRD creator), present:
+**Create isolated workspace for parallel execution:**
+
+### Step 5.1: Determine Workspace Name
+
+Use the `parent_task_id` from Phase 4:
+- Must be filesystem-safe: lowercase, hyphens only, no spaces
+- Example: "Page Listing Access Fix" → "page-listing-access-fix"
+- This becomes the workspace directory name
+
+### Step 5.2: Create Workspace Directory Structure
+
+```bash
+mkdir -p agents/ralph/workspaces/{parent-task-id}/
+```
+
+### Step 5.3: Move Files to Workspace
+
+Move the PRD files you just created INTO the workspace:
+
+```bash
+# Move from root ralph/ to workspace/
+mv agents/ralph/prd.json agents/ralph/workspaces/{parent-task-id}/prd.json
+mv agents/ralph/progress.txt agents/ralph/workspaces/{parent-task-id}/progress.txt
+mv agents/ralph/parent-task-id.txt agents/ralph/workspaces/{parent-task-id}/parent-task-id.txt
+```
+
+**CRITICAL:** All three files MUST be in the workspace directory, not in agents/ralph/ root.
+
+### Step 5.4: Create Git Feature Branch
+
+```bash
+git checkout -b feature/{parent-task-id}
+```
+
+This isolates the feature work on its own branch for clean PR workflow.
+
+### Step 5.5: Commit Workspace Creation
+
+```bash
+git add agents/ralph/workspaces/{parent-task-id}/
+git commit -m "feat: create PRD workspace for {feature-name}
+
+- Created workspace: agents/ralph/workspaces/{parent-task-id}/
+- Initialized prd.json with {count} stories
+- Created feature branch: feature/{parent-task-id}
+- Ready for Ralph loop execution"
+```
+
+---
+
+## Phase 6: Confirmation
+
+After completing Phases 1-5, present:
 
 ```markdown
 ## PRD Created Successfully ✅
 
 **Feature:** [name]
 **Stories:** [count]
-**PRD Creator Used:** agents/ralph/skills/prd-creator.md (standard)
+**Workspace:** agents/ralph/workspaces/{parent-task-id}/
+**Branch:** feature/{parent-task-id}
 
 **Files created (VERIFY ALL EXIST):**
-- ✅ agents/ralph/parent-task-id.txt (task scope) - **REQUIRED**
-- ✅ agents/ralph/prd.json (stories for Ralph loop) - **REQUIRED**
-- ✅ agents/ralph/progress.txt (initialized) - **REQUIRED**
+- ✅ agents/ralph/workspaces/{parent-task-id}/parent-task-id.txt - **REQUIRED**
+- ✅ agents/ralph/workspaces/{parent-task-id}/prd.json - **REQUIRED**
+- ✅ agents/ralph/workspaces/{parent-task-id}/progress.txt - **REQUIRED**
 - 📄 tasks/prd-[feature-name].md (human-readable copy) - Optional
+
+**Git Setup:**
+- ✅ Feature branch created: feature/{parent-task-id}
+- ✅ Workspace committed to branch
 
 ### Decisions Captured
 | Question | Decision | Rationale |
@@ -297,9 +354,41 @@ After completing Phase 4 (using the standard PRD creator), present:
 - [ ] DB stories include `npm run audit-db-access`
 - [ ] Stories ordered by dependencies
 
-### Ready for Ralph Loop
-To start implementation:
-1. Run preflight: `./agents/ralph/validation/preflight.sh`
+### Ready for Ralph Loop 🚀
+
+**To start autonomous implementation:**
+
+```bash
+cd agents/ralph
+./ralph.sh workspaces/{parent-task-id}
+```
+
+Ralph will:
+- ✅ Load PRD from workspace
+- ✅ Implement stories sequentially with fresh context per story
+- ✅ Auto-commit after each story
+- ✅ Auto-fix validation failures (max 2 attempts)
+- ✅ Archive and extract patterns when complete
+- ✅ Mark workspace as completed
+
+**For parallel execution**, you can run multiple Ralph instances:
+```bash
+# Terminal 1
+./ralph.sh workspaces/feature-a
+
+# Terminal 2
+./ralph.sh workspaces/feature-b
+
+# Terminal 3
+./ralph.sh workspaces/feature-c
+```
+
+Each workspace is isolated - no conflicts! 🎉
+
+### Additional Commands
+- List workspaces: `./ralph.sh --list`
+- Check status: `./ralph.sh --status workspaces/{parent-task-id}`
+- Manual preflight: `./agents/ralph/validation/preflight.sh`
 2. Begin US-001
 
 Shall I start the implementation now?
