@@ -293,18 +293,23 @@ mv agents/ralph/parent-task-id.txt agents/ralph/workspaces/{parent-task-id}/pare
 
 **CRITICAL:** All three files MUST be in the workspace directory, not in agents/ralph/ root.
 
-### Step 5.4: Create Git Feature Branch
+### Step 5.4: Create Git Feature Branch and Commit
+
+**⚠️ CRITICAL: You MUST commit the workspace. Ralph's preflight will fail without this.**
+
+Execute these commands in sequence:
 
 ```bash
+# 1. Create and checkout feature branch
 git checkout -b feature/{parent-task-id}
-```
 
-This isolates the feature work on its own branch for clean PR workflow.
-
-### Step 5.5: Commit Workspace Creation
-
-```bash
+# 2. Stage the workspace files
 git add agents/ralph/workspaces/{parent-task-id}/
+
+# 3. Also stage the markdown PRD if you created one
+git add tasks/prd-*.md 2>/dev/null || true
+
+# 4. Commit with descriptive message
 git commit -m "feat: create PRD workspace for {feature-name}
 
 - Created workspace: agents/ralph/workspaces/{parent-task-id}/
@@ -312,6 +317,17 @@ git commit -m "feat: create PRD workspace for {feature-name}
 - Created feature branch: feature/{parent-task-id}
 - Ready for Ralph loop execution"
 ```
+
+**Verify the commit succeeded:**
+```bash
+git status
+```
+
+Expected output:
+- "On branch feature/{parent-task-id}"
+- "nothing to commit, working tree clean"
+
+**If git status shows uncommitted changes, the commit FAILED. Investigate and fix before proceeding.**
 
 ---
 
@@ -333,9 +349,17 @@ After completing Phases 1-5, present:
 - ✅ agents/ralph/workspaces/{parent-task-id}/progress.txt - **REQUIRED**
 - 📄 tasks/prd-[feature-name].md (human-readable copy) - Optional
 
-**Git Setup:**
+**Git Setup (VERIFY WITH git status):**
 - ✅ Feature branch created: feature/{parent-task-id}
-- ✅ Workspace committed to branch
+- ✅ Workspace committed to branch (working tree MUST be clean)
+- ⚠️ If git status shows uncommitted files, Ralph preflight will FAIL
+
+**Verification Command:**
+\`\`\`bash
+git status
+# Expected: "nothing to commit, working tree clean"
+# If NOT clean: Re-run the git add + commit commands
+\`\`\`
 
 ### Decisions Captured
 | Question | Decision | Rationale |
