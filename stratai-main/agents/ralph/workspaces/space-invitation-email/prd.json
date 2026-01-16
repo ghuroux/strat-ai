@@ -1,0 +1,139 @@
+{
+  "feature": "Space Invitation Email",
+  "created": "2026-01-16",
+  "parent_task_id": "space-invitation-email",
+  "research": {
+    "similar_patterns": [
+      "src/lib/server/email/templates.ts - Email template structure",
+      "src/routes/login/+page.server.ts - Login flow with redirect",
+      "src/routes/api/spaces/[id]/members/+server.ts - Member addition API",
+      "src/lib/types/space-memberships.ts - Role definitions"
+    ],
+    "related_commits": [],
+    "docs_reviewed": [
+      "docs/features/SPACE_INVITATION_EMAIL.md",
+      "docs/features/WELCOME_EMAIL_ON_USER_CREATION.md",
+      "docs/SENDGRID_EMAIL_INTEGRATION.md"
+    ],
+    "existing_infrastructure": [
+      "SendGrid email integration working",
+      "getWelcomeEmail() template exists",
+      "createSetPasswordLink() helper exists",
+      "getBaseUrl() helper exists"
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Add returnUrl support to login page",
+      "description": "As a user clicking an email link, I want to be redirected to my intended destination after login so that I don't have to navigate there manually.",
+      "status": "completed",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Login page accepts `returnUrl` query parameter",
+        "validateReturnUrl() function validates URL (must start with /, no protocol-relative, no javascript:)",
+        "After successful login, redirects to returnUrl if provided and valid",
+        "Falls back to user's home preference if no valid returnUrl",
+        "Form preserves returnUrl in action URL during submission",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Update welcome email to mention org workspace",
+      "description": "As a new user receiving a welcome email, I want to know that I have access to my organization's workspace so that I understand what I'll see when I log in.",
+      "status": "completed",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Welcome email template includes org workspace access messaging",
+        "Email mentions 'The {orgName} workspace - your team's shared space for collaboration'",
+        "Both HTML and plain text versions updated",
+        "Email renders correctly (test with existing welcome email flow)",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Create space invitation email template",
+      "description": "As a developer, I need a space invitation email template so that users can be notified when added to a space.",
+      "status": "completed",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "getSpaceInvitationEmail() function created in templates.ts",
+        "Template includes: inviter name, space name, role",
+        "Role-specific permissions listed (admin: manage members, member: collaborate, guest: shared content only)",
+        "getRoleDisplayName() helper returns 'an Admin', 'a Member', 'a Guest'",
+        "getRolePermissions() helper returns permission array based on role",
+        "createSpaceLink() helper generates /spaces/{slug} URL",
+        "Both HTML and plain text versions with consistent styling",
+        "Subject line: 'You've been added to {spaceName}'",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Create space invitation email sending service",
+      "description": "As a developer, I need a service to send space invitation emails so that the API can trigger emails when members are added.",
+      "status": "pending",
+      "dependencies": [
+        "US-003"
+      ],
+      "acceptance_criteria": [
+        "New file: src/lib/server/email/space-invitation.ts",
+        "sendSpaceInvitationEmail() function accepts userId, spaceId, spaceSlug, spaceName, role, invitedByUserId",
+        "Function fetches user details (firstName, email) from repository",
+        "Function fetches inviter details (displayName) from repository",
+        "Falls back to 'A team member' if inviter not found",
+        "Falls back to 'there' if user has no firstName",
+        "Calls sendEmail() from sendgrid.ts",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Send invitation email when user added to space",
+      "description": "As a space admin, I want users to receive an email when I add them to a space so that they know they have access.",
+      "status": "pending",
+      "dependencies": [
+        "US-001",
+        "US-004"
+      ],
+      "acceptance_criteria": [
+        "POST /api/spaces/[id]/members sends email after successful membership creation",
+        "Email NOT sent for org spaces (space_type = 'organization')",
+        "Email NOT sent when adding yourself (targetUserId === userId)",
+        "Email NOT sent for group memberships (groupId provided)",
+        "Email failure does NOT block membership creation (try/catch with console.error)",
+        "Email failure is logged with error details",
+        "Need to fetch space details (slug, name, space_type) for email",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Manual testing and verification",
+      "description": "As a developer, I need to verify all scenarios work correctly so that users have a reliable experience.",
+      "status": "pending",
+      "dependencies": [
+        "US-005"
+      ],
+      "acceptance_criteria": [
+        "Add existing user to space - they receive invitation email",
+        "Add user to org space - no email sent",
+        "Add yourself to space - no email sent (edge case)",
+        "Add group to space - no email sent",
+        "Click email link while logged in - goes directly to space",
+        "Click email link while logged out - login then redirect to space",
+        "Invalid returnUrl - falls back to home",
+        "npm run check passes",
+        "npm run lint passes",
+        "Email renders correctly in email client (Gmail/Outlook)"
+      ]
+    }
+  ]
+}

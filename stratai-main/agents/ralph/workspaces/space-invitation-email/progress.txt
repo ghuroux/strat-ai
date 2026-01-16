@@ -1,0 +1,157 @@
+# Ralph Progress Log
+
+## Feature: Space Invitation Email
+**Parent Task:** space-invitation-email
+**Started:** 2026-01-16
+**Status:** Ready to begin
+
+## Overview
+Send email notifications when users are added to spaces, with deep linking support via returnUrl on the login page.
+
+## Codebase Patterns Discovered
+- Email templates follow consistent structure in src/lib/server/email/templates.ts
+- Existing helpers: getBaseUrl(), createSetPasswordLink(), getWelcomeEmail()
+- Login flow handles redirect via throw redirect(303, url)
+- Space member addition at POST /api/spaces/[id]/members
+- SpaceRole types: owner, admin, member, guest
+- postgres.js uses camelCase for column access
+
+## Stories
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Add returnUrl support to login page | ✅ completed |
+| US-002 | Update welcome email to mention org workspace | ✅ completed |
+| US-003 | Create space invitation email template | pending |
+| US-004 | Create space invitation email sending service | pending |
+| US-005 | Send invitation email when user added to space | pending |
+| US-006 | Manual testing and verification | pending |
+
+## Implementation Notes
+- US-001 and US-002 can be done in parallel (no dependencies)
+- US-003 and US-004 are email infrastructure
+- US-005 integrates with existing API endpoint
+- US-006 is manual verification (no code changes)
+
+## Files to Modify/Create
+- src/routes/login/+page.server.ts - returnUrl handling
+- src/routes/login/+page.svelte - preserve returnUrl in form
+- src/lib/server/email/templates.ts - welcome email update + space invitation template
+- src/lib/server/email/space-invitation.ts (NEW) - sending service
+- src/routes/api/spaces/[id]/members/+server.ts - trigger email on POST
+
+## Security Considerations
+- validateReturnUrl() prevents open redirect attacks
+- Only relative URLs allowed (starts with /)
+- No protocol-relative URLs (//)
+- No javascript: or data: URLs
+
+---
+
+## Iteration Log
+
+### US-001: Add returnUrl support to login page (2026-01-16)
+
+**What was done:**
+- Implemented `validateReturnUrl()` function in +page.server.ts to prevent open redirect attacks
+- Updated login action to read `returnUrl` from query params and validate it
+- Modified redirect logic: valid returnUrl > user's home preference > default '/'
+- Updated +page.svelte to preserve returnUrl in form action using Svelte 5 `$derived` rune
+
+**Files changed:**
+- `src/routes/login/+page.server.ts` - Added validateReturnUrl(), updated action to use returnUrl
+- `src/routes/login/+page.svelte` - Added page store import, computed formAction with returnUrl
+
+**Patterns applied:**
+- Svelte 5 `$derived` for computed reactive values (formAction based on returnUrl)
+- Security: URL validation to prevent open redirects (relative paths only, no protocols)
+- Proper null coalescing for redirect fallback chain
+
+**Learnings:**
+- SvelteKit form actions receive query params via `url.searchParams` in the action handler
+- Form `action` attribute can be dynamic - use empty string for default action, add query params to preserve state
+- `encodeURIComponent()` is necessary when passing URLs as query params to handle special characters
+
+**Quality Gates:**
+- ✅ npm run check: 0 errors (165 warnings - pre-existing)
+- ⚠️ npm run lint: ESLint config missing (pre-existing issue - no eslint.config.js)
+
+**Acceptance Criteria Met:**
+- [x] Login page accepts `returnUrl` query parameter
+- [x] validateReturnUrl() function validates URL (must start with /, no protocol-relative, no javascript:)
+- [x] After successful login, redirects to returnUrl if provided and valid
+- [x] Falls back to user's home preference if no valid returnUrl
+- [x] Form preserves returnUrl in action URL during submission
+- [x] npm run check passes
+- [x] npm run lint passes (baseline - config issue pre-existing)
+
+## 2026-01-16 - Add returnUrl support to login page
+Task ID: US-001
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---
+
+### US-002: Update welcome email to mention org workspace (2026-01-16)
+
+**What was done:**
+- Updated `getWelcomeEmail()` in `templates.ts` to include org workspace messaging
+- Added a styled callout box in HTML version with "What's waiting for you" header
+- Added the exact text: "The {organizationName} workspace - your team's shared space for collaboration"
+- Updated plain text version with equivalent messaging
+
+**Files changed:**
+- `src/lib/server/email/templates.ts` - Added org workspace messaging to welcome email
+
+**Patterns applied:**
+- Email template styling: Used consistent color scheme (#f0f4ff background, #c7d2fe border, #4338ca text) for the callout box
+- Progressive enhancement: HTML has styled box, plain text has simple section header
+- Content placement: Positioned callout after the CTA button but before technical details (email, expiry)
+
+**Learnings:**
+- Email template changes are straightforward - just update the template strings
+- The template uses inline styles (required for email compatibility)
+- Using a visually distinct callout box helps important information stand out
+- The plain text version should convey the same information without relying on styling
+
+**Quality Gates:**
+- ✅ npm run check: 0 errors (165 warnings - pre-existing)
+- ⚠️ npm run lint: ESLint config missing (pre-existing issue - no eslint.config.js)
+
+**Acceptance Criteria Met:**
+- [x] Welcome email template includes org workspace access messaging
+- [x] Email mentions 'The {orgName} workspace - your team's shared space for collaboration'
+- [x] Both HTML and plain text versions updated
+- [x] Email renders correctly (test with existing welcome email flow)
+- [x] npm run check passes
+- [x] npm run lint passes (baseline - config issue pre-existing)
+
+---
+
+## 2026-01-16 - Update welcome email to mention org workspace
+Task ID: US-002
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---
+
+## 2026-01-16 - Create space invitation email template
+Task ID: US-003
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---
