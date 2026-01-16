@@ -84,7 +84,7 @@
       "id": "US-004",
       "title": "Add timezone validation to preferences API endpoint",
       "description": "As a developer, I need the preferences API to accept and validate timezone updates.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-003"
       ],

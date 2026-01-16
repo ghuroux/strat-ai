@@ -62,6 +62,32 @@ function validateDefaultModel(model: unknown): string | null {
 }
 
 /**
+ * Validate timezone - must be a valid IANA timezone string
+ * Uses Intl.DateTimeFormat for runtime validation
+ *
+ * @example
+ * validateTimezone('Africa/Johannesburg') // 'Africa/Johannesburg'
+ * validateTimezone('America/New_York')    // 'America/New_York'
+ * validateTimezone('Invalid/Timezone')    // null
+ * validateTimezone('')                    // null
+ * validateTimezone(123)                   // null
+ */
+function validateTimezone(timezone: unknown): string | null {
+	// Must be a non-empty string
+	if (typeof timezone !== 'string') return null;
+	const trimmed = timezone.trim();
+	if (trimmed.length === 0) return null;
+
+	// Validate using Intl.DateTimeFormat - throws on invalid timezone
+	try {
+		Intl.DateTimeFormat(undefined, { timeZone: trimmed });
+		return trimmed;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * GET /api/user/preferences
  * Returns current user preferences
  */
@@ -84,7 +110,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 /**
  * PATCH /api/user/preferences
- * Body: { homePage?, theme?, defaultModel? }
+ * Body: { homePage?, theme?, defaultModel?, timezone? }
  * Merges with existing preferences
  */
 export const PATCH: RequestHandler = async ({ request, locals }) => {
@@ -128,6 +154,18 @@ export const PATCH: RequestHandler = async ({ request, locals }) => {
 		// Validate and apply defaultModel if present
 		if (body.defaultModel !== undefined) {
 			updates.defaultModel = validateDefaultModel(body.defaultModel);
+		}
+
+		// Validate and apply timezone if present
+		if (body.timezone !== undefined) {
+			const validatedTimezone = validateTimezone(body.timezone);
+			if (!validatedTimezone) {
+				return json(
+					{ error: { message: 'Invalid timezone preference', type: 'validation_error' } },
+					{ status: 400 }
+				);
+			}
+			updates.timezone = validatedTimezone;
 		}
 
 		// Update preferences in database

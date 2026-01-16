@@ -27,7 +27,7 @@
 | US-001 | Create getTemporalContext() function in system-prompts.ts | completed |
 | US-002 | Inject temporal context as Layer 0 in getSystemPromptLayers() | completed |
 | US-003 | Add timezone field to UserPreferences type | completed |
-| US-004 | Add timezone validation to preferences API endpoint | pending |
+| US-004 | Add timezone validation to preferences API endpoint | completed |
 | US-005 | Detect and sync timezone on app load | pending |
 | US-006 | Pass timezone to chat API and prompt builder | pending |
 | US-007 | Add timezone selector to Settings UI (Optional Phase 3) | pending |
@@ -128,6 +128,37 @@
 1. **UserPreferences stored as JSONB** - No migration needed for new preference fields since they're stored in a JSON column. Just add to the TypeScript interface.
 2. **IANA timezone format** - Industry standard format (e.g., 'Africa/Johannesburg') used by JavaScript's `Intl` APIs. Browser-detectable via `Intl.DateTimeFormat().resolvedOptions().timeZone`.
 3. **Simple stories matter** - Even a 6-line change is a discrete unit of work that can be tested and committed independently. Sets up foundation for US-004 (validation) and US-005 (detection).
+
+**Quality gates:**
+- ✅ npm run check - passes (0 errors, 160 warnings - all pre-existing)
+- ⚠️ npm run lint - skipped (pre-existing missing eslint config)
+
+---
+
+### US-004: Add timezone validation to preferences API endpoint (2026-01-16)
+
+**Status:** Completed
+
+**What was done:**
+- Added `validateTimezone()` function to `src/routes/api/user/preferences/+server.ts`
+- Uses `Intl.DateTimeFormat` to validate IANA timezone strings at runtime
+- Updated PATCH handler to accept `body.timezone` and call validation
+- Invalid timezone returns 400 with `validation_error` type (follows existing pattern)
+- Updated JSDoc for PATCH handler to include timezone parameter
+
+**Files changed:**
+- `src/routes/api/user/preferences/+server.ts` - Added validateTimezone() function (~25 lines) and PATCH handler timezone handling (~10 lines)
+
+**Patterns applied:**
+- Followed existing validation pattern from `validateTheme()` and `validateDefaultModel()`
+- Used `Intl.DateTimeFormat` for timezone validation (throws on invalid timezone)
+- Consistent error response format with `{ message, type: 'validation_error' }`
+- JSDoc examples for clarity on expected input/output
+
+**Learnings:**
+1. **Intl.DateTimeFormat for timezone validation** - Passing an invalid timezone to `{ timeZone: value }` option throws a RangeError. This is the cleanest way to validate IANA timezone strings without maintaining a hardcoded list.
+2. **Pattern consistency matters** - Following the exact same pattern as existing validators (validateTheme, validateHomePage) makes the code predictable and easy to review.
+3. **Error message format** - Using `type: 'validation_error'` allows clients to differentiate between validation errors (user fixable) and server errors (not user fixable).
 
 **Quality gates:**
 - ✅ npm run check - passes (0 errors, 160 warnings - all pre-existing)
