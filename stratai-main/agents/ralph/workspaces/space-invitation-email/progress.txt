@@ -1,0 +1,46 @@
+# Ralph Progress Log
+
+## Feature: Space Invitation Email
+**Parent Task:** space-invitation-email
+**Started:** 2026-01-16
+**Status:** Ready to begin
+
+## Overview
+Send email notifications when users are added to spaces, with deep linking support via returnUrl on the login page.
+
+## Codebase Patterns Discovered
+- Email templates follow consistent structure in src/lib/server/email/templates.ts
+- Existing helpers: getBaseUrl(), createSetPasswordLink(), getWelcomeEmail()
+- Login flow handles redirect via throw redirect(303, url)
+- Space member addition at POST /api/spaces/[id]/members
+- SpaceRole types: owner, admin, member, guest
+- postgres.js uses camelCase for column access
+
+## Stories
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Add returnUrl support to login page | pending |
+| US-002 | Update welcome email to mention org workspace | pending |
+| US-003 | Create space invitation email template | pending |
+| US-004 | Create space invitation email sending service | pending |
+| US-005 | Send invitation email when user added to space | pending |
+| US-006 | Manual testing and verification | pending |
+
+## Implementation Notes
+- US-001 and US-002 can be done in parallel (no dependencies)
+- US-003 and US-004 are email infrastructure
+- US-005 integrates with existing API endpoint
+- US-006 is manual verification (no code changes)
+
+## Files to Modify/Create
+- src/routes/login/+page.server.ts - returnUrl handling
+- src/routes/login/+page.svelte - preserve returnUrl in form
+- src/lib/server/email/templates.ts - welcome email update + space invitation template
+- src/lib/server/email/space-invitation.ts (NEW) - sending service
+- src/routes/api/spaces/[id]/members/+server.ts - trigger email on POST
+
+## Security Considerations
+- validateReturnUrl() prevents open redirect attacks
+- Only relative URLs allowed (starts with /)
+- No protocol-relative URLs (//)
+- No javascript: or data: URLs
