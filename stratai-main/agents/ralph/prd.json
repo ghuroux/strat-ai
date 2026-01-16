@@ -45,7 +45,9 @@
       "title": "Update search() with access control",
       "description": "As a user, I want search to only return pages I can access so that search results respect sharing permissions.",
       "status": "pending",
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "acceptance_criteria": [
         "Reuse buildAccessiblePagesQuery() helper from US-001",
         "search() filters results through accessible pages CTE",
@@ -62,7 +64,9 @@
       "title": "Update count() with access control",
       "description": "As a user, I want page counts to reflect only pages I can access so that UI counters are accurate.",
       "status": "pending",
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "acceptance_criteria": [
         "Reuse buildAccessiblePagesQuery() helper from US-001",
         "count() filters through accessible pages CTE",
@@ -77,7 +81,11 @@
       "title": "Manual testing and verification",
       "description": "As a developer, I want to verify all access control scenarios work correctly so that the fix is complete.",
       "status": "pending",
-      "dependencies": ["US-001", "US-002", "US-003"],
+      "dependencies": [
+        "US-001",
+        "US-002",
+        "US-003"
+      ],
       "acceptance_criteria": [
         "Test: User A creates page, shares with area -> User B (area member) sees it in list",
         "Test: User A creates private page, shares with User B -> User B sees it in list",
