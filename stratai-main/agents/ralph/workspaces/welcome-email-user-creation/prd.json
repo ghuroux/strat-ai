@@ -45,7 +45,9 @@
       "title": "Create welcome email template",
       "description": "As a system, I need a professional welcome email template so that new users receive a branded, informative email with their set password link.",
       "status": "pending",
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "acceptance_criteria": [
         "getWelcomeEmail() function added to templates.ts",
         "Template includes: greeting with firstName, organization name, set password button, email reminder, 7-day expiration note",
@@ -62,7 +64,9 @@
       "title": "Update token repository to support token types and variable expiration",
       "description": "As a developer, I need the token repository to support different token types with their own expiration times so that welcome tokens can expire in 7 days while reset tokens expire in 1 hour.",
       "status": "pending",
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "acceptance_criteria": [
         "TOKEN_EXPIRY_MINUTES constant replaced with TOKEN_EXPIRY_MINUTES object: { reset: 60, welcome: 10080 }",
         "create() method accepts optional tokenType parameter (defaults to 'reset')",
@@ -80,7 +84,9 @@
       "title": "Create set-password page for welcome emails",
       "description": "As a new user, I need a dedicated set-password page so that I can set my password after receiving a welcome email.",
       "status": "pending",
-      "dependencies": ["US-003"],
+      "dependencies": [
+        "US-003"
+      ],
       "acceptance_criteria": [
         "Route created at /set-password with +page.svelte and +page.server.ts",
         "Page validates token on load via URL parameter",
@@ -99,7 +105,11 @@
       "title": "Update admin create user flow to send welcome email",
       "description": "As an admin, I want user creation to automatically send a welcome email so that new users receive secure access without me manually sharing passwords.",
       "status": "pending",
-      "dependencies": ["US-002", "US-003", "US-004"],
+      "dependencies": [
+        "US-002",
+        "US-003",
+        "US-004"
+      ],
       "acceptance_criteria": [
         "Password field removed from create user form in +page.svelte",
         "Info message added: 'A welcome email will be sent with a link to set password'",
@@ -119,7 +129,9 @@
       "title": "Add resend welcome email action",
       "description": "As an admin, I need to resend welcome emails for users who haven't set their password yet so that they can receive a fresh link if the original expired.",
       "status": "pending",
-      "dependencies": ["US-005"],
+      "dependencies": [
+        "US-005"
+      ],
       "acceptance_criteria": [
         "resendWelcome action added to +page.server.ts",
         "Action validates user has never logged in (lastLoginAt IS NULL)",
@@ -138,7 +150,10 @@
       "title": "Populate Invitations tab with pending invitations",
       "description": "As an admin, I want to see pending invitations in the Invitations tab so that I can track who hasn't set up their account yet and take action.",
       "status": "pending",
-      "dependencies": ["US-005", "US-006"],
+      "dependencies": [
+        "US-005",
+        "US-006"
+      ],
       "acceptance_criteria": [
         "Load function queries pending invitations: users with lastLoginAt IS NULL",
         "Query joins with password_reset_tokens to get welcome token status (pending/expired)",
