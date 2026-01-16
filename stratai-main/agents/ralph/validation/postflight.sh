@@ -42,18 +42,46 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════
-# 2. Lint Check
+# 2. Lint Check (Only fails on NEW errors)
 # ═══════════════════════════════════════════════════════════════════
 echo ""
 echo "🔎 Checking lint..."
 
-if ! npm run lint --silent 2>/dev/null; then
-  echo "❌ Lint errors introduced"
-  echo ""
-  echo "   Fix: Run 'npm run lint' and fix all errors"
-  FAILED=1
-else
+# Run lint and capture output
+set +e
+LINT_OUTPUT=$(npm run lint 2>&1)
+LINT_EXIT_CODE=$?
+set -e
+
+if [ $LINT_EXIT_CODE -eq 0 ]; then
   echo "   ✅ Lint passes"
+else
+  # Lint failed - check if this is worse than baseline
+  CURRENT_ERRORS=$(echo "$LINT_OUTPUT" | grep -c "error" || echo "0")
+  
+  if [ -f "$RALPH_DIR/.ralph-lint-baseline" ]; then
+    BASELINE_ERRORS=$(cat "$RALPH_DIR/.ralph-lint-baseline")
+    
+    if [ "$CURRENT_ERRORS" -gt "$BASELINE_ERRORS" ]; then
+      echo "❌ NEW lint errors introduced"
+      echo "   Baseline errors: $BASELINE_ERRORS"
+      echo "   Current errors:  $CURRENT_ERRORS"
+      echo "   NEW errors: $((CURRENT_ERRORS - BASELINE_ERRORS))"
+      echo ""
+      echo "   Fix: Run 'npm run lint' and fix the NEW errors"
+      FAILED=1
+    else
+      echo "   ⚠️  Lint errors exist (but NOT worse than baseline)"
+      echo "      Baseline errors: $BASELINE_ERRORS"
+      echo "      Current errors:  $CURRENT_ERRORS"
+      echo "      (Not blocking - no regression)"
+    fi
+  else
+    # No baseline - just warn but don't block
+    echo "   ⚠️  Lint errors exist (no baseline to compare)"
+    echo "      Errors: $CURRENT_ERRORS"
+    echo "      (Not blocking - establish baseline with preflight)"
+  fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════

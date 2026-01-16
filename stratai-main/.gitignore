@@ -12,3 +12,4 @@ vite.config.ts.timestamp-*
 # Ralph agent loop working files
 agents/ralph/.ralph-state
 agents/ralph/.ralph-test-baseline
+agents/ralph/.ralph-lint-baseline

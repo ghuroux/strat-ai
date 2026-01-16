@@ -51,20 +51,25 @@ fi
 echo "   ✅ TypeScript compiles (0 errors)"
 
 # ═══════════════════════════════════════════════════════════════════
-# 3. Lint Check
+# 3. Lint Check Baseline
 # ═══════════════════════════════════════════════════════════════════
 echo ""
-echo "🔎 Checking lint..."
+echo "🔎 Capturing lint baseline..."
 
-# Capture lint output - we'll allow existing warnings but track them
-LINT_OUTPUT=$(npm run lint 2>&1) || true
-LINT_ERRORS=$(echo "$LINT_OUTPUT" | grep -c "error" || echo "0")
+# Run lint and capture baseline
+set +e
+LINT_OUTPUT=$(npm run lint 2>&1)
+LINT_EXIT_CODE=$?
+set -e
 
-if [ "$LINT_ERRORS" -gt 0 ]; then
-  echo "⚠️  Lint errors exist (will not accept new ones)"
-  echo "   Existing errors: $LINT_ERRORS"
+if [ $LINT_EXIT_CODE -eq 0 ]; then
+  echo "   ✅ Lint passes (0 errors)"
+  echo "0" > "$RALPH_DIR/.ralph-lint-baseline"
 else
-  echo "   ✅ Lint passes"
+  BASELINE_ERRORS=$(echo "$LINT_OUTPUT" | grep -c "error" || echo "0")
+  echo "   ⚠️  Baseline lint errors: $BASELINE_ERRORS"
+  echo "   (Will not accept NEW errors during this iteration)"
+  echo "$BASELINE_ERRORS" > "$RALPH_DIR/.ralph-lint-baseline"
 fi
 
 # ═══════════════════════════════════════════════════════════════════
