@@ -497,11 +497,10 @@ trap cleanup_tail EXIT
 
 cd "$PROJECT_DIR" || exit 1
 
-# Spawn orchestrator agent
+# Spawn orchestrator agent (streaming mode for real-time output)
 set +e
-$CLAUDE_CLI --print \
+$CLAUDE_CLI \
   --dangerously-skip-permissions \
-  --verbose \
   "$(cat "$WORKSPACE_DIR/.orchestrator-context.txt")"
 
 ORCHESTRATOR_EXIT=$?
