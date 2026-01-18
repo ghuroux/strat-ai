@@ -13,6 +13,7 @@ import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
 import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
 import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import type { CreateAreaInput } from '$lib/types/areas';
+import { generateDistinctColor } from '$lib/utils/colorGeneration';
 
 /**
  * GET /api/areas
@@ -109,12 +110,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			);
 		}
 
+		// Auto-generate color if not provided
+		let areaColor = body.color;
+		if (!areaColor) {
+			// Fetch existing area colors in this space for distinct color generation
+			const existingAreas = await postgresAreaRepository.findAllAccessible(userId, resolvedSpaceId);
+			const existingColors = existingAreas.map((a) => a.color).filter(Boolean) as string[];
+			areaColor = generateDistinctColor(existingColors);
+		}
+
 		const input: CreateAreaInput = {
 			spaceId: resolvedSpaceId,
 			name: body.name.trim(),
 			context: body.context,
 			contextDocumentIds: body.contextDocumentIds,
-			color: body.color,
+			color: areaColor,
 			icon: body.icon
 		};
 
