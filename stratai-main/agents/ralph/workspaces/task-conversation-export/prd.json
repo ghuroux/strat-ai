@@ -48,7 +48,9 @@
       "title": "Add Export Button to Task Conversation UI",
       "description": "As a user, I need an export button in the task conversation interface so that I can easily download my conversation history.",
       "status": "pending",
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "acceptance_criteria": [
         "Export button appears in task conversation header (header-right section)",
         "Uses dropdown menu pattern similar to ExportMenu.svelte",
@@ -69,7 +71,10 @@
       "title": "Polish Export Quality and Edge Cases",
       "description": "As a user, I need exported conversation files to be clean, readable, and handle all edge cases so that exports are reliable and professional.",
       "status": "pending",
-      "dependencies": ["US-001", "US-002"],
+      "dependencies": [
+        "US-001",
+        "US-002"
+      ],
       "acceptance_criteria": [
         "Filenames sanitized: no special chars (/\\:*?\"<>|), truncated to 50 chars",
         "Markdown: code blocks have language hints (```typescript, ```python)",
