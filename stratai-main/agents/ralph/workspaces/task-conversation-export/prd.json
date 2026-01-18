@@ -70,7 +70,7 @@
       "id": "US-003",
       "title": "Polish Export Quality and Edge Cases",
       "description": "As a user, I need exported conversation files to be clean, readable, and handle all edge cases so that exports are reliable and professional.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001",
         "US-002"
