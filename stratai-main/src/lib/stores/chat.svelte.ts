@@ -13,6 +13,7 @@ import type { Message, Conversation, StructuredSummary } from '$lib/types/chat';
 import type { AssistState } from '$lib/types/assists';
 import { ASSISTS } from '$lib/config/assists';
 import { generateUUID } from '$lib/utils/uuid';
+import { generationActivityStore } from '$lib/stores/generationActivity.svelte';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
@@ -799,6 +800,13 @@ class ChatStore {
 		this.isStreaming = streaming;
 		this.abortController = controller || null;
 
+		// Update generation activity store
+		if (streaming) {
+			generationActivityStore.startGeneration();
+		} else {
+			generationActivityStore.stopGeneration();
+		}
+
 		// Persist and sync when streaming completes
 		if (!streaming && this.activeConversationId) {
 			const conv = this.conversations.get(this.activeConversationId);
@@ -815,6 +823,9 @@ class ChatStore {
 		}
 		this.isStreaming = false;
 		this.abortController = null;
+
+		// Stop generation activity tracking (defensive coverage)
+		generationActivityStore.stopGeneration();
 
 		if (this.activeConversationId) {
 			const conv = this.conversations.get(this.activeConversationId);
