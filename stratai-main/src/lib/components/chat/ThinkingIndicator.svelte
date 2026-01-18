@@ -24,7 +24,7 @@
 
 <div class="thinking-container">
 	<!-- Animated orb with glow -->
-	<div class="orb-container">
+	<div class="orb-container" class:paused={!generationActivityStore.isGenerating}>
 		<!-- Pulse rings -->
 		<div class="pulse-ring pulse-ring-1"></div>
 		<div class="pulse-ring pulse-ring-2"></div>
@@ -37,7 +37,7 @@
 	</div>
 
 	<!-- Subtle text -->
-	<span class="thinking-text">
+	<span class="thinking-text" class:paused={!generationActivityStore.isGenerating}>
 		Thinking
 		{#if generationActivityStore.elapsedSeconds > 0}
 			<span class="elapsed-time">({formatElapsedTime(generationActivityStore.elapsedSeconds)})</span>
@@ -171,5 +171,11 @@
 		100% {
 			opacity: 1;
 		}
+	}
+
+	/* Animation control based on isGenerating state */
+	.paused,
+	.paused :global(*) {
+		animation-play-state: paused !important;
 	}
 </style>
