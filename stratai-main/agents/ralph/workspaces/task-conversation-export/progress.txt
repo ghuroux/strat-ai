@@ -139,3 +139,15 @@ Enable users to export task conversation history in multiple formats (Markdown, 
 - ✅ npm run audit-db-access - passes (no snake_case violations)
 
 ---
+
+## 2026-01-18 - Add Export Button to Task Conversation UI
+Task ID: US-002
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---
