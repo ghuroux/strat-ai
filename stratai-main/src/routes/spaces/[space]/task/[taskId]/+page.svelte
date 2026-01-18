@@ -18,6 +18,7 @@
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { areaStore } from '$lib/stores/areas.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
@@ -1209,6 +1210,15 @@
 	function handlePageCreated(pageId: string) {
 		createPageModalOpen = false;
 		pageSuggestionPageType = null;
+
+		// Show success feedback
+		toastStore.success('Page created successfully');
+
+		// Navigate to the new page
+		// Look up area slug from task's areaId
+		const area = areaStore.getAreaById(task?.areaId || '');
+		const areaSlug = area?.slug || 'general';
+		goto(`/spaces/${spaceParam}/${areaSlug}/pages/${pageId}`);
 	}
 
 	// Handle closing the CreatePageModal
