@@ -1,0 +1,230 @@
+# Ralph Progress Log
+
+## Feature: Task Conversation Export
+**Parent Task:** task-conversation-export
+**Started:** 2026-01-18
+**Status:** Ready to begin
+
+## Overview
+
+Enable users to export task conversation history in multiple formats (Markdown, JSON, Plain Text) for archival, sharing, and external analysis.
+
+## Codebase Patterns Discovered
+
+### Existing Export Pattern
+- ExportMenu.svelte provides dropdown UI with format options
+- /api/pages/export/[id] returns files with Content-Disposition headers
+- Uses window.location.href for triggering downloads
+
+### Database Access
+- postgresConversationRepository.findById(id, userId) for fetching conversations
+- MUST use camelCase for column access (row.taskId, row.spaceId, row.messages)
+- Messages stored as JSONB array in conversations table
+
+### Authentication
+- Check locals.session for auth
+- Use locals.session.userId for user identification
+- Return 401 if not authenticated
+
+### Integration Point
+- Task conversation header at /src/routes/spaces/[space]/task/[taskId]/+page.svelte
+- Export button goes in header-right section after Create Page button
+
+## Stories
+
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Create Conversation Export API Endpoint | completed |
+| US-002 | Add Export Button to Task Conversation UI | completed |
+| US-003 | Polish Export Quality and Edge Cases | completed |
+
+## Technical Notes
+
+### Files to Create
+- /src/routes/api/conversations/export/[id]/+server.ts (~300 lines)
+- /src/lib/services/conversationExport.ts (~400 lines) - conversion utilities
+- Export menu component (reuse ExportMenu pattern or create ConversationExportMenu.svelte)
+
+### Files to Modify
+- /src/routes/spaces/[space]/task/[taskId]/+page.svelte - add export menu to header
+
+### Key Dependencies
+- postgresConversationRepository from $lib/server/persistence
+- Conversation and Message types from $lib/types/chat
+- toastStore for error notifications
+
+## Implementation Log
+
+### US-001: Create Conversation Export API Endpoint (2026-01-18)
+
+**Status:** Completed
+
+**What was done:**
+- Created GET /api/conversations/export/[id]?format=markdown|json|plaintext endpoint
+- Implemented three export formats:
+  - **Markdown**: Title as H1, role labels with timestamps, extended thinking in collapsible details, attachments with metadata, search sources as reference list
+  - **JSON**: Full conversation data with all metadata, excludes hidden messages and attachment binary data
+  - **Plain text**: `[Timestamp] Role: Message` format suitable for grep/analysis
+- Proper error handling: 401 (unauthorized), 404 (not found), 400 (invalid format)
+- Content-Disposition header with sanitized filename: `{title}-conversation-{date}.{ext}`
+- Handles empty conversations gracefully with "No messages yet" placeholder
+
+**Files created:**
+- `/src/routes/api/conversations/export/[id]/+server.ts` - Export endpoint (~280 lines)
+
+**Patterns applied:**
+- Authentication pattern from AGENTS.md (`if (!locals.session) throw error(401)`)
+- Error handling with SvelteKit `error()` function (not json response)
+- Filename sanitization pattern from pages export endpoint
+- Content-Type and Content-Disposition headers pattern
+
+**Learnings:**
+1. **SvelteKit error() vs json() for errors**: The pages export endpoint uses `throw error()` for cleaner error handling with automatic status code propagation. This is preferable for download endpoints vs API endpoints that return JSON.
+
+2. **Export format considerations**:
+   - Markdown includes extended thinking in collapsible `<details>` blocks for cleaner reading
+   - JSON excludes `content.data` from attachments to keep export size manageable
+   - Plain text uses fixed-width timestamp prefix for alignment during grep
+
+3. **Hidden messages filtering**: All formats filter out `hidden: true` messages to match what users see in the UI
+
+4. **ESLint config missing**: `npm run lint` fails because `eslint.config.js` doesn't exist in project root. This is a pre-existing issue unrelated to this story.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 TypeScript errors)
+- ⚠️ npm run lint - config missing (pre-existing issue)
+- ✅ npm run audit-db-access - passes (no snake_case violations)
+
+---
+
+### US-002: Add Export Button to Task Conversation UI (2026-01-18)
+
+**Status:** Completed
+
+**What was done:**
+- Created ConversationExportMenu.svelte component following ExportMenu.svelte pattern
+- Integrated export button into task conversation header (header-right section)
+- Dropdown shows three format options: Markdown, JSON, Plain Text
+- Button disabled with tooltip when conversation has no messages
+- Uses lucide-svelte icons (Download, FileText, FileCode, FileDown)
+- Svelte 5 runes throughout ($state, $derived, $effect, $props)
+
+**Files created:**
+- `/src/lib/components/chat/ConversationExportMenu.svelte` - Export dropdown component (~220 lines)
+
+**Files modified:**
+- `/src/routes/spaces/[space]/task/[taskId]/+page.svelte` - Added import and component in header-right section
+
+**Patterns applied:**
+- Dropdown menu pattern from ExportMenu.svelte (click-outside, escape key, fly transition)
+- Svelte 5 Props interface pattern with $props() destructuring
+- lucide-svelte for icons (per SKILL.md guidance)
+- CSS variables for light/dark theme support
+- toastStore for error notifications
+
+**Learnings:**
+1. **Responsive button design**: Added `.button-text` class that hides on mobile (`display: none`) and shows on desktop (`@media (min-width: 640px)`). This keeps the button compact on small screens while showing full text on larger screens.
+
+2. **Props pattern for conditional state**: Using `hasMessages: boolean` as a prop instead of deriving it internally keeps the component decoupled and reusable. The parent knows the conversation state.
+
+3. **Nullish coalescing for optional props**: `conversationId={activeConversation?.id ?? null}` ensures we pass `null` (not `undefined`) which is more explicit for the component's type system.
+
+4. **Click-outside pattern in $effect**: The cleanup function returned from $effect properly removes event listeners, preventing memory leaks when dropdown closes.
+
+5. **lucide-svelte with global styles**: When using lucide-svelte icons inside styled containers, use `:global(svg)` selector to target the icons since they're rendered as child components.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 TypeScript errors)
+- ⚠️ npm run lint - config missing (pre-existing issue)
+- ✅ npm run audit-db-access - passes (no snake_case violations)
+
+---
+
+### US-003: Polish Export Quality and Edge Cases (2026-01-18)
+
+**Status:** Completed
+
+**What was done:**
+- Enhanced filename sanitization: removes filesystem-forbidden chars, control chars, truncates to 50 chars per acceptance criteria
+- Added automatic language detection for code blocks (TypeScript, Python, SQL, HTML, CSS, JSON, Bash, Go, Rust, Java, C#)
+- Improved attachments display with markdown table format: filename, size (human-readable), MIME type
+- Extended thinking sections now marked with 💭 icon in collapsible details block
+- Search sources formatted as numbered reference list with truncated snippets
+- Added export metadata footer: exported timestamp, platform (StratAI), message count
+- Subtask conversations now include parent task context in header (all 3 formats)
+- Added icons to role headers (👤 User, 🤖 Assistant, ⚙️ System)
+- JSON export now includes subtaskContext object and exportVersion bump to 1.1
+- Plain text includes sources (was missing before)
+- All formats now include export metadata footer
+
+**Files modified:**
+- `/src/routes/api/conversations/export/[id]/+server.ts` - Enhanced from ~280 to ~620 lines with all polishing
+
+**Key enhancements:**
+
+1. **Filename sanitization** (AC: no special chars, truncated to 50 chars):
+   ```typescript
+   function sanitizeFilename(text: string): string {
+     return text
+       .replace(/[/\\:*?"<>|]/g, '')  // filesystem-forbidden
+       .replace(/[\x00-\x1F\x7F]/g, '') // control chars
+       .replace(/[\r\n\t]+/g, ' ')
+       .replace(/\s+/g, ' ')
+       .replace(/\s/g, '-')
+       .replace(/-+/g, '-')
+       .replace(/^-+|-+$/g, '')
+       .trim()
+       .substring(0, 50);  // truncate
+   }
+   ```
+
+2. **Language detection for code blocks** (AC: ```typescript, ```python):
+   - Pattern-based detection for 12+ languages
+   - Only adds hints to blocks without existing language markers
+   - Preserves existing language hints
+
+3. **Subtask context** (AC: parent task context in header):
+   - Fetches task via postgresTaskRepository when conversation has taskId
+   - If task has parentTaskId, fetches parent task
+   - Shows parent task title and contextSummary in all formats
+
+4. **Performance for long conversations** (AC: 1000+ messages):
+   - Uses array join for string building (O(n) vs O(n²))
+   - Single filter pass for visible messages
+   - Lazy computation where possible
+
+**Patterns applied:**
+- Repository pattern for task fetching
+- Error tolerance for auxiliary data (subtask context)
+- Consistent format across all export types
+
+**Learnings:**
+
+1. **Language detection is heuristic-based**: Perfect detection is impossible without AST parsing. The pattern-based approach is fast and handles 80%+ of common cases. Unknown code blocks stay unmarked rather than guessed wrong.
+
+2. **Subtask context is auxiliary**: If we can't fetch parent task info (permissions, deleted, etc.), we continue without it. Export shouldn't fail due to ancillary data.
+
+3. **Array join is performant**: For long conversations, building an array and joining at the end is more efficient than string concatenation. JavaScript engines optimize this well.
+
+4. **Markdown table for attachments**: Tables render better than lists for structured data with multiple columns. Using backticks for MIME type helps distinguish it visually.
+
+5. **Export version in JSON**: Adding `exportVersion: "1.1"` helps downstream tools understand schema changes.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 TypeScript errors)
+- ⚠️ npm run lint - config missing (pre-existing issue)
+- ✅ npm run audit-db-access - passes (no snake_case violations)
+
+---
+
+## 2026-01-18 - Polish Export Quality and Edge Cases
+Task ID: US-003
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---

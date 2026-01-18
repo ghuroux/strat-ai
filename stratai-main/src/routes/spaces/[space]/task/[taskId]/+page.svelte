@@ -26,6 +26,7 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
+	import ConversationExportMenu from '$lib/components/chat/ConversationExportMenu.svelte';
 	import ModelSelector from '$lib/components/ModelSelector.svelte';
 	import ModelBadge from '$lib/components/ModelBadge.svelte';
 	import PlanModePanel from '$lib/components/tasks/PlanModePanel.svelte';
@@ -1379,6 +1380,12 @@
 					{:else}
 						<ModelBadge model={effectiveModel} />
 					{/if}
+
+					<!-- Export conversation -->
+					<ConversationExportMenu
+						conversationId={activeConversation?.id ?? null}
+						hasMessages={messages.length > 0}
+					/>
 				{/if}
 
 				{#if viewMode === 'chat' && !isPlanModeActive && panelSubtasks.length > 0}

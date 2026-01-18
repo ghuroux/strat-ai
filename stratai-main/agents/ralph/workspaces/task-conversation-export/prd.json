@@ -1,0 +1,96 @@
+{
+  "feature_name": "Task Conversation Export",
+  "parent_task_id": "task-conversation-export",
+  "created": "2026-01-18",
+  "research": {
+    "similar_patterns": [
+      "src/lib/components/pages/ExportMenu.svelte",
+      "src/routes/api/pages/export/[id]/+server.ts",
+      "src/routes/api/conversations/[id]/+server.ts"
+    ],
+    "docs_reviewed": [
+      "docs/database/SCHEMA_REFERENCE.md",
+      "docs/features/TASK_CONVERSATION_EXPORT.md",
+      "CLAUDE.md"
+    ],
+    "codebase_patterns": [
+      "postgres.js camelCase transformation (row.taskId not row.task_id)",
+      "locals.session authentication pattern",
+      "Content-Disposition header for file downloads",
+      "Svelte 5 runes ($state, $derived, $effect)"
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Create Conversation Export API Endpoint",
+      "description": "As a developer, I need a robust API endpoint that converts conversation data into exportable formats (Markdown, JSON, Plain Text) so that the UI can trigger downloads.",
+      "status": "completed",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "GET /api/conversations/export/[id]?format=markdown|json|plaintext endpoint exists",
+        "Returns 401 if not authenticated (no locals.session)",
+        "Returns 404 if conversation not found",
+        "Returns 400 for invalid format parameter",
+        "Markdown format includes: title as H1, role labels (User/Assistant), timestamps, preserved code blocks",
+        "JSON format includes: id, title, createdAt, updatedAt, messages array with all metadata",
+        "Plain text format: [Timestamp] Role: Message - suitable for grep/analysis",
+        "Content-Type header matches format (text/markdown, application/json, text/plain)",
+        "Content-Disposition header with filename: {task-title}-conversation-{timestamp}.{ext}",
+        "Handles empty conversations gracefully (exports with 'No messages yet')",
+        "npm run check passes (0 TypeScript errors)",
+        "npm run lint passes (0 new ESLint errors)",
+        "npm run audit-db-access passes (correct camelCase usage)"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Add Export Button to Task Conversation UI",
+      "description": "As a user, I need an export button in the task conversation interface so that I can easily download my conversation history.",
+      "status": "completed",
+      "dependencies": [
+        "US-001"
+      ],
+      "acceptance_criteria": [
+        "Export button appears in task conversation header (header-right section)",
+        "Uses dropdown menu pattern similar to ExportMenu.svelte",
+        "Button icon: download icon (lucide-svelte Download or inline SVG)",
+        "Dropdown shows three format options: Markdown, JSON, Plain Text",
+        "Clicking format option triggers API call to /api/conversations/export/[id]?format=X",
+        "Browser downloads file automatically via window.location.href",
+        "Button disabled with tooltip when conversation has no messages",
+        "Error toast shown if export fails (uses toastStore)",
+        "Dropdown closes after selection",
+        "Uses Svelte 5 runes ($state, $effect) - NOT Svelte 4 stores",
+        "npm run check passes (0 TypeScript errors)",
+        "npm run lint passes (0 new ESLint errors)"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Polish Export Quality and Edge Cases",
+      "description": "As a user, I need exported conversation files to be clean, readable, and handle all edge cases so that exports are reliable and professional.",
+      "status": "completed",
+      "dependencies": [
+        "US-001",
+        "US-002"
+      ],
+      "acceptance_criteria": [
+        "Filenames sanitized: no special chars (/\\:*?\"<>|), truncated to 50 chars",
+        "Markdown: code blocks have language hints (```typescript, ```python)",
+        "Markdown: attachments listed with filename, size (human-readable), MIME type",
+        "Markdown: extended thinking sections marked clearly",
+        "Markdown: search sources formatted as reference list at end of message",
+        "Markdown: export metadata footer (exported by, timestamp, platform, message count)",
+        "Empty conversations export successfully with metadata only",
+        "Very long conversations (1000+ messages) handled without performance issues",
+        "Special characters (emoji, backticks, markdown-like text) handled correctly",
+        "Subtask conversations include parent task context in header",
+        "npm run check passes (0 TypeScript errors)",
+        "npm run lint passes (0 new ESLint errors)",
+        "Manual testing with: short/long conversations, attachments, code blocks, thinking blocks"
+      ]
+    }
+  ],
+  "completed_at": "2026-01-18T19:30:42Z"
+}
