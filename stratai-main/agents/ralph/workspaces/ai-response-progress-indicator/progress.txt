@@ -1,0 +1,37 @@
+# Ralph Progress Log
+
+## Feature: AI Response Progress Indicator
+**Parent Task:** ai-response-progress-indicator
+**Started:** 2026-01-18
+**Status:** Ready to begin
+
+## Codebase Patterns Discovered
+
+### Svelte 5 Store Pattern (from toast.svelte.ts)
+- Class-based stores using `$state` rune
+- Methods modify state directly on class properties
+- Export singleton instance for app-wide use
+- Example: `export const toastStore = new ToastStore();`
+
+### Chat Store Integration Points (from chat.svelte.ts)
+- `setStreaming(streaming: boolean, controller?: AbortController)` at ~line 798
+- `stopStreaming()` at ~line 812
+- Both methods handle persist/sync after streaming completes
+
+### ThinkingIndicator Current State
+- Pure CSS animations, no script/state
+- Animations: orbPulse, pulseRing, shimmerText
+- Text: "Thinking" (static)
+
+## Wave Execution Plan
+- Wave 1: US-001 (Sonnet - new store with timer logic)
+- Wave 2: US-002, US-003, US-004 (Haiku - parallel, all depend on US-001)
+
+## Stories
+
+| ID | Title | Status | Wave |
+|----|-------|--------|------|
+| US-001 | Create generation activity store | pending | 1 |
+| US-002 | Add elapsed time to ThinkingIndicator | pending | 2 |
+| US-003 | Add conditional animation control | pending | 2 |
+| US-004 | Integrate store with chat flow | pending | 2 |
