@@ -35,7 +35,7 @@ Enable users to export task conversation history in multiple formats (Markdown, 
 | ID | Title | Status |
 |----|-------|--------|
 | US-001 | Create Conversation Export API Endpoint | completed |
-| US-002 | Add Export Button to Task Conversation UI | pending |
+| US-002 | Add Export Button to Task Conversation UI | completed |
 | US-003 | Polish Export Quality and Edge Cases | pending |
 
 ## Technical Notes
@@ -97,14 +97,45 @@ Enable users to export task conversation history in multiple formats (Markdown, 
 
 ---
 
-## 2026-01-18 - Create Conversation Export API Endpoint
-Task ID: US-001
-Status: Completed
+### US-002: Add Export Button to Task Conversation UI (2026-01-18)
 
-### What Was Done
-[Fill in implementation details]
+**Status:** Completed
 
-### Learnings
-[Capture patterns, decisions, lessons]
+**What was done:**
+- Created ConversationExportMenu.svelte component following ExportMenu.svelte pattern
+- Integrated export button into task conversation header (header-right section)
+- Dropdown shows three format options: Markdown, JSON, Plain Text
+- Button disabled with tooltip when conversation has no messages
+- Uses lucide-svelte icons (Download, FileText, FileCode, FileDown)
+- Svelte 5 runes throughout ($state, $derived, $effect, $props)
+
+**Files created:**
+- `/src/lib/components/chat/ConversationExportMenu.svelte` - Export dropdown component (~220 lines)
+
+**Files modified:**
+- `/src/routes/spaces/[space]/task/[taskId]/+page.svelte` - Added import and component in header-right section
+
+**Patterns applied:**
+- Dropdown menu pattern from ExportMenu.svelte (click-outside, escape key, fly transition)
+- Svelte 5 Props interface pattern with $props() destructuring
+- lucide-svelte for icons (per SKILL.md guidance)
+- CSS variables for light/dark theme support
+- toastStore for error notifications
+
+**Learnings:**
+1. **Responsive button design**: Added `.button-text` class that hides on mobile (`display: none`) and shows on desktop (`@media (min-width: 640px)`). This keeps the button compact on small screens while showing full text on larger screens.
+
+2. **Props pattern for conditional state**: Using `hasMessages: boolean` as a prop instead of deriving it internally keeps the component decoupled and reusable. The parent knows the conversation state.
+
+3. **Nullish coalescing for optional props**: `conversationId={activeConversation?.id ?? null}` ensures we pass `null` (not `undefined`) which is more explicit for the component's type system.
+
+4. **Click-outside pattern in $effect**: The cleanup function returned from $effect properly removes event listeners, preventing memory leaks when dropdown closes.
+
+5. **lucide-svelte with global styles**: When using lucide-svelte icons inside styled containers, use `:global(svg)` selector to target the icons since they're rendered as child components.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 TypeScript errors)
+- ⚠️ npm run lint - config missing (pre-existing issue)
+- ✅ npm run audit-db-access - passes (no snake_case violations)
 
 ---

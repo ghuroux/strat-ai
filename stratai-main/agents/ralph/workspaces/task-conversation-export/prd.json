@@ -47,7 +47,7 @@
       "id": "US-002",
       "title": "Add Export Button to Task Conversation UI",
       "description": "As a user, I need an export button in the task conversation interface so that I can easily download my conversation history.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-001"
       ],
