@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS spaces (
   color TEXT,                            -- Accent color (hex, e.g., '#3b82f6')
   icon TEXT,                             -- Icon identifier (e.g., 'briefcase', 'beaker')
   order_index INTEGER NOT NULL DEFAULT 0,
+  is_pinned BOOLEAN DEFAULT false,       -- Whether space is pinned to top of navigation
 
   -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
