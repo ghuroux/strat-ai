@@ -83,6 +83,9 @@ npm run dev              # Dev server (port 5173)
 npm run check            # TypeScript check
 npm run build            # Production build
 docker-compose up -d     # Start LiteLLM
+
+# Database migrations (see .claude/commands/db-migrate.md for details)
+node -e "import('postgres').then(({default:postgres})=>{import('fs').then(fs=>{const sql=postgres(process.env.DATABASE_URL||'postgres://ghuroux@localhost:5432/stratai');const schemas=['schema.sql','users-schema.sql','organizations-schema.sql','org-memberships-schema.sql','user-id-mappings-schema.sql','tasks-schema.sql','documents-schema.sql','focus-areas-schema.sql','spaces-schema.sql','arena-schema.sql','tool-cache-schema.sql'];(async()=>{for(const file of schemas){console.log(\`Running: \${file}\`);const schema=fs.readFileSync(\`src/lib/server/persistence/\${file}\`,'utf-8');await sql.unsafe(schema).catch(e=>console.log(\`Notice: \${e.message}\`))}await sql.end();console.log('✅ Migrations complete')})()})})"
 ```
 
 ---
