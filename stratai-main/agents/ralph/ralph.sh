@@ -228,6 +228,102 @@ echo ""
 # Track start time for duration calculation (Phase 2.5)
 date +%s > "$WORKSPACE_DIR/.start-time"
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Git Branch Management (Trunk-Based Development)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Rule: Main is always the source of truth. Each feature gets its own branch.
+# This ensures parallel Ralph loops don't conflict and code stays organized.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_step "🌿 Setting Up Feature Branch"
+
+# Check if we're in a git repo
+if ! git -C "$PROJECT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+  print_warning "Not a git repository - skipping branch management"
+  echo ""
+else
+  cd "$PROJECT_DIR" || exit 1
+
+  # Get feature name for branch
+  FEATURE_NAME=$(jq -r '.feature_name // .feature // "unknown"' "$PRD_FILE" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+  FEATURE_BRANCH="feature/$FEATURE_NAME"
+
+  # Check current branch
+  CURRENT_BRANCH=$(git branch --show-current)
+
+  # Check for uncommitted changes
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    print_warning "Uncommitted changes detected"
+    echo ""
+    echo "   Options:"
+    echo "   1. Commit your changes first"
+    echo "   2. Stash with: git stash"
+    echo "   3. Discard with: git checkout -- ."
+    echo ""
+    read -p "   Continue anyway? [y/N] " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      echo "   Aborted. Please handle uncommitted changes first."
+      exit 1
+    fi
+  fi
+
+  # Check if feature branch already exists
+  if git show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH"; then
+    # Feature branch exists - check if we're on it
+    if [ "$CURRENT_BRANCH" = "$FEATURE_BRANCH" ]; then
+      print_success "Already on feature branch: $FEATURE_BRANCH"
+      echo ""
+    else
+      echo "   Feature branch exists: $FEATURE_BRANCH"
+      echo "   Current branch: $CURRENT_BRANCH"
+      echo ""
+      read -p "   Switch to existing feature branch? [Y/n] " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        git checkout "$FEATURE_BRANCH"
+        print_success "Switched to: $FEATURE_BRANCH"
+        echo ""
+      fi
+    fi
+  else
+    # Feature branch doesn't exist - create from main
+    echo "   Creating feature branch from main..."
+    echo ""
+
+    # If not on main, switch to it first
+    if [ "$CURRENT_BRANCH" != "main" ]; then
+      echo "   Switching to main branch..."
+      git checkout main || {
+        print_error "Failed to checkout main branch"
+        exit 1
+      }
+    fi
+
+    # Pull latest main (if remote exists)
+    if git remote | grep -q origin; then
+      echo "   Pulling latest from origin/main..."
+      git pull origin main --ff-only 2>/dev/null || {
+        print_warning "Could not pull from origin (continuing with local main)"
+      }
+    fi
+
+    # Create and switch to feature branch
+    git checkout -b "$FEATURE_BRANCH" || {
+      print_error "Failed to create branch: $FEATURE_BRANCH"
+      exit 1
+    }
+
+    print_success "Created feature branch: $FEATURE_BRANCH"
+    echo ""
+  fi
+
+  # Store branch name for later use
+  echo "$FEATURE_BRANCH" > "$WORKSPACE_DIR/.feature-branch"
+fi
+
 # Check if progress.txt needs reset (new feature)
 if [ -f "$PROGRESS_FILE" ]; then
   PROGRESS_FEATURE=$(head -10 "$PROGRESS_FILE" | grep "Feature:" | cut -d: -f2 | xargs || echo "")
@@ -441,7 +537,8 @@ echo ""
 # Archive workspace if in workspace mode
 if [ "$WORKSPACE_DIR" != "$SCRIPT_DIR" ]; then
   DATE=$(date +%Y-%m-%d)
-  ARCHIVE_DIR="$SCRIPT_DIR/archive/$DATE-$(echo "$FEATURE_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
+  FEATURE_NAME_SLUG=$(echo "$FEATURE_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+  ARCHIVE_DIR="$SCRIPT_DIR/archive/$DATE-$FEATURE_NAME_SLUG"
 
   if [ -f "$PROGRESS_FILE" ] && [ ! -f "$WORKSPACE_DIR/.completed" ]; then
     mkdir -p "$ARCHIVE_DIR"
@@ -460,5 +557,99 @@ if [ "$WORKSPACE_DIR" != "$SCRIPT_DIR" ]; then
   fi
 fi
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Git Branch Merge (Trunk-Based Development)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if [ -f "$WORKSPACE_DIR/.feature-branch" ]; then
+  FEATURE_BRANCH=$(cat "$WORKSPACE_DIR/.feature-branch")
+  CURRENT_BRANCH=$(git -C "$PROJECT_DIR" branch --show-current)
+
+  echo ""
+  print_step "🔀 Branch Management"
+  echo ""
+  echo "   Feature branch: $FEATURE_BRANCH"
+  echo "   Current branch: $CURRENT_BRANCH"
+  echo ""
+
+  # Offer to merge to main
+  echo "   Would you like to merge this feature to main?"
+  echo ""
+  echo "   [M] Merge to main and delete feature branch (recommended)"
+  echo "   [K] Keep feature branch (merge later)"
+  echo "   [N] Do nothing"
+  echo ""
+  read -p "   Choice [M/k/n]: " -n 1 -r
+  echo ""
+  echo ""
+
+  if [[ $REPLY =~ ^[Mm]$ ]] || [[ -z $REPLY ]]; then
+    cd "$PROJECT_DIR" || exit 1
+
+    # Ensure we're on the feature branch and it has all changes
+    if [ "$CURRENT_BRANCH" != "$FEATURE_BRANCH" ]; then
+      git checkout "$FEATURE_BRANCH" 2>/dev/null || true
+    fi
+
+    # Check for uncommitted changes
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+      echo "   Committing remaining changes..."
+      git add -A
+      git commit -m "chore: final changes for $FEATURE_NAME" || true
+    fi
+
+    # Switch to main and merge
+    echo "   Switching to main..."
+    git checkout main || {
+      print_error "Failed to checkout main"
+      exit 1
+    }
+
+    echo "   Merging $FEATURE_BRANCH..."
+    if git merge "$FEATURE_BRANCH" -m "Merge $FEATURE_BRANCH"; then
+      print_success "Merged to main successfully"
+
+      # Delete feature branch
+      echo "   Cleaning up feature branch..."
+      git branch -d "$FEATURE_BRANCH" 2>/dev/null || true
+      rm -f "$WORKSPACE_DIR/.feature-branch"
+      print_success "Deleted branch: $FEATURE_BRANCH"
+      echo ""
+
+      # Offer to push
+      if git remote | grep -q origin; then
+        echo "   Push to origin? [y/N] "
+        read -n 1 -r
+        echo ""
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+          git push origin main && print_success "Pushed to origin/main"
+        fi
+      fi
+    else
+      print_error "Merge failed - resolve conflicts manually"
+      echo "   Your feature branch is preserved: $FEATURE_BRANCH"
+      echo "   To resolve:"
+      echo "     1. Fix conflicts"
+      echo "     2. git add ."
+      echo "     3. git commit"
+      echo "     4. git branch -d $FEATURE_BRANCH"
+    fi
+
+  elif [[ $REPLY =~ ^[Kk]$ ]]; then
+    echo "   Feature branch kept: $FEATURE_BRANCH"
+    echo ""
+    echo "   To merge later:"
+    echo "     git checkout main"
+    echo "     git merge $FEATURE_BRANCH"
+    echo "     git branch -d $FEATURE_BRANCH"
+    echo ""
+
+  else
+    echo "   No changes made to branches."
+  fi
+fi
+
+echo ""
+print_success "Ralph loop complete!"
 echo ""
 exit 0
