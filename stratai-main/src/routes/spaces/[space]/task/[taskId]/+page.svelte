@@ -1672,6 +1672,7 @@
 								onResend={handleResend}
 								onRegenerate={handleRegenerate}
 								onSecondOpinion={() => {}}
+								onCreatePage={() => (createPageModalOpen = true)}
 							/>
 						{/each}
 					{/if}

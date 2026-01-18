@@ -1,15 +1,27 @@
 # Ralph Loop Optimization
 
-> **Status:** Planning
+> **Status:** Phase 1 Complete, Phase 2 In Progress
 > **Created:** 2026-01-18
+> **Updated:** 2026-01-18
 > **Priority:** High
-> **Effort:** Multi-phase (4 weeks)
+> **Effort:** Multi-phase (5 weeks)
 
 ---
 
 ## Executive Summary
 
-Optimize the Ralph compound engineering loop to improve feature completion rates, reduce token costs, and leverage Claude Code 2.1.0's new agent capabilities. Current issues: incomplete feature implementations, complex checkout flow, and inefficient token usage. Target improvements: 80-90% cost reduction via prompt caching, 30-40% better completion rates, and faster execution via background agents.
+Optimize the Ralph compound engineering loop to improve feature completion rates, reduce token costs, and enable intelligent parallelization via Claude Code 2.1.0's sub-agent capabilities.
+
+**Key Innovation:** Coordinator + Sub-agent Architecture
+- Long-lived coordinator maintains high-level context (story dependencies, patterns learned, parallelization decisions)
+- Fresh sub-agents handle implementation (clean context, no pollution)
+- Best of both worlds: learning across stories + fresh implementation focus
+
+**Target Improvements:**
+- **70-85% cost reduction** via prompt caching + smart model selection
+- **30-50% faster execution** via intelligent parallelization
+- **90-95% completion rate** via automated AC verification
+- **Better quality** via cross-story learning and dynamic optimization
 
 ---
 
@@ -61,6 +73,105 @@ fi
 **Problem:** 2 attempts may be insufficient for complex validation failures.
 
 **No AC verification:** postflight.sh (209 lines) validates TypeScript/lint/tests but never checks if story acceptance criteria were actually met.
+
+**4. Sequential Execution Bottleneck**
+- **Symptom:** All stories execute sequentially, even when independent
+- **Root Cause:** Fresh session per story to avoid context pollution
+- **Impact:** 10-story feature takes 30+ minutes (could be 15 min with parallelization)
+
+---
+
+## The Coordinator Insight
+
+### The Core Trade-off
+
+**Current Approach (Fresh Session Per Story):**
+```
+Story 1 → [Fresh Agent] → Commit
+Story 2 → [Fresh Agent] → Commit
+Story 3 → [Fresh Agent] → Commit
+```
+- ✅ No context pollution
+- ✅ Clear task boundaries
+- ❌ No learning across stories
+- ❌ Purely sequential (slow)
+- ❌ Repeated doc reads (expensive)
+
+**New Approach (Coordinator + Sub-agents):**
+```
+[Coordinator Agent - Sonnet, long-lived]
+  ↓
+  Analyzes: "Stories 2 & 3 touch different files → can parallel"
+  ↓
+  Spawns: [Story-1 Sub-agent - Sonnet, fresh] → Complete
+  ↓
+  Spawns: [Haiku Verifier] → Verify AC
+  ↓
+  Spawns: [Story-2 Sub-agent] + [Story-3 Sub-agent] (parallel!)
+  ↓
+  Learns: "Pattern from Story-2 applies to Story-4"
+  ↓
+  Continues until feature complete
+```
+
+### Key Benefits
+
+**1. Parallelization Intelligence**
+- Analyzes PRD to identify safe parallelization opportunities
+- No file overlap → safe to parallel
+- No dependencies → safe to parallel
+- Example: 10-story auth feature
+  - Sequential: 10 × 3min = **30 minutes**
+  - Parallelized: 5 waves × 3min = **15 minutes (50% faster!)**
+
+**2. Cross-Story Learning**
+- "Story 2 revealed auth uses JWT, not sessions"
+- "Stories 3-5 can follow pattern from Story 3"
+- "This AC keeps failing - adjust approach"
+
+**3. Fresh Implementation Context**
+- Coordinator context = high-level (story status, patterns, dependencies)
+- Sub-agent context = fresh (just the story + cached docs)
+- **Best of both worlds!**
+
+**4. Smarter Error Recovery**
+- Coordinator sees failure patterns → adjusts strategy
+- Can reorder stories dynamically
+- Escalates to human when stuck
+
+### When Parallelization is Safe
+
+```
+Can parallelize Story A + Story B when:
+✅ No file overlap (A: auth.ts, B: payments.ts)
+✅ No dependencies (B doesn't need A's output)
+✅ Independent tests (A's tests don't affect B)
+✅ No shared state mutations (different DB tables)
+
+Must serialize when:
+❌ Same file modified (both touch hooks.server.ts)
+❌ Dependencies exist (B needs A's types)
+❌ Sequential logic (Step 2 needs Step 1's setup)
+```
+
+### Coordinator Responsibilities
+
+1. **Dependency Analysis**: Parse PRD, build dependency graph
+2. **Wave Planning**: Group independent stories into parallel waves
+3. **Sub-agent Spawning**: Launch implementation agents with fresh context
+4. **Progress Monitoring**: Track completions, handle failures
+5. **Pattern Learning**: Extract insights across stories
+6. **Dynamic Re-planning**: Adjust based on outcomes
+
+### Risk Mitigation
+
+| Risk | Mitigation |
+|------|------------|
+| **Git conflicts from parallel commits** | Coordinator commits after each wave, not sub-agents |
+| **Context pollution in coordinator** | Coordinator only holds high-level state (< 50k tokens) |
+| **Wrong parallelization decision** | Conservative: if unsure, serialize |
+| **Coordinator crash mid-feature** | Save wave state to workspace; resume capability |
+| **Cost of long-lived coordinator** | Mostly orchestration (small prompts); sub-agents cached |
 
 ---
 
@@ -414,10 +525,11 @@ fi
 
 ---
 
-## Phase 2: Leverage Claude Code 2.1.0 (Week 2)
+## Phase 2: Token Cost Optimizations (Week 2)
 
+**Status:** ✅ Complete (2026-01-18)
 **Effort:** 1 week
-**Impact:** Very High (50-85% cost reduction)
+**Impact:** Very High (70-85% cost reduction)
 **Risk:** Medium (requires Claude Code 2.1.0+ features)
 
 ### 2.1 Implement Prompt Caching
@@ -636,13 +748,254 @@ fi
 
 ---
 
-## Phase 3: Advanced Features (Week 3)
+## Phase 2.5: Coordinator Analysis Mode (Week 3)
 
+**Status:** Planning
+**Effort:** 3-4 days
+**Impact:** Medium (validation + metrics gathering)
+**Risk:** Low (analysis-only, no execution changes)
+
+### Objective
+
+Add coordinator agent in **planning mode only** to:
+1. Analyze parallelization opportunities BEFORE implementation
+2. Log potential time savings for validation
+3. Gather data on how often parallelization is possible
+4. Test coordinator prompting without risking execution flow
+
+**Key Constraint:** Coordinator only analyzes and logs - actual implementation stays sequential (current approach).
+
+### 2.5.1 Create Coordinator Agent
+
+**Create:** `agents/ralph/lib/coordinator-agent.sh`
+
+```bash
+#!/bin/bash
+# Coordinator agent - Wave analysis mode
+
+WORKSPACE_DIR=$1
+PRD_FILE="$WORKSPACE_DIR/prd.json"
+ANALYSIS_FILE="$WORKSPACE_DIR/.wave-analysis.json"
+
+# Invoke coordinator in analysis-only mode
+COORDINATOR_PROMPT="You are the Ralph Loop Coordinator analyzing parallelization opportunities.
+
+**Feature:** $(jq -r '.feature' "$PRD_FILE")
+
+**Stories:**
+$(jq '.stories[]' "$PRD_FILE")
+
+**Your Task:**
+
+Analyze the PRD and create a wave execution plan. For each story, determine:
+1. Which stories it depends on (check .dependencies field)
+2. Which files it will likely modify (infer from title + description)
+3. Whether it can run in parallel with other stories
+
+**Wave Planning Rules:**
+- Wave 1: Stories with no dependencies and unique file sets
+- Wave N: Stories whose dependencies are in waves 1..N-1
+- NEVER parallelize stories touching the same file
+- When file overlap is uncertain, serialize
+
+**Output Format (JSON):**
+\`\`\`json
+{
+  \"total_stories\": 10,
+  \"estimated_sequential_time_min\": 30,
+  \"waves\": [
+    {
+      \"wave_number\": 1,
+      \"stories\": [\"US-001\"],
+      \"parallelism\": 1,
+      \"rationale\": \"Schema migration - blocks all others\"
+    },
+    {
+      \"wave_number\": 2,
+      \"stories\": [\"US-002\", \"US-003\"],
+      \"parallelism\": 2,
+      \"rationale\": \"US-002 touches auth-service.ts, US-003 touches auth-middleware.ts (different files, no dependencies)\"
+    }
+  ],
+  \"estimated_wave_time_min\": 18,
+  \"time_savings_percent\": 40,
+  \"confidence\": \"medium\",
+  \"risks\": [
+    \"US-002 and US-003 might both modify types.ts (uncertain)\"
+  ]
+}
+\`\`\`
+
+**Be conservative:** If unsure whether parallelization is safe, serialize."
+
+claude --model sonnet --print "$COORDINATOR_PROMPT" > "$ANALYSIS_FILE"
+
+echo "✅ Wave analysis complete: $ANALYSIS_FILE"
+```
+
+### 2.5.2 Integrate into ralph.sh (Analysis Only)
+
+**Modify:** `ralph.sh` after PRD load, before story loop
+
+```bash
+# Line ~240, after PRD validation, before main loop:
+
+print_step "🔍 Analyzing Parallelization Opportunities..."
+
+if [ -x "$SCRIPT_DIR/lib/coordinator-agent.sh" ]; then
+  "$SCRIPT_DIR/lib/coordinator-agent.sh" "$WORKSPACE_DIR"
+
+  if [ -f "$WORKSPACE_DIR/.wave-analysis.json" ]; then
+    echo ""
+    echo "📊 Coordinator Analysis:"
+
+    ESTIMATED_SEQUENTIAL=$(jq -r '.estimated_sequential_time_min' "$WORKSPACE_DIR/.wave-analysis.json")
+    ESTIMATED_PARALLEL=$(jq -r '.estimated_wave_time_min' "$WORKSPACE_DIR/.wave-analysis.json")
+    SAVINGS_PERCENT=$(jq -r '.time_savings_percent' "$WORKSPACE_DIR/.wave-analysis.json")
+
+    echo "   Sequential execution: ~${ESTIMATED_SEQUENTIAL} min"
+    echo "   With parallelization: ~${ESTIMATED_PARALLEL} min"
+    echo "   Potential savings: ${SAVINGS_PERCENT}%"
+    echo ""
+
+    WAVE_COUNT=$(jq '.waves | length' "$WORKSPACE_DIR/.wave-analysis.json")
+    echo "   Proposed execution plan: $WAVE_COUNT waves"
+    jq -r '.waves[] | "     Wave \(.wave_number): \(.stories | join(", ")) (\(.parallelism) parallel)"' "$WORKSPACE_DIR/.wave-analysis.json"
+    echo ""
+
+    RISKS=$(jq -r '.risks | join("\n   - ")' "$WORKSPACE_DIR/.wave-analysis.json")
+    if [ -n "$RISKS" ] && [ "$RISKS" != "null" ]; then
+      echo "   ⚠️  Potential risks:"
+      echo "   - $RISKS"
+      echo ""
+    fi
+
+    echo "   (Currently executing sequentially - parallelization in Phase 3)"
+    echo ""
+  fi
+else
+  echo "   Coordinator agent not found - skipping analysis"
+  echo ""
+fi
+
+# Continue with sequential execution (current approach)
+print_header "Beginning Sequential Story Implementation"
+```
+
+### 2.5.3 Metrics Collection
+
+**Add:** Wave analysis tracking to COMPLETION_SUMMARY.md
+
+```bash
+# In completion logic (line ~298), add to COMPLETION_SUMMARY.md:
+
+if [ -f "$WORKSPACE_DIR/.wave-analysis.json" ]; then
+  cat >> "$WORKSPACE_DIR/COMPLETION_SUMMARY.md" <<EOF
+
+## Parallelization Analysis
+
+**Coordinator predicted:**
+- Sequential time: $(jq -r '.estimated_sequential_time_min' "$WORKSPACE_DIR/.wave-analysis.json") min
+- Parallel time: $(jq -r '.estimated_wave_time_min' "$WORKSPACE_DIR/.wave-analysis.json") min
+- Potential savings: $(jq -r '.time_savings_percent' "$WORKSPACE_DIR/.wave-analysis.json")%
+
+**Actual execution:**
+- Start: $FEATURE_START_TIME
+- End: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+- Duration: $ACTUAL_DURATION min
+
+**Wave plan accuracy:**
+$(jq -r '.waves[] | "- Wave \(.wave_number): \(.stories | join(", "))"' "$WORKSPACE_DIR/.wave-analysis.json")
+
+**Learnings for Phase 3:**
+- Was the wave plan accurate? (review file changes)
+- Did any stories touch same files? (would have caused conflicts)
+- Could parallelization have been more aggressive?
+
+EOF
+fi
+```
+
+### 2.5.4 Test on Real Features
+
+**Run on 3-5 completed workspaces** to gather data:
+
+```bash
+# Test on existing workspaces
+for workspace in agents/ralph/archive/*/; do
+  if [ -f "$workspace/prd.json" ]; then
+    echo "Analyzing: $workspace"
+    ./lib/coordinator-agent.sh "$workspace"
+
+    # Compare prediction to actual (if timing data available)
+    cat "$workspace/.wave-analysis.json" | jq '.estimated_wave_time_min, .time_savings_percent'
+  fi
+done
+
+# Aggregate results
+echo "📊 Parallelization Potential Across Features:"
+echo "   Average savings: X%"
+echo "   Features with 30%+ savings: Y/Z"
+echo "   Most common wave count: N"
+```
+
+### 2.5.5 Validation Criteria
+
+Phase 2.5 is successful when:
+- [ ] Coordinator can analyze a PRD and produce a wave plan
+- [ ] Wave plan is conservative (no obvious conflicts)
+- [ ] Analysis runs in < 30 seconds
+- [ ] At least 3 real features analyzed
+- [ ] Data shows 20%+ average potential savings
+- [ ] Risks are correctly identified
+
+### Benefits of Phase 2.5
+
+1. **Low Risk:** No changes to execution flow
+2. **Data-Driven:** Gather metrics before implementation
+3. **Prompt Refinement:** Test coordinator prompting
+4. **Feasibility Validation:** Confirm parallelization is worthwhile
+5. **User Feedback:** Show potential savings to stakeholders
+
+### Expected Outcomes
+
+**Good case:**
+- 30-50% of features show 30%+ savings potential
+- Coordinator accurately identifies file conflicts
+- Wave plans make logical sense
+
+**Neutral case:**
+- 10-20% savings potential (marginal benefit)
+- Many uncertain file overlaps (conservative serialization)
+
+**Bad case:**
+- < 10% savings potential across features
+- Coordinator can't reliably determine file overlaps
+- **Decision:** Skip Phase 3, focus on other optimizations
+
+---
+
+## Phase 3: Coordinator Implementation (Week 4)
+
+**Status:** Planning
 **Effort:** 1 week
-**Impact:** High (faster execution, better quality)
-**Risk:** Medium-High (new Claude Code features)
+**Impact:** High (30-50% faster execution, cross-story learning)
+**Risk:** Medium-High (new execution model)
 
-### 3.1 Background Validation Agents
+**Prerequisites:** Phase 2.5 complete with positive results (20%+ average savings potential)
+
+### Objective
+
+Implement full coordinator agent with conservative parallel execution:
+1. Coordinator analyzes wave plan (from Phase 2.5)
+2. Spawns sub-agents for story implementation (one per wave)
+3. Verifies completions with Haiku
+4. Commits after each wave
+5. Learns from outcomes to optimize future waves
+
+**Constraint:** Max 2 stories in parallel (conservative start)
+
+### 3.1 Coordinator Agent Execution Mode
 
 **Problem:** Agent implements → exits → bash runs validation → new agent fixes
 
