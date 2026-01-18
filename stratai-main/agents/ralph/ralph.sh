@@ -341,10 +341,10 @@ if [ -f "$PROGRESS_FILE" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Coordinator Wave Analysis (Phase 2.5 - Analysis Only)
+# Coordinator Wave Analysis (Phase 3 - Parallel Execution Planning)
 # ─────────────────────────────────────────────────────────────────────────────
 
-print_step "🔍 Analyzing Parallelization Opportunities (Phase 2.5)"
+print_step "🔍 Analyzing Parallelization Opportunities (Phase 3 - Wave Planning)"
 
 if [ -x "$SCRIPT_DIR/lib/coordinator-agent.sh" ]; then
   # Run coordinator analysis
@@ -391,7 +391,7 @@ if [ -x "$SCRIPT_DIR/lib/coordinator-agent.sh" ]; then
         echo ""
       fi
 
-      echo "   ℹ️  Currently executing sequentially (Phase 3 will add parallelization)"
+      echo "   ℹ️  Phase 3 ACTIVE: Parallel wave execution enabled"
       echo ""
     fi
   else
@@ -405,7 +405,7 @@ else
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Launch Orchestrator Agent (Phase 2.75)
+# Launch Orchestrator Agent (Phase 3 - Parallel Wave Execution)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 print_header "Launching Orchestrator Agent"
@@ -462,17 +462,22 @@ See the "Progress Logging" section in the orchestrator prompt for all events to 
 Read the orchestrator prompt at: $ORCHESTRATOR_PROMPT_FILE
 
 Then:
-1. Log "🚀 Orchestrator started" to progress log
+1. Log "🚀 Orchestrator started (Phase 3 - Parallel Waves)" to progress log
 2. Read prd.json to understand all stories
-3. Read .wave-analysis.json for parallelization insights (informational only)
+3. Read .wave-analysis.json for wave execution plan (REQUIRED for parallel execution)
 4. Read progress.txt for context from previous stories (if it exists)
-5. For each story: log progress, implement via sub-agent, validate, update progress
-6. Create COMPLETION_SUMMARY.md when all stories complete
-7. Log "🏆 ALL STORIES COMPLETE" to progress log
+5. Process stories BY WAVE:
+   - For each wave, spawn sub-agents IN PARALLEL (run_in_background: true)
+   - Use Haiku for simple stories, Sonnet for complex ones
+   - Wait for all stories in wave to complete
+   - Run validation ONCE per wave (not per story)
+   - Auto-fix failures in parallel if needed
+6. Create COMPLETION_SUMMARY.md when all waves complete
+7. Log "🏆 ALL WAVES COMPLETE" to progress log
 
-Work through stories sequentially. Do not parallelize (Phase 3).
+Process stories by WAVE with parallel execution within waves.
 
-Start with the first pending story.
+Start with Wave 1.
 EOF
 
 # Initialize progress log for live visibility
