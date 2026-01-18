@@ -311,6 +311,16 @@ npm run lint 2>&1
 npm run audit-db-access 2>&1
 ```
 
+**After running validation, LOG THE RESULT:**
+
+```bash
+# If validation passed:
+echo "✅ [$(date +%H:%M:%S)] [WAVE-N] Validation passed" >> .orchestrator-progress.log
+
+# If validation failed:
+echo "❌ [$(date +%H:%M:%S)] [WAVE-N] Validation failed (attempting fix...)" >> .orchestrator-progress.log
+```
+
 **If validation passes:** Proceed to Step 7
 
 **If validation fails:** Proceed to Step 6 (parallel auto-fix)
@@ -469,9 +479,19 @@ Log wave completion:
 echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE ([X] stories)" >> .orchestrator-progress.log
 ```
 
-**Move to next wave:** Find the next wave_number in `.wave-analysis.json` and repeat from Step 1.
+**Move to next wave:**
+
+1. Check `.wave-analysis.json` for the next wave_number
+2. If more waves exist:
+   ```bash
+   echo "➡️ [$(date +%H:%M:%S)] Moving to Wave [N+1]..." >> .orchestrator-progress.log
+   ```
+3. Repeat from Step 1 with the next wave
+4. If no more waves, proceed to Feature Completion
 
 **Wave Order:** Always process waves in order (1, 2, 3...). Never skip waves or process out of order.
+
+**CRITICAL LOGGING REMINDER:** You MUST log at every step. The progress log is the only way to see what's happening. If you don't log, we can't debug issues.
 
 ## Feature Completion
 
