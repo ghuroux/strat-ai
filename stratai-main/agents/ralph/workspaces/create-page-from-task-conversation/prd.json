@@ -1,0 +1,66 @@
+{
+  "feature_name": "Create Page from Task Conversation",
+  "parent_task_id": "create-page-from-task-conversation",
+  "created": "2026-01-18",
+  "research": {
+    "similar_patterns": [
+      "src/lib/components/pages/CreatePageModal.svelte",
+      "src/routes/api/pages/extract/+server.ts",
+      "src/routes/api/pages/+server.ts",
+      "src/routes/spaces/[space]/[area]/+page.svelte"
+    ],
+    "related_commits": [],
+    "docs_reviewed": [
+      "docs/features/CREATE_PAGE_FROM_TASK_CONVERSATION.md",
+      "docs/database/SCHEMA_REFERENCE.md",
+      "docs/DOCUMENT_SYSTEM.md"
+    ],
+    "key_findings": [
+      "CreatePageModal.svelte already accepts areaId, conversationId, messages as props - fully reusable",
+      "POST /api/pages already supports taskId and sourceConversationId fields",
+      "/api/pages/extract already handles conversation-to-TipTap conversion",
+      "Task entity has areaId field for determining where pages should be saved",
+      "Area page (lines 1280-1323, 1726-1735) shows exact pattern to follow for modal integration"
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Add Create Page Button and Modal to Task Conversation UI",
+      "description": "As a user working on a task conversation, I want a 'Create Page' button that opens the existing CreatePageModal so that I can convert my task discussion into a permanent Page document.",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Button appears in task conversation header/action bar area (match Area conversation placement)",
+        "Button uses document icon and tooltip 'Create Page from conversation' (consistent with Area)",
+        "Button is disabled when conversation has fewer than 2 messages (1 user + 1 assistant minimum)",
+        "Clicking button opens CreatePageModal with correct props: conversationId, messages, and task's areaId",
+        "Modal receives task's parent area ID from task.areaId (must fetch task to get areaId)",
+        "CreatePageModal imported from '$lib/components/pages' (reuse existing component)",
+        "State variables added: createPageModalOpen (boolean), pageSuggestionPageType (PageType | null)",
+        "Handler functions added: handlePageCreated, handleCreatePageModalClose (follow Area page patterns)",
+        "npm run check passes (0 TypeScript errors)",
+        "npm run lint passes (0 new ESLint errors)",
+        "Button renders correctly and is keyboard accessible"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Implement Success Feedback and Navigation",
+      "description": "As a user, after creating a Page from my task conversation, I want clear feedback and the ability to navigate to the new Page so that I know it succeeded and can access my document.",
+      "status": "pending",
+      "dependencies": ["US-001"],
+      "acceptance_criteria": [
+        "handlePageCreated function shows success toast: 'Page created successfully' (use toastStore.success)",
+        "After toast, navigate to new Page at /spaces/[spaceId]/[area]/pages/[pageId] (use goto from $app/navigation)",
+        "Navigation uses spaceParam and area slug from task context (derive from task.areaId)",
+        "Task conversation remains accessible via browser back button (standard SvelteKit navigation)",
+        "handleCreatePageModalClose resets both createPageModalOpen and pageSuggestionPageType to null",
+        "Error handling: if modal reports error, toast shows error message (existing modal handles internally)",
+        "npm run check passes (0 TypeScript errors)",
+        "npm run lint passes (0 new ESLint errors)",
+        "Manual test: Create page from task conversation, verify toast appears, verify navigation works"
+      ]
+    }
+  ]
+}
