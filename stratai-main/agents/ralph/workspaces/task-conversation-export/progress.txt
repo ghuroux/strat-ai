@@ -1,0 +1,58 @@
+# Ralph Progress Log
+
+## Feature: Task Conversation Export
+**Parent Task:** task-conversation-export
+**Started:** 2026-01-18
+**Status:** Ready to begin
+
+## Overview
+
+Enable users to export task conversation history in multiple formats (Markdown, JSON, Plain Text) for archival, sharing, and external analysis.
+
+## Codebase Patterns Discovered
+
+### Existing Export Pattern
+- ExportMenu.svelte provides dropdown UI with format options
+- /api/pages/export/[id] returns files with Content-Disposition headers
+- Uses window.location.href for triggering downloads
+
+### Database Access
+- postgresConversationRepository.findById(id, userId) for fetching conversations
+- MUST use camelCase for column access (row.taskId, row.spaceId, row.messages)
+- Messages stored as JSONB array in conversations table
+
+### Authentication
+- Check locals.session for auth
+- Use locals.session.userId for user identification
+- Return 401 if not authenticated
+
+### Integration Point
+- Task conversation header at /src/routes/spaces/[space]/task/[taskId]/+page.svelte
+- Export button goes in header-right section after Create Page button
+
+## Stories
+
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Create Conversation Export API Endpoint | pending |
+| US-002 | Add Export Button to Task Conversation UI | pending |
+| US-003 | Polish Export Quality and Edge Cases | pending |
+
+## Technical Notes
+
+### Files to Create
+- /src/routes/api/conversations/export/[id]/+server.ts (~300 lines)
+- /src/lib/services/conversationExport.ts (~400 lines) - conversion utilities
+- Export menu component (reuse ExportMenu pattern or create ConversationExportMenu.svelte)
+
+### Files to Modify
+- /src/routes/spaces/[space]/task/[taskId]/+page.svelte - add export menu to header
+
+### Key Dependencies
+- postgresConversationRepository from $lib/server/persistence
+- Conversation and Message types from $lib/types/chat
+- toastStore for error notifications
+
+## Implementation Log
+
+(Ralph will update this section as stories are completed)
