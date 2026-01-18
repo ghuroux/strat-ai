@@ -355,31 +355,53 @@ You are the Ralph Loop orchestrator agent.
 **Project Directory:** $PROJECT_DIR
 **Feature:** $FEATURE_NAME
 **Pending Stories:** $PENDING_STORIES
+**Progress Log:** $WORKSPACE_DIR/.orchestrator-progress.log
+
+**CRITICAL - Progress Logging:**
+Write progress updates to .orchestrator-progress.log for live visibility!
+Example: echo "📋 [\$(date +%H:%M:%S)] Starting US-001: Story Title" >> .orchestrator-progress.log
+See the "Progress Logging" section in the orchestrator prompt for all events to log.
 
 **Instructions:**
 Read the orchestrator prompt at: $ORCHESTRATOR_PROMPT_FILE
 
 Then:
-1. Read prd.json to understand all stories
-2. Read .wave-analysis.json for parallelization insights (informational only)
-3. Read progress.txt for context from previous stories (if it exists)
-4. Implement each pending story by spawning Task sub-agents
-5. Validate, auto-fix, update progress after each story
+1. Log "🚀 Orchestrator started" to progress log
+2. Read prd.json to understand all stories
+3. Read .wave-analysis.json for parallelization insights (informational only)
+4. Read progress.txt for context from previous stories (if it exists)
+5. For each story: log progress, implement via sub-agent, validate, update progress
 6. Create COMPLETION_SUMMARY.md when all stories complete
+7. Log "🏆 ALL STORIES COMPLETE" to progress log
 
 Work through stories sequentially. Do not parallelize (Phase 3).
 
 Start with the first pending story.
 EOF
 
-# Spawn orchestrator agent
-echo "   Launching orchestrator..."
-echo ""
+# Initialize progress log for live visibility
+PROGRESS_LOG="$WORKSPACE_DIR/.orchestrator-progress.log"
+echo "" > "$PROGRESS_LOG"
+echo "═══════════════════════════════════════════════════════════════"
+echo "📊 Live Progress (from $PROGRESS_LOG)"
 echo "═══════════════════════════════════════════════════════════════"
 echo ""
 
+# Start tailing progress log in background
+tail -f "$PROGRESS_LOG" 2>/dev/null &
+TAIL_PID=$!
+
+# Cleanup function to stop tail
+cleanup_tail() {
+  if [ -n "$TAIL_PID" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
+    kill "$TAIL_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup_tail EXIT
+
 cd "$PROJECT_DIR" || exit 1
 
+# Spawn orchestrator agent
 set +e
 $CLAUDE_CLI --print \
   --dangerously-skip-permissions \
@@ -388,6 +410,10 @@ $CLAUDE_CLI --print \
 
 ORCHESTRATOR_EXIT=$?
 set -e
+
+# Stop tailing
+cleanup_tail
+trap - EXIT
 
 echo ""
 echo "═══════════════════════════════════════════════════════════════"

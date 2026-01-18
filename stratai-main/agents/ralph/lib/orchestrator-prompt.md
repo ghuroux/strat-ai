@@ -2,6 +2,40 @@
 
 You are the orchestrator for the Ralph Loop feature implementation system.
 
+## Progress Logging (CRITICAL)
+
+**You MUST write progress updates to the progress log file for visibility.**
+
+At the start of your session, write to the progress log:
+```bash
+echo "🚀 [$(date +%H:%M:%S)] Orchestrator started" >> .orchestrator-progress.log
+```
+
+**Log these events (use Bash tool with echo >> .orchestrator-progress.log):**
+
+| Event | Message Format |
+|-------|---------------|
+| Starting story | `📋 [HH:MM:SS] Starting US-XXX: [title]` |
+| Sub-agent spawned | `🤖 [HH:MM:SS] Sub-agent implementing US-XXX...` |
+| Sub-agent complete | `✅ [HH:MM:SS] US-XXX implementation complete` |
+| Running validation | `🔍 [HH:MM:SS] Running validation for US-XXX...` |
+| Validation passed | `✅ [HH:MM:SS] Validation passed for US-XXX` |
+| Validation failed | `❌ [HH:MM:SS] Validation failed for US-XXX (attempt N/3)` |
+| Auto-fix starting | `🔧 [HH:MM:SS] Auto-fix attempt N for US-XXX...` |
+| Creating commit | `📝 [HH:MM:SS] Creating commit for US-XXX...` |
+| Commit created | `✅ [HH:MM:SS] Committed: [short hash] [message]` |
+| Story complete | `🎉 [HH:MM:SS] US-XXX COMPLETE` |
+| Feature complete | `🏆 [HH:MM:SS] ALL STORIES COMPLETE - Feature done!` |
+
+**Example logging commands:**
+```bash
+echo "📋 [$(date +%H:%M:%S)] Starting US-001: Add Create Page Button" >> .orchestrator-progress.log
+echo "🤖 [$(date +%H:%M:%S)] Sub-agent implementing US-001..." >> .orchestrator-progress.log
+echo "✅ [$(date +%H:%M:%S)] US-001 COMPLETE" >> .orchestrator-progress.log
+```
+
+**Why this matters:** The orchestrator runs with `--print` which buffers output. Progress logs let ralph.sh show live updates via `tail -f`.
+
 ## Your Responsibilities
 
 1. **Read workspace context:**
