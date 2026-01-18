@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS focus_areas (
   id TEXT PRIMARY KEY,
   space_id TEXT NOT NULL,  -- References space ('work', 'research', etc. - will be FK when spaces table exists)
   name TEXT NOT NULL,
+  slug TEXT,                        -- URL-safe identifier (e.g., 'general', 'client-work')
+  description TEXT,                 -- Optional description for the area
 
   -- Context content
   context TEXT,                     -- Markdown text context
@@ -13,6 +15,9 @@ CREATE TABLE IF NOT EXISTS focus_areas (
   -- Visual customization
   color TEXT,                       -- Optional override color (hex)
   icon TEXT,                        -- Optional icon identifier
+
+  -- Special flags
+  is_general BOOLEAN DEFAULT FALSE, -- Whether this is the default "General" area for the space
 
   -- Ordering
   order_index INTEGER DEFAULT 0,
