@@ -686,6 +686,75 @@ Examples:
 
 ---
 
-*Last updated: 2026-01-16 (Added CTE composition, E2E test, and table alias patterns from Page Listing Access Control)*
+### Pattern: Code Language Detection for Exports
+
+**When to use:** Adding language hints to code blocks in exports/documentation
+
+**Implementation:**
+```typescript
+function detectLanguageHint(code: string): string {
+  const patterns: [RegExp, string][] = [
+    // TypeScript/JavaScript
+    [/\b(const|let|var)\s+\w+\s*=|function\s+\w+\s*\(|=>\s*{/i, 'javascript'],
+    [/\binterface\s+\w+|type\s+\w+\s*=|:\s*(string|number|boolean)\b/i, 'typescript'],
+    // Python
+    [/\bdef\s+\w+\s*\(|from\s+\w+\s+import/i, 'python'],
+    // SQL
+    [/\b(SELECT|INSERT|UPDATE|DELETE|CREATE)\s+/i, 'sql'],
+    // ... add more patterns as needed
+  ];
+
+  for (const [pattern, lang] of patterns) {
+    if (pattern.test(code)) return lang;
+  }
+  return ''; // No hint if can't detect
+}
+
+// Apply to unmarked code blocks
+content.replace(/```\n([\s\S]*?)```/g, (match, code) => {
+  const hint = detectLanguageHint(code);
+  return hint ? '```' + hint + '\n' + code + '```' : match;
+});
+```
+
+**Why:** Heuristic-based detection handles 80%+ of common cases. Unknown code stays unmarked rather than guessed wrong.
+
+**See:** `src/routes/api/conversations/export/[id]/+server.ts`
+
+---
+
+### Pattern: Auxiliary Data Error Tolerance
+
+**When to use:** When primary operation shouldn't fail due to secondary data fetch
+
+**Implementation:**
+```typescript
+// Primary data - must succeed
+const conversation = await postgresConversationRepository.findById(id, userId);
+if (!conversation) throw error(404, 'Conversation not found');
+
+// Auxiliary data - continue without if fails
+let subtaskContext: SubtaskContext | null = null;
+if (conversation.taskId) {
+  try {
+    const task = await postgresTaskRepository.findById(conversation.taskId, userId);
+    if (task?.parentTaskId) {
+      const parent = await postgresTaskRepository.findById(task.parentTaskId, userId);
+      if (parent) subtaskContext = { parentTask: parent, currentTask: task };
+    }
+  } catch (e) {
+    console.warn('[export] Failed to fetch task context:', e);
+    // Continue without subtask context
+  }
+}
+```
+
+**Why:** Export should work even if we can't fetch parent task info (permissions, deleted, etc.).
+
+**See:** `src/routes/api/conversations/export/[id]/+server.ts`
+
+---
+
+*Last updated: 2026-01-18 (Added code language detection and auxiliary data error tolerance patterns from Task Conversation Export)*
 *Maintainer: Development Team*
 
