@@ -1,0 +1,71 @@
+{
+  "total_stories": 4,
+  "estimated_sequential_time_min": 12,
+  "waves": [
+    {
+      "wave_number": 1,
+      "stories": ["US-001"],
+      "parallelism": 1,
+      "rationale": "US-001 creates the generationActivity.svelte.ts store which is a dependency for US-002, US-003, and US-004. Must run first as foundation.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 2,
+      "stories": ["US-002", "US-003"],
+      "parallelism": 2,
+      "rationale": "Both US-002 and US-003 modify ThinkingIndicator.svelte, but they modify different aspects: US-002 adds elapsed time display logic, US-003 adds conditional animation control. However, since they touch the same file, there is risk of merge conflicts. Being conservative: these should be serialized despite seeming independent.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 3,
+      "stories": ["US-004"],
+      "parallelism": 1,
+      "rationale": "US-004 modifies chat.svelte.ts to integrate the store with chat flow. Depends on US-001 being complete. Could theoretically run in parallel with US-002/US-003 since it touches a different file (chat.svelte.ts vs ThinkingIndicator.svelte), but placed in wave 3 for safety to ensure all indicator modifications are complete first.",
+      "estimated_time_min": 3
+    }
+  ],
+  "estimated_wave_time_min": 9,
+  "time_savings_percent": 25,
+  "confidence": "medium",
+  "risks": [
+    "US-002 and US-003 both modify ThinkingIndicator.svelte - potential for merge conflicts if parallelized",
+    "US-003 depends on US-002's import of generationActivityStore - if US-002 doesn't add the import, US-003 description says 'if not already imported', creating implicit ordering",
+    "Conservative approach: serialize US-002 and US-003 despite theoretical independence to avoid file conflicts"
+  ]
+}
+```
+```json
+{
+  "total_stories": 4,
+  "estimated_sequential_time_min": 12,
+  "waves": [
+    {
+      "wave_number": 1,
+      "stories": ["US-001"],
+      "parallelism": 1,
+      "rationale": "US-001 creates the generationActivity.svelte.ts store. This is a new file creation with no dependencies. All other stories depend on this, so it must complete first.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 2,
+      "stories": ["US-002"],
+      "parallelism": 1,
+      "rationale": "US-002 modifies ThinkingIndicator.svelte to add elapsed time display. Cannot parallelize with US-003 because both modify the same file (ThinkingIndicator.svelte).",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 3,
+      "stories": ["US-003", "US-004"],
+      "parallelism": 2,
+      "rationale": "US-003 modifies ThinkingIndicator.svelte (animation control) and US-004 modifies chat.svelte.ts (integration). Different files, so can run in parallel. US-003's description explicitly handles the case where US-002 already imported the store ('if not already imported').",
+      "estimated_time_min": 3
+    }
+  ],
+  "estimated_wave_time_min": 9,
+  "time_savings_percent": 25,
+  "confidence": "high",
+  "risks": [
+    "US-002 and US-003 both modify ThinkingIndicator.svelte sequentially to avoid conflicts",
+    "US-003 assumes US-002's import may exist ('if not already imported') - wave ordering ensures this assumption holds"
+  ]
+}
