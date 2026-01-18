@@ -34,7 +34,7 @@ Enable users to export task conversation history in multiple formats (Markdown, 
 
 | ID | Title | Status |
 |----|-------|--------|
-| US-001 | Create Conversation Export API Endpoint | pending |
+| US-001 | Create Conversation Export API Endpoint | completed |
 | US-002 | Add Export Button to Task Conversation UI | pending |
 | US-003 | Polish Export Quality and Edge Cases | pending |
 
@@ -55,4 +55,44 @@ Enable users to export task conversation history in multiple formats (Markdown, 
 
 ## Implementation Log
 
-(Ralph will update this section as stories are completed)
+### US-001: Create Conversation Export API Endpoint (2026-01-18)
+
+**Status:** Completed
+
+**What was done:**
+- Created GET /api/conversations/export/[id]?format=markdown|json|plaintext endpoint
+- Implemented three export formats:
+  - **Markdown**: Title as H1, role labels with timestamps, extended thinking in collapsible details, attachments with metadata, search sources as reference list
+  - **JSON**: Full conversation data with all metadata, excludes hidden messages and attachment binary data
+  - **Plain text**: `[Timestamp] Role: Message` format suitable for grep/analysis
+- Proper error handling: 401 (unauthorized), 404 (not found), 400 (invalid format)
+- Content-Disposition header with sanitized filename: `{title}-conversation-{date}.{ext}`
+- Handles empty conversations gracefully with "No messages yet" placeholder
+
+**Files created:**
+- `/src/routes/api/conversations/export/[id]/+server.ts` - Export endpoint (~280 lines)
+
+**Patterns applied:**
+- Authentication pattern from AGENTS.md (`if (!locals.session) throw error(401)`)
+- Error handling with SvelteKit `error()` function (not json response)
+- Filename sanitization pattern from pages export endpoint
+- Content-Type and Content-Disposition headers pattern
+
+**Learnings:**
+1. **SvelteKit error() vs json() for errors**: The pages export endpoint uses `throw error()` for cleaner error handling with automatic status code propagation. This is preferable for download endpoints vs API endpoints that return JSON.
+
+2. **Export format considerations**:
+   - Markdown includes extended thinking in collapsible `<details>` blocks for cleaner reading
+   - JSON excludes `content.data` from attachments to keep export size manageable
+   - Plain text uses fixed-width timestamp prefix for alignment during grep
+
+3. **Hidden messages filtering**: All formats filter out `hidden: true` messages to match what users see in the UI
+
+4. **ESLint config missing**: `npm run lint` fails because `eslint.config.js` doesn't exist in project root. This is a pre-existing issue unrelated to this story.
+
+**Quality gates:**
+- ✅ npm run check - passes (0 TypeScript errors)
+- ⚠️ npm run lint - config missing (pre-existing issue)
+- ✅ npm run audit-db-access - passes (no snake_case violations)
+
+---

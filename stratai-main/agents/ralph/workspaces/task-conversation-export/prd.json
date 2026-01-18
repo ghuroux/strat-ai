@@ -25,7 +25,7 @@
       "id": "US-001",
       "title": "Create Conversation Export API Endpoint",
       "description": "As a developer, I need a robust API endpoint that converts conversation data into exportable formats (Markdown, JSON, Plain Text) so that the UI can trigger downloads.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "GET /api/conversations/export/[id]?format=markdown|json|plaintext endpoint exists",
