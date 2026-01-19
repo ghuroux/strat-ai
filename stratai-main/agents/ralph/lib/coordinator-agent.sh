@@ -60,16 +60,38 @@ $(jq -c '.stories[]' "$PRD_FILE")
 
 Analyze the PRD and create a wave execution plan. For each story:
 
-1. **Dependencies:** Check the .dependencies field
+1. **Dependencies:** Check the .dependencies field (supports typed dependencies)
 2. **File modifications:** Infer from title + description which files will be modified
 3. **Parallelization safety:** Determine if it can run in parallel with other stories
 
+**Dependency Types (Key for Parallelization):**
+
+Dependencies can be typed for smarter parallelization:
+
+- **Simple format:** \`\"dependencies\": [\"US-001\"]\` - Treated as integration dependency
+- **Typed format:** \`\"dependencies\": [{ \"story\": \"US-001\", \"type\": \"contract\" }]\`
+
+**Dependency Type Meanings:**
+
+| Type | Meaning | Parallelization |
+|------|---------|-----------------|
+| \`contract\` | Only needs types/interfaces to exist | CAN run in parallel after contract story completes |
+| \`integration\` | Needs actual implementation working | MUST wait for full completion |
+| (default) | Untyped dependencies | Treat as integration (conservative) |
+
 **Wave Planning Rules:**
 
-1. **Wave 1:** Stories with no dependencies
-2. **Wave N:** Stories whose ALL dependencies are in waves 1..N-1
-3. **NEVER parallelize** stories that touch the same file
-4. **When uncertain** about file overlap, serialize (conservative approach)
+1. **Wave 0/1:** Stories with no dependencies OR only contract dependencies on completed stories
+2. **Contract dependencies:** If story A has only \`type: contract\` deps on Wave 0, it CAN run in Wave 1 alongside other contract-dependent stories
+3. **Integration dependencies:** Story MUST wait until dependency wave completes
+4. **NEVER parallelize** stories that touch the same file (file_conflict)
+5. **When uncertain** about file overlap, serialize (conservative approach)
+
+**Example - Parallel Frontend/Backend:**
+- US-001: Define types (Wave 0)
+- US-002: Implement API (contract dep on US-001) → Wave 1
+- US-003: Build UI component (contract dep on US-001) → Wave 1 (PARALLEL with US-002!)
+- US-004: Integration tests (integration dep on US-002, US-003) → Wave 2
 
 **File Overlap Heuristics:**
 
@@ -77,6 +99,7 @@ Analyze the PRD and create a wave execution plan. For each story:
 - Stories mentioning same component → likely touch same file
 - \"Add X service\" + \"Add X middleware\" → likely different files (auth-service.ts vs auth-middleware.ts)
 - \"Update X\" + \"Fix X bug\" → likely same file
+- API endpoint + Frontend component (different file trees) → likely safe to parallelize
 - When in doubt: serialize
 
 **Output Format (JSON only, no explanation):**

@@ -125,7 +125,10 @@ echo "🤖 [$(date +%H:%M:%S)] [WAVE-2] Sub-agent implementing US-002 (haiku)...
   - title: Story title
   - description: User story
   - status: "pending" | "completed" | "deferred"
-  - dependencies: Array of story IDs
+  - dependencies: Array - supports two formats:
+    - Simple: `["US-001"]` - treated as integration dependencies
+    - Typed: `[{ "story": "US-001", "type": "contract" }]` - enables parallelization
+    - Types: `contract` (can parallelize), `integration` (must wait), `file_conflict` (same file)
   - acceptance_criteria: Array of criteria
   - deferred_reason: (optional) Why the story was deferred
   - deferred_at: (optional) ISO timestamp when deferred

@@ -200,10 +200,23 @@ For any story involving database work, include the schema context:
   "stories": [
     {
       "id": "US-001",
+      "title": "Define ModelConfig types and interfaces",
+      "description": "As a developer, I need TypeScript types for model configurations.",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Types defined in src/lib/types/model-config.ts",
+        "npm run check passes"
+      ]
+    },
+    {
+      "id": "US-002",
       "title": "Create model_configurations migration",
       "description": "As a developer, I need the database schema for model configurations.",
       "status": "pending",
-      "dependencies": [],
+      "dependencies": [
+        { "story": "US-001", "type": "contract" }
+      ],
       "acceptance_criteria": [
         "Migration creates table with correct columns",
         "Index on enabled column",
@@ -211,11 +224,14 @@ For any story involving database work, include the schema context:
       ]
     },
     {
-      "id": "US-002",
+      "id": "US-003",
       "title": "Create model-configs-postgres.ts repository",
       "description": "As a developer, I need type-safe DB access for model configurations.",
       "status": "pending",
-      "dependencies": ["US-001"],
+      "dependencies": [
+        { "story": "US-001", "type": "contract" },
+        { "story": "US-002", "type": "integration" }
+      ],
       "acceptance_criteria": [
         "Row interface uses camelCase",
         "Row converter handles nullables with ??",
@@ -225,6 +241,44 @@ For any story involving database work, include the schema context:
     }
   ]
 }
+```
+
+### Dependency Types (Enables Parallel Execution)
+
+Dependencies can be typed to enable smarter parallelization:
+
+| Type | Meaning | Coordinator Behavior |
+|------|---------|---------------------|
+| `"contract"` | Only needs types/interfaces to exist | Can run in parallel after contract story completes |
+| `"integration"` | Needs the actual implementation working | Must wait for dependency to fully complete |
+| `"file_conflict"` | Both stories write to the same file | Must run sequentially (auto-detected) |
+
+**Simple syntax (backward compatible):**
+```json
+"dependencies": ["US-001"]  // Treated as "integration" type
+```
+
+**Typed syntax (enables parallelization):**
+```json
+"dependencies": [
+  { "story": "US-001", "type": "contract" },
+  { "story": "US-002", "type": "integration" }
+]
+```
+
+**When to use each type:**
+
+- **`contract`**: Frontend story that imports types from a backend story. The frontend can be built against the types before the backend is implemented.
+- **`integration`**: E2E tests, or UI that needs actual API responses. Must wait for real implementation.
+- **No dependency**: Stories that touch completely different files/features.
+
+**Example - Parallel Frontend/Backend:**
+```
+US-001: Define User API types (types/user.ts)     → Wave 0
+US-002: Implement User API (api/users/+server.ts) → Wave 1 (contract dep on US-001)
+US-003: Build UserForm component (UserForm.svelte) → Wave 1 (contract dep on US-001)
+                                                     ↑ US-002 and US-003 run in PARALLEL!
+US-004: Integration tests                         → Wave 2 (integration dep on US-002, US-003)
 ```
 
 ### Story Status Values
