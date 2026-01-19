@@ -208,13 +208,14 @@
 	}
 </script>
 
-<div class="settings-section">
-	<div class="settings-section-header">
-		<h2 class="settings-section-title">Home Page</h2>
-		<p class="settings-section-desc">Choose where you land when you click the logo or press Cmd+Shift+H</p>
+<div class="max-w-xl">
+	<!-- Header -->
+	<div class="mb-6">
+		<h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Home Page</h2>
+		<p class="text-sm text-zinc-600 dark:text-zinc-400">Choose where you land when you click the logo or press Cmd+Shift+H</p>
 	</div>
 
-	<div class="options-list">
+	<div class="flex flex-col gap-3">
 		<!-- Main Chat -->
 		<label class="option-card" class:selected={selectedType === 'main-chat'}>
 			<input
@@ -434,10 +435,10 @@
 </div>
 
 <!-- Timezone Section -->
-<div class="settings-section timezone-section">
-	<div class="settings-section-header">
-		<h2 class="settings-section-title">Timezone</h2>
-		<p class="settings-section-desc">Set your timezone for accurate date and time in AI conversations</p>
+<div class="timezone-section max-w-xl">
+	<div class="mb-6">
+		<h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Timezone</h2>
+		<p class="text-sm text-zinc-600 dark:text-zinc-400">Set your timezone for accurate date and time in AI conversations</p>
 	</div>
 
 	<div class="timezone-selector">
@@ -472,52 +473,42 @@
 </div>
 
 <style>
-	.settings-section {
-		max-width: 600px;
-	}
-
-	.settings-section-header {
-		margin-bottom: 1.5rem;
-	}
-
-	.settings-section-title {
-		font-size: 1.125rem;
-		font-weight: 600;
-		color: rgb(var(--color-surface-100));
-		margin-bottom: 0.25rem;
-	}
-
-	.settings-section-desc {
-		font-size: 0.875rem;
-		color: rgb(var(--color-surface-500));
-	}
-
-	.options-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
+	/* Option cards - theme aware */
 	.option-card {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
 		padding: 1rem;
-		background: rgb(var(--color-surface-800) / 0.5);
-		border: 1px solid rgb(var(--color-surface-700));
+		background: theme('colors.zinc.100 / 50%');
+		border: 1px solid theme('colors.zinc.300');
 		border-radius: 0.75rem;
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
 
+	:global(.dark) .option-card {
+		background: theme('colors.zinc.800 / 50%');
+		border-color: theme('colors.zinc.600');
+	}
+
 	.option-card:hover {
-		background: rgb(var(--color-surface-800));
-		border-color: rgb(var(--color-surface-600));
+		background: theme('colors.zinc.200 / 70%');
+		border-color: theme('colors.zinc.400');
+	}
+
+	:global(.dark) .option-card:hover {
+		background: theme('colors.zinc.800');
+		border-color: theme('colors.zinc.500');
 	}
 
 	.option-card.selected {
-		background: rgb(var(--color-primary-500) / 0.1);
-		border-color: rgb(var(--color-primary-500) / 0.5);
+		background: theme('colors.primary.500 / 10%');
+		border-color: theme('colors.primary.500 / 50%');
+	}
+
+	:global(.dark) .option-card.selected {
+		background: theme('colors.primary.500 / 10%');
+		border-color: theme('colors.primary.500 / 50%');
 	}
 
 	.option-card input[type='radio'] {
@@ -537,9 +528,14 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: rgb(var(--color-surface-700));
+		background: theme('colors.zinc.200');
 		border-radius: 0.625rem;
-		color: rgb(var(--color-surface-400));
+		color: theme('colors.zinc.600');
+	}
+
+	:global(.dark) .option-icon {
+		background: theme('colors.zinc.700');
+		color: theme('colors.zinc.400');
 	}
 
 	.option-icon svg {
@@ -571,12 +567,16 @@
 	.option-label {
 		font-size: 0.9375rem;
 		font-weight: 500;
-		color: rgb(var(--color-surface-100));
+		color: theme('colors.zinc.900');
+	}
+
+	:global(.dark) .option-label {
+		color: theme('colors.zinc.100');
 	}
 
 	.option-hint {
 		font-size: 0.8125rem;
-		color: rgb(var(--color-surface-500));
+		color: theme('colors.zinc.500');
 	}
 
 	.option-check {
@@ -585,7 +585,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: rgb(var(--color-primary-500));
+		color: theme('colors.primary.500');
 	}
 
 	.option-check svg {
@@ -593,12 +593,17 @@
 		height: 1.25rem;
 	}
 
+	/* Option details - theme aware */
 	.option-details {
 		padding: 1rem;
 		margin-left: 1rem;
-		background: rgb(var(--color-surface-800) / 0.3);
-		border-left: 2px solid rgb(var(--color-primary-500) / 0.3);
+		background: theme('colors.zinc.100 / 50%');
+		border-left: 2px solid theme('colors.primary.500 / 30%');
 		border-radius: 0 0.5rem 0.5rem 0;
+	}
+
+	:global(.dark) .option-details {
+		background: theme('colors.zinc.800 / 30%');
 	}
 
 	.option-details.two-col {
@@ -616,41 +621,62 @@
 	.detail-label {
 		font-size: 0.75rem;
 		font-weight: 500;
-		color: rgb(var(--color-surface-400));
+		color: theme('colors.zinc.500');
 		text-transform: uppercase;
 		letter-spacing: 0.025em;
 	}
 
-	.detail-select {
-		padding: 0.5rem 0.75rem;
+	/* Selects - theme aware */
+	.detail-select,
+	.timezone-select {
+		padding: 0.625rem 0.875rem;
 		font-size: 0.875rem;
-		background: rgb(var(--color-surface-800));
-		border: 1px solid rgb(var(--color-surface-700));
+		background: theme('colors.zinc.100');
+		border: 1px solid theme('colors.zinc.300');
 		border-radius: 0.5rem;
-		color: rgb(var(--color-surface-100));
+		color: theme('colors.zinc.900');
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
 
-	.detail-select:hover {
-		border-color: rgb(var(--color-surface-600));
+	:global(.dark) .detail-select,
+	:global(.dark) .timezone-select {
+		background: theme('colors.zinc.800');
+		border-color: theme('colors.zinc.600');
+		color: theme('colors.zinc.100');
 	}
 
-	.detail-select:focus {
+	.detail-select:hover,
+	.timezone-select:hover {
+		border-color: theme('colors.zinc.400');
+	}
+
+	:global(.dark) .detail-select:hover,
+	:global(.dark) .timezone-select:hover {
+		border-color: theme('colors.zinc.500');
+	}
+
+	.detail-select:focus,
+	.timezone-select:focus {
 		outline: none;
-		border-color: rgb(var(--color-primary-500));
-		box-shadow: 0 0 0 2px rgb(var(--color-primary-500) / 0.2);
+		border-color: theme('colors.primary.500');
+		box-shadow: 0 0 0 2px theme('colors.primary.500 / 20%');
 	}
 
-	.detail-select:disabled {
+	.detail-select:disabled,
+	.timezone-select:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.timezone-select {
+		max-width: 300px;
 	}
 
 	.save-status {
 		margin-top: 1rem;
 		font-size: 0.875rem;
-		color: rgb(var(--color-surface-500));
+		color: theme('colors.zinc.500');
 	}
 
 	@media (max-width: 640px) {
@@ -659,11 +685,15 @@
 		}
 	}
 
-	/* Timezone section styles */
+	/* Timezone section - theme aware */
 	.timezone-section {
 		margin-top: 2.5rem;
 		padding-top: 2rem;
-		border-top: 1px solid rgb(var(--color-surface-800));
+		border-top: 1px solid theme('colors.zinc.200');
+	}
+
+	:global(.dark) .timezone-section {
+		border-top-color: theme('colors.zinc.800');
 	}
 
 	.timezone-selector {
@@ -681,34 +711,11 @@
 	.timezone-label {
 		font-size: 0.8125rem;
 		font-weight: 500;
-		color: rgb(var(--color-surface-400));
+		color: theme('colors.zinc.600');
 	}
 
-	.timezone-select {
-		padding: 0.75rem 1rem;
-		font-size: 0.9375rem;
-		background: rgb(var(--color-surface-800));
-		border: 1px solid rgb(var(--color-surface-700));
-		border-radius: 0.5rem;
-		color: rgb(var(--color-surface-100));
-		cursor: pointer;
-		transition: all 0.15s ease;
-		max-width: 300px;
-	}
-
-	.timezone-select:hover {
-		border-color: rgb(var(--color-surface-600));
-	}
-
-	.timezone-select:focus {
-		outline: none;
-		border-color: rgb(var(--color-primary-500));
-		box-shadow: 0 0 0 2px rgb(var(--color-primary-500) / 0.2);
-	}
-
-	.timezone-select:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
+	:global(.dark) .timezone-label {
+		color: theme('colors.zinc.400');
 	}
 
 	.timezone-detected {
@@ -716,7 +723,7 @@
 		align-items: center;
 		gap: 0.5rem;
 		font-size: 0.8125rem;
-		color: rgb(var(--color-surface-500));
+		color: theme('colors.zinc.500');
 	}
 
 	.timezone-icon {
@@ -726,7 +733,11 @@
 	}
 
 	.detected-value {
-		color: rgb(var(--color-surface-400));
+		color: theme('colors.zinc.600');
 		font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+	}
+
+	:global(.dark) .detected-value {
+		color: theme('colors.zinc.400');
 	}
 </style>

@@ -78,29 +78,41 @@
 	}
 </script>
 
-<div class="settings-section">
-	<div class="settings-section-header">
-		<h2 class="settings-section-title">Change Password</h2>
-		<p class="settings-section-desc">Update your account password</p>
+<div class="max-w-md">
+	<!-- Header -->
+	<div class="mb-8">
+		<h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Change Password</h2>
+		<p class="text-sm text-zinc-600 dark:text-zinc-400">Update your account password</p>
 	</div>
 
+	<!-- Error message -->
 	{#if error}
-		<div class="error-message" role="alert" aria-live="polite">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+		<div class="flex items-center gap-2 p-3 mb-6 rounded-lg bg-red-500/10 border border-red-500/20" role="alert" aria-live="polite">
+			<svg class="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 				<circle cx="12" cy="12" r="10" />
 				<line x1="12" y1="8" x2="12" y2="12" />
 				<line x1="12" y1="16" x2="12.01" y2="16" />
 			</svg>
-			{error}
+			<span class="text-sm text-red-600 dark:text-red-400">{error}</span>
 		</div>
 	{/if}
 
-	<div class="form-group">
-		<label class="form-label" for="currentPassword">Current Password</label>
+	<!-- Current Password -->
+	<div class="mb-5">
+		<label class="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2" for="currentPassword">
+			Current Password
+		</label>
 		<input
 			type="password"
 			id="currentPassword"
-			class="form-input"
+			class="w-full px-3 py-2.5 rounded-lg
+				   bg-zinc-100 dark:bg-zinc-800
+				   border border-zinc-300 dark:border-zinc-600
+				   text-sm text-zinc-900 dark:text-zinc-100
+				   placeholder:text-zinc-400 dark:placeholder:text-zinc-500
+				   hover:border-zinc-400 dark:hover:border-zinc-500
+				   focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20
+				   transition-colors duration-150"
 			placeholder="Enter your current password"
 			bind:value={currentPassword}
 			oninput={handleInput}
@@ -109,13 +121,23 @@
 		/>
 	</div>
 
-	<div class="form-group">
-		<label class="form-label" for="newPassword">New Password</label>
+	<!-- New Password -->
+	<div class="mb-5">
+		<label class="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2" for="newPassword">
+			New Password
+		</label>
 		<input
 			type="password"
 			id="newPassword"
-			class="form-input"
-			class:invalid={(newPassword.length > 0 && !isLongEnough) || isTooLong}
+			class="w-full px-3 py-2.5 rounded-lg
+				   bg-zinc-100 dark:bg-zinc-800
+				   border text-sm text-zinc-900 dark:text-zinc-100
+				   placeholder:text-zinc-400 dark:placeholder:text-zinc-500
+				   focus:outline-none focus:ring-2
+				   transition-colors duration-150
+				   {(newPassword.length > 0 && !isLongEnough) || isTooLong
+				     ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+				     : 'border-zinc-300 dark:border-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-500 focus:border-primary-500 focus:ring-primary-500/20'}"
 			placeholder="Enter a new password"
 			bind:value={newPassword}
 			oninput={handleInput}
@@ -124,19 +146,29 @@
 			aria-describedby={newPassword.length > 0 && (!isLongEnough || isTooLong) ? 'newPassword-error' : undefined}
 		/>
 		{#if newPassword.length > 0 && !isLongEnough}
-			<p class="form-error" id="newPassword-error">Password must be at least 8 characters</p>
+			<p class="text-xs text-red-600 dark:text-red-400 mt-1.5" id="newPassword-error">Password must be at least 8 characters</p>
 		{:else if isTooLong}
-			<p class="form-error" id="newPassword-error">Password must be less than {MAX_PASSWORD_LENGTH} characters</p>
+			<p class="text-xs text-red-600 dark:text-red-400 mt-1.5" id="newPassword-error">Password must be less than {MAX_PASSWORD_LENGTH} characters</p>
 		{/if}
 	</div>
 
-	<div class="form-group">
-		<label class="form-label" for="confirmPassword">Confirm New Password</label>
+	<!-- Confirm New Password -->
+	<div class="mb-6">
+		<label class="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2" for="confirmPassword">
+			Confirm New Password
+		</label>
 		<input
 			type="password"
 			id="confirmPassword"
-			class="form-input"
-			class:invalid={confirmPassword.length > 0 && !passwordsMatch}
+			class="w-full px-3 py-2.5 rounded-lg
+				   bg-zinc-100 dark:bg-zinc-800
+				   border text-sm text-zinc-900 dark:text-zinc-100
+				   placeholder:text-zinc-400 dark:placeholder:text-zinc-500
+				   focus:outline-none focus:ring-2
+				   transition-colors duration-150
+				   {confirmPassword.length > 0 && !passwordsMatch
+				     ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20'
+				     : 'border-zinc-300 dark:border-zinc-600 hover:border-zinc-400 dark:hover:border-zinc-500 focus:border-primary-500 focus:ring-primary-500/20'}"
 			placeholder="Confirm your new password"
 			bind:value={confirmPassword}
 			oninput={handleInput}
@@ -145,141 +177,21 @@
 			aria-describedby={confirmPassword.length > 0 && !passwordsMatch ? 'confirmPassword-error' : undefined}
 		/>
 		{#if confirmPassword.length > 0 && !passwordsMatch}
-			<p class="form-error" id="confirmPassword-error">Passwords do not match</p>
+			<p class="text-xs text-red-600 dark:text-red-400 mt-1.5" id="confirmPassword-error">Passwords do not match</p>
 		{/if}
 	</div>
 
-	<div class="form-actions">
-		<button
-			type="button"
-			class="save-button"
-			onclick={changePassword}
-			disabled={!canSubmit}
-		>
-			{isSaving ? 'Changing...' : 'Change Password'}
-		</button>
-	</div>
+	<!-- Submit Button -->
+	<button
+		type="button"
+		class="px-5 py-2.5 rounded-lg text-sm font-medium text-white
+			   bg-primary-500 hover:bg-primary-600
+			   disabled:opacity-50 disabled:cursor-not-allowed
+			   transition-colors duration-150
+			   max-sm:w-full"
+		onclick={changePassword}
+		disabled={!canSubmit}
+	>
+		{isSaving ? 'Changing...' : 'Change Password'}
+	</button>
 </div>
-
-<style>
-	.settings-section {
-		max-width: 400px;
-	}
-
-	.settings-section-header {
-		margin-bottom: 2rem;
-	}
-
-	.settings-section-title {
-		font-size: 1.125rem;
-		font-weight: 600;
-		color: rgb(var(--color-surface-100));
-		margin-bottom: 0.25rem;
-	}
-
-	.settings-section-desc {
-		font-size: 0.875rem;
-		color: rgb(var(--color-surface-500));
-	}
-
-	.error-message {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1rem;
-		margin-bottom: 1.5rem;
-		background: rgb(var(--color-error-500) / 0.1);
-		border: 1px solid rgb(var(--color-error-500) / 0.3);
-		border-radius: 0.5rem;
-		color: rgb(var(--color-error-400));
-		font-size: 0.875rem;
-	}
-
-	.error-message svg {
-		width: 1.125rem;
-		height: 1.125rem;
-		flex-shrink: 0;
-	}
-
-	.form-group {
-		margin-bottom: 1.25rem;
-	}
-
-	.form-label {
-		display: block;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--color-surface-200);
-		margin-bottom: 0.5rem;
-	}
-
-	.form-input {
-		width: 100%;
-		padding: 0.625rem 0.875rem;
-		font-size: 0.9375rem;
-		background: rgb(var(--color-surface-800));
-		border: 1px solid rgb(var(--color-surface-700));
-		border-radius: 0.5rem;
-		color: rgb(var(--color-surface-100));
-		transition: all 0.15s ease;
-	}
-
-	.form-input::placeholder {
-		color: rgb(var(--color-surface-500));
-	}
-
-	.form-input:hover {
-		border-color: rgb(var(--color-surface-600));
-	}
-
-	.form-input:focus {
-		outline: none;
-		border-color: rgb(var(--color-primary-500));
-		box-shadow: 0 0 0 2px rgb(var(--color-primary-500) / 0.2);
-	}
-
-	.form-input.invalid {
-		border-color: rgb(var(--color-error-500));
-	}
-
-	.form-input.invalid:focus {
-		box-shadow: 0 0 0 2px rgb(var(--color-error-500) / 0.2);
-	}
-
-	.form-error {
-		font-size: 0.8125rem;
-		color: rgb(var(--color-error-400));
-		margin-top: 0.375rem;
-	}
-
-	.form-actions {
-		margin-top: 1.5rem;
-	}
-
-	.save-button {
-		padding: 0.625rem 1.25rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: white;
-		background: rgb(var(--color-primary-600));
-		border: none;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.save-button:hover:not(:disabled) {
-		background: rgb(var(--color-primary-500));
-	}
-
-	.save-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	@media (max-width: 480px) {
-		.save-button {
-			width: 100%;
-		}
-	}
-</style>

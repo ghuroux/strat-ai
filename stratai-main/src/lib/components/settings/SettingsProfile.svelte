@@ -70,19 +70,30 @@
 	}
 </script>
 
-<div class="settings-section">
-	<div class="settings-section-header">
-		<h2 class="settings-section-title">Profile</h2>
-		<p class="settings-section-desc">Manage your account information</p>
+<div class="max-w-xl">
+	<!-- Header -->
+	<div class="mb-8">
+		<h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-1">Profile</h2>
+		<p class="text-sm text-zinc-600 dark:text-zinc-400">Manage your account information</p>
 	</div>
 
-	<div class="name-row">
-		<div class="form-group">
-			<label class="form-label" for="firstName">First Name</label>
+	<!-- Name Fields -->
+	<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+		<div>
+			<label class="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2" for="firstName">
+				First Name
+			</label>
 			<input
 				type="text"
 				id="firstName"
-				class="form-input"
+				class="w-full px-3 py-2.5 rounded-lg
+					   bg-zinc-100 dark:bg-zinc-800
+					   border border-zinc-300 dark:border-zinc-600
+					   text-sm text-zinc-900 dark:text-zinc-100
+					   placeholder:text-zinc-400 dark:placeholder:text-zinc-500
+					   hover:border-zinc-400 dark:hover:border-zinc-500
+					   focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20
+					   transition-colors duration-150"
 				placeholder="Enter your first name"
 				bind:value={firstName}
 				onkeydown={handleKeydown}
@@ -90,12 +101,21 @@
 			/>
 		</div>
 
-		<div class="form-group">
-			<label class="form-label" for="lastName">Last Name</label>
+		<div>
+			<label class="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2" for="lastName">
+				Last Name
+			</label>
 			<input
 				type="text"
 				id="lastName"
-				class="form-input"
+				class="w-full px-3 py-2.5 rounded-lg
+					   bg-zinc-100 dark:bg-zinc-800
+					   border border-zinc-300 dark:border-zinc-600
+					   text-sm text-zinc-900 dark:text-zinc-100
+					   placeholder:text-zinc-400 dark:placeholder:text-zinc-500
+					   hover:border-zinc-400 dark:hover:border-zinc-500
+					   focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20
+					   transition-colors duration-150"
 				placeholder="Enter your last name"
 				bind:value={lastName}
 				onkeydown={handleKeydown}
@@ -104,16 +124,21 @@
 		</div>
 	</div>
 
-	<div class="display-name-preview">
-		<span class="preview-label">Display Name:</span>
-		<span class="preview-value">{displayNamePreview()}</span>
+	<!-- Display Name Preview -->
+	<div class="flex items-center gap-2 p-3 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50 mb-4">
+		<span class="text-xs text-zinc-500 dark:text-zinc-500">Display Name:</span>
+		<span class="text-sm font-medium text-zinc-800 dark:text-zinc-200">{displayNamePreview()}</span>
 	</div>
 
+	<!-- Save Button -->
 	{#if hasChanges}
-		<div class="action-row">
+		<div class="mb-6">
 			<button
 				type="button"
-				class="save-button"
+				class="px-5 py-2.5 rounded-lg text-sm font-medium text-white
+					   bg-primary-500 hover:bg-primary-600
+					   disabled:opacity-50 disabled:cursor-not-allowed
+					   transition-colors duration-150"
 				onclick={saveProfile}
 				disabled={isSaving}
 			>
@@ -122,148 +147,10 @@
 		</div>
 	{/if}
 
-	<div class="form-group email-group">
-		<label class="form-label">Email</label>
-		<p class="form-value">{userStore.user?.email ?? 'Not available'}</p>
-		<p class="form-hint-muted">Contact an administrator to change your email</p>
+	<!-- Email (read-only) -->
+	<div class="mt-6">
+		<label class="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2">Email</label>
+		<p class="text-sm text-zinc-700 dark:text-zinc-300 py-1">{userStore.user?.email ?? 'Not available'}</p>
+		<p class="text-xs text-zinc-500 dark:text-zinc-500 mt-1">Contact an administrator to change your email</p>
 	</div>
 </div>
-
-<style>
-	.settings-section {
-		max-width: 600px;
-	}
-
-	.settings-section-header {
-		margin-bottom: 2rem;
-	}
-
-	.settings-section-title {
-		font-size: 1.125rem;
-		font-weight: 600;
-		color: rgb(var(--color-surface-100));
-		margin-bottom: 0.25rem;
-	}
-
-	.settings-section-desc {
-		font-size: 0.875rem;
-		color: rgb(var(--color-surface-500));
-	}
-
-	.name-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 1rem;
-		margin-bottom: 1rem;
-	}
-
-	.form-group {
-		margin-bottom: 0;
-	}
-
-	.email-group {
-		margin-top: 1.5rem;
-	}
-
-	.form-label {
-		display: block;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--color-surface-200);
-		margin-bottom: 0.5rem;
-	}
-
-	.form-hint-muted {
-		font-size: 0.75rem;
-		color: var(--color-surface-600);
-		margin-top: 0.375rem;
-	}
-
-	.form-value {
-		font-size: 0.9375rem;
-		color: var(--color-surface-300);
-		padding: 0.5rem 0;
-	}
-
-	.form-input {
-		width: 100%;
-		padding: 0.625rem 0.875rem;
-		font-size: 0.9375rem;
-		background: rgb(var(--color-surface-800));
-		border: 1px solid rgb(var(--color-surface-700));
-		border-radius: 0.5rem;
-		color: rgb(var(--color-surface-100));
-		transition: all 0.15s ease;
-	}
-
-	.form-input::placeholder {
-		color: rgb(var(--color-surface-500));
-	}
-
-	.form-input:hover {
-		border-color: rgb(var(--color-surface-600));
-	}
-
-	.form-input:focus {
-		outline: none;
-		border-color: rgb(var(--color-primary-500));
-		box-shadow: 0 0 0 2px rgb(var(--color-primary-500) / 0.2);
-	}
-
-	.display-name-preview {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem;
-		background: rgb(var(--color-surface-800) / 0.5);
-		border-radius: 0.5rem;
-		margin-bottom: 1rem;
-	}
-
-	.preview-label {
-		font-size: 0.8125rem;
-		color: rgb(var(--color-surface-500));
-	}
-
-	.preview-value {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: rgb(var(--color-surface-200));
-	}
-
-	.action-row {
-		margin-bottom: 1.5rem;
-	}
-
-	.save-button {
-		padding: 0.625rem 1.25rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: white;
-		background: rgb(var(--color-primary-600));
-		border: none;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		transition: all 0.15s ease;
-		white-space: nowrap;
-	}
-
-	.save-button:hover:not(:disabled) {
-		background: rgb(var(--color-primary-500));
-	}
-
-	.save-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	@media (max-width: 480px) {
-		.name-row {
-			grid-template-columns: 1fr;
-		}
-
-		.form-group {
-			margin-bottom: 1rem;
-		}
-	}
-</style>
