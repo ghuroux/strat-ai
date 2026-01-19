@@ -20,6 +20,7 @@
 	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
 	import ShareSpaceModal from './ShareSpaceModal.svelte';
 	import SharedWithMeSection from './SharedWithMeSection.svelte';
+	import { SkeletonCard } from '$lib/components/skeletons';
 	import { getSpaceIconPath } from '$lib/config/space-icons';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { userStore } from '$lib/stores/user.svelte';
@@ -44,6 +45,7 @@
 		activeTasks: Task[];
 		spaceSlug: string;
 		sharedAreas?: SharedAreaInfo[]; // Phase 6: Areas from other spaces shared with user
+		isLoading?: boolean; // Loading state for skeleton display
 		onCreateArea: () => void;
 		onEditArea?: (area: Area) => void;
 		onDeleteArea?: (area: Area) => void;
@@ -58,6 +60,7 @@
 		activeTasks,
 		spaceSlug,
 		sharedAreas = [],
+		isLoading = false,
 		onCreateArea,
 		onEditArea,
 		onDeleteArea,
@@ -312,24 +315,33 @@
 			<section class="areas-section">
 				<header class="section-header">
 					<h2 class="section-title">Areas</h2>
-					<span class="section-count">{areas.length}</span>
+					{#if !isLoading}
+						<span class="section-count">{areas.length}</span>
+					{/if}
 				</header>
 
 				<div class="areas-grid">
-					{#each areasWithCounts as area (area.id)}
-						<AreaCard
-							{area}
-							conversationCount={area.conversationCount ?? 0}
-							lastActivity={area.lastActivity ?? null}
-							{spaceColor}
-							memberCount={area.memberCount}
-							onclick={() => handleAreaClick(area)}
-							onEdit={onEditArea}
-							onDelete={onDeleteArea}
-							onShare={handleShareArea}
-						/>
-					{/each}
-					<CreateAreaCard {spaceColor} onclick={onCreateArea} />
+					{#if isLoading}
+						<!-- Loading skeletons - maintain grid layout -->
+						{#each Array(3) as _, i (i)}
+							<SkeletonCard />
+						{/each}
+					{:else}
+						{#each areasWithCounts as area (area.id)}
+							<AreaCard
+								{area}
+								conversationCount={area.conversationCount ?? 0}
+								lastActivity={area.lastActivity ?? null}
+								{spaceColor}
+								memberCount={area.memberCount}
+								onclick={() => handleAreaClick(area)}
+								onEdit={onEditArea}
+								onDelete={onDeleteArea}
+								onShare={handleShareArea}
+							/>
+						{/each}
+						<CreateAreaCard {spaceColor} onclick={onCreateArea} />
+					{/if}
 				</div>
 			</section>
 

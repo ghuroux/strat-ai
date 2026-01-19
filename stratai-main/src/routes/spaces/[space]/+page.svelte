@@ -278,12 +278,7 @@
 	<!-- Global Header for navigation -->
 	<Header onSettingsClick={() => showSettingsPanel = true} />
 
-	{#if isLoading}
-		<div class="loading-container">
-			<div class="loading-spinner"></div>
-			<p>Loading...</p>
-		</div>
-	{:else if space}
+	{#if space}
 		<SpaceDashboard
 		{space}
 		areas={areasWithStats}
@@ -291,12 +286,18 @@
 		{activeTasks}
 		{sharedAreas}
 		spaceSlug={spaceParam || ''}
+		{isLoading}
 		onCreateArea={handleCreateArea}
 		onEditArea={handleEditArea}
 		onDeleteArea={handleDeleteAreaFromCard}
 		onTaskClick={handleTaskClick}
 		onCreateTask={handleCreateTask}
 	/>
+	{:else if isLoading}
+		<div class="loading-container">
+			<div class="loading-spinner"></div>
+			<p>Loading...</p>
+		</div>
 
 	<!-- Area Modal (for creating new areas) -->
 	<AreaModal

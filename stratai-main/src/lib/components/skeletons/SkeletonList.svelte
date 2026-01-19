@@ -5,13 +5,14 @@
 	interface Props {
 		count?: number;
 		variant?: 'card' | 'conversation';
-		gap?: 'sm' | 'md' | 'lg';
+		gap?: 'xs' | 'sm' | 'md' | 'lg';
 	}
 
 	let { count = 3, variant = 'card', gap = 'md' }: Props = $props();
 
 	// Map gap prop to Tailwind classes
 	const gapClasses = {
+		xs: 'gap-1',
 		sm: 'gap-2',
 		md: 'gap-3',
 		lg: 'gap-4'

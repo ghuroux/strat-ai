@@ -7,6 +7,7 @@
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import ConversationItem from './ConversationItem.svelte';
 	import ClearConversationsModal from './ClearConversationsModal.svelte';
+	import { SkeletonList } from '$lib/components/skeletons';
 
 	interface Props {
 		onNewChat: () => void;
@@ -255,7 +256,12 @@
 
 	<!-- Conversation List -->
 	<div class="flex-1 overflow-y-auto py-2 scrollbar-hide">
-		{#if !hasResults}
+		{#if chatStore.isLoading}
+			<!-- Loading skeletons -->
+			<div class="px-2">
+				<SkeletonList count={5} variant="conversation" gap="xs" />
+			</div>
+		{:else if !hasResults}
 			<div class="px-4 py-8 text-center text-surface-500">
 				{#if searchQuery}
 					<svg

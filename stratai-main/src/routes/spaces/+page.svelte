@@ -6,6 +6,7 @@
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import { SpaceModal } from '$lib/components/spaces';
+	import { SkeletonCard } from '$lib/components/skeletons';
 	import type { SpaceConfig, SpaceType } from '$lib/types/chat';
 	import type { Space } from '$lib/types/spaces';
 
@@ -187,70 +188,77 @@
 
 		<!-- Space Cards -->
 		<div class="grid gap-4 sm:grid-cols-2">
-			{#each allSpaces as space}
-				{@const accent = getAccentClass(space)}
-				{@const isCustom = 'isCustom' in space && space.isCustom}
-				<a
-					href="/spaces/{space.id}"
+			{#if spacesStore.isLoading}
+				<!-- Loading skeletons - maintain grid layout -->
+				{#each Array(6) as _, i (i)}
+					<SkeletonCard />
+				{/each}
+			{:else}
+				{#each allSpaces as space}
+					{@const accent = getAccentClass(space)}
+					{@const isCustom = 'isCustom' in space && space.isCustom}
+					<a
+						href="/spaces/{space.id}"
+						class="group relative p-6 rounded-xl border text-left transition-all duration-200
+							   {accent.bg} {accent.border} {accent.hover}"
+					>
+						<!-- Icon -->
+						<div class="mb-3 {accent.icon}">
+							{#if isCustom}
+								<!-- Custom space icon -->
+								<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+									<path stroke-linecap="round" stroke-linejoin="round" d={getSpaceIconPath('icon' in space ? space.icon : undefined)} />
+								</svg>
+							{:else}
+								<SpaceIcon space={space.id as SpaceType} size="xl" />
+							{/if}
+						</div>
+
+						<!-- Name -->
+						<h2 class="text-xl font-semibold text-surface-100 mb-2 group-hover:text-white transition-colors">
+							{space.name}
+						</h2>
+
+						<!-- Description -->
+						<p class="text-sm text-surface-400 group-hover:text-surface-300 transition-colors">
+							{space.description}
+						</p>
+
+						<!-- Hover arrow indicator -->
+						<div class="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
+							<svg class="w-5 h-5 {accent.icon}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+							</svg>
+						</div>
+					</a>
+				{/each}
+
+				<!-- Create Space Card -->
+				<button
+					type="button"
+					onclick={() => showCreateModal = true}
 					class="group relative p-6 rounded-xl border text-left transition-all duration-200
-						   {accent.bg} {accent.border} {accent.hover}"
+						   border-dashed border-surface-600 hover:border-surface-400
+						   bg-surface-800/30 hover:bg-surface-800/50"
 				>
 					<!-- Icon -->
-					<div class="mb-3 {accent.icon}">
-						{#if isCustom}
-							<!-- Custom space icon -->
-							<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-								<path stroke-linecap="round" stroke-linejoin="round" d={getSpaceIconPath('icon' in space ? space.icon : undefined)} />
-							</svg>
-						{:else}
-							<SpaceIcon space={space.id as SpaceType} size="xl" />
-						{/if}
+					<div class="mb-3 text-surface-500 group-hover:text-surface-300 transition-colors">
+						<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+						</svg>
 					</div>
 
 					<!-- Name -->
-					<h2 class="text-xl font-semibold text-surface-100 mb-2 group-hover:text-white transition-colors">
-						{space.name}
+					<h2 class="text-xl font-semibold text-surface-400 mb-2 group-hover:text-surface-200 transition-colors">
+						Create Space
 					</h2>
 
 					<!-- Description -->
-					<p class="text-sm text-surface-400 group-hover:text-surface-300 transition-colors">
-						{space.description}
+					<p class="text-sm text-surface-500 group-hover:text-surface-400 transition-colors">
+						Create a custom space for your specific needs
 					</p>
-
-					<!-- Hover arrow indicator -->
-					<div class="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity">
-						<svg class="w-5 h-5 {accent.icon}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
-						</svg>
-					</div>
-				</a>
-			{/each}
-
-			<!-- Create Space Card -->
-			<button
-				type="button"
-				onclick={() => showCreateModal = true}
-				class="group relative p-6 rounded-xl border text-left transition-all duration-200
-					   border-dashed border-surface-600 hover:border-surface-400
-					   bg-surface-800/30 hover:bg-surface-800/50"
-			>
-				<!-- Icon -->
-				<div class="mb-3 text-surface-500 group-hover:text-surface-300 transition-colors">
-					<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-					</svg>
-				</div>
-
-				<!-- Name -->
-				<h2 class="text-xl font-semibold text-surface-400 mb-2 group-hover:text-surface-200 transition-colors">
-					Create Space
-				</h2>
-
-				<!-- Description -->
-				<p class="text-sm text-surface-500 group-hover:text-surface-400 transition-colors">
-					Create a custom space for your specific needs
-				</p>
-			</button>
+				</button>
+			{/if}
 		</div>
 
 		<!-- Hint text -->
