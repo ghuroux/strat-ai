@@ -1,5 +1,7 @@
 # StratAI Fresh Install
 
+> **Last updated:** 2026-01-19 (schema version 040)
+
 This directory contains scripts for a clean database installation, replacing the migration-based approach with a single comprehensive schema.
 
 ## When to Use This

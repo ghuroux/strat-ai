@@ -1,0 +1,128 @@
+# ============================================================================
+# StratAI Production Docker Compose
+# ============================================================================
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in values
+#   2. docker compose -f docker-compose.prod.yml up -d
+#
+# Services:
+#   - stratai:   SvelteKit application (port 3000)
+#   - postgres:  PostgreSQL 17 database (port 5432)
+#   - litellm:   LLM proxy (port 4000)
+#
+# For AWS deployment, you may want to use RDS instead of the postgres container.
+# In that case, remove the postgres service and set DATABASE_URL to your RDS endpoint.
+# ============================================================================
+
+services:
+  # ============================================
+  # StratAI Application
+  # ============================================
+  stratai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stratai_app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      # Database connection (use postgres service or external RDS)
+      - DATABASE_URL=${DATABASE_URL:-postgres://stratai:stratai_password@postgres:5432/stratai}
+      # LiteLLM connection
+      - LITELLM_BASE_URL=${LITELLM_BASE_URL:-http://litellm:4000}
+      - LITELLM_API_KEY=${LITELLM_API_KEY:-sk-1234}
+      # Authentication
+      - SESSION_SECRET=${SESSION_SECRET}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      # App settings
+      - BASE_URL=${BASE_URL:-http://localhost:3000}
+      - PUBLIC_APP_NAME=${PUBLIC_APP_NAME:-StratAI Chat}
+      # Optional: Email
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+      - SENDGRID_FROM_EMAIL=${SENDGRID_FROM_EMAIL:-}
+      # Optional: Web search
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      litellm:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - stratai_network
+
+  # ============================================
+  # PostgreSQL Database
+  # ============================================
+  # For production, consider using AWS RDS instead
+  postgres:
+    image: postgres:17-alpine
+    container_name: stratai_postgres
+    environment:
+      - POSTGRES_USER=stratai
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-stratai_password}
+      - POSTGRES_DB=stratai
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Run fresh-install schema on first start
+      - ./fresh-install/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./fresh-install/seed-data.sql:/docker-entrypoint-initdb.d/02-seed-data.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stratai -d stratai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - stratai_network
+
+  # ============================================
+  # LiteLLM Proxy
+  # ============================================
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: stratai_litellm
+    ports:
+      - "4000:4000"
+    environment:
+      # LLM Provider API Keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      # AWS Bedrock (optional)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION_NAME=${AWS_REGION_NAME:-us-east-1}
+    volumes:
+      - ../litellm-config.yaml:/app/config.yaml:ro
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - stratai_network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  stratai_network:
+    driver: bridge

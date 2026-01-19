@@ -1,7 +1,9 @@
 -- ============================================================================
 -- StratAI Fresh Install Schema
 -- ============================================================================
--- Generated: 2026-01-16
+-- Generated: 2026-01-19
+-- Updated: Added token_type to password_reset_tokens (migration 039)
+--          Added welcome, space_invite to email_logs types (migrations 039, 040)
 --
 -- This is the complete database schema for StratAI.
 -- Run this on a fresh PostgreSQL 15+ database.
@@ -639,12 +641,12 @@ CREATE INDEX idx_audit_events_resource ON audit_events(resource_type, resource_i
 CREATE INDEX idx_audit_events_type ON audit_events(event_type, created_at DESC);
 CREATE INDEX idx_audit_events_created ON audit_events(created_at DESC);
 
--- Email logs
+-- Email logs (updated with welcome and space_invite - migrations 039, 040)
 CREATE TABLE email_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    email_type TEXT NOT NULL CHECK (email_type IN ('password_reset', 'email_verification', 'team_invite', 'notification')),
+    email_type TEXT NOT NULL CHECK (email_type IN ('password_reset', 'email_verification', 'team_invite', 'space_invite', 'notification', 'welcome')),
     recipient_email TEXT NOT NULL,
     subject TEXT NOT NULL,
     sendgrid_message_id TEXT,
@@ -661,19 +663,23 @@ CREATE INDEX idx_email_logs_type ON email_logs(email_type);
 CREATE INDEX idx_email_logs_status ON email_logs(status);
 CREATE INDEX idx_email_logs_created ON email_logs(created_at);
 
--- Password reset tokens
+-- Password reset tokens (also used for welcome tokens - migration 039)
 CREATE TABLE password_reset_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL,
+    token_type TEXT NOT NULL DEFAULT 'reset' CHECK (token_type IN ('reset', 'welcome')),
     expires_at TIMESTAMPTZ NOT NULL,
     used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+COMMENT ON COLUMN password_reset_tokens.token_type IS 'Token purpose: reset (password reset, 1hr expiry) or welcome (new user, 7 day expiry)';
+
 CREATE INDEX idx_password_reset_tokens_user ON password_reset_tokens(user_id);
 CREATE INDEX idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);
 CREATE INDEX idx_password_reset_tokens_expires ON password_reset_tokens(expires_at) WHERE used_at IS NULL;
+CREATE INDEX idx_password_reset_tokens_type ON password_reset_tokens(token_type);
 
 -- Password reset rate limiting
 CREATE TABLE password_reset_attempts (
@@ -824,8 +830,8 @@ CREATE TABLE schema_migrations (
     applied_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Mark this as version 039 (fresh install)
-INSERT INTO schema_migrations (version) VALUES ('039-fresh-install');
+-- Mark this as version 040 (fresh install)
+INSERT INTO schema_migrations (version) VALUES ('040-fresh-install');
 
 -- ============================================================================
 -- DONE!
