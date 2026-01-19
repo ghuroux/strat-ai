@@ -1,0 +1,55 @@
+# Ralph Progress Log
+
+## Feature: Pre-Launch Phase 3: Harden for Production
+**Parent Task:** prelaunch-phase3-production-hardening
+**Started:** 2026-01-19
+**Status:** Ready to begin
+
+## Overview
+Production hardening to ensure data integrity and usability across devices. These issues could cause problems at scale or limit how users can access the application.
+
+## Codebase Patterns Discovered
+- Document sharing uses sql.begin() for transactions (pattern to follow for US-001)
+- postgres.js camelCase transformation for column access
+- Svelte 5 runes ($state, $derived) for reactivity
+- Tailwind responsive classes: md: prefix for 768px breakpoint
+- Existing timeout detection in chat pages (extend for US-002)
+- SpacesStore has no guard flags (need to add for US-004)
+
+## Stories
+| ID | Title | Status | Notes |
+|----|-------|--------|-------|
+| US-001 | Implement Document Deletion Cascade | pending | Backend transaction work |
+| US-002 | Add Chat Message Retry on Failure | pending | Frontend UI + state |
+| US-003 | Fix Mobile Responsiveness - Core Layout | pending | Layout + CSS changes |
+| US-004 | Add Request Deduplication for Critical Actions | pending | UI + store guards |
+
+## Implementation Notes
+
+### US-001: Document Deletion Cascade
+- Modify documents-postgres.ts delete() method
+- Cascade order: areas contextDocumentIds -> document_area_shares -> task_documents -> soft delete
+- Use sql.begin() transaction pattern from document-sharing-postgres.ts
+- Return cleanup counts for UI feedback
+
+### US-002: Chat Message Retry
+- Add failedMessage state to both +page.svelte files
+- Store content and attachments for retry
+- Red-tinted bubble with AlertCircle, RotateCcw, X icons
+- Clear on new send or dismiss
+
+### US-003: Mobile Responsiveness
+- Add mobile state management with matchMedia
+- Hamburger menu in Header
+- Slide-out sidebar with backdrop
+- Bottom sheet modals on mobile
+- iOS safe area support
+
+### US-004: Request Deduplication
+- Add isSubmitting state to modal components
+- Add private guard flags to store methods
+- Show loading spinner during operations
+- Disable buttons during submission
+
+## Session Log
+(Ralph will update this during implementation)

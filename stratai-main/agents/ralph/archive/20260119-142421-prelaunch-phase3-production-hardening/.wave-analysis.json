@@ -1,0 +1,29 @@
+{
+  "total_stories": 4,
+  "estimated_sequential_time_min": 12,
+  "waves": [
+    {
+      "wave_number": 1,
+      "stories": ["US-001"],
+      "parallelism": 1,
+      "rationale": "US-001 modifies documents-postgres.ts and references document-sharing-postgres.ts and areas-postgres.ts. This is a foundational data layer change that implements cascade deletion. Must complete first to ensure database integrity patterns are established.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 2,
+      "stories": ["US-002", "US-003", "US-004"],
+      "parallelism": 3,
+      "rationale": "US-002 (chat retry) modifies chat page routes and references ChatMessage.svelte. US-003 (mobile responsiveness) modifies layout components (Sidebar, Header, modals, ChatInput). US-004 (request deduplication) modifies modals and stores. These stories touch completely different files with one exception: ChatInput.svelte appears in both US-003 and US-004. However, US-003 adds iOS safe area padding to ChatInput while US-004 adds loading/disabled state to send button - these are orthogonal changes to different aspects of the component with minimal merge conflict risk. The modal modifications in US-003 (responsive styling) and US-004 (loading states) are also orthogonal. Given that US-002 touches different files entirely (page routes, not shared components) and the overlap between US-003 and US-004 involves different concerns (styling vs state management), parallelization is feasible with careful merge conflict resolution.",
+      "estimated_time_min": 3
+    }
+  ],
+  "estimated_wave_time_min": 6,
+  "time_savings_percent": 50,
+  "confidence": "medium",
+  "risks": [
+    "US-003 and US-004 both modify ChatInput.svelte - merge conflict possible if changes overlap in same code sections",
+    "US-003 and US-004 both modify SpaceModal.svelte and AreaModal.svelte - merge conflicts likely require manual resolution",
+    "Mobile responsiveness changes (US-003) may affect touch target sizing which could interact with loading state UX (US-004)",
+    "If SpaceModal/AreaModal structure changes significantly in US-003, US-004's disabled state logic may need adjustment"
+  ]
+}

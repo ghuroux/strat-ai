@@ -334,27 +334,39 @@ interface Props {
 </form>
 ```
 
-## Tailwind Class Patterns
+## Tailwind Class Patterns (Theme-Aware)
+
+**See `stratai-conventions/DESIGN-SYSTEM.md` for complete design system reference.**
 
 ```svelte
-<!-- Consistent button styles -->
-<button class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded
+<!-- Primary button (brand color - same in both themes) -->
+<button class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg
                disabled:opacity-50 disabled:cursor-not-allowed
                transition-colors">
     Primary Button
 </button>
 
-<button class="px-4 py-2 text-zinc-400 hover:text-white transition-colors">
+<!-- Secondary/Ghost button (theme-aware) -->
+<button class="px-4 py-2 rounded-lg
+               text-zinc-600 dark:text-zinc-400
+               hover:text-zinc-900 dark:hover:text-zinc-200
+               hover:bg-zinc-100 dark:hover:bg-zinc-800
+               transition-colors">
     Secondary Button
 </button>
 
-<!-- Input styles -->
-<input class="w-full bg-zinc-700 text-white rounded px-3 py-2
-              border border-zinc-600 focus:border-blue-500 focus:outline-none
-              placeholder:text-zinc-500" />
+<!-- Input styles (theme-aware) -->
+<input class="w-full rounded-lg px-3 py-2
+              bg-zinc-100 dark:bg-zinc-800
+              border border-zinc-300 dark:border-zinc-700
+              text-zinc-900 dark:text-zinc-100
+              placeholder:text-zinc-400 dark:placeholder:text-zinc-500
+              focus:border-primary-500 focus:outline-none" />
 
-<!-- Card/panel styles -->
-<div class="bg-zinc-800 rounded-lg border border-zinc-700 p-4">
+<!-- Card/panel styles (theme-aware) -->
+<div class="rounded-xl p-4
+            bg-white dark:bg-zinc-900
+            border border-zinc-200 dark:border-zinc-700">
     Content
 </div>
 
