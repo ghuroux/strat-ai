@@ -9,6 +9,7 @@
 	 * - Auto-saves on selection
 	 * - Loading state during API call
 	 * - Keyboard navigation (Escape to close)
+	 * - Fixed positioning to escape overflow containers (modals)
 	 *
 	 * Mirrors AreaRoleSelector pattern.
 	 */
@@ -39,10 +40,36 @@
 	let isOpen = $state(false);
 	let isUpdating = $state(false);
 	let dropdownRef: HTMLDivElement | null = $state(null);
+	let triggerRef: HTMLButtonElement | null = $state(null);
+	let dropdownStyle = $state('');
+
+	// Calculate dropdown position based on trigger button
+	function updateDropdownPosition() {
+		if (!triggerRef) return;
+
+		const rect = triggerRef.getBoundingClientRect();
+		const dropdownHeight = 200; // Approximate dropdown height
+		const viewportHeight = window.innerHeight;
+		const spaceBelow = viewportHeight - rect.bottom;
+		const spaceAbove = rect.top;
+
+		// Decide whether to show above or below
+		const showAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+		if (showAbove) {
+			dropdownStyle = `position: fixed; bottom: ${viewportHeight - rect.top + 8}px; left: ${rect.left}px;`;
+		} else {
+			dropdownStyle = `position: fixed; top: ${rect.bottom + 8}px; left: ${rect.left}px;`;
+		}
+	}
 
 	// Toggle dropdown
 	function toggleDropdown() {
 		if (disabled || isUpdating) return;
+
+		if (!isOpen) {
+			updateDropdownPosition();
+		}
 		isOpen = !isOpen;
 	}
 
@@ -94,6 +121,7 @@
 	<button
 		type="button"
 		class="role-trigger"
+		bind:this={triggerRef}
 		onclick={toggleDropdown}
 		disabled={disabled || isUpdating}
 		aria-label="Change role for {memberName}"
@@ -107,9 +135,9 @@
 		</span>
 	</button>
 
-	<!-- Dropdown Menu -->
+	<!-- Dropdown Menu (fixed position to escape overflow containers) -->
 	{#if isOpen}
-		<div class="role-dropdown" transition:fade={{ duration: 150 }} role="listbox">
+		<div class="role-dropdown" style={dropdownStyle} transition:fade={{ duration: 150 }} role="listbox">
 			<div class="dropdown-header">
 				<span class="dropdown-label">Change Role</span>
 			</div>
@@ -192,17 +220,14 @@
 		transform: rotate(180deg);
 	}
 
-	/* Dropdown */
+	/* Dropdown - uses fixed positioning via inline style to escape overflow containers */
 	.role-dropdown {
-		position: absolute;
-		top: calc(100% + 0.5rem);
-		left: 0;
 		min-width: 220px;
 		background: rgba(23, 23, 23, 0.98);
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 0.5rem;
 		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-		z-index: 50;
+		z-index: 1000; /* High z-index to appear above modals */
 		overflow: hidden;
 	}
 
