@@ -280,26 +280,33 @@
 
 	{#if space}
 		<SpaceDashboard
-		{space}
-		areas={areasWithStats}
-		{recentConversations}
-		{activeTasks}
-		{sharedAreas}
-		spaceSlug={spaceParam || ''}
-		{isLoading}
-		onCreateArea={handleCreateArea}
-		onEditArea={handleEditArea}
-		onDeleteArea={handleDeleteAreaFromCard}
-		onTaskClick={handleTaskClick}
-		onCreateTask={handleCreateTask}
-	/>
+			{space}
+			areas={areasWithStats}
+			{recentConversations}
+			{activeTasks}
+			{sharedAreas}
+			spaceSlug={spaceParam || ''}
+			{isLoading}
+			onCreateArea={handleCreateArea}
+			onEditArea={handleEditArea}
+			onDeleteArea={handleDeleteAreaFromCard}
+			onTaskClick={handleTaskClick}
+			onCreateTask={handleCreateTask}
+		/>
 	{:else if isLoading}
 		<div class="loading-container">
 			<div class="loading-spinner"></div>
 			<p>Loading...</p>
 		</div>
+	{:else}
+		<div class="error-container">
+			<h1>Space not found</h1>
+			<p>The space you're looking for doesn't exist.</p>
+			<a href="/spaces" class="back-link">Back to spaces</a>
+		</div>
+	{/if}
 
-	<!-- Area Modal (for creating new areas) -->
+	<!-- Modals - must be outside the if/else to always render -->
 	<AreaModal
 		open={showAreaModal}
 		area={null}
@@ -310,7 +317,6 @@
 		onDelete={handleAreaDelete}
 	/>
 
-	<!-- Area Edit Panel (for editing existing areas) -->
 	{#if editingArea && spaceFromStore}
 		<AreaEditPanel
 			isOpen={showAreaEditPanel}
@@ -322,7 +328,6 @@
 		/>
 	{/if}
 
-	<!-- Delete Area Confirmation Modal -->
 	<DeleteAreaModal
 		open={showDeleteAreaModal}
 		area={deletingArea}
@@ -333,7 +338,6 @@
 		onConfirm={handleConfirmAreaDelete}
 	/>
 
-	<!-- Space Settings Panel -->
 	{#if spaceFromStore}
 		<SpaceSettingsPanel
 			isOpen={showSettingsPanel}
@@ -344,7 +348,6 @@
 		/>
 	{/if}
 
-	<!-- Space Settings Modal (for creation) -->
 	{#if spaceFromStore}
 		<SpaceModal
 			open={showSpaceModal}
@@ -353,13 +356,6 @@
 			onCreate={async () => {}}
 			onUpdate={handleSpaceUpdate}
 		/>
-	{/if}
-{:else}
-		<div class="error-container">
-			<h1>Space not found</h1>
-			<p>The space you're looking for doesn't exist.</p>
-			<a href="/spaces" class="back-link">Back to spaces</a>
-		</div>
 	{/if}
 </div>
 
