@@ -1202,6 +1202,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Final safety check: enforce Anthropic's 4 cache_control block limit
 		const validatedMessages = enforceCacheControlLimit(messagesWithCache, cleanBody.model);
 
+		// DEBUG: Count exact cache_control blocks being sent to LiteLLM
+		let totalCacheBlocks = 0;
+		validatedMessages.forEach((msg, idx) => {
+			if (Array.isArray(msg.content)) {
+				msg.content.forEach((block, blockIdx) => {
+					if ('cache_control' in block && block.cache_control) {
+						totalCacheBlocks++;
+						console.log(`[Cache Debug] Message ${idx} (${msg.role}), Block ${blockIdx}: HAS cache_control`);
+					}
+				});
+			}
+		});
+		console.log(`[Cache Debug] TOTAL cache_control blocks being sent to LiteLLM: ${totalCacheBlocks}`);
+		if (totalCacheBlocks > 4) {
+			console.error(`[Cache Debug] ❌ EXCEEDED LIMIT BEFORE LITELLM! Found ${totalCacheBlocks} blocks`);
+		}
+
 		// Log cache breakpoint application for debugging
 		if (shouldUseCacheControl(cleanBody.model)) {
 			const cachedCount = validatedMessages.filter(m =>
@@ -1346,6 +1363,23 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	
 	// Final safety check: enforce Anthropic's 4 cache_control block limit
 	const finalMessages = enforceCacheControlLimit(messagesWithSearchContext, body.model);
+
+	// DEBUG: Count exact cache_control blocks being sent to LiteLLM (tool path)
+	let totalCacheBlocksTool = 0;
+	finalMessages.forEach((msg, idx) => {
+		if (Array.isArray(msg.content)) {
+			msg.content.forEach((block, blockIdx) => {
+				if ('cache_control' in block && block.cache_control) {
+					totalCacheBlocksTool++;
+					console.log(`[Cache Debug Tool] Message ${idx} (${msg.role}), Block ${blockIdx}: HAS cache_control`);
+				}
+			});
+		}
+	});
+	console.log(`[Cache Debug Tool] TOTAL cache_control blocks being sent to LiteLLM: ${totalCacheBlocksTool}`);
+	if (totalCacheBlocksTool > 4) {
+		console.error(`[Cache Debug Tool] ❌ EXCEEDED LIMIT BEFORE LITELLM! Found ${totalCacheBlocksTool} blocks`);
+	}
 
 	// Create a ReadableStream for SSE
 	const stream = new ReadableStream({

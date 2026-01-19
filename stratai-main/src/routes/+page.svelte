@@ -390,17 +390,26 @@
 			// Build API messages with proper format for vision/non-vision
 			const apiMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string | Array<unknown> }> = [];
 
-			// Add system prompt
+			// Combine all system content into a single message to avoid Anthropic's
+			// cache_control limit (max 4 blocks). LiteLLM adds cache_control to each
+			// system message, so multiple system messages can exceed the limit.
+			const systemParts: string[] = [];
+
 			if (systemPrompt) {
-				apiMessages.push({ role: 'system', content: systemPrompt });
+				systemParts.push(systemPrompt);
 			}
 
-			// Add text document context as system message (for non-image attachments)
+			// Add text document context (for non-image attachments)
 			if (attachments && !hasImages) {
 				const textContext = formatTextAttachmentsForLLM(attachments);
 				if (textContext) {
-					apiMessages.push({ role: 'system', content: textContext });
+					systemParts.push(textContext);
 				}
+			}
+
+			// Add combined system message (single block for cache_control)
+			if (systemParts.length > 0) {
+				apiMessages.push({ role: 'system', content: systemParts.join('\n\n---\n\n') });
 			}
 
 			// Add conversation history (all messages except the last user message if it has images)

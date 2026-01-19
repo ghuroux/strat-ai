@@ -109,6 +109,7 @@ Claude Code has access to specialized skills and commands. **Before working on r
 - `POSTGRES.md` - Database patterns (camelCase access, query building)
 - `API-PATTERNS.md` - API endpoint patterns (streaming, error handling)
 - `PROMPTS.md` - Prompt engineering patterns (layered prompts, context)
+- `DESIGN-SYSTEM.md` - **✅ MUST READ for UI work** (colors, buttons, theme support, modals, loading states)
 
 ### Quick Commands
 
@@ -212,6 +213,7 @@ Before marking work complete, ensure all applicable gates pass:
 | **Database Access** | Manual review | Uses camelCase access (`row.userId` NOT `row.user_id`) |
 | **File Naming** | Manual review | Components: PascalCase, Stores: camelCase + `.svelte.ts`, Routes: lowercase |
 | **Store Patterns** | Manual review | Uses `SvelteMap` for reactive collections, `_version` counter for fine-grained updates |
+| **Theme Support** | Manual review | All UI supports both dark AND light mode (uses `dark:` prefix pattern). See `DESIGN-SYSTEM.md` |
 
 ### Database Work
 
@@ -295,6 +297,7 @@ Don't revisit without good reason:
 | AI retrieval via tools | AI has no inherent org knowledge; uses tool calls to query data, then reasons over results. Semantic + hierarchical + relational queries |
 | postgres.js camelCase standard | Database columns use snake_case, postgres.js transforms to camelCase at runtime. ALWAYS access as camelCase (row.userId not row.user_id) |
 | Database standardization project | Systematic fix of snake_case bugs + comprehensive docs. 6-phase plan over 2 weeks. Critical for reliable development. |
+| Theme support mandatory | All UI components MUST support both dark AND light modes using `dark:` prefix pattern. Light mode is base, dark mode overrides. Prevents "invisible in light mode" bugs. See `DESIGN-SYSTEM.md`. |
 
 ---
 

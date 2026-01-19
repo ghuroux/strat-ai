@@ -632,8 +632,13 @@
 
 			const apiMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string | Array<unknown> }> = [];
 
+			// Combine all system content into a single message to avoid Anthropic's
+			// cache_control limit (max 4 blocks). LiteLLM adds cache_control to each
+			// system message, so multiple system messages can exceed the limit.
+			const systemParts: string[] = [];
+
 			if (systemPrompt) {
-				apiMessages.push({ role: 'system', content: systemPrompt });
+				systemParts.push(systemPrompt);
 			}
 
 			// Phase 8: Add guided creation system prompt (P8-GF-02, P8-GF-03)
@@ -642,14 +647,34 @@
 					guidedCreationStore.pageType,
 					guidedCreationStore.topic
 				);
-				apiMessages.push({ role: 'system', content: guidedPrompt });
+				systemParts.push(guidedPrompt);
 			}
 
 			if (attachments && !hasImages) {
+				// Debug: Log attachment content status
+				console.log('[Attachments Debug]', {
+					count: attachments.length,
+					details: attachments.map(a => ({
+						filename: a.filename,
+						type: a.content.type,
+						hasContent: a.content.type === 'text' ? a.content.data?.length > 0 : !!a.content.data,
+						contentLength: a.content.type === 'text' ? a.content.data?.length : 'N/A (image)',
+						charCount: a.charCount
+					}))
+				});
+
 				const textContext = formatTextAttachmentsForLLM(attachments);
 				if (textContext) {
-					apiMessages.push({ role: 'system', content: textContext });
+					console.log('[Text Context Preview]', textContext.substring(0, 500) + (textContext.length > 500 ? '...' : ''));
+					systemParts.push(textContext);
+				} else {
+					console.warn('[Warning] No text context generated from attachments!');
 				}
+			}
+
+			// Add combined system message (single block for cache_control)
+			if (systemParts.length > 0) {
+				apiMessages.push({ role: 'system', content: systemParts.join('\n\n---\n\n') });
 			}
 
 			const historyMessages = hasImages ? allMessages.slice(0, -1) : allMessages;

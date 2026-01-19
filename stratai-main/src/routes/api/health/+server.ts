@@ -16,7 +16,7 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { sql } from '$lib/server/persistence/database';
+import { sql } from '$lib/server/persistence';
 
 export const GET: RequestHandler = async ({ url }) => {
 	const includeDb = url.searchParams.get('db') === 'true';

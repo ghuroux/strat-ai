@@ -813,3 +813,7 @@ import ListItem from './ListItem.svelte';
 - `src/lib/components/spaces/AllSpacesDropdown.svelte` - Dropdown with click-outside
 - `src/lib/components/spaces/SpaceNavTabs.svelte` - Context menu example
 - `src/lib/components/areas/ShareAreaModal.svelte` - Data loading example
+
+## Related Documentation
+
+- **[DESIGN-SYSTEM.md](../stratai-conventions/DESIGN-SYSTEM.md)** - **MUST READ** for UI work: color tokens, button variants, theme-aware patterns, modals, empty states, loading states

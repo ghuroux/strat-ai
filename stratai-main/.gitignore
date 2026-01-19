@@ -21,3 +21,9 @@ vite.config.ts.timestamp-*
 agents/ralph/workspaces/*/.ralph-state
 agents/ralph/workspaces/*/.ralph-test-baseline
 agents/ralph/workspaces/*/.ralph-lint-baseline
+
+# Playwright test artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

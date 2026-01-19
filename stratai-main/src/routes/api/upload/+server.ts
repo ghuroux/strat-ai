@@ -57,9 +57,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Parse the file
 		const parsedFile = await parseFile(buffer, file.name, file.type);
 
-		console.log(
-			`File uploaded: ${parsedFile.filename}, size: ${parsedFile.size}, chars: ${parsedFile.charCount}, truncated: ${parsedFile.truncated}`
-		);
+		// Debug: Detailed upload logging
+		console.log('[Upload Success]', {
+			filename: parsedFile.filename,
+			size: parsedFile.size,
+			mimeType: parsedFile.mimeType,
+			charCount: parsedFile.charCount,
+			truncated: parsedFile.truncated,
+			contentType: parsedFile.content.type,
+			hasContent: parsedFile.content.type === 'text'
+				? parsedFile.content.data.length > 0
+				: !!parsedFile.content.data,
+			contentPreview: parsedFile.content.type === 'text'
+				? parsedFile.content.data.substring(0, 200) + (parsedFile.content.data.length > 200 ? '...' : '')
+				: '[image data]'
+		});
 
 		// Return parsed content
 		return new Response(JSON.stringify(parsedFile), {

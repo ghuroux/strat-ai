@@ -1,24 +1,19 @@
 model_list:
   # Anthropic Claude Models - Latest (December 2025)
-  # All models have cache_control_injection_points to enable automatic prompt caching
-  # This adds cache_control: {type: "ephemeral"} to system messages for 90% cost savings
+  # NOTE: Prompt caching is handled server-side in chat/+server.ts via layered caching
+  # (getSystemPromptLayers + addCacheBreakpoints + enforceCacheControlLimit)
+  # DO NOT add cache_control_injection_points here - it causes double-caching bugs
   - model_name: claude-opus-4-5
     litellm_params:
       model: anthropic/claude-opus-4-5-20251101
       api_key: os.environ/ANTHROPIC_API_KEY
       max_tokens: 8192
-      cache_control_injection_points:
-        - location: message
-          role: system
 
   - model_name: claude-sonnet-4-5
     litellm_params:
       model: anthropic/claude-sonnet-4-5-20250929
       api_key: os.environ/ANTHROPIC_API_KEY
       max_tokens: 8192
-      cache_control_injection_points:
-        - location: message
-          role: system
 
   # Alias for legacy model name (dot instead of dash)
   - model_name: claude-sonnet-4.5
@@ -26,9 +21,6 @@ model_list:
       model: anthropic/claude-sonnet-4-5-20250929
       api_key: os.environ/ANTHROPIC_API_KEY
       max_tokens: 8192
-      cache_control_injection_points:
-        - location: message
-          role: system
 
   # Claude Sonnet 4 (previous generation)
   - model_name: claude-sonnet-4
@@ -36,9 +28,6 @@ model_list:
       model: anthropic/claude-sonnet-4-20250514
       api_key: os.environ/ANTHROPIC_API_KEY
       max_tokens: 8192
-      cache_control_injection_points:
-        - location: message
-          role: system
 
   # Claude 3.7 Sonnet (replaces 3.5 Sonnet)
   - model_name: claude-3-7-sonnet
@@ -46,18 +35,12 @@ model_list:
       model: anthropic/claude-3-7-sonnet-20250219
       api_key: os.environ/ANTHROPIC_API_KEY
       max_tokens: 8192
-      cache_control_injection_points:
-        - location: message
-          role: system
 
   - model_name: claude-3-5-haiku
     litellm_params:
       model: anthropic/claude-3-5-haiku-20241022
       api_key: os.environ/ANTHROPIC_API_KEY
       max_tokens: 8192
-      cache_control_injection_points:
-        - location: message
-          role: system
 
   # Claude Haiku 4.5 (Fast & cost-effective)
   - model_name: claude-haiku-4-5
@@ -65,9 +48,6 @@ model_list:
       model: anthropic/claude-haiku-4-5-20251001
       api_key: os.environ/ANTHROPIC_API_KEY
       max_tokens: 8192
-      cache_control_injection_points:
-        - location: message
-          role: system
 
   # OpenAI Models - Latest (December 2025)
 
