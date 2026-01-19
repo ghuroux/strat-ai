@@ -1,0 +1,100 @@
+{
+  "feature_name": "Auto Area Color Generation",
+  "parent_task_id": "auto-area-color-generation",
+  "created": "2026-01-18",
+  "research": {
+    "similar_patterns": [
+      "src/lib/utils/fluentEmoji.ts",
+      "src/lib/utils/model-display.ts",
+      "src/lib/components/areas/AreaModal.svelte"
+    ],
+    "related_files": [
+      "src/routes/api/areas/+server.ts",
+      "src/lib/server/persistence/areas-postgres.ts",
+      "src/lib/types/areas.ts"
+    ],
+    "docs_reviewed": [
+      "docs/features/AUTO_AREA_COLOR_GENERATION.md"
+    ],
+    "existing_color_palette": [
+      "#3b82f6",
+      "#8b5cf6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#ec4899",
+      "#06b6d4",
+      "#84cc16"
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Create color generation utility",
+      "description": "As a developer, I need a color generation utility that can generate visually distinct colors based on existing colors in HSL color space.",
+      "status": "completed",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "Create src/lib/utils/colorGeneration.ts with generateDistinctColor(existingColors: string[]): string function",
+        "Function uses HSL color space for perceptually uniform distribution",
+        "Returns hex color string (e.g., #3b82f6)",
+        "When existingColors is empty, returns a color from STARTER_PALETTE",
+        "When existingColors has values, finds largest gap in hue circle (0-360) and picks midpoint",
+        "Maintains saturation 60-80% and lightness 45-65% for vibrant but readable colors",
+        "Export hexToHsl() and hslToHex() helper functions",
+        "Export ColorGenerationOptions interface for future extensibility",
+        "Create src/lib/utils/colorGeneration.test.ts with unit tests",
+        "Test: empty array returns starter palette color",
+        "Test: single color returns opposite hue (180 degrees away)",
+        "Test: multiple colors finds largest gap correctly",
+        "Test: edge case with all similar hues",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Integrate color generation with Area Creation API",
+      "description": "As a user, I want areas to be auto-assigned visually distinct colors when I don't provide one, so I don't have to manually pick colors every time.",
+      "status": "completed",
+      "dependencies": ["US-001"],
+      "acceptance_criteria": [
+        "Modify POST /api/areas endpoint in src/routes/api/areas/+server.ts",
+        "If color not provided in request body, auto-generate one using generateDistinctColor()",
+        "Fetch existing area colors for the space using postgresAreaRepository.findAllAccessible()",
+        "Extract colors array: existingAreas.map(a => a.color).filter(Boolean)",
+        "Generated color is passed to postgresAreaRepository.create() and saved to database",
+        "Response includes the generated color in the area object",
+        "Existing behavior preserved when color IS explicitly provided (user override)",
+        "Test manually: create area without color - verify auto-generated color is returned",
+        "Test manually: create area with explicit color - verify provided color is used",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Update Area Creation UI for auto-generated colors",
+      "description": "As a user, I want to see a preview of the auto-generated color when creating an area, with the option to override it if I prefer a different color.",
+      "status": "completed",
+      "dependencies": ["US-001"],
+      "acceptance_criteria": [
+        "Modify src/lib/components/areas/AreaModal.svelte",
+        "Import generateDistinctColor from $lib/utils/colorGeneration",
+        "On modal open (create mode), fetch existing area colors from props or API",
+        "Generate preview color client-side using generateDistinctColor(existingColors)",
+        "Pre-select the auto-generated color in the color picker",
+        "Add visual indicator showing 'Auto' label or badge on the pre-selected color",
+        "Color picker shows existing area colors as 'already used' with visual distinction (muted/marked)",
+        "User can click any color to override the auto-generated one",
+        "If user doesn't interact with color picker, auto-generated color is submitted",
+        "Smooth UX - color selection feels optional, not a required step",
+        "Test manually: open create modal - verify color is pre-selected",
+        "Test manually: create area without changing color - verify auto color is used",
+        "Test manually: override auto color - verify new color is used",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    }
+  ]
+}

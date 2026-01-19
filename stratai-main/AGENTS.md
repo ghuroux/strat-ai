@@ -643,6 +643,38 @@ const constraints = config.parameterConstraints as ParameterConstraints;
 
 ---
 
+### Gotcha: Responsive Button Text Visibility
+
+**Issue:** Button text too long on mobile screens, but needed for clarity on desktop
+
+**Symptom:** UI looks cramped on mobile with full button text
+
+**Solution:** Use CSS class that hides text on mobile:
+```svelte
+<button>
+  <Download size={16} />
+  <span class="button-text">Export</span>
+</button>
+
+<style>
+  .button-text {
+    display: none;
+  }
+
+  @media (min-width: 640px) {
+    .button-text {
+      display: inline;
+    }
+  }
+</style>
+```
+
+**Why:** Shows icon-only on mobile (compact), full text on desktop (clear). The 640px breakpoint aligns with Tailwind's `sm:` breakpoint.
+
+**See:** `src/lib/components/chat/ConversationExportMenu.svelte`
+
+---
+
 ## Quality Gates
 
 Every change must pass these gates before commit:
@@ -686,6 +718,212 @@ Examples:
 
 ---
 
-*Last updated: 2026-01-16 (Added CTE composition, E2E test, and table alias patterns from Page Listing Access Control)*
+### Pattern: Filename Sanitization for Downloads
+
+**When to use:** Any file download endpoint that uses user-provided content in filename
+
+**Implementation:**
+```typescript
+function sanitizeFilename(text: string): string {
+  return text
+    .replace(/[/\\:*?"<>|]/g, '')      // filesystem-forbidden chars
+    .replace(/[\x00-\x1F\x7F]/g, '')   // control characters
+    .replace(/[\r\n\t]+/g, ' ')        // normalize whitespace
+    .replace(/\s+/g, ' ')
+    .replace(/\s/g, '-')               // spaces to hyphens
+    .replace(/-+/g, '-')               // collapse multiple hyphens
+    .replace(/^-+|-+$/g, '')           // trim leading/trailing hyphens
+    .trim()
+    .substring(0, 50);                 // truncate to reasonable length
+}
+
+// Usage in Content-Disposition header
+const safeName = sanitizeFilename(title) || 'export';
+response.headers.set('Content-Disposition', `attachment; filename="${safeName}.md"`);
+```
+
+**Why:** User-provided titles may contain filesystem-forbidden characters. The 50-char limit prevents overly long filenames.
+
+**See:** `src/routes/api/conversations/export/[id]/+server.ts`
+
+---
+
+### Pattern: SvelteKit error() for Download Endpoints
+
+**When to use:** API endpoints that return file downloads (not JSON APIs)
+
+**Implementation:**
+```typescript
+import { error } from '@sveltejs/kit';
+
+export const GET: RequestHandler = async ({ params, locals }) => {
+  // Use throw error() for download endpoints (not json response)
+  if (!locals.session) {
+    throw error(401, 'Unauthorized');
+  }
+
+  const resource = await repository.findById(params.id, locals.session.userId);
+  if (!resource) {
+    throw error(404, 'Resource not found');
+  }
+
+  // Return file response
+  return new Response(content, {
+    headers: {
+      'Content-Type': 'text/markdown; charset=utf-8',
+      'Content-Disposition': `attachment; filename="export.md"`
+    }
+  });
+};
+```
+
+**Why:** `throw error()` is cleaner than `return json({ error })` for non-JSON endpoints. SvelteKit handles status codes automatically, and the browser shows appropriate error pages.
+
+**Contrast with JSON APIs:**
+```typescript
+// JSON API - return json with status
+return json({ error: 'Not found' }, { status: 404 });
+
+// Download endpoint - throw error()
+throw error(404, 'Not found');
+```
+
+**See:** `src/routes/api/conversations/export/[id]/+server.ts`, `src/routes/api/pages/export/[id]/+server.ts`
+
+---
+
+### Pattern: Code Language Detection for Exports
+
+**When to use:** Adding language hints to code blocks in exports/documentation
+
+**Implementation:**
+```typescript
+function detectLanguageHint(code: string): string {
+  const patterns: [RegExp, string][] = [
+    // TypeScript/JavaScript
+    [/\b(const|let|var)\s+\w+\s*=|function\s+\w+\s*\(|=>\s*{/i, 'javascript'],
+    [/\binterface\s+\w+|type\s+\w+\s*=|:\s*(string|number|boolean)\b/i, 'typescript'],
+    // Python
+    [/\bdef\s+\w+\s*\(|from\s+\w+\s+import/i, 'python'],
+    // SQL
+    [/\b(SELECT|INSERT|UPDATE|DELETE|CREATE)\s+/i, 'sql'],
+    // ... add more patterns as needed
+  ];
+
+  for (const [pattern, lang] of patterns) {
+    if (pattern.test(code)) return lang;
+  }
+  return ''; // No hint if can't detect
+}
+
+// Apply to unmarked code blocks
+content.replace(/```\n([\s\S]*?)```/g, (match, code) => {
+  const hint = detectLanguageHint(code);
+  return hint ? '```' + hint + '\n' + code + '```' : match;
+});
+```
+
+**Why:** Heuristic-based detection handles 80%+ of common cases. Unknown code stays unmarked rather than guessed wrong.
+
+**See:** `src/routes/api/conversations/export/[id]/+server.ts`
+
+---
+
+### Pattern: Auxiliary Data Error Tolerance
+
+**When to use:** When primary operation shouldn't fail due to secondary data fetch
+
+**Implementation:**
+```typescript
+// Primary data - must succeed
+const conversation = await postgresConversationRepository.findById(id, userId);
+if (!conversation) throw error(404, 'Conversation not found');
+
+// Auxiliary data - continue without if fails
+let subtaskContext: SubtaskContext | null = null;
+if (conversation.taskId) {
+  try {
+    const task = await postgresTaskRepository.findById(conversation.taskId, userId);
+    if (task?.parentTaskId) {
+      const parent = await postgresTaskRepository.findById(task.parentTaskId, userId);
+      if (parent) subtaskContext = { parentTask: parent, currentTask: task };
+    }
+  } catch (e) {
+    console.warn('[export] Failed to fetch task context:', e);
+    // Continue without subtask context
+  }
+}
+```
+
+**Why:** Export should work even if we can't fetch parent task info (permissions, deleted, etc.).
+
+**See:** `src/routes/api/conversations/export/[id]/+server.ts`
+
+---
+
+### Pattern: Click-Outside Dropdown with Svelte 5 $effect
+
+**When to use:** Dropdown menus that close when clicking outside
+
+**Implementation:**
+```typescript
+<script lang="ts">
+  let isOpen = $state(false);
+  let containerRef: HTMLElement | undefined = $state();
+
+  // Click-outside handler with cleanup
+  $effect(() => {
+    if (!isOpen) return;
+
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef && !containerRef.contains(e.target as Node)) {
+        isOpen = false;
+      }
+    }
+
+    // Delay to avoid closing on the click that opened it
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 0);
+
+    // Cleanup function - CRITICAL to prevent memory leaks
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  });
+
+  // Escape key handler
+  $effect(() => {
+    if (!isOpen) return;
+
+    function handleKeydown(e: KeyboardEvent) {
+      if (e.key === 'Escape') isOpen = false;
+    }
+
+    document.addEventListener('keydown', handleKeydown);
+    return () => document.removeEventListener('keydown', handleKeydown);
+  });
+</script>
+
+<div bind:this={containerRef}>
+  <button onclick={() => isOpen = !isOpen}>Toggle</button>
+  {#if isOpen}
+    <div class="dropdown" transition:fly={{ y: -5, duration: 150 }}>
+      <!-- dropdown content -->
+    </div>
+  {/if}
+</div>
+```
+
+**Why:**
+- The cleanup function returned from `$effect` is called when the effect re-runs or component unmounts
+- `setTimeout` prevents the opening click from immediately closing the dropdown
+- Separate effects for click-outside and escape key keeps concerns isolated
+
+**See:** `src/lib/components/chat/ConversationExportMenu.svelte`, `src/lib/components/pages/ExportMenu.svelte`
+
+---
+
+*Last updated: 2026-01-18 (Added filename sanitization, SvelteKit error() for downloads, click-outside dropdown, and responsive button patterns from Task Conversation Export)*
 *Maintainer: Development Team*
 

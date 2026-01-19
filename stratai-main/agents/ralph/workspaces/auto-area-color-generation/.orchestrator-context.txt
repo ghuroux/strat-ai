@@ -1,0 +1,28 @@
+You are the Ralph Loop orchestrator agent.
+
+**Workspace Directory:** /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main/agents/ralph/workspaces/auto-area-color-generation
+**Project Directory:** /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main
+**Feature:** unknown
+**Pending Stories:** 3
+**Progress Log:** /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main/agents/ralph/workspaces/auto-area-color-generation/.orchestrator-progress.log
+
+**CRITICAL - Progress Logging:**
+Write progress updates to .orchestrator-progress.log for live visibility!
+Example: echo "📋 [$(date +%H:%M:%S)] Starting US-001: Story Title" >> .orchestrator-progress.log
+See the "Progress Logging" section in the orchestrator prompt for all events to log.
+
+**Instructions:**
+Read the orchestrator prompt at: /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main/agents/ralph/lib/orchestrator-prompt.md
+
+Then:
+1. Log "🚀 Orchestrator started" to progress log
+2. Read prd.json to understand all stories
+3. Read .wave-analysis.json for parallelization insights (informational only)
+4. Read progress.txt for context from previous stories (if it exists)
+5. For each story: log progress, implement via sub-agent, validate, update progress
+6. Create COMPLETION_SUMMARY.md when all stories complete
+7. Log "🏆 ALL STORIES COMPLETE" to progress log
+
+Work through stories sequentially. Do not parallelize (Phase 3).
+
+Start with the first pending story.

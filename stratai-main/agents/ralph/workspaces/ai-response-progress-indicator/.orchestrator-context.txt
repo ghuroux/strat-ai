@@ -1,0 +1,33 @@
+You are the Ralph Loop orchestrator agent.
+
+**Workspace Directory:** /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main/agents/ralph/workspaces/ai-response-progress-indicator
+**Project Directory:** /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main
+**Feature:** unknown
+**Pending Stories:** 4
+**Progress Log:** /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main/agents/ralph/workspaces/ai-response-progress-indicator/.orchestrator-progress.log
+
+**CRITICAL - Progress Logging:**
+Write progress updates to .orchestrator-progress.log for live visibility!
+Example: echo "📋 [$(date +%H:%M:%S)] Starting US-001: Story Title" >> .orchestrator-progress.log
+See the "Progress Logging" section in the orchestrator prompt for all events to log.
+
+**Instructions:**
+Read the orchestrator prompt at: /Users/ghuroux/Documents/coding/strathost-ai-main/stratai-main/agents/ralph/lib/orchestrator-prompt.md
+
+Then:
+1. Log "🚀 Orchestrator started (Phase 3 - Parallel Waves)" to progress log
+2. Read prd.json to understand all stories
+3. Read .wave-analysis.json for wave execution plan (REQUIRED for parallel execution)
+4. Read progress.txt for context from previous stories (if it exists)
+5. Process stories BY WAVE:
+   - For each wave, spawn sub-agents IN PARALLEL (run_in_background: true)
+   - Use Haiku for simple stories, Sonnet for complex ones
+   - Wait for all stories in wave to complete
+   - Run validation ONCE per wave (not per story)
+   - Auto-fix failures in parallel if needed
+6. Create COMPLETION_SUMMARY.md when all waves complete
+7. Log "🏆 ALL WAVES COMPLETE" to progress log
+
+Process stories by WAVE with parallel execution within waves.
+
+Start with Wave 1.

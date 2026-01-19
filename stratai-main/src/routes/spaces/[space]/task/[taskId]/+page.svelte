@@ -18,6 +18,7 @@
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { areaStore } from '$lib/stores/areas.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
@@ -25,6 +26,7 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
+	import ConversationExportMenu from '$lib/components/chat/ConversationExportMenu.svelte';
 	import ModelSelector from '$lib/components/ModelSelector.svelte';
 	import ModelBadge from '$lib/components/ModelBadge.svelte';
 	import PlanModePanel from '$lib/components/tasks/PlanModePanel.svelte';
@@ -36,7 +38,9 @@
 	import TaskWorkWelcome from '$lib/components/tasks/TaskWorkWelcome.svelte';
 	import CompleteTaskModal from '$lib/components/tasks/CompleteTaskModal.svelte';
 	import TaskPlanningModelModal from '$lib/components/tasks/TaskPlanningModelModal.svelte';
+	import CreatePageModal from '$lib/components/pages/CreatePageModal.svelte';
 	import type { Task, ProposedSubtask, SubtaskType } from '$lib/types/tasks';
+	import type { PageType } from '$lib/types/page';
 	import type { SpaceType, Message, FileAttachment } from '$lib/types/chat';
 	import type { TaskContextInfo } from '$lib/utils/context-builder';
 	import { contentContainsProposal, extractProposedSubtasks } from '$lib/utils/subtask-extraction';
@@ -109,6 +113,10 @@
 	let showSubtaskWelcome = $state(true);
 	let showPlanningModelModal = $state(false);
 	let isCreatingSubtasks = $state(false);
+
+	// Create Page modal state
+	let createPageModalOpen = $state(false);
+	let pageSuggestionPageType = $state<PageType | null>(null);
 
 	// Multi-conversation support for subtasks
 	let taskConversations = $derived(
@@ -1199,6 +1207,27 @@
 		chatStore.setActiveConversation(newConvId);
 	}
 
+	// Handle page created from CreatePageModal (US-001: basic close, US-002 adds toast + navigation)
+	function handlePageCreated(pageId: string) {
+		createPageModalOpen = false;
+		pageSuggestionPageType = null;
+
+		// Show success feedback
+		toastStore.success('Page created successfully');
+
+		// Navigate to the new page
+		// Look up area slug from task's areaId
+		const area = areaStore.getAreaById(task?.areaId || '');
+		const areaSlug = area?.slug || 'general';
+		goto(`/spaces/${spaceParam}/${areaSlug}/pages/${pageId}`);
+	}
+
+	// Handle closing the CreatePageModal
+	function handleCreatePageModalClose() {
+		createPageModalOpen = false;
+		pageSuggestionPageType = null;
+	}
+
 	// Handle panel toggle
 	function handleTogglePanelCollapse() {
 		setContextPanelCollapsed(!contextPanelCollapsed);
@@ -1286,6 +1315,21 @@
 			</div>
 
 			<div class="header-right">
+				<!-- Create Page button - only in chat view with sufficient messages -->
+				{#if viewMode === 'chat' && activeConversation}
+					<button
+						type="button"
+						class="create-page-button"
+						onclick={() => (createPageModalOpen = true)}
+						disabled={visibleMessages.length < 2}
+						title="Create Page from conversation"
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+					</button>
+				{/if}
+
 				<!-- Complete buttons -->
 				{#if isSubtask && task.subtaskType === 'conversation' && task.status !== 'completed'}
 					<button type="button" class="complete-button" onclick={handleCompleteCurrentSubtask}>
@@ -1336,6 +1380,12 @@
 					{:else}
 						<ModelBadge model={effectiveModel} />
 					{/if}
+
+					<!-- Export conversation -->
+					<ConversationExportMenu
+						conversationId={activeConversation?.id ?? null}
+						hasMessages={messages.length > 0}
+					/>
 				{/if}
 
 				{#if viewMode === 'chat' && !isPlanModeActive && panelSubtasks.length > 0}
@@ -1629,6 +1679,7 @@
 								onResend={handleResend}
 								onRegenerate={handleRegenerate}
 								onSecondOpinion={() => {}}
+								onCreatePage={() => (createPageModalOpen = true)}
 							/>
 						{/each}
 					{/if}
@@ -1767,6 +1818,19 @@
 				taskColor={task.color}
 				onChooseWork={handleChooseWork}
 				onChoosePlan={handleChoosePlan}
+			/>
+		{/if}
+
+		<!-- Create Page from Task Conversation Modal -->
+		{#if activeConversation && task?.areaId}
+			<CreatePageModal
+				isOpen={createPageModalOpen}
+				conversationId={activeConversation.id}
+				messages={visibleMessages}
+				areaId={task.areaId}
+				suggestedPageType={pageSuggestionPageType ?? undefined}
+				onClose={handleCreatePageModalClose}
+				onCreated={handlePageCreated}
 			/>
 		{/if}
 	</div>
@@ -2013,6 +2077,35 @@
 	.complete-button svg {
 		width: 0.875rem;
 		height: 0.875rem;
+	}
+
+	.create-page-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.05);
+		border: none;
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.create-page-button:hover:not(:disabled) {
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.create-page-button:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.create-page-button svg {
+		width: 1rem;
+		height: 1rem;
 	}
 
 	.back-to-dashboard {

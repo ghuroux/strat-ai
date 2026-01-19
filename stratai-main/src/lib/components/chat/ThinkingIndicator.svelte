@@ -1,13 +1,30 @@
 <script lang="ts">
 	/**
 	 * ThinkingIndicator - A modern, premium thinking animation
-	 * Features: Glowing orb with pulse rings and subtle text
+	 * Features: Glowing orb with pulse rings and subtle text with elapsed time
 	 */
+
+	import { generationActivityStore } from '$lib/stores/generationActivity.svelte';
+
+	/**
+	 * Format elapsed seconds into human-readable time
+	 * < 60s: "15s"
+	 * >= 60s: "1m 15s"
+	 */
+	function formatElapsedTime(seconds: number): string {
+		if (seconds < 60) {
+			return `${seconds}s`;
+		}
+
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		return `${minutes}m ${remainingSeconds}s`;
+	}
 </script>
 
 <div class="thinking-container">
 	<!-- Animated orb with glow -->
-	<div class="orb-container">
+	<div class="orb-container" class:paused={!generationActivityStore.isGenerating}>
 		<!-- Pulse rings -->
 		<div class="pulse-ring pulse-ring-1"></div>
 		<div class="pulse-ring pulse-ring-2"></div>
@@ -20,7 +37,12 @@
 	</div>
 
 	<!-- Subtle text -->
-	<span class="thinking-text">Thinking</span>
+	<span class="thinking-text" class:paused={!generationActivityStore.isGenerating}>
+		Thinking
+		{#if generationActivityStore.elapsedSeconds > 0}
+			<span class="elapsed-time">({formatElapsedTime(generationActivityStore.elapsedSeconds)})</span>
+		{/if}
+	</span>
 </div>
 
 <style>
@@ -93,6 +115,13 @@
 		background-clip: text;
 		-webkit-text-fill-color: transparent;
 		animation: shimmerText 2s ease-in-out infinite;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	.elapsed-time {
+		animation: fadeIn 0.3s ease-in-out;
 	}
 
 	@keyframes orbPulse {
@@ -133,5 +162,20 @@
 		100% {
 			background-position: 200% 0;
 		}
+	}
+
+	@keyframes fadeIn {
+		0% {
+			opacity: 0;
+		}
+		100% {
+			opacity: 1;
+		}
+	}
+
+	/* Animation control based on isGenerating state */
+	.paused,
+	.paused :global(*) {
+		animation-play-state: paused !important;
 	}
 </style>

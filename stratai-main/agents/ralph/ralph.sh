@@ -225,6 +225,105 @@ COMPLETED_STORIES=$((TOTAL_STORIES - PENDING_STORIES))
 echo "   Stories:        $COMPLETED_STORIES/$TOTAL_STORIES complete"
 echo ""
 
+# Track start time for duration calculation (Phase 2.5)
+date +%s > "$WORKSPACE_DIR/.start-time"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Git Branch Management (Trunk-Based Development)
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# Rule: Main is always the source of truth. Each feature gets its own branch.
+# This ensures parallel Ralph loops don't conflict and code stays organized.
+#
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_step "🌿 Setting Up Feature Branch"
+
+# Check if we're in a git repo
+if ! git -C "$PROJECT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
+  print_warning "Not a git repository - skipping branch management"
+  echo ""
+else
+  cd "$PROJECT_DIR" || exit 1
+
+  # Get feature name for branch
+  FEATURE_NAME=$(jq -r '.feature_name // .feature // "unknown"' "$PRD_FILE" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+  FEATURE_BRANCH="feature/$FEATURE_NAME"
+
+  # Check current branch
+  CURRENT_BRANCH=$(git branch --show-current)
+
+  # Check for uncommitted changes
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    print_warning "Uncommitted changes detected"
+    echo ""
+    echo "   Options:"
+    echo "   1. Commit your changes first"
+    echo "   2. Stash with: git stash"
+    echo "   3. Discard with: git checkout -- ."
+    echo ""
+    read -p "   Continue anyway? [y/N] " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      echo "   Aborted. Please handle uncommitted changes first."
+      exit 1
+    fi
+  fi
+
+  # Check if feature branch already exists
+  if git show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH"; then
+    # Feature branch exists - check if we're on it
+    if [ "$CURRENT_BRANCH" = "$FEATURE_BRANCH" ]; then
+      print_success "Already on feature branch: $FEATURE_BRANCH"
+      echo ""
+    else
+      echo "   Feature branch exists: $FEATURE_BRANCH"
+      echo "   Current branch: $CURRENT_BRANCH"
+      echo ""
+      read -p "   Switch to existing feature branch? [Y/n] " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+        git checkout "$FEATURE_BRANCH"
+        print_success "Switched to: $FEATURE_BRANCH"
+        echo ""
+      fi
+    fi
+  else
+    # Feature branch doesn't exist - create from main
+    echo "   Creating feature branch from main..."
+    echo ""
+
+    # If not on main, switch to it first
+    if [ "$CURRENT_BRANCH" != "main" ]; then
+      echo "   Switching to main branch..."
+      git checkout main || {
+        print_error "Failed to checkout main branch"
+        exit 1
+      }
+    fi
+
+    # Pull latest main (if remote exists)
+    if git remote | grep -q origin; then
+      echo "   Pulling latest from origin/main..."
+      git pull origin main --ff-only 2>/dev/null || {
+        print_warning "Could not pull from origin (continuing with local main)"
+      }
+    fi
+
+    # Create and switch to feature branch
+    git checkout -b "$FEATURE_BRANCH" || {
+      print_error "Failed to create branch: $FEATURE_BRANCH"
+      exit 1
+    }
+
+    print_success "Created feature branch: $FEATURE_BRANCH"
+    echo ""
+  fi
+
+  # Store branch name for later use
+  echo "$FEATURE_BRANCH" > "$WORKSPACE_DIR/.feature-branch"
+fi
+
 # Check if progress.txt needs reset (new feature)
 if [ -f "$PROGRESS_FILE" ]; then
   PROGRESS_FEATURE=$(head -10 "$PROGRESS_FILE" | grep "Feature:" | cut -d: -f2 | xargs || echo "")
@@ -241,673 +340,347 @@ if [ -f "$PROGRESS_FILE" ]; then
   fi
 fi
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Coordinator Wave Analysis (Phase 3 - Parallel Execution Planning)
+# ─────────────────────────────────────────────────────────────────────────────
+
+print_step "🔍 Analyzing Parallelization Opportunities (Phase 3 - Wave Planning)"
+
+if [ -x "$SCRIPT_DIR/lib/coordinator-agent.sh" ]; then
+  # Run coordinator analysis
+  if "$SCRIPT_DIR/lib/coordinator-agent.sh" "$WORKSPACE_DIR"; then
+
+    ANALYSIS_FILE="$WORKSPACE_DIR/.wave-analysis.json"
+
+    if [ -f "$ANALYSIS_FILE" ]; then
+      echo ""
+      echo "┌────────────────────────────────────────────────────────────┐"
+      echo "│  📊 COORDINATOR ANALYSIS                                   │"
+      echo "└────────────────────────────────────────────────────────────┘"
+      echo ""
+
+      # Extract key metrics
+      ESTIMATED_SEQUENTIAL=$(jq -r '.estimated_sequential_time_min' "$ANALYSIS_FILE")
+      ESTIMATED_PARALLEL=$(jq -r '.estimated_wave_time_min' "$ANALYSIS_FILE")
+      SAVINGS_PERCENT=$(jq -r '.time_savings_percent' "$ANALYSIS_FILE")
+      CONFIDENCE=$(jq -r '.confidence' "$ANALYSIS_FILE")
+
+      echo "   Sequential execution:    ~${ESTIMATED_SEQUENTIAL} min"
+      echo "   With parallelization:    ~${ESTIMATED_PARALLEL} min"
+      echo "   Potential time savings:   ${SAVINGS_PERCENT}%"
+      echo "   Confidence level:         ${CONFIDENCE}"
+      echo ""
+
+      # Show wave breakdown
+      WAVE_COUNT=$(jq '.waves | length' "$ANALYSIS_FILE")
+      echo "   Proposed execution plan:  $WAVE_COUNT waves"
+      echo ""
+
+      jq -r '.waves[] |
+        "     Wave \(.wave_number): \(.stories | join(", ")) " +
+        (if .parallelism > 1 then "(\(.parallelism) parallel)" else "(sequential)" end) +
+        "\n       → \(.rationale)"' "$ANALYSIS_FILE"
+
+      echo ""
+
+      # Show risks if any
+      RISKS=$(jq -r '.risks | length' "$ANALYSIS_FILE")
+      if [ "$RISKS" -gt 0 ]; then
+        echo "   ⚠️  Potential risks identified:"
+        jq -r '.risks[] | "       • " + .' "$ANALYSIS_FILE"
+        echo ""
+      fi
+
+      echo "   ℹ️  Phase 3 ACTIVE: Parallel wave execution enabled"
+      echo ""
+    fi
+  else
+    echo "   ⚠️  Wave analysis failed - proceeding with sequential execution"
+    echo ""
+  fi
+else
+  echo "   ⚠️  Coordinator agent not found - skipping analysis"
+  echo "   Install: chmod +x $SCRIPT_DIR/lib/coordinator-agent.sh"
+  echo ""
+fi
+
 # ═══════════════════════════════════════════════════════════════════════════════
-# Main Loop
+# Launch Orchestrator Agent (Phase 3 - Parallel Wave Execution)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-for i in $(seq 1 $MAX_ITERATIONS); do
-  print_header "Iteration $i of $MAX_ITERATIONS"
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Find next pending story
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  STORY_ID=$(jq -r '.stories[] | select(.status == "pending") | .id' "$PRD_FILE" | head -1)
-  
-  if [ -z "$STORY_ID" ] || [ "$STORY_ID" == "null" ]; then
-    print_header "🎉 All Stories Complete!"
-    echo ""
-    
-    # Calculate stats
-    COMPLETED=$(jq '[.stories[] | select(.status == "complete" or .status == "completed")] | length' "$PRD_FILE")
-    FEATURE=$(jq -r '.feature_name // .feature // "unnamed"' "$PRD_FILE")
-    
-    echo "   Feature:    $FEATURE"
-    echo "   Completed:  $COMPLETED stories"
-    echo ""
-    
-    # ═════════════════════════════════════════════════════════════════════════════
-    # Feature Cleanup Automation
-    # ═════════════════════════════════════════════════════════════════════════════
-    
-    print_step "🧹 Feature Cleanup"
-    
-    DATE=$(date +%Y-%m-%d)
-    ARCHIVE_DIR="$SCRIPT_DIR/archive/$DATE-$(echo "$FEATURE" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
-    
-    # 1. Archive to central location
-    if [ -f "$PROGRESS_FILE" ]; then
-      mkdir -p "$ARCHIVE_DIR"
-      cp "$PROGRESS_FILE" "$ARCHIVE_DIR/"
-      cp "$PRD_FILE" "$ARCHIVE_DIR/"
-      cp "$PARENT_ID_FILE" "$ARCHIVE_DIR/" 2>/dev/null || true
-      echo "   📦 Archived to: $ARCHIVE_DIR/"
-    fi
-    
-    # 2. Mark workspace as completed
+print_header "Launching Orchestrator Agent"
+
+# Check for Claude Code CLI
+CLAUDE_CLI=""
+if command -v claude &> /dev/null; then
+  CLAUDE_CLI="claude"
+elif [ -x "/Users/ghuroux/.npm-global/bin/claude" ]; then
+  CLAUDE_CLI="/Users/ghuroux/.npm-global/bin/claude"
+fi
+
+if [ -z "$CLAUDE_CLI" ]; then
+  print_error "Claude Code CLI not found"
+  echo ""
+  echo "   Install: npm install -g @anthropic-ai/claude-cli"
+  echo ""
+  exit 1
+fi
+
+# Build orchestrator prompt
+ORCHESTRATOR_PROMPT_FILE="$SCRIPT_DIR/lib/orchestrator-prompt.md"
+
+if [ ! -f "$ORCHESTRATOR_PROMPT_FILE" ]; then
+  print_error "Orchestrator prompt not found: $ORCHESTRATOR_PROMPT_FILE"
+  exit 1
+fi
+
+# Launch orchestrator agent
+print_step "Starting orchestrator agent for feature: $(jq -r '.feature // "unknown"' "$PRD_FILE")"
+echo ""
+echo "   Workspace: $WORKSPACE_DIR"
+echo "   Stories: $TOTAL_STORIES total, $PENDING_STORIES pending"
+echo ""
+
+# Create orchestrator context
+FEATURE_NAME=$(jq -r '.feature // "unknown"' "$PRD_FILE")
+
+cat > "$WORKSPACE_DIR/.orchestrator-context.txt" <<EOF
+You are the Ralph Loop orchestrator agent.
+
+**Workspace Directory:** $WORKSPACE_DIR
+**Project Directory:** $PROJECT_DIR
+**Feature:** $FEATURE_NAME
+**Pending Stories:** $PENDING_STORIES
+**Progress Log:** $WORKSPACE_DIR/.orchestrator-progress.log
+
+**CRITICAL - Progress Logging:**
+Write progress updates using the FULL PATH above (not relative paths).
+Example: echo "📋 [\$(date +%H:%M:%S)] Starting US-001: Story Title" >> "$WORKSPACE_DIR/.orchestrator-progress.log"
+See the "Progress Logging" section in the orchestrator prompt for all events to log.
+
+**Instructions:**
+Read the orchestrator prompt at: $ORCHESTRATOR_PROMPT_FILE
+
+Then:
+1. Log "🚀 Orchestrator started (Phase 3 - Parallel Waves)" to progress log
+2. Read prd.json to understand all stories
+3. Read .wave-analysis.json for wave execution plan (REQUIRED for parallel execution)
+4. Read progress.txt for context from previous stories (if it exists)
+5. Process stories BY WAVE:
+   - For each wave, spawn sub-agents IN PARALLEL (run_in_background: true)
+   - Use Haiku for simple stories, Sonnet for complex ones
+   - Wait for all stories in wave to complete
+   - Run validation ONCE per wave (not per story)
+   - Auto-fix failures in parallel if needed
+6. Create COMPLETION_SUMMARY.md when all waves complete
+7. Log "🏆 ALL WAVES COMPLETE" to progress log
+
+Process stories by WAVE with parallel execution within waves.
+
+Start with Wave 1.
+EOF
+
+# Initialize progress log for live visibility
+PROGRESS_LOG="$WORKSPACE_DIR/.orchestrator-progress.log"
+echo "" > "$PROGRESS_LOG"
+echo "═══════════════════════════════════════════════════════════════"
+echo "📊 Live Progress (from $PROGRESS_LOG)"
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+
+# Start tailing progress log in background
+tail -f "$PROGRESS_LOG" 2>/dev/null &
+TAIL_PID=$!
+
+# Cleanup function to stop tail
+cleanup_tail() {
+  if [ -n "$TAIL_PID" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
+    kill "$TAIL_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup_tail EXIT
+
+cd "$PROJECT_DIR" || exit 1
+
+# Spawn orchestrator agent (streaming mode for real-time output)
+set +e
+$CLAUDE_CLI \
+  --dangerously-skip-permissions \
+  "$(cat "$WORKSPACE_DIR/.orchestrator-context.txt")"
+
+ORCHESTRATOR_EXIT=$?
+set -e
+
+# Stop tailing
+cleanup_tail
+trap - EXIT
+
+echo ""
+echo "═══════════════════════════════════════════════════════════════"
+echo ""
+
+if [ $ORCHESTRATOR_EXIT -ne 0 ]; then
+  print_error "Orchestrator agent failed with exit code: $ORCHESTRATOR_EXIT"
+  echo ""
+  echo "   Check workspace for partial progress: $WORKSPACE_DIR/progress.txt"
+  echo "   To resume: ./ralph.sh $WORKSPACE_DIR"
+  echo ""
+  exit 1
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Feature Complete
+# ═══════════════════════════════════════════════════════════════════════════════
+
+print_success "Feature implementation complete!"
+echo ""
+echo "   Review checklist: $WORKSPACE_DIR/COMPLETION_SUMMARY.md"
+echo "   Full progress log: $WORKSPACE_DIR/progress.txt"
+echo ""
+
+# Archive workspace if in workspace mode
+if [ "$WORKSPACE_DIR" != "$SCRIPT_DIR" ]; then
+  DATE=$(date +%Y-%m-%d)
+  FEATURE_NAME_SLUG=$(echo "$FEATURE_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+  ARCHIVE_DIR="$SCRIPT_DIR/archive/$DATE-$FEATURE_NAME_SLUG"
+
+  if [ -f "$PROGRESS_FILE" ] && [ ! -f "$WORKSPACE_DIR/.completed" ]; then
+    mkdir -p "$ARCHIVE_DIR"
+    cp "$PROGRESS_FILE" "$ARCHIVE_DIR/" 2>/dev/null || true
+    cp "$PRD_FILE" "$ARCHIVE_DIR/" 2>/dev/null || true
+    cp "$PARENT_ID_FILE" "$ARCHIVE_DIR/" 2>/dev/null || true
+    cp "$WORKSPACE_DIR/COMPLETION_SUMMARY.md" "$ARCHIVE_DIR/" 2>/dev/null || true
+    echo "   📦 Archived to: $ARCHIVE_DIR/"
+  fi
+
+  # Mark workspace as completed if not already
+  if [ ! -f "$WORKSPACE_DIR/.completed" ]; then
     COMPLETION_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     echo "$COMPLETION_TIME" > "$WORKSPACE_DIR/.completed"
-    
-    # Update prd.json with completion metadata
-    jq --arg time "$COMPLETION_TIME" '.completed_at = $time' "$PRD_FILE" > "$PRD_FILE.tmp"
-    mv "$PRD_FILE.tmp" "$PRD_FILE"
-    
     echo "   ✅ Workspace marked as completed"
-    
-    # 2. Extract patterns to AGENTS.md (if Claude CLI available)
-    if [ -n "$CLAUDE_CLI" ]; then
-      echo "   🔍 Extracting reusable patterns..."
-      
-      EXTRACT_PROMPT="Review the completed feature in agents/ralph/progress.txt and extract:
-
-1. **New Codebase Patterns** - Reusable code patterns discovered
-2. **Architectural Decisions** - Important design choices made
-3. **Common Gotchas** - Non-obvious issues found and fixed
-
-Add these to AGENTS.md following the existing format. Only add genuinely reusable insights.
-
-Read agents/ralph/progress.txt for the feature implementation details."
-
-      set +e
-      if [ -n "$TIMEOUT_CMD" ]; then
-        $TIMEOUT_CMD $CLAUDE_CLI --print \
-          --dangerously-skip-permissions \
-          "$EXTRACT_PROMPT" > /dev/null 2>&1
-      else
-        $CLAUDE_CLI --print \
-          --dangerously-skip-permissions \
-          "$EXTRACT_PROMPT" > /dev/null 2>&1
-      fi
-      set -e
-      
-      echo "   ✅ Patterns extracted to AGENTS.md"
-    fi
-    
-    # 3. Reset working files ONLY in legacy mode
-    # In workspace mode, keep files for reference
-    if [ "$WORKSPACE_DIR" = "$SCRIPT_DIR" ]; then
-      # Legacy mode - reset for next feature
-      echo "   🔄 Resetting working files (legacy mode)..."
-      
-      # Reset progress.txt to self-documenting template
-    cat > "$PROGRESS_FILE" << 'EOF'
-# Ralph Progress Log
-
-## Feature: [Feature Name]
-**Parent Task:** [parent-task-id]
-**Started:** [YYYY-MM-DD]
-**Status:** Ready to begin
-
-## Decisions Made During PRD Creation
-
-- **Decision 1**: [What was decided] - [Rationale]
-- **Decision 2**: [What was decided] - [Rationale]
-
-(Filled by PRD creator during research phase)
-
-## Codebase Patterns Discovered
-
-- **Pattern 1**: [Pattern name] - [Where it's used]
-- **Pattern 2**: [Pattern name] - [Where it's used]
-
-(Filled by PRD creator during research phase)
-
-## Stories
-
-| ID | Title | Status |
-|----|-------|--------|
-| US-001 | [Story title] | pending |
-| US-002 | [Story title] | pending |
-
----
-
-## Iteration Log
-
-(Each story implementation appends a section below)
-
-**Example format:**
-```
-### US-001: [Story Title] (YYYY-MM-DD)
-
-**Status:** Completed
-
-**What was done:**
-- [Implementation detail 1]
-- [Implementation detail 2]
-
-**Files changed:**
-- [file path] - [what changed]
-
-**Patterns applied:**
-- [Pattern name from AGENTS.md]
-
-**Learnings:**
-1. [Learning 1]
-2. [Learning 2]
-
-**Quality gates:**
-- ✅ npm run check - passes
-- ✅ npm run lint - passes
-- ✅ npm run test - passes
-
----
-```
-
-EOF
-    
-    # Reset prd.json to self-documenting template with full structure
-    cat > "$PRD_FILE" << 'EOF'
-{
-  "_comment": "See agents/ralph/skills/prd-creator.md for full documentation",
-  "feature": "Feature Name Here",
-  "created": "YYYY-MM-DD",
-  "parent_task_id": "matching-value-from-parent-task-id.txt",
-  "research": {
-    "similar_patterns": [
-      "src/path/to/similar-file.ts - brief description"
-    ],
-    "docs_reviewed": [
-      "docs/database/ENTITY_MODEL.md",
-      "docs/database/SCHEMA_REFERENCE.md",
-      "CLAUDE.md"
-    ],
-    "decisions_made": [
-      {
-        "question": "Where to store X?",
-        "decision": "Store in Y location",
-        "rationale": "Because of Z reason"
-      }
-    ]
-  },
-  "stories": [
-    {
-      "id": "US-001",
-      "title": "Story title (clear, action-oriented)",
-      "description": "As a [role], I need [what] so that [why].",
-      "status": "pending",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Specific, testable criterion 1",
-        "Specific, testable criterion 2",
-        "npm run check passes",
-        "npm run lint passes"
-      ]
-    },
-    {
-      "id": "US-002",
-      "title": "Another story title",
-      "description": "As a [role], I need [what] so that [why].",
-      "status": "pending",
-      "dependencies": ["US-001"],
-      "acceptance_criteria": [
-        "Criterion 1",
-        "Criterion 2"
-      ]
-    }
-  ]
-}
-EOF
-    
-      # Clear parent task ID
-      > "$SCRIPT_DIR/parent-task-id.txt"
-      
-      echo "   ✅ Working files reset for next feature"
-    else
-      # Workspace mode - keep files intact
-      echo "   📦 Workspace preserved at: $WORKSPACE_DIR/"
-      echo "   ⚠️  Use cleanup script to remove old workspaces"
-    fi
-    
-    # 4. Create final summary commit
-    cd "$PROJECT_DIR"
-    git add -A
-    
-    if [ -n "$WORKSPACE_DIR" ]; then
-      git commit -m "feat: complete $FEATURE feature
-
-- Implemented $COMPLETED stories
-- Extracted patterns to AGENTS.md
-- Archived progress to $ARCHIVE_DIR/
-- Cleaned up workspace directory"
-    else
-      git commit -m "feat: complete $FEATURE feature
-
-- Implemented $COMPLETED stories
-- Extracted patterns to AGENTS.md
-- Archived progress to $ARCHIVE_DIR/
-- Reset working files for next feature"
-    fi
-    
-    # 5. Delete workspace directory (now that everything is archived and committed)
-    if [ -n "$WORKSPACE_DIR" ]; then
-      echo ""
-      echo "   🗑️  Removing workspace directory..."
-      cd "$PROJECT_DIR"  # Ensure we're not inside the workspace
-      rm -rf "$WORKSPACE_DIR"
-      echo "   ✅ Workspace deleted"
-    fi
-    
-    echo ""
-    print_success "Feature complete!"
-    echo ""
-    echo "   📊 Summary:"
-    echo "   • Feature: $FEATURE"
-    echo "   • Stories completed: $COMPLETED"
-    echo "   • Archive: $ARCHIVE_DIR/"
-    echo "   • Patterns: Added to AGENTS.md"
-    if [ -n "$WORKSPACE_DIR" ]; then
-      echo "   • Workspace: Cleaned up"
-    fi
-    echo ""
-    echo "   🚀 Ready for next feature!"
-    echo ""
-    exit 0
   fi
-  
-  STORY_TITLE=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .title' "$PRD_FILE")
-  STORY_DESC=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .description' "$PRD_FILE")
-  STORY_STATUS=$(jq -r --arg id "$STORY_ID" '.stories[] | select(.id == $id) | .status' "$PRD_FILE")
-  
-  # ───────────────────────────────────────────────────────────────────────────────
-  # Resume Capability: Skip completed stories
-  # ───────────────────────────────────────────────────────────────────────────────
-  
-  if [ "$STORY_STATUS" == "completed" ] || [ "$STORY_STATUS" == "complete" ]; then
-    echo ""
-    echo "✅ Story $STORY_ID already completed - skipping"
-    continue
-  fi
-  
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Git Branch Merge (Trunk-Based Development)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if [ -f "$WORKSPACE_DIR/.feature-branch" ]; then
+  FEATURE_BRANCH=$(cat "$WORKSPACE_DIR/.feature-branch")
+  CURRENT_BRANCH=$(git -C "$PROJECT_DIR" branch --show-current)
+
   echo ""
-  echo "📋 Story: $STORY_ID"
-  echo "   Title: $STORY_TITLE"
+  print_step "🔀 Branch Management"
   echo ""
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Research Phase (first iteration only)
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  if [ "$i" -eq 1 ]; then
-    print_step "🔍 Research Phase"
-    echo ""
-    echo "   Before implementing, review:"
-    echo "   • AGENTS.md - Long-term codebase patterns"
-    echo "   • progress.txt - Current feature context"
-    echo "   • docs/database/SCHEMA_REFERENCE.md - TypeScript interfaces (if DB work)"
-    echo "   • docs/database/ENTITY_MODEL.md - Schema context (if DB work)"
-    echo "   • Similar implementations in codebase"
-    echo ""
-  fi
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Preflight Validation
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  print_step "🔒 Preflight Validation"
-  
-  if ! "$SCRIPT_DIR/validation/preflight.sh"; then
-    print_error "Preflight failed"
-    echo ""
-    echo "   Fix the issues above and run again"
-    exit 1
-  fi
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Work Phase (Agent Implementation)
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  print_step "🤖 Work Phase"
+  echo "   Feature branch: $FEATURE_BRANCH"
+  echo "   Current branch: $CURRENT_BRANCH"
   echo ""
-  echo "   Agent implementing: $STORY_ID - $STORY_TITLE"
+
+  # Offer to merge to main
+  echo "   Would you like to merge this feature to main?"
   echo ""
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Try to invoke Claude agent automatically
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  CLAUDE_CLI=""
-  if command -v claude &> /dev/null; then
-    CLAUDE_CLI="claude"
-  elif [ -x "/Users/ghuroux/.npm-global/bin/claude" ]; then
-    CLAUDE_CLI="/Users/ghuroux/.npm-global/bin/claude"
-  fi
-  
-  if [ -n "$CLAUDE_CLI" ]; then
-    echo "   ┌────────────────────────────────────────────────────────────┐"
-    echo "   │  🤖 INVOKING CLAUDE AGENT AUTOMATICALLY                   │"
-    echo "   └────────────────────────────────────────────────────────────┘"
-    echo ""
-    echo "   📋 Story: $STORY_ID - $STORY_TITLE"
-    echo "   📁 Context: prompt.md, prd.json, progress.txt, AGENTS.md"
-    echo ""
-    echo "   Agent will:"
-    echo "   1. Read prompt.md for instructions"
-    echo "   2. Implement the story"
-    echo "   3. Run quality gates"
-    echo "   4. Update progress.txt"
-    echo ""
-    echo "   Starting agent..."
-    echo ""
-    echo "═══════════════════════════════════════════════════════════════"
-    
-    # Build the agent prompt
-    AGENT_PROMPT="You are implementing a user story in the Ralph compound engineering loop.
+  echo "   [M] Merge to main and delete feature branch (recommended)"
+  echo "   [K] Keep feature branch (merge later)"
+  echo "   [N] Do nothing"
+  echo ""
+  read -p "   Choice [M/k/n]: " -n 1 -r
+  echo ""
+  echo ""
 
-**Current Story:** $STORY_ID - $STORY_TITLE
-
-**Your Task:**
-1. Read and follow the instructions in \`agents/ralph/prompt.md\`
-2. Read the current story details from \`agents/ralph/prd.json\`
-3. Review existing patterns in \`AGENTS.md\`
-4. Review current feature context in \`agents/ralph/progress.txt\`
-5. Implement the story following ALL acceptance criteria
-6. Run quality gates: \`npm run check\`, \`npm run lint\`
-7. Update \`agents/ralph/progress.txt\` with your learnings
-8. Commit your changes with a descriptive message
-
-**Critical Rules:**
-- Follow the patterns in AGENTS.md (especially camelCase for DB access)
-- Do NOT skip any acceptance criteria
-- Do NOT skip quality gates
-- Do NOT skip updating progress.txt
-- Commit your work when done
-
-**Start by reading agents/ralph/prompt.md to understand the full context.**"
-
-    # Invoke Claude CLI
+  if [[ $REPLY =~ ^[Mm]$ ]] || [[ -z $REPLY ]]; then
     cd "$PROJECT_DIR" || exit 1
-    
-    # Create a temporary prompt file
-    TEMP_PROMPT_FILE=$(mktemp)
-    echo "Implement user story $STORY_ID: $STORY_TITLE
 
-Start by reading agents/ralph/prompt.md for full instructions and context.
-
-You MUST:
-1. Implement ALL acceptance criteria
-2. Run quality gates (npm run check, npm run lint)
-3. Update agents/ralph/progress.txt with learnings
-4. Commit your changes
-
-Read agents/ralph/prompt.md NOW to begin." > "$TEMP_PROMPT_FILE"
-    
-    echo "   Invoking Claude CLI (this may take 2-5 minutes)..."
-    echo ""
-    echo "───────────────────────────────────────────────────────────────"
-    
-    # Run with timeout and show output
-    set +e  # Don't exit on error
-    
-    # macOS doesn't have timeout by default, use gtimeout if available
-    TIMEOUT_CMD=""
-    if command -v timeout &> /dev/null; then
-      TIMEOUT_CMD="timeout 600"
-    elif command -v gtimeout &> /dev/null; then
-      TIMEOUT_CMD="gtimeout 600"
+    # Ensure we're on the feature branch and it has all changes
+    if [ "$CURRENT_BRANCH" != "$FEATURE_BRANCH" ]; then
+      git checkout "$FEATURE_BRANCH" 2>/dev/null || true
     fi
-    
-    if [ -n "$TIMEOUT_CMD" ]; then
-      $TIMEOUT_CMD $CLAUDE_CLI --print \
-        --system-prompt "$AGENT_PROMPT" \
-        --dangerously-skip-permissions \
-        --verbose \
-        "$(cat "$TEMP_PROMPT_FILE")"
-    else
-      # No timeout available - run without it
-      $CLAUDE_CLI --print \
-        --system-prompt "$AGENT_PROMPT" \
-        --dangerously-skip-permissions \
-        --verbose \
-        "$(cat "$TEMP_PROMPT_FILE")"
+
+    # Check for uncommitted changes
+    if ! git diff --quiet || ! git diff --cached --quiet; then
+      echo "   Committing remaining changes..."
+      git add -A
+      git commit -m "chore: final changes for $FEATURE_NAME" || true
     fi
-    
-    CLAUDE_EXIT_CODE=$?
-    set -e  # Re-enable exit on error
-    
-    # Clean up temp file
-    rm -f "$TEMP_PROMPT_FILE"
-    
-    echo ""
-    echo "───────────────────────────────────────────────────────────────"
-    
-    if [ $CLAUDE_EXIT_CODE -eq 124 ]; then
-      # Timeout
-      echo ""
-      echo "   ⏱️  Agent timed out (10 minute limit)"
-      echo ""
-      echo "   The agent may have completed work. Proceeding to validation..."
-      echo "   If validation fails, you can manually continue the work."
-      echo ""
-    elif [ $CLAUDE_EXIT_CODE -ne 0 ]; then
-      # Error
-      echo ""
-      echo "   ⚠️  Agent exited with code: $CLAUDE_EXIT_CODE"
-      echo ""
-      echo "   Options:"
-      echo "   1. Press Enter to continue to validation anyway"
-      echo "   2. Press Ctrl+C to exit and investigate"
-      echo ""
-      read -r
-    else
-      # Success
-      echo ""
-      echo "   ✅ Agent completed"
-      echo ""
-      echo "   Proceeding to postflight validation..."
-      echo ""
-    fi
-    
-  else
-    # Fallback to manual mode
-    echo "   ┌────────────────────────────────────────────────────────────┐"
-    echo "   │  ⚠️  MANUAL IMPLEMENTATION REQUIRED                        │"
-    echo "   │                                                            │"
-    echo "   │  Claude CLI not found. Please implement manually:         │"
-    echo "   │                                                            │"
-    echo "   │  1. Read prompt.md for context                            │"
-    echo "   │  2. Implement the story                                   │"
-    echo "   │  3. Run quality gates                                     │"
-    echo "   │  4. Update progress.txt                                   │"
-    echo "   │                                                            │"
-    echo "   └────────────────────────────────────────────────────────────┘"
-    echo ""
-    echo "   Press Enter when story is implemented, or Ctrl+C to exit..."
-    read -r
-  fi
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Postflight Validation with Auto-Fix
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  print_step "🔒 Postflight Validation"
-  
-  POSTFLIGHT_OUTPUT=$(mktemp)
-  MAX_FIX_ATTEMPTS=2
-  FIX_ATTEMPT=0
-  
-  while true; do
-    # Run postflight and capture output
-    if "$SCRIPT_DIR/validation/postflight.sh" 2>&1 | tee "$POSTFLIGHT_OUTPUT"; then
-      # Success!
-      rm -f "$POSTFLIGHT_OUTPUT"
-      break
-    fi
-    
-    # Postflight failed
-    print_error "Postflight failed"
-    echo ""
-    
-    # Check if we've exhausted fix attempts
-    if [ $FIX_ATTEMPT -ge $MAX_FIX_ATTEMPTS ]; then
-      echo "   ❌ Maximum fix attempts ($MAX_FIX_ATTEMPTS) reached"
-      echo ""
-      echo "   Options:"
-      echo "   1. Press Enter to skip this story and continue"
-      echo "   2. Press Ctrl+C to exit and fix manually"
-      echo ""
-      read -r
-      rm -f "$POSTFLIGHT_OUTPUT"
-      continue 2  # Continue to next story in outer loop
-    fi
-    
-    # Try auto-fix if Claude CLI is available
-    if [ -n "$CLAUDE_CLI" ]; then
-      FIX_ATTEMPT=$((FIX_ATTEMPT + 1))
-      echo "   🔧 Auto-fix attempt $FIX_ATTEMPT of $MAX_FIX_ATTEMPTS..."
-      echo ""
-      
-      # Create fix prompt with error details
-      FIX_PROMPT="You are fixing validation errors for story $STORY_ID.
 
-**CRITICAL: This is a FIX attempt. The story was implemented but validation failed.**
+    # Switch to main and merge
+    echo "   Switching to main..."
+    git checkout main || {
+      print_error "Failed to checkout main"
+      exit 1
+    }
 
-**Validation errors:**
-\`\`\`
-$(cat "$POSTFLIGHT_OUTPUT")
-\`\`\`
+    echo "   Merging $FEATURE_BRANCH..."
+    if git merge "$FEATURE_BRANCH" -m "Merge $FEATURE_BRANCH"; then
+      print_success "Merged to main successfully"
 
-**Your task:**
-1. Read the validation errors above carefully
-2. Fix ONLY the specific issues mentioned
-3. Do NOT reimplement the entire story
-4. Run quality gates after fixing
-5. Update progress.txt with what you fixed
+      # Delete feature branch
+      echo "   Cleaning up feature branch..."
+      git branch -d "$FEATURE_BRANCH" 2>/dev/null || true
+      rm -f "$WORKSPACE_DIR/.feature-branch"
+      print_success "Deleted branch: $FEATURE_BRANCH"
+      echo ""
 
-**Rules:**
-- Focus ONLY on fixing the errors shown above
-- Do not introduce new changes
-- Test your fixes with npm run check, npm run lint, npm run test
-- If you cannot fix the issue, explain why in progress.txt
-
-Read agents/ralph/prompt.md for context if needed."
-
-      # Invoke fix agent with fresh context
-      set +e
-      if [ -n "$TIMEOUT_CMD" ]; then
-        $TIMEOUT_CMD $CLAUDE_CLI --print \
-          --system-prompt "$AGENT_PROMPT" \
-          --dangerously-skip-permissions \
-          "$(echo "$FIX_PROMPT")"
-      else
-        $CLAUDE_CLI --print \
-          --system-prompt "$AGENT_PROMPT" \
-          --dangerously-skip-permissions \
-          "$(echo "$FIX_PROMPT")"
-      fi
-      FIX_EXIT_CODE=$?
-      set -e
-      
-      if [ $FIX_EXIT_CODE -eq 0 ]; then
+      # Offer to push
+      if git remote | grep -q origin; then
+        echo "   Push to origin? [y/N] "
+        read -n 1 -r
         echo ""
-        echo "   ✅ Fix agent completed - re-running validation..."
-        echo ""
-        # Loop will re-run postflight
-      else
-        echo ""
-        echo "   ⚠️  Fix agent failed (exit code: $FIX_EXIT_CODE)"
-        echo ""
-        # Loop will try again or hit max attempts
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+          git push origin main && print_success "Pushed to origin/main"
+        fi
       fi
     else
-      # No CLI - manual fix required
-      echo "   Fix the issues and press Enter to re-validate..."
-      echo "   (Or press Ctrl+C to exit)"
-      read -r
+      print_error "Merge failed - resolve conflicts manually"
+      echo "   Your feature branch is preserved: $FEATURE_BRANCH"
+      echo "   To resolve:"
+      echo "     1. Fix conflicts"
+      echo "     2. git add ."
+      echo "     3. git commit"
+      echo "     4. git branch -d $FEATURE_BRANCH"
     fi
-  done
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Review Phase
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  print_step "👀 Review Phase"
-  echo ""
-  echo "   Self-review checklist:"
-  echo "   • Code follows existing patterns"
-  echo "   • All property access uses camelCase"
-  echo "   • Nullable columns handled with ??"
-  echo "   • No unnecessary complexity"
-  echo "   • Would a new developer understand this?"
-  echo ""
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Compound Phase
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  print_step "📚 Compound Phase"
-  echo ""
-  echo "   Capture learnings:"
-  echo "   • What patterns did you apply?"
-  echo "   • What decisions did you make?"
-  echo "   • What would you do differently?"
-  echo ""
-  
-  # Update PRD status
-  print_step "📝 Updating PRD..."
-  
-  jq --arg id "$STORY_ID" \
-    '.stories = [.stories[] | if .id == $id then .status = "completed" else . end]' \
-    "$PRD_FILE" > "$PRD_FILE.tmp" && mv "$PRD_FILE.tmp" "$PRD_FILE"
-  
-  # Append to progress.txt
-  echo "" >> "$PROGRESS_FILE"
-  echo "## $(date +%Y-%m-%d) - $STORY_TITLE" >> "$PROGRESS_FILE"
-  echo "Task ID: $STORY_ID" >> "$PROGRESS_FILE"
-  echo "Status: Completed" >> "$PROGRESS_FILE"
-  echo "" >> "$PROGRESS_FILE"
-  echo "### What Was Done" >> "$PROGRESS_FILE"
-  echo "[Fill in implementation details]" >> "$PROGRESS_FILE"
-  echo "" >> "$PROGRESS_FILE"
-  echo "### Learnings" >> "$PROGRESS_FILE"
-  echo "[Capture patterns, decisions, lessons]" >> "$PROGRESS_FILE"
-  echo "" >> "$PROGRESS_FILE"
-  echo "---" >> "$PROGRESS_FILE"
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Auto-Commit Story
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  print_step "💾 Committing changes..."
-  
-  cd "$PROJECT_DIR"
-  
-  # Auto-commit this story's changes
-  if git add -A && git commit -m "feat($STORY_ID): $STORY_TITLE"; then
+
+  elif [[ $REPLY =~ ^[Kk]$ ]]; then
+    cd "$PROJECT_DIR" || exit 1
+
+    # Ensure we're on the feature branch for testing
+    CURRENT_BRANCH=$(git branch --show-current)
+    if [ "$CURRENT_BRANCH" != "$FEATURE_BRANCH" ]; then
+      echo "   Switching to feature branch for testing..."
+      git checkout "$FEATURE_BRANCH" 2>/dev/null || true
+    fi
+
+    print_success "Ready for testing on: $FEATURE_BRANCH"
     echo ""
-    echo "   ✅ Committed: feat($STORY_ID): $STORY_TITLE"
+    echo "   To test:"
+    echo "     npm run dev"
     echo ""
+    echo "   After testing, to merge:"
+    echo "     git checkout main"
+    echo "     git merge $FEATURE_BRANCH"
+    echo "     git branch -d $FEATURE_BRANCH"
+    echo ""
+
   else
-    echo ""
-    echo "   ⚠️  Commit failed (possibly nothing to commit)"
-    echo ""
+    echo "   No changes made to branches."
+
+    # Still ensure we're on the feature branch
+    cd "$PROJECT_DIR" || exit 1
+    CURRENT_BRANCH=$(git branch --show-current)
+    if [ "$CURRENT_BRANCH" != "$FEATURE_BRANCH" ]; then
+      echo "   Switching to feature branch..."
+      git checkout "$FEATURE_BRANCH" 2>/dev/null || true
+    fi
+    echo "   Currently on: $(git branch --show-current)"
   fi
-  
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Summary
-  # ─────────────────────────────────────────────────────────────────────────────
-  
-  print_success "Story $STORY_ID complete!"
-  
-  REMAINING=$(jq '[.stories[] | select(.status == "pending")] | length' "$PRD_FILE")
-  echo ""
-  echo "   Remaining stories: $REMAINING"
-  echo ""
-  
-  if [ "$REMAINING" -gt 0 ]; then
-    echo "🔄 Continuing to next story..."
-  fi
-  
-done
+fi
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Max Iterations Reached
-# ═══════════════════════════════════════════════════════════════════════════════
-
-print_warning "Max iterations ($MAX_ITERATIONS) reached"
 echo ""
-echo "   To continue: ./ralph.sh $((MAX_ITERATIONS * 2))"
+print_success "Ralph loop complete!"
 echo ""
 
-REMAINING=$(jq '[.stories[] | select(.status == "pending")] | length' "$PRD_FILE")
-echo "   Remaining stories: $REMAINING"
+# Final branch status
+cd "$PROJECT_DIR" 2>/dev/null || true
+FINAL_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "   📍 Current branch: $FINAL_BRANCH"
 echo ""
-
+exit 0

@@ -1,0 +1,27 @@
+{
+  "total_stories": 3,
+  "estimated_sequential_time_min": 9,
+  "waves": [
+    {
+      "wave_number": 1,
+      "stories": ["US-001"],
+      "parallelism": 1,
+      "rationale": "US-001 creates the foundational color generation utility (src/lib/utils/colorGeneration.ts). Both US-002 and US-003 depend on this utility and import generateDistinctColor() from it. Must complete first before dependent stories can proceed.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 2,
+      "stories": ["US-002", "US-003"],
+      "parallelism": 2,
+      "rationale": "US-002 modifies src/routes/api/areas/+server.ts (backend API) while US-003 modifies src/lib/components/areas/AreaModal.svelte (frontend UI). These are completely separate files with no overlap. Both depend only on US-001 (completed in Wave 1). Safe to parallelize - one developer can work on API integration while another works on UI updates simultaneously.",
+      "estimated_time_min": 3
+    }
+  ],
+  "estimated_wave_time_min": 6,
+  "time_savings_percent": 33,
+  "confidence": "high",
+  "risks": [
+    "Low risk: US-002 and US-003 both fetch existing area colors but from different contexts (server-side vs client-side). No shared state mutation.",
+    "US-003 may need to test against US-002's API changes, but the interface is well-defined (color field in response). Integration testing can happen after both complete."
+  ]
+}

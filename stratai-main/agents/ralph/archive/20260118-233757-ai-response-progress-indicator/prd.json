@@ -1,0 +1,167 @@
+{
+  "feature_name": "AI Response Progress Indicator",
+  "parent_task_id": "ai-response-progress-indicator",
+  "created": "2026-01-18",
+  "research": {
+    "similar_patterns": [
+      "src/lib/stores/toast.svelte.ts - Svelte 5 class-based store with $state rune",
+      "src/lib/stores/chat.svelte.ts - setStreaming/stopStreaming methods at ~line 798-826"
+    ],
+    "related_files": [
+      "src/lib/components/chat/ThinkingIndicator.svelte - Target component for elapsed time display",
+      "src/lib/components/chat/AIStatusIndicator.svelte - Reference for animation patterns"
+    ],
+    "docs_reviewed": [
+      "stratai-main/docs/features/session-activity-indicator.md"
+    ]
+  },
+  "waves": [
+    {
+      "wave": 1,
+      "stories": ["US-001"],
+      "description": "Foundation - Create generation activity store"
+    },
+    {
+      "wave": 2,
+      "stories": ["US-002", "US-003", "US-004"],
+      "description": "Parallel - UI updates and integration (all depend on US-001)"
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Create generation activity store",
+      "description": "As a developer, I need a centralized Svelte 5 store for tracking AI generation activity so that all indicator components have consistent access to generation state and timing.",
+      "status": "completed",
+      "dependencies": [],
+      "model_recommendation": "sonnet",
+      "files": [
+        "src/lib/stores/generationActivity.svelte.ts (create)"
+      ],
+      "what_to_do": [
+        "Create new file src/lib/stores/generationActivity.svelte.ts",
+        "Use Svelte 5 runes pattern (reference toast.svelte.ts)",
+        "Create class GenerationActivityStore with $state properties",
+        "Track: isGenerating (boolean), startTime (number | null), elapsedSeconds (number)",
+        "Implement startGeneration() - sets isGenerating=true, startTime=Date.now(), starts interval",
+        "Implement stopGeneration() - sets isGenerating=false, clears interval, resets state",
+        "Auto-update elapsedSeconds every second via setInterval",
+        "Clean up interval in stopGeneration() to prevent memory leaks",
+        "Export singleton instance: export const generationActivityStore = new GenerationActivityStore()"
+      ],
+      "acceptance_criteria": [
+        "File exists at src/lib/stores/generationActivity.svelte.ts",
+        "Uses Svelte 5 $state rune (not Svelte 4 writable)",
+        "Exposes isGenerating, startTime, elapsedSeconds as reactive state",
+        "startGeneration() sets isGenerating=true and starts timer",
+        "stopGeneration() sets isGenerating=false and clears interval",
+        "elapsedSeconds updates every 1000ms while isGenerating is true",
+        "No memory leaks - interval cleared on stopGeneration()",
+        "Singleton exported for app-wide use",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Add elapsed time to ThinkingIndicator",
+      "description": "As a user, I want to see how long the AI has been generating so that I know the system is still working and can gauge expected wait time.",
+      "status": "completed",
+      "dependencies": ["US-001"],
+      "model_recommendation": "haiku",
+      "files": [
+        "src/lib/components/chat/ThinkingIndicator.svelte (modify)"
+      ],
+      "what_to_do": [
+        "Import generationActivityStore from $lib/stores/generationActivity.svelte",
+        "Add script block with lang='ts' if not present",
+        "Read elapsedSeconds from the store",
+        "Create helper function formatElapsedTime(seconds: number): string",
+        "Format: '<60s shows \"Xs\" (e.g., \"15s\"), >=60s shows \"Xm Ys\" (e.g., \"1m 15s\")",
+        "Update thinking text span to show: \"Thinking... (Xs)\" or \"Thinking... (Xm Ys)\"",
+        "Use CSS transition for smooth appearance/disappearance of time"
+      ],
+      "acceptance_criteria": [
+        "ThinkingIndicator imports generationActivityStore",
+        "Displays elapsed time next to Thinking text: \"Thinking... (15s)\"",
+        "Time updates every second while generating",
+        "Format shows seconds for < 60s, shows \"1m 15s\" for >= 60s",
+        "Smooth transition when time appears/disappears",
+        "npm run check passes",
+        "npm run lint passes",
+        "Visual verification: Indicator shows incrementing time"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Add conditional animation control",
+      "description": "As a user, I want continuous visual feedback that the system is responsive so that I can distinguish between 'working' and 'frozen'.",
+      "status": "completed",
+      "dependencies": ["US-001"],
+      "model_recommendation": "haiku",
+      "files": [
+        "src/lib/components/chat/ThinkingIndicator.svelte (modify)"
+      ],
+      "what_to_do": [
+        "Import generationActivityStore if not already imported (from US-002)",
+        "Read isGenerating from the store",
+        "Add conditional class to animation containers based on isGenerating",
+        "Keep existing CSS animations (orbPulse, pulseRing, shimmerText)",
+        "Add animation-play-state: paused when isGenerating is false",
+        "Animation runs only when isGenerating is true from store",
+        "Ensure animation is subtle (existing animations are appropriate)"
+      ],
+      "acceptance_criteria": [
+        "Animations tied to isGenerating state from store",
+        "Animations run when isGenerating is true",
+        "Animations pause/stop when isGenerating is false",
+        "No new colors introduced (uses existing color scheme)",
+        "Animation is subtle, not distracting",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Integrate store with chat flow",
+      "description": "As a user, I want the progress indicator to automatically activate during AI responses so that I don't need to do anything special to see the feedback.",
+      "status": "completed",
+      "dependencies": ["US-001"],
+      "model_recommendation": "haiku",
+      "files": [
+        "src/lib/stores/chat.svelte.ts (modify)"
+      ],
+      "what_to_do": [
+        "Import generationActivityStore at top of file",
+        "In setStreaming() method (~line 798): call generationActivityStore.startGeneration() when streaming=true",
+        "In setStreaming() method: call generationActivityStore.stopGeneration() when streaming=false",
+        "In stopStreaming() method (~line 812): also call generationActivityStore.stopGeneration() for defensive coverage",
+        "Ensure elapsed time resets to 0 on each new generation (handled by startGeneration())"
+      ],
+      "acceptance_criteria": [
+        "generationActivityStore imported at top of chat.svelte.ts",
+        "setStreaming(true) calls generationActivityStore.startGeneration()",
+        "setStreaming(false) calls generationActivityStore.stopGeneration()",
+        "stopStreaming() calls generationActivityStore.stopGeneration()",
+        "Elapsed time resets to 0 on each new generation",
+        "npm run check passes",
+        "npm run lint passes",
+        "End-to-end: Sending message shows elapsed time, completing response stops timer"
+      ]
+    }
+  ],
+  "non_goals": [
+    "Token count or progress percentage (not available from streaming API)",
+    "Cancel/abort generation button (separate feature)",
+    "Multiple concurrent generation tracking (single chat context only)"
+  ],
+  "technical_notes": {
+    "store_pattern": "Use Svelte 5 class-based pattern with $state rune (see toast.svelte.ts)",
+    "timer_implementation": "setInterval for 1-second updates, clear on stop to prevent leaks",
+    "integration_points": [
+      "setStreaming(true) -> startGeneration()",
+      "setStreaming(false) -> stopGeneration()",
+      "stopStreaming() -> stopGeneration() (defensive)"
+    ]
+  }
+}

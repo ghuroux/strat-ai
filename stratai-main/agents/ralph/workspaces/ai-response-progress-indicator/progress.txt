@@ -1,0 +1,200 @@
+# Ralph Progress Log
+
+## Feature: AI Response Progress Indicator
+**Parent Task:** ai-response-progress-indicator
+**Started:** 2026-01-18
+**Status:** Ready to begin
+
+## Codebase Patterns Discovered
+
+### Svelte 5 Store Pattern (from toast.svelte.ts)
+- Class-based stores using `$state` rune
+- Methods modify state directly on class properties
+- Export singleton instance for app-wide use
+- Example: `export const toastStore = new ToastStore();`
+
+### Chat Store Integration Points (from chat.svelte.ts)
+- `setStreaming(streaming: boolean, controller?: AbortController)` at ~line 798
+- `stopStreaming()` at ~line 812
+- Both methods handle persist/sync after streaming completes
+
+### ThinkingIndicator Current State
+- Pure CSS animations, no script/state
+- Animations: orbPulse, pulseRing, shimmerText
+- Text: "Thinking" (static)
+
+## Wave Execution Plan
+- Wave 1: US-001 (Sonnet - new store with timer logic)
+- Wave 2: US-002, US-003, US-004 (Haiku - parallel, all depend on US-001)
+
+## Stories
+
+| ID | Title | Status | Wave |
+|----|-------|--------|------|
+| US-001 | Create generation activity store | ✅ completed | 1 |
+| US-002 | Add elapsed time to ThinkingIndicator | ✅ completed | 2 |
+| US-003 | Add conditional animation control | ✅ completed | 3 |
+| US-004 | Integrate store with chat flow | ✅ completed | 3 |
+
+---
+
+## Implementation Log
+
+### US-001: Create generation activity store (2026-01-18)
+
+**Status:** ✅ Completed
+**Wave:** 1 | **Model:** Sonnet
+**Commit:** d18b43b
+
+**Acceptance Criteria Met:**
+- [x] File exists at src/lib/stores/generationActivity.svelte.ts
+- [x] Uses Svelte 5 $state rune (not Svelte 4 writable)
+- [x] Exposes isGenerating, startTime, elapsedSeconds as reactive state
+- [x] startGeneration() sets isGenerating=true and starts timer
+- [x] stopGeneration() sets isGenerating=false and clears interval
+- [x] elapsedSeconds updates every 1000ms while isGenerating is true
+- [x] No memory leaks - interval cleared on stopGeneration()
+- [x] Singleton exported for app-wide use
+- [x] npm run check passes (0 errors, 160 warnings - pre-existing)
+
+**Implementation Summary:**
+- Created class-based Svelte 5 store following toast.svelte.ts pattern
+- Private `intervalId` for timer management
+- `startGeneration()` clears any existing interval before starting (prevents duplicates)
+- `stopGeneration()` clears interval and resets all state to defaults
+- Singleton exported as `generationActivityStore`
+
+**Files Created:**
+- src/lib/stores/generationActivity.svelte.ts - Generation activity state store
+
+**Patterns Applied:**
+- Svelte 5 $state rune for reactive state
+- Class-based store pattern from toast.svelte.ts
+- Interval cleanup pattern to prevent memory leaks
+
+**Learnings:**
+1. Store pattern is straightforward - class with $state properties
+2. Important to clear existing interval in startGeneration() to handle rapid start/stop
+
+---
+
+### US-002: Add elapsed time to ThinkingIndicator (2026-01-18)
+
+**Status:** ✅ Completed
+**Wave:** 2 | **Model:** Haiku
+**Commit:** a5abf0d
+
+**Acceptance Criteria Met:**
+- [x] ThinkingIndicator imports generationActivityStore
+- [x] Displays elapsed time next to Thinking text: "Thinking... (15s)"
+- [x] Time updates every second while generating
+- [x] Format shows seconds for < 60s, shows "1m 15s" for >= 60s
+- [x] Smooth transition when time appears/disappears (fadeIn animation)
+- [x] npm run check passes (0 errors)
+
+**Implementation Summary:**
+- Added script tag with TypeScript to ThinkingIndicator.svelte
+- Imported generationActivityStore from $lib/stores/generationActivity.svelte
+- Created formatElapsedTime(seconds) helper for proper time formatting
+- Conditional display: only shows time when elapsedSeconds > 0
+- CSS fadeIn animation for smooth appearance
+
+**Files Modified:**
+- src/lib/components/chat/ThinkingIndicator.svelte - Added script, elapsed time display, animations
+
+**Patterns Applied:**
+- Reactive store access (store.elapsedSeconds accessed directly)
+- Conditional Svelte rendering with {#if}
+- CSS keyframe animation for smooth transitions
+
+**Learnings:**
+1. ThinkingIndicator was pure CSS before - now has reactive state
+2. Store properties can be accessed directly (class-based with $state)
+
+---
+
+### US-003: Add conditional animation control (2026-01-18)
+
+**Status:** ✅ Completed
+**Wave:** 3 | **Model:** Haiku
+**Commit:** 657708e
+
+**Acceptance Criteria Met:**
+- [x] Animations tied to isGenerating state from store
+- [x] Animations run when isGenerating is true
+- [x] Animations pause when isGenerating is false
+- [x] No new colors introduced (uses existing color scheme)
+- [x] Animation is subtle, not distracting
+- [x] npm run check passes (0 errors)
+
+**Implementation Summary:**
+- Added conditional class binding: `class:paused={!generationActivityStore.isGenerating}`
+- Applied to `.orb-container` and `.thinking-text` elements
+- Added CSS rule: `.paused, .paused :global(*) { animation-play-state: paused !important; }`
+
+**Files Modified:**
+- src/lib/components/chat/ThinkingIndicator.svelte - Added conditional animation control
+
+**Patterns Applied:**
+- Svelte 5 class binding: `class:paused={condition}`
+- CSS `:global()` selector for child element styling
+- animation-play-state for animation control
+
+**Learnings:**
+1. Use `:global(*)` to affect all animated children
+2. `animation-play-state: paused` freezes animations at current frame
+
+---
+
+### US-004: Integrate store with chat flow (2026-01-18)
+
+**Status:** ✅ Completed
+**Wave:** 3 | **Model:** Haiku
+**Commit:** c1dd769
+
+**Acceptance Criteria Met:**
+- [x] generationActivityStore imported at top of chat.svelte.ts
+- [x] setStreaming(true) calls generationActivityStore.startGeneration()
+- [x] setStreaming(false) calls generationActivityStore.stopGeneration()
+- [x] stopStreaming() calls generationActivityStore.stopGeneration()
+- [x] Elapsed time resets to 0 on each new generation
+- [x] npm run check passes (0 errors)
+
+**Implementation Summary:**
+- Added import at line 16
+- Modified setStreaming() to call startGeneration()/stopGeneration()
+- Modified stopStreaming() to also call stopGeneration() (defensive)
+
+**Files Modified:**
+- src/lib/stores/chat.svelte.ts - Added store import and integration calls
+
+**Patterns Applied:**
+- Store method calls in existing flow methods
+- Defensive redundant calls for reliability
+
+**Learnings:**
+1. Integration is straightforward - just add method calls at appropriate points
+2. Defensive stopGeneration() in stopStreaming() ensures timer always stops
+
+---
+
+## Feature Complete: AI Response Progress Indicator
+
+**All 4 stories completed successfully.**
+
+**Total Commits:** 4
+- d18b43b feat(US-001): Create generation activity store
+- a5abf0d feat(US-002): Add elapsed time to ThinkingIndicator
+- c1dd769 feat(US-004): Integrate store with chat flow
+- 657708e feat(US-003): Add conditional animation control
+
+**Files Created:**
+- src/lib/stores/generationActivity.svelte.ts (new store)
+
+**Files Modified:**
+- src/lib/components/chat/ThinkingIndicator.svelte (elapsed time + animation control)
+- src/lib/stores/chat.svelte.ts (store integration)
+
+**Quality Gates:**
+- npm run check: ✅ 0 errors (160 pre-existing warnings)
+- All acceptance criteria met

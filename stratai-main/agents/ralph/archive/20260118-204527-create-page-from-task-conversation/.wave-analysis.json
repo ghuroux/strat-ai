@@ -1,0 +1,28 @@
+{
+  "total_stories": 2,
+  "estimated_sequential_time_min": 6,
+  "waves": [
+    {
+      "wave_number": 1,
+      "stories": ["US-001"],
+      "parallelism": 1,
+      "rationale": "US-001 must run first as it establishes the core UI infrastructure (button, modal state, handlers). US-002 explicitly depends on US-001 and will modify the same handlers (handlePageCreated) that US-001 creates. Both stories touch the same task conversation component file.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 2,
+      "stories": ["US-002"],
+      "parallelism": 1,
+      "rationale": "US-002 depends on US-001 completion and extends the handlePageCreated function created in US-001. Same file modification (task conversation component). Must run serially after Wave 1.",
+      "estimated_time_min": 3
+    }
+  ],
+  "estimated_wave_time_min": 6,
+  "time_savings_percent": 0,
+  "confidence": "high",
+  "risks": [
+    "Both stories modify the same component file (task conversation UI)",
+    "US-002 extends handlers created in US-001 (handlePageCreated function)",
+    "No parallelization possible due to explicit dependency and file overlap"
+  ]
+}
