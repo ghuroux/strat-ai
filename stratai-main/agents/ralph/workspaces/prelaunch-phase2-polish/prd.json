@@ -28,7 +28,7 @@
       "id": "US-001",
       "title": "Create debug utility for environment-gated logging",
       "description": "As a developer, I need a debug utility that gates console output by environment so that production builds have clean console output while development retains useful debugging information.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "Create src/lib/utils/debug.ts with debugLog and debugWarn functions",
@@ -44,7 +44,7 @@
       "id": "US-002",
       "title": "Clean up console.log in high-density files",
       "description": "As a developer, I need to remove or gate console.log statements in the highest-density files so that production console output is clean and internal logic is not exposed.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         { "story": "US-001", "type": "contract" }
       ],
@@ -64,7 +64,7 @@
       "id": "US-003",
       "title": "Create skeleton loading components",
       "description": "As a user, I need visual feedback while content loads so that I know the app is working, not frozen.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "Create src/lib/components/skeletons/SkeletonCard.svelte with animate-pulse animation",
@@ -84,7 +84,7 @@
       "id": "US-004",
       "title": "Integrate skeleton loaders into list views",
       "description": "As a user, I need to see skeleton placeholders while spaces, areas, and conversations load so that page transitions feel smooth.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         { "story": "US-003", "type": "integration" }
       ],
@@ -101,7 +101,7 @@
       "id": "US-005",
       "title": "Create reusable EmptyState component",
       "description": "As a new user, I need guidance when I have no content so that I know what to do next.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "Create src/lib/components/EmptyState.svelte with props: icon, iconColor, heading, description, ctaLabel, onCtaClick, size",
@@ -120,7 +120,7 @@
       "id": "US-006",
       "title": "Add empty states to spaces and areas views",
       "description": "As a new user, I need helpful empty states with CTAs in the spaces page, space dashboard, and sidebar so I understand how to get started.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         { "story": "US-005", "type": "integration" }
       ],
@@ -142,7 +142,7 @@
       "id": "US-007",
       "title": "Implement space deletion cascade in repository",
       "description": "As a user, I need space deletion to clean up related data so that I don't have orphaned areas, tasks, and conversations polluting my database.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "src/lib/server/persistence/spaces-postgres.ts delete method updated to cascade",
@@ -164,7 +164,7 @@
       "id": "US-008",
       "title": "Update space delete API and frontend to show cascade info",
       "description": "As a user, I need to see what will be deleted with my space and get confirmation so that I understand the impact of my action.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         { "story": "US-007", "type": "integration" }
       ],

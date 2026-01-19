@@ -1,0 +1,42 @@
+{
+  "total_stories": 8,
+  "estimated_sequential_time_min": 24,
+  "waves": [
+    {
+      "wave_number": 1,
+      "stories": ["US-001", "US-003", "US-005", "US-007"],
+      "parallelism": 4,
+      "rationale": "All four stories have no dependencies and touch completely different files: US-001 creates src/lib/utils/debug.ts (new utility), US-003 creates skeleton components in src/lib/components/skeletons/ (new directory), US-005 creates src/lib/components/EmptyState.svelte (new component), and US-007 modifies src/lib/server/persistence/spaces-postgres.ts (backend repository). No file conflicts exist between these stories.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 2,
+      "stories": ["US-002", "US-004", "US-006"],
+      "parallelism": 3,
+      "rationale": "US-002 depends on US-001 (contract dependency - only needs debug utility types to exist). US-004 depends on US-003 (integration dependency - needs skeleton components working). US-006 depends on US-005 (integration dependency - needs EmptyState component working). All three touch different file sets: US-002 modifies API routes and stores (chat.svelte.ts, spaces.svelte.ts, areas.svelte.ts), US-004 modifies view components (spaces/+page.svelte, SpaceDashboard.svelte, Sidebar.svelte), and US-006 also modifies views but different ones (same files as US-004). CONFLICT DETECTED: US-004 and US-006 both modify Sidebar.svelte. Must serialize US-006 to Wave 3.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 3,
+      "stories": ["US-006"],
+      "parallelism": 1,
+      "rationale": "US-006 must wait for US-005 completion (integration dependency) and cannot run parallel with US-004 due to file conflict on src/lib/components/layout/Sidebar.svelte. Both stories modify the same Sidebar component to add empty states.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 4,
+      "stories": ["US-008"],
+      "parallelism": 1,
+      "rationale": "US-008 depends on US-007 (integration dependency - needs the repository cascade deletion implementation working). Modifies src/routes/api/spaces/[id]/+server.ts, creates new DeleteSpaceModal.svelte component, and updates spaces.svelte.ts store. No earlier stories touch these files after Wave 1, but must wait for US-007 backend implementation to complete.",
+      "estimated_time_min": 3
+    }
+  ],
+  "estimated_wave_time_min": 12,
+  "time_savings_percent": 50,
+  "confidence": "high",
+  "risks": [
+    "US-004 and US-006 both modify src/lib/components/layout/Sidebar.svelte - serialized to prevent merge conflicts",
+    "US-002 touches multiple store files (chat.svelte.ts, spaces.svelte.ts, areas.svelte.ts) - if other stories in Wave 2 unexpectedly modify stores, conflicts could arise",
+    "US-008 modifies spaces.svelte.ts which was also touched by US-002 in Wave 2 - timing gap should prevent conflicts but requires clean Wave 2 completion"
+  ]
+}
