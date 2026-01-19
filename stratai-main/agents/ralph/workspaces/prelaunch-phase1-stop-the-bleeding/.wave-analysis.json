@@ -1,0 +1,28 @@
+{
+  "total_stories": 4,
+  "estimated_sequential_time_min": 12,
+  "waves": [
+    {
+      "wave_number": 1,
+      "stories": ["US-001", "US-003"],
+      "parallelism": 2,
+      "rationale": "US-001 creates src/routes/+error.svelte (new error boundary component). US-003 modifies WelcomeScreen.svelte (existing welcome component). These are completely different files with no overlap. US-001 is a root-level route error handler, US-003 is a chat welcome screen component. Safe to parallelize.",
+      "estimated_time_min": 3
+    },
+    {
+      "wave_number": 2,
+      "stories": ["US-002", "US-004"],
+      "parallelism": 1,
+      "rationale": "US-002 modifies chat.svelte.ts (adds timeout logic and error handling). US-004 also modifies chat.svelte.ts (adds toast notifications to store operations). Both stories explicitly touch the same store file. Additionally, US-002 mentions error toast behavior and US-004 wires toast notifications, creating logical coupling. Must serialize to avoid merge conflicts and ensure toast integration works correctly with timeout error handling.",
+      "estimated_time_min": 6
+    }
+  ],
+  "estimated_wave_time_min": 9,
+  "time_savings_percent": 25,
+  "confidence": "high",
+  "risks": [
+    "US-002 and US-004 both modify chat.svelte.ts - serialized to prevent conflicts",
+    "US-004 touches multiple store files (spaces.svelte.ts, areas.svelte.ts, chat.svelte.ts) - if future stories touch these stores, careful sequencing required",
+    "Toast notification wiring in US-004 may need adjustment after US-002's error handling is implemented"
+  ]
+}

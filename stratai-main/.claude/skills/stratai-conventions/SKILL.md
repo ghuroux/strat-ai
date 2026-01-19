@@ -194,6 +194,7 @@ export const myStore = new MyStore();
 - [PROMPTS.md](PROMPTS.md) - Prompt engineering patterns (document summaries, layering)
 - [POSTGRES.md](POSTGRES.md) - Quick database reference
 - [API-PATTERNS.md](API-PATTERNS.md) - Quick API reference
+- [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) - **UI/UX design tokens, colors, components** (READ for any UI work)
 
 **For comprehensive patterns, see these skills:**
 - **`creating-components`** - Complete component patterns (icons, forms, data loading)

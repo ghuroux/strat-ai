@@ -22,10 +22,98 @@
 ## Stories
 | ID | Title | Status |
 |----|-------|--------|
-| US-001 | Add Root Error Boundary | pending |
+| US-001 | Add Root Error Boundary | completed |
 | US-002 | Add Streaming Timeout with User Feedback | pending |
-| US-003 | Add Model Selection Guidance for First-Time Users | pending |
+| US-003 | Add Model Selection Guidance for First-Time Users | completed |
 | US-004 | Wire Toast Notifications to Store Operations | pending |
+
+---
+
+## Wave 1 Implementation (2026-01-19)
+
+### US-001: Add Root Error Boundary (2026-01-19)
+
+**Status:** ✅ Completed
+**Wave:** 1 | **Model:** haiku
+
+**Acceptance Criteria Met:**
+- [x] src/routes/+error.svelte exists with full-screen centered layout
+- [x] Uses AlertTriangle icon from lucide-svelte (not inline SVG)
+- [x] Shows user-friendly error message from $page.error?.message
+- [x] Displays error status code when available (e.g., 'Error 404')
+- [x] Has 'Go Home' button with Home icon that navigates to /
+- [x] Has 'Try Again' button with RefreshCw icon that calls location.reload()
+- [x] Matches app styling: zinc-950 background, zinc text colors
+- [x] Primary button uses bg-primary-500 hover:bg-primary-600
+- [x] Secondary button uses bg-zinc-800 hover:bg-zinc-700 border-zinc-700
+- [x] npm run check passes
+- [x] npm run lint passes
+
+**Implementation Summary:**
+- Created new file src/routes/+error.svelte as root error boundary
+- Full-screen centered layout matching app dark theme
+- AlertTriangle icon in red container for visual error feedback
+- Two recovery options: Go Home and Try Again buttons
+- Uses lucide-svelte icons (AlertTriangle, Home, RefreshCw)
+
+**Files Changed:**
+- src/routes/+error.svelte (created) - Root error boundary component
+
+**Patterns Applied:**
+- lucide-svelte icons per codebase standards
+- Tailwind styling matching existing app aesthetic
+- SvelteKit error page pattern with $page store
+
+**Learnings & Gotchas:**
+1. No existing error pages in codebase - clean implementation
+2. Button onclick handlers work with arrow functions in Svelte 5
+
+**Commit:** 27eb80e feat(US-001): Add Root Error Boundary
+
+---
+
+### US-003: Add Model Selection Guidance for First-Time Users (2026-01-19)
+
+**Status:** ✅ Completed
+**Wave:** 1 | **Model:** haiku
+
+**Acceptance Criteria Met:**
+- [x] When no model selected, model selection guidance shows instead of normal welcome
+- [x] Uses Sparkles icon in gradient icon container (from-primary-500/20 to-cyan-500/20)
+- [x] Heading: 'Welcome to StratAI'
+- [x] Subheading: 'To get started, select an AI model'
+- [x] Recommendation box explains AUTO mode benefit with Zap icon
+- [x] 'Select AUTO Mode' button is full-width with primary styling and shadow glow
+- [x] Clicking button sets settingsStore.selectedModel to 'auto'
+- [x] After model selection, component re-renders to show normal welcome content
+- [x] Secondary text mentions 'dropdown above' to guide eye to header
+- [x] Works for both new users and users who cleared settings
+- [x] npm run check passes
+- [x] npm run lint passes
+
+**Implementation Summary:**
+- Modified WelcomeScreen.svelte to add conditional model selection guidance
+- Added Sparkles and Zap icons from lucide-svelte
+- Used $derived() rune for reactive selectedModel state
+- Created selectAutoMode() function to set model via settingsStore
+- Wrapped existing welcome content in {:else} block
+
+**Files Changed:**
+- src/lib/components/chat/WelcomeScreen.svelte (modified) - Added model selection guidance
+
+**Patterns Applied:**
+- Svelte 5 $derived() rune for reactive state
+- settingsStore.setSelectedModel() for state management
+- lucide-svelte icons (Sparkles, Zap)
+- Gradient icon container pattern from spec
+
+**Learnings & Gotchas:**
+1. AUTO_MODEL_ID defined locally as 'auto' rather than importing
+2. Existing component structure required wrapping in {#if !selectedModel} ... {:else}
+
+**Commit:** d71b767 feat(US-003): Add Model Selection Guidance for First-Time Users
+
+---
 
 ## Implementation Notes
 - US-001, US-003, US-004 have no dependencies and can potentially run in parallel

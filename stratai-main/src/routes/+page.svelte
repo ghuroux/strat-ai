@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { Clock, AlertCircle, RotateCcw } from 'lucide-svelte';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
@@ -58,6 +59,13 @@
 	// Bring to Context Modal state (Phase C)
 	let showBringToContextModal = $state(false);
 	let bringToContextConversation = $state<Conversation | null>(null);
+
+	// Streaming timeout state
+	let showSlowWarning = $state(false);
+	let streamingTimedOut = $state(false);
+	let lastMessageContent = $state<string | null>(null);
+	let slowWarningTimeout: ReturnType<typeof setTimeout> | null = null;
+	let hardTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	// Apply saved theme on mount and sync conversations from API
 	onMount(() => {
@@ -122,6 +130,41 @@
 				top: messagesContainer.scrollHeight,
 				behavior: 'smooth'
 			});
+		}
+	}
+
+	function startStreamingTimeouts() {
+		clearStreamingTimeouts();
+
+		// Warning after 15s
+		slowWarningTimeout = setTimeout(() => {
+			showSlowWarning = true;
+		}, 15000);
+
+		// Hard timeout after 60s
+		hardTimeout = setTimeout(() => {
+			if (chatStore.isStreaming) {
+				chatStore.stopStreaming();
+				streamingTimedOut = true;
+				showSlowWarning = false;
+				toastStore.error('Response timed out. Please try again.');
+			}
+		}, 60000);
+	}
+
+	function clearStreamingTimeouts() {
+		if (slowWarningTimeout) clearTimeout(slowWarningTimeout);
+		if (hardTimeout) clearTimeout(hardTimeout);
+		slowWarningTimeout = null;
+		hardTimeout = null;
+		showSlowWarning = false;
+		// Note: Don't clear streamingTimedOut here - let the retry button reset it
+	}
+
+	function retryLastMessage() {
+		if (lastMessageContent) {
+			streamingTimedOut = false;
+			handleSend(lastMessageContent);
 		}
 	}
 
@@ -252,6 +295,13 @@
 	}
 
 	async function handleSend(content: string, attachments?: FileAttachment[]) {
+		// Clear any previous timeouts and reset timeout state
+		clearStreamingTimeouts();
+		streamingTimedOut = false;
+
+		// Store message content for retry
+		lastMessageContent = content;
+
 		// Auto-close second opinion panel when user sends a new message
 		if (chatStore.isSecondOpinionOpen) {
 			chatStore.closeSecondOpinion();
@@ -298,6 +348,9 @@
 		// Start streaming
 		const controller = new AbortController();
 		chatStore.setStreaming(true, controller);
+
+		// Start streaming timeouts
+		startStreamingTimeouts();
 
 		try {
 			// Build messages array for API
@@ -470,6 +523,9 @@
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
 				sources: collectedSources.length > 0 ? collectedSources : undefined
 			});
+
+			// Clear timeouts on successful completion
+			clearStreamingTimeouts();
 		} catch (err) {
 			if (err instanceof Error && err.name === 'AbortError') {
 				// User stopped the stream
@@ -483,6 +539,8 @@
 				});
 				toastStore.error(err instanceof Error ? err.message : 'Failed to get response');
 			}
+			// Clear timeouts on error
+			clearStreamingTimeouts();
 		} finally {
 			chatStore.setStreaming(false);
 		}
@@ -755,6 +813,9 @@
 		const controller = new AbortController();
 		chatStore.setStreaming(true, controller);
 
+		// Start streaming timeouts
+		startStreamingTimeouts();
+
 		try {
 			const conv = chatStore.getConversation(conversationId);
 			const allMessages = (conv?.messages || []).filter((m) => !m.isStreaming && !m.error);
@@ -921,6 +982,9 @@
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
 				sources: collectedSources.length > 0 ? collectedSources : undefined
 			});
+
+			// Clear timeouts on successful completion
+			clearStreamingTimeouts();
 		} catch (err) {
 			if (err instanceof Error && err.name === 'AbortError') {
 				chatStore.updateMessage(conversationId, assistantMessageId, {
@@ -933,6 +997,8 @@
 				});
 				toastStore.error(err instanceof Error ? err.message : 'Failed to get response');
 			}
+			// Clear timeouts on error
+			clearStreamingTimeouts();
 		} finally {
 			chatStore.setStreaming(false);
 		}
@@ -1284,6 +1350,41 @@
 					{/if}
 				{/if}
 			</ChatMessageList>
+
+			<!-- Streaming timeout warnings/errors -->
+			<div class="px-4 pb-2">
+				{#if showSlowWarning && chatStore.isStreaming}
+					<div class="flex items-center gap-2 px-3 py-2 mt-2 rounded-lg
+								bg-amber-500/10 border border-amber-500/20 max-w-3xl mx-auto">
+						<Clock class="w-4 h-4 text-amber-400 animate-pulse" />
+						<span class="text-sm text-amber-300">Taking longer than expected...</span>
+					</div>
+				{/if}
+
+				{#if streamingTimedOut}
+					<div class="flex items-center gap-3 px-4 py-3 rounded-xl
+								bg-red-500/10 border border-red-500/20 max-w-3xl mx-auto">
+						<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-500/15
+									flex items-center justify-center">
+							<AlertCircle class="w-4 h-4 text-red-400" />
+						</div>
+						<div class="flex-1 min-w-0">
+							<p class="text-sm font-medium text-zinc-200">Response timed out</p>
+							<p class="text-xs text-zinc-400 mt-0.5">The AI took too long to respond.</p>
+						</div>
+						<button
+							onclick={retryLastMessage}
+							class="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+								   bg-zinc-700 hover:bg-zinc-600 border border-zinc-600
+								   text-sm font-medium text-zinc-200
+								   transition-all duration-150"
+						>
+							<RotateCcw class="w-3.5 h-3.5" />
+							Retry
+						</button>
+					</div>
+				{/if}
+			</div>
 
 			<!-- Input -->
 			<ChatInput

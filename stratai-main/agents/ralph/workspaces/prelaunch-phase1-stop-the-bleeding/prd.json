@@ -41,7 +41,7 @@
       "id": "US-001",
       "title": "Add Root Error Boundary",
       "description": "As a user, I need graceful error handling when something crashes so that I can understand what went wrong and recover.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "src/routes/+error.svelte exists with full-screen centered layout",
@@ -83,7 +83,7 @@
       "id": "US-003",
       "title": "Add Model Selection Guidance for First-Time Users",
       "description": "As a first-time user, I need clear guidance on how to start chatting so that I don't get stuck on a disabled input field.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [],
       "acceptance_criteria": [
         "When no model selected, model selection guidance shows instead of normal welcome content in WelcomeScreen.svelte",
