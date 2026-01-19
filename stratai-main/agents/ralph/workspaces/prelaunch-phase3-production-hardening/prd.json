@@ -1,0 +1,148 @@
+{
+  "feature_name": "Pre-Launch Phase 3: Harden for Production",
+  "parent_task_id": "prelaunch-phase3-production-hardening",
+  "created": "2026-01-19",
+  "branch": "feature/prelaunch-phase3-production-hardening",
+  "base_branch": "main",
+  "research": {
+    "similar_patterns": [
+      "src/lib/server/persistence/documents-postgres.ts - Existing delete() method needs cascade logic",
+      "src/lib/server/persistence/document-sharing-postgres.ts - Share record structure and area deactivation pattern",
+      "src/lib/stores/spaces.svelte.ts - Store pattern (no guard flags currently)",
+      "src/routes/+page.svelte - Main chat with existing timeout detection"
+    ],
+    "related_commits": [
+      "a080ceb - feat(US-008): Add space delete modal with cascade info (similar cascade pattern)"
+    ],
+    "docs_reviewed": [
+      "docs/features/prelaunch-phase3-harden-for-production.md",
+      "CLAUDE.md"
+    ],
+    "codebase_patterns": [
+      "Document sharing uses `sql.begin()` for transactions",
+      "postgres.js camelCase transformation for column access",
+      "Svelte 5 runes ($state, $derived) for reactivity",
+      "Tailwind responsive classes: md: prefix for 768px breakpoint"
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Implement Document Deletion Cascade",
+      "description": "As a user, I need document deletion to clean up shares and links so that I don't have dead references throughout the app. This modifies the delete() method in documents-postgres.ts to cascade delete document_area_shares, task_documents, and remove from areas' contextDocumentIds arrays, all within a transaction.",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/lib/server/persistence/documents-postgres.ts"
+      ],
+      "files_to_reference": [
+        "src/lib/server/persistence/document-sharing-postgres.ts",
+        "src/lib/server/persistence/areas-postgres.ts"
+      ],
+      "acceptance_criteria": [
+        "Document deletion removes document ID from all areas' contextDocumentIds arrays using array_remove()",
+        "Document deletion deletes all document_area_shares records for the document",
+        "Document deletion deletes all task_documents links for the document",
+        "All cascade operations are wrapped in sql.begin() transaction for atomicity",
+        "Only document owner can delete (existing check preserved)",
+        "Delete method returns cleanup counts: { areasUpdated, sharesDeleted, taskLinksDeleted }",
+        "Cascade order is: areas -> shares -> task_documents -> soft delete document",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Add Chat Message Retry on Failure",
+      "description": "As a user, I need to retry failed messages without retyping so that network issues don't lose my work. This adds failed message state and inline retry UI to both main chat and area chat pages.",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/routes/+page.svelte",
+        "src/routes/spaces/[space]/[area]/+page.svelte"
+      ],
+      "files_to_reference": [
+        "src/lib/components/chat/ChatMessage.svelte"
+      ],
+      "acceptance_criteria": [
+        "Failed message displays with red-tinted bubble styling (bg-red-500/10 border-red-500/30)",
+        "Error indicator shows 'Failed to send' text with AlertCircle icon from lucide-svelte",
+        "Retry button uses RotateCcw icon and primary color (text-primary-400)",
+        "Dismiss button uses X icon and muted color (text-zinc-400)",
+        "Message content truncated to 200 characters with ellipsis when longer",
+        "Attachments count shown if present with Paperclip icon",
+        "Retry sends exact same content including any attachments",
+        "Dismiss clears the failed state",
+        "Sending a new message clears any previous failure",
+        "Only one failed message tracked at a time (latest failure)",
+        "Works in both main chat (+page.svelte) and area chat ([area]/+page.svelte)",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Fix Mobile Responsiveness - Core Layout",
+      "description": "As a mobile user, I need the app to work on small screens so that I can use StratAI on my phone. This adds mobile sidebar overlay, hamburger menu, responsive modals, and iOS safe area support.",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/routes/+layout.svelte",
+        "src/lib/components/layout/Sidebar.svelte",
+        "src/lib/components/layout/Header.svelte",
+        "src/lib/components/ChatInput.svelte",
+        "src/lib/components/spaces/SpaceModal.svelte",
+        "src/lib/components/areas/AreaModal.svelte"
+      ],
+      "acceptance_criteria": [
+        "Hamburger menu button (Menu icon) shows on mobile via md:hidden class",
+        "Sidebar slides in from left on mobile with fixed positioning (w-72 shadow-2xl)",
+        "Mobile backdrop appears when sidebar open (bg-black/60 backdrop-blur-sm)",
+        "Tapping backdrop closes sidebar",
+        "Sidebar navigation triggers onNavigate callback to close sidebar on mobile",
+        "Header shows X icon when sidebar open, Menu icon when closed",
+        "Modals use bottom sheet pattern on mobile (items-end, rounded-t-2xl, full width)",
+        "Modals respect iOS safe area with pb-[env(safe-area-inset-bottom)]",
+        "Chat input respects iOS safe area padding",
+        "All touch targets minimum 36px (w-9 h-9), preferred 40px (w-10 h-10)",
+        "App is usable on 375px wide viewport (iPhone SE minimum)",
+        "No horizontal scrolling appears on any viewport size",
+        "Sidebar state managed via matchMedia: auto-close on mobile resize, auto-open on desktop",
+        "Transition duration for sidebar is 200ms with ease-out",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Add Request Deduplication for Critical Actions",
+      "description": "As a user, I need rapid clicks to not create duplicate items so that I don't accidentally create multiple spaces/areas. This adds loading spinners, disabled states, and store-level guards to prevent duplicate API requests.",
+      "status": "pending",
+      "dependencies": [],
+      "files_to_modify": [
+        "src/lib/components/spaces/SpaceModal.svelte",
+        "src/lib/components/areas/AreaModal.svelte",
+        "src/lib/components/ChatInput.svelte",
+        "src/lib/stores/spaces.svelte.ts",
+        "src/lib/stores/areas.svelte.ts"
+      ],
+      "acceptance_criteria": [
+        "All submit buttons show inline SVG spinner with animate-spin class when loading",
+        "All submit buttons are disabled during submission via disabled prop",
+        "Cancel buttons also disabled during submission to prevent close mid-operation",
+        "Loading text shown: 'Creating...' for create, 'Saving...' for save, 'Deleting...' for delete",
+        "Send button in ChatInput shows spinner only (no text, icon-only button style)",
+        "SpaceModal has local isSubmitting state that guards handleCreate function",
+        "AreaModal has local isSubmitting state that guards handleCreate function",
+        "SpacesStore.createSpace() has private _creatingSpace guard flag that rejects concurrent calls",
+        "AreasStore.createArea() has private _creatingArea guard flag that rejects concurrent calls",
+        "Guard flags log console.warn when rejecting duplicate calls",
+        "Double-click cannot create duplicate items (verify with rapid clicking)",
+        "Form inputs remain disabled during submission",
+        "Spinner size is w-4 h-4 in buttons, w-5 h-5 in icon-only buttons",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    }
+  ]
+}
