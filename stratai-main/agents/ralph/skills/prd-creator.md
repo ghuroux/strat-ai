@@ -227,6 +227,20 @@ For any story involving database work, include the schema context:
 }
 ```
 
+### Story Status Values
+
+| Status | Meaning | Set By |
+|--------|---------|--------|
+| `pending` | Not yet started | PRD Creator (initial) |
+| `completed` | Successfully implemented and validated | Orchestrator (after passing quality gates) |
+| `deferred` | Failed after max retries, skipped by user | Orchestrator (when user chooses to skip) |
+
+Stories with `deferred` status include additional fields:
+- `deferred_reason`: Summary of why the story failed (e.g., "TypeScript errors after 3 fix attempts")
+- `deferred_at`: ISO timestamp when deferred (e.g., "2026-01-19T14:30:00Z")
+
+**Note:** When a feature completes with deferred stories, COMPLETION_SUMMARY.md will list them as requiring manual intervention.
+
 ### Secondary Output: Markdown PRD (Optional but Recommended)
 
 Also generate a readable markdown version at `tasks/prd-[feature-name].md` for human review.

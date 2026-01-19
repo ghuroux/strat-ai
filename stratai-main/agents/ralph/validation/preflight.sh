@@ -18,6 +18,28 @@ echo "   Project: $PROJECT_DIR"
 cd "$PROJECT_DIR"
 
 # ═══════════════════════════════════════════════════════════════════
+# 0. Branch Health Check (if prd.json has branch field)
+# ═══════════════════════════════════════════════════════════════════
+echo ""
+echo "🌿 Checking branch health..."
+
+PRD_FILE="$RALPH_DIR/prd.json"
+if [ -f "$PRD_FILE" ]; then
+    EXPECTED_BRANCH=$(jq -r '.branch // empty' "$PRD_FILE" 2>/dev/null || echo "")
+    if [ -n "$EXPECTED_BRANCH" ]; then
+        if ! "$SCRIPT_DIR/branch-check.sh" --strict "$RALPH_DIR" 2>/dev/null; then
+            echo "❌ Branch health check failed"
+            exit 1
+        fi
+        echo "   ✅ Branch health OK"
+    else
+        echo "   ⚠️  No branch in prd.json (skipping check)"
+    fi
+else
+    echo "   ⚠️  No prd.json found (skipping check)"
+fi
+
+# ═══════════════════════════════════════════════════════════════════
 # 1. Clean Working Directory (Allow Ralph Working Files)
 # ═══════════════════════════════════════════════════════════════════
 echo ""

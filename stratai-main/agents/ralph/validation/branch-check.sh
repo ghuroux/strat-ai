@@ -2,7 +2,10 @@
 #
 # Branch Health Check for Ralph Loop
 #
-# Usage: ./branch-check.sh [workspace_dir]
+# Usage: ./branch-check.sh [--strict] [workspace_dir]
+#
+# Options:
+#   --strict    Fail immediately on any issue (non-interactive, for CI/automation)
 #
 # Verifies:
 # 1. Correct branch (matches prd.json if recorded)
@@ -11,6 +14,13 @@
 #
 
 set -e
+
+# Parse --strict flag
+STRICT_MODE=false
+if [[ "$1" == "--strict" ]]; then
+    STRICT_MODE=true
+    shift
+fi
 
 WORKSPACE_DIR=${1:-"agents/ralph"}
 RED='\033[0;31m'
@@ -49,12 +59,16 @@ if [ -n "$EXPECTED_BRANCH" ]; then
         echo "   Expected: $EXPECTED_BRANCH"
         echo "   Current:  $CURRENT_BRANCH"
         echo ""
-        echo "   Switch with: git checkout $EXPECTED_BRANCH"
+        echo "   Fix: git checkout $EXPECTED_BRANCH"
         exit 1
     fi
     echo -e "${GREEN}✅ Branch matches prd.json${NC}"
 else
-    echo -e "${YELLOW}⚠️  No branch recorded in prd.json (consider adding)${NC}"
+    if [ "$STRICT_MODE" = true ]; then
+        echo -e "${YELLOW}⚠️  No branch recorded in prd.json${NC}"
+    else
+        echo -e "${YELLOW}⚠️  No branch recorded in prd.json (consider adding)${NC}"
+    fi
 fi
 
 # 5. Check if behind main
@@ -68,21 +82,28 @@ BEHIND=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
 AHEAD=$(git rev-list --count origin/main..HEAD 2>/dev/null || echo "0")
 
 if [ "$BEHIND" -gt 0 ]; then
-    echo -e "${YELLOW}⚠️  Branch is $BEHIND commits BEHIND main${NC}"
-    echo ""
-    echo "   To sync: git merge origin/main"
-    echo ""
+    if [ "$STRICT_MODE" = true ]; then
+        echo -e "${RED}⚠️  Branch is $BEHIND commits BEHIND main${NC}"
+        echo ""
+        echo "   Fix: git merge origin/main"
+        exit 1
+    else
+        echo -e "${YELLOW}⚠️  Branch is $BEHIND commits BEHIND main${NC}"
+        echo ""
+        echo "   To sync: git merge origin/main"
+        echo ""
 
-    # Only prompt if interactive terminal
-    if [ -t 0 ]; then
-        read -p "   Merge main now? (y/n): " REPLY
-        if [ "$REPLY" = "y" ]; then
-            echo "   Merging..."
-            if git merge origin/main; then
-                echo -e "${GREEN}✅ Merged main successfully${NC}"
-            else
-                echo -e "${RED}❌ Merge conflicts! Resolve before continuing.${NC}"
-                exit 1
+        # Only prompt if interactive terminal
+        if [ -t 0 ]; then
+            read -p "   Merge main now? (y/n): " REPLY
+            if [ "$REPLY" = "y" ]; then
+                echo "   Merging..."
+                if git merge origin/main; then
+                    echo -e "${GREEN}✅ Merged main successfully${NC}"
+                else
+                    echo -e "${RED}❌ Merge conflicts! Resolve before continuing.${NC}"
+                    exit 1
+                fi
             fi
         fi
     fi

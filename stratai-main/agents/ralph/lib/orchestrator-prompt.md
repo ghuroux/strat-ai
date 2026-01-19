@@ -124,9 +124,11 @@ echo "🤖 [$(date +%H:%M:%S)] [WAVE-2] Sub-agent implementing US-002 (haiku)...
   - id: Story ID (e.g., "US-001")
   - title: Story title
   - description: User story
-  - status: "pending" | "completed"
+  - status: "pending" | "completed" | "deferred"
   - dependencies: Array of story IDs
   - acceptance_criteria: Array of criteria
+  - deferred_reason: (optional) Why the story was deferred
+  - deferred_at: (optional) ISO timestamp when deferred
 
 **Coordinator Analysis (.wave-analysis.json):**
 - waves: Array of wave objects with:
@@ -462,6 +464,35 @@ If still failing after 3 attempts, use AskUserQuestion to ask whether to:
 - Keep debugging (spawn another fix agent)
 - Abort feature implementation
 
+#### Persisting Deferred Status
+
+When user chooses "Skip" for a failing story, you MUST persist the deferred status:
+
+1. **Update prd.json** - Change the story status and add metadata:
+   ```json
+   {
+     "id": "US-003",
+     "status": "deferred",
+     "deferred_reason": "TypeScript errors after 3 fix attempts - Property 'userId' not found on type 'UserRow'",
+     "deferred_at": "2026-01-19T14:30:00Z"
+   }
+   ```
+   Use jq or the Edit tool to update the story in prd.json.
+
+2. **Log to progress.txt:**
+   ```
+   ⏸️ [HH:MM:SS] US-003 DEFERRED: TypeScript errors after 3 fix attempts
+      Last error: Property 'userId' not found on type 'UserRow'
+      This story requires manual intervention.
+   ```
+
+3. **Log to orchestrator progress:**
+   ```bash
+   echo "⏸️ [$(date +%H:%M:%S)] [WAVE-N] US-003 DEFERRED: {reason}" >> "$PROGRESS_LOG"
+   ```
+
+4. **Continue to next wave** - Don't let one deferred story block the entire feature.
+
 ### Step 7: Generate Progress Summaries for All Stories in Wave
 
 For each completed story in the wave, read the git log and create a summary:
@@ -557,7 +588,7 @@ echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE ([X] stories, ${WAVE_MIN}m ${WAVE
 
 ## Feature Completion
 
-When no pending stories remain (all stories have `status: "completed"`):
+When no pending stories remain (all stories have `status: "completed"` or `status: "deferred"`):
 
 ### 1. Create COMPLETION_SUMMARY.md
 
@@ -585,6 +616,23 @@ Generate a comprehensive feature completion summary:
 
 **Status:** Completed
 **Dependencies:** [list or "None"]
+
+---
+
+## Deferred Stories
+
+[If any stories have status "deferred", list them here:]
+
+### ⏸️ [STORY_ID]: [STORY_TITLE]
+
+**Description:** [story.description]
+**Reason:** [story.deferred_reason]
+**Deferred At:** [story.deferred_at]
+
+**Action Required:** This story must be completed manually before the feature can be considered production-ready.
+
+[If no deferred stories, write:]
+No stories were deferred. All stories completed successfully! 🎉
 
 ---
 
@@ -730,7 +778,11 @@ Implemented [N] stories:
 - [STORY_ID_2]: [STORY_TITLE_2]
 ...
 
-All acceptance criteria met. Quality gates passed.
+[If any deferred stories, add:]
+Deferred [M] stories (require manual completion):
+- [DEFERRED_STORY_ID]: [reason]
+
+All quality gates passed.
 
 Parent task: [parent-task-id]
 
