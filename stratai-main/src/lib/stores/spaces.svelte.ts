@@ -11,6 +11,7 @@
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
 import type { SpaceMembershipWithUser, SpaceRole } from '$lib/types/space-memberships';
+import { toastStore } from './toast.svelte';
 
 class SpacesStore {
 	// Space cache by ID
@@ -134,12 +135,14 @@ class SpacesStore {
 				this.spaces.set(space.id, space);
 				this.spacesBySlug.set(space.slug, space);
 				this._version++;
+				toastStore.success('Space created');
 				return space;
 			}
 			return null;
 		} catch (e) {
 			console.error('Failed to create space:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create space';
+			toastStore.error(this.error);
 			return null;
 		} finally {
 			this.isLoading = false;
@@ -186,12 +189,14 @@ class SpacesStore {
 				this.spacesBySlug.set(space.slug, space);
 
 				this._version++;
+				toastStore.success('Space updated');
 				return space;
 			}
 			return null;
 		} catch (e) {
 			console.error('Failed to update space:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update space';
+			toastStore.error(this.error);
 			return null;
 		} finally {
 			this.isLoading = false;
@@ -223,10 +228,12 @@ class SpacesStore {
 			this.spaces.delete(id);
 			this.spacesBySlug.delete(space.slug);
 			this._version++;
+			toastStore.success('Space deleted');
 			return true;
 		} catch (e) {
 			console.error('Failed to delete space:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to delete space';
+			toastStore.error(this.error);
 			return false;
 		} finally {
 			this.isLoading = false;
@@ -366,10 +373,12 @@ class SpacesStore {
 
 			// Refresh member list to get hydrated data
 			await this.loadMembers(spaceId, true);
+			toastStore.success('Member added');
 			return true;
 		} catch (e) {
 			console.error('Failed to add space member:', e);
 			this.lastMemberError = e instanceof Error ? e.message : 'Failed to add member';
+			toastStore.error(this.lastMemberError);
 			return false;
 		}
 	}
@@ -402,10 +411,12 @@ class SpacesStore {
 				this._memberVersion++;
 			}
 
+			toastStore.success('Member removed');
 			return true;
 		} catch (e) {
 			console.error('Failed to remove space member:', e);
 			this.lastMemberError = e instanceof Error ? e.message : 'Failed to remove member';
+			toastStore.error(this.lastMemberError);
 			return false;
 		}
 	}
@@ -607,6 +618,7 @@ class SpacesStore {
 		} catch (e) {
 			console.error('Failed to pin space:', e);
 			this.lastPinError = e instanceof Error ? e.message : 'Failed to pin space';
+			toastStore.error(this.lastPinError);
 			return false;
 		} finally {
 			this.isPinning = false;
@@ -659,6 +671,7 @@ class SpacesStore {
 		} catch (e) {
 			console.error('Failed to unpin space:', e);
 			this.lastPinError = e instanceof Error ? e.message : 'Failed to unpin space';
+			toastStore.error(this.lastPinError);
 			return false;
 		} finally {
 			this.isPinning = false;

@@ -20,6 +20,7 @@ import type {
 	AreaAccessResult,
 	AreaAccessSource
 } from '$lib/types/area-memberships';
+import { toastStore } from './toast.svelte';
 
 class AreaStore {
 	// Area cache by ID
@@ -150,12 +151,14 @@ class AreaStore {
 				this.areasBySpace.set(input.spaceId, [...spaceList, area]);
 
 				this._version++;
+				toastStore.success('Area created');
 				return area;
 			}
 			return null;
 		} catch (e) {
 			console.error('Failed to create area:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create area';
+			toastStore.error(this.error);
 			return null;
 		} finally {
 			this.isLoading = false;
@@ -203,12 +206,14 @@ class AreaStore {
 				}
 
 				this._version++;
+				toastStore.success('Area updated');
 				return area;
 			}
 			return null;
 		} catch (e) {
 			console.error('Failed to update area:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update area';
+			toastStore.error(this.error);
 			return null;
 		} finally {
 			this.isLoading = false;
@@ -269,10 +274,12 @@ class AreaStore {
 			}
 
 			this._version++;
+			toastStore.success('Area deleted');
 			return true;
 		} catch (e) {
 			console.error('Failed to delete area:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to delete area';
+			toastStore.error(this.error);
 			return false;
 		} finally {
 			this.isLoading = false;

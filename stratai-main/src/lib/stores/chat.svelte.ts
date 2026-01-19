@@ -14,6 +14,7 @@ import type { AssistState } from '$lib/types/assists';
 import { ASSISTS } from '$lib/config/assists';
 import { generateUUID } from '$lib/utils/uuid';
 import { generationActivityStore } from '$lib/stores/generationActivity.svelte';
+import { toastStore } from './toast.svelte';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
@@ -170,6 +171,7 @@ class ChatStore {
 		} catch (e) {
 			console.warn('Failed to sync from API, using localStorage:', e);
 			this.syncError = e instanceof Error ? e.message : 'Sync failed';
+			toastStore.error('Failed to sync conversations');
 		} finally {
 			this.isLoading = false;
 		}
@@ -224,15 +226,17 @@ class ChatStore {
 	}
 
 	// Delete from API
-	private async deleteFromApi(id: string): Promise<void> {
-		if (typeof window === 'undefined') return;
+	private async deleteFromApi(id: string): Promise<boolean> {
+		if (typeof window === 'undefined') return false;
 
 		try {
 			await fetch(`/api/conversations/${id}`, {
 				method: 'DELETE'
 			});
+			return true;
 		} catch (e) {
 			console.warn('Failed to delete conversation from API:', e);
+			return false;
 		}
 	}
 
@@ -903,14 +907,22 @@ class ChatStore {
 		}
 	}
 
-	deleteConversation(id: string): void {
+	async deleteConversation(id: string): Promise<void> {
+		// Optimistically delete from local state
 		this.conversations.delete(id);
 		if (this.activeConversationId === id) {
 			const remaining = Array.from(this.conversations.keys());
 			this.activeConversationId = remaining[0] || null;
 		}
 		this.schedulePersist();
-		this.deleteFromApi(id);
+
+		// Try to delete from API
+		const success = await this.deleteFromApi(id);
+		if (success) {
+			toastStore.success('Conversation deleted');
+		} else {
+			toastStore.error('Failed to delete conversation');
+		}
 	}
 
 	deleteMessage(conversationId: string, messageId: string): void {

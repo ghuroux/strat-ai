@@ -1279,7 +1279,6 @@
 		showConversationMenu = false;
 
 		chatStore.deleteConversation(conv.id);
-		toastStore.success('Conversation deleted');
 	}
 
 	// ============================================
@@ -1331,7 +1330,6 @@
 
 	function handleDrawerDelete(convId: string) {
 		chatStore.deleteConversation(convId);
-		toastStore.success('Conversation deleted');
 	}
 
 	// ============================================
