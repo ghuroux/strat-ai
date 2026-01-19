@@ -60,9 +60,15 @@ src/lib/server/persistence/
 If `psql` is available in your PATH:
 
 ```bash
-psql -d stratai -f src/lib/server/persistence/schema.sql
-psql -d stratai -f src/lib/server/persistence/users-schema.sql
+/opt/homebrew/opt/postgresql@18/bin/psql -d stratai -f src/lib/server/persistence/schema.sql
+/opt/homebrew/opt/postgresql@18/bin/psql -d stratai -f src/lib/server/persistence/users-schema.sql
 # ... repeat for each schema file
+```
+
+For migrations:
+
+```bash
+/opt/homebrew/opt/postgresql@18/bin/psql -d stratai -f src/lib/server/persistence/migrations/[migration-file].sql
 ```
 
 ## Why Node.js Method is Preferred
@@ -85,7 +91,12 @@ DATABASE_URL=postgres://ghuroux@localhost:5432/stratai
 
 ### "psql: command not found"
 
-Use the Node.js method above instead. Even if postgres is running locally, `psql` might not be in your PATH.
+Use the full path on macOS with Homebrew:
+```bash
+/opt/homebrew/opt/postgresql@18/bin/psql -d stratai -f [schema-file].sql
+```
+
+Or use the Node.js method above instead.
 
 ### "Connection refused"
 
@@ -102,7 +113,7 @@ Create the database first:
 ```bash
 createdb stratai
 # or via psql:
-# psql -d postgres -c "CREATE DATABASE stratai;"
+# /opt/homebrew/opt/postgresql@18/bin/psql -d postgres -c "CREATE DATABASE stratai;"
 ```
 
 ## Notes

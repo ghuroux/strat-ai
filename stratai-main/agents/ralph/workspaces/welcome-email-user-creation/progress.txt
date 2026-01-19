@@ -1,0 +1,233 @@
+# Ralph Progress Log
+
+## Feature: Welcome Email on User Creation
+**Parent Task:** welcome-email-user-creation
+**Started:** 2026-01-16
+**Status:** Ready to begin
+
+## Summary
+When admins create new users, the system will automatically send a secure welcome email with a "Set Password" link instead of requiring the admin to share passwords manually. This improves security and user experience.
+
+## Key Implementation Notes
+- Reuses existing password_reset_tokens infrastructure with new token_type column
+- Welcome tokens expire in 7 days (vs 1 hour for password reset)
+- Email failure blocks user creation (atomic operation)
+- Invitations tab shows pending users who haven't set their password yet
+
+## Codebase Patterns Discovered
+- Password reset tokens: src/lib/server/persistence/password-reset-tokens-postgres.ts
+- Email templates: src/lib/server/email/templates.ts (getPasswordResetEmail pattern)
+- SendGrid service: src/lib/server/email/sendgrid.ts (with audit logging)
+- Admin members page: src/routes/admin/members/ (+page.server.ts, +page.svelte)
+- Migration numbering: 039 is next available
+
+## Stories
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Add token_type column to password_reset_tokens table | **completed** |
+| US-002 | Create welcome email template | **completed** |
+| US-003 | Update token repository to support token types and variable expiration | **completed** |
+| US-004 | Create set-password page for welcome emails | **completed** |
+| US-005 | Update admin create user flow to send welcome email | **completed** |
+| US-006 | Add resend welcome email action | pending |
+| US-007 | Populate Invitations tab with pending invitations | pending |
+
+---
+
+## Execution Log
+
+### US-001: Add token_type column to password_reset_tokens table
+**Status:** Completed
+**Date:** 2026-01-16
+
+**What was done:**
+- Created migration 039-welcome-tokens.sql
+- Added `token_type` column to `password_reset_tokens` table with CHECK constraint ('reset', 'welcome')
+- Default value is 'reset' so existing tokens continue to work
+- Added index on `token_type` column for efficient lookups
+- Updated `email_logs_type_check` constraint to include 'welcome' email type
+
+**Files changed:**
+- `src/lib/server/persistence/migrations/039-welcome-tokens.sql` (created)
+
+**Patterns applied:**
+- Idempotent migration using `IF NOT EXISTS` and `DROP CONSTRAINT IF EXISTS` patterns
+- CHECK constraints for enum-like values (consistent with existing email_logs_type_check pattern)
+- Column comments for documentation
+
+**Learnings:**
+- Used DO $$ block for conditional column addition (more robust than raw IF NOT EXISTS on ALTER TABLE)
+- The password_reset_tokens table already uses proper camelCase in repository (userId, tokenHash, etc.)
+- ESLint config is missing (mid-migration) - lint baseline shows 0 as acceptable
+
+**Quality gates:**
+- `npm run check`: Passed (only pre-existing warnings)
+- `npm run lint`: Known config issue (baseline shows 0 errors expected)
+
+### US-002: Create welcome email template
+**Status:** Completed
+**Date:** 2026-01-16
+
+**What was done:**
+- Added `getWelcomeEmail()` function to `src/lib/server/email/templates.ts`
+- Created `WelcomeEmailTemplateData` interface with: firstName, organizationName, setPasswordLink, email, expiresInDays
+- Template includes all required elements: greeting with firstName, organization name, set password button, email reminder, 7-day expiration note
+- Added both HTML and plain text versions
+- Added `createSetPasswordLink()` helper function for generating set-password URLs
+- Matched existing password reset email styling (purple gradient header, button styling, layout)
+- Subject line: 'Welcome to StratAI - Set Your Password'
+
+**Files changed:**
+- `src/lib/server/email/templates.ts` (modified - added getWelcomeEmail and createSetPasswordLink)
+
+**Patterns applied:**
+- Followed existing getPasswordResetEmail() pattern for consistency
+- Used same HTML structure and inline styles as password reset email
+- Reused getBaseUrl() helper for URL generation
+- Interface-driven template data (explicit contract)
+
+**Learnings:**
+- Email templates use inline styles (no external CSS) for maximum email client compatibility
+- The purple gradient header (#667eea to #764ba2) is the StratAI brand styling for emails
+- Link expiration displayed in days for welcome emails (vs minutes for password reset)
+- Both HTML and plain text versions are required for accessibility and email client compatibility
+
+**Quality gates:**
+- `npm run check`: Passed (only pre-existing warnings)
+- `npm run lint`: Known config issue (baseline shows 0 errors expected)
+
+### US-003: Update token repository to support token types and variable expiration
+**Status:** Completed
+**Date:** 2026-01-16
+
+**What was done:**
+- Updated `TOKEN_EXPIRY_MINUTES` from a single number to an object with `reset: 60` and `welcome: 10080` values
+- Updated `PasswordResetTokenRow` interface to include `tokenType: TokenType` field
+- Updated `rowToToken()` converter to map the `tokenType` field
+- Updated `create()` method to accept optional `tokenType` parameter (defaults to 'reset')
+- Updated `create()` to use correct expiration based on token type and only invalidate tokens of the same type
+- Updated `verify()` method to accept optional `expectedType` parameter for type validation
+- Added `createByEmail()` method that looks up user by email and creates token (defaults to 'welcome' type)
+- Updated `PasswordResetToken` interface in email.ts to include `tokenType: TokenType` field
+- Added `TokenType` type ('reset' | 'welcome') to email.ts
+- Added 'welcome' to `EmailType` union type
+
+**Files changed:**
+- `src/lib/server/persistence/password-reset-tokens-postgres.ts` (modified - all repository changes)
+- `src/lib/types/email.ts` (modified - added TokenType, updated EmailType and PasswordResetToken)
+
+**Patterns applied:**
+- Default parameter values for backward compatibility (`tokenType = 'reset'`)
+- Record type for mapping token types to expiry values (`Record<TokenType, number>`)
+- Separate invalidation by token type (welcome tokens don't invalidate reset tokens)
+- Method chaining with `this.create()` in `createByEmail()` for code reuse
+- Null coalescing (`??`) instead of OR (`||`) for proper null handling
+
+**Learnings:**
+- Token type filtering in queries prevents unintended invalidation across different flows
+- The `createByEmail()` method provides a clean interface for welcome flow where we have email but not userId
+- Using default parameter values maintains backward compatibility - existing `create(userId)` calls continue to work
+- Query with optional type checking avoids code duplication while maintaining type safety
+
+**Quality gates:**
+- `npm run check`: Passed (0 errors, 160 pre-existing warnings)
+- `npm run lint`: Known config issue (ESLint 9 migration needed - pre-existing)
+- `npm run audit-db-access`: Passed (0 violations)
+
+---
+
+### US-004: Create set-password page for welcome emails
+**Status:** Completed
+**Date:** 2026-01-16
+
+**What was done:**
+- Created `/set-password` route with `+page.svelte` and `+page.server.ts`
+- Implemented server-side token validation on page load (validates welcome tokens specifically)
+- Created `/api/auth/set-password` API endpoint for password submission
+- Added `/set-password` to PUBLIC_ROUTES in `hooks.server.ts`
+- Implemented comprehensive error handling for invalid/expired/used tokens
+- Added clear guidance to contact administrator when token issues occur
+- Password validation: minimum 8 characters, confirmation must match
+- On success: redirects to `/login?message=password_set` after 2 seconds
+
+**Files created:**
+- `src/routes/set-password/+page.svelte` - Password set form UI
+- `src/routes/set-password/+page.server.ts` - Server-side token validation
+- `src/routes/api/auth/set-password/+server.ts` - API endpoint for setting password
+
+**Files modified:**
+- `src/hooks.server.ts` - Added `/set-password` to PUBLIC_ROUTES
+
+**Patterns applied:**
+- Server-side token validation on page load (security best practice - don't waste user time on invalid tokens)
+- Followed existing `reset-password` page styling and structure for consistency
+- Svelte 5 runes: `$props()`, `$state()`, `$derived()` for reactive state management
+- API endpoint validates token type specifically ('welcome' vs 'reset') for security isolation
+- Token validation returns discriminated union type for clear state handling
+
+**Learnings:**
+- Server-side validation on load (`+page.server.ts`) provides better UX than client-side validation - user sees appropriate error immediately
+- Welcome and reset flows share infrastructure but need type isolation for security (prevent reset token being used for welcome flow and vice versa)
+- The `verify(token, 'welcome')` call in repository ensures only welcome tokens work on set-password page
+- Using TypeScript discriminated union (`TokenValidationState`) makes state handling in template clear and type-safe
+- Existing `reset-password` page doesn't have server-side validation - our approach is an improvement
+
+**Quality gates:**
+- `npm run check`: Passed (0 errors, 160 pre-existing warnings)
+- `npm run lint`: Known config issue (ESLint 9 migration needed - pre-existing)
+- `npm run audit-db-access`: Passed (0 violations)
+
+---
+
+### US-005: Update admin create user flow to send welcome email
+**Status:** Completed
+**Date:** 2026-01-16
+
+**What was done:**
+- Removed password field from create user form in `+page.svelte`
+- Added info message: "A welcome email will be sent with a link to set password"
+- Updated `createForm` state to remove password field
+- Updated `+page.server.ts` create action:
+  - Removed password from required fields validation
+  - Creates user with random placeholder password hash (cannot be used to login)
+  - Creates welcome token using `createByEmail()` (7-day expiry)
+  - Sends welcome email via `sendEmail()` with proper audit logging
+  - Rolls back user creation if email fails (atomic operation)
+- Updated success message to show "User created. Welcome email sent to {email}"
+- Added CSS styling for info message box (blue theme, dark/light mode support)
+
+**Files modified:**
+- `src/routes/admin/members/+page.svelte` - UI changes (form, success message, styling)
+- `src/routes/admin/members/+page.server.ts` - Create action with email sending
+
+**Patterns applied:**
+- Atomic operations: user creation rolls back if email fails
+- Placeholder password pattern: generate long random string so user cannot guess/login
+- Used existing repositories: `postgresUserRepository`, `postgresPasswordResetTokenRepository`, `postgresOrganizationRepository`
+- Leveraged existing email infrastructure: `sendEmail()`, `getWelcomeEmail()`, `createSetPasswordLink()`
+- Return additional data from action (`welcomeEmailSent`, `email`) for frontend display
+
+**Learnings:**
+- The `generateTempPassword()` function creates a random 12-char password; combining multiple calls + timestamp creates a practically unguessable placeholder
+- The `sendEmail()` function already handles audit logging via `postgresEmailLogRepository` - no need to log separately
+- The `createByEmail()` method simplifies the token creation flow when we have the email but user was just created
+- Organization name is retrieved from `postgresOrganizationRepository.findById()` for use in welcome email
+- Email metadata captures useful audit info: `{ role, invitedBy: locals.session.userId }`
+
+**Quality gates:**
+- `npm run check`: Passed (0 errors, 160 pre-existing warnings)
+- `npm run lint`: Known config issue (ESLint 9 migration needed - pre-existing)
+
+---
+
+## 2026-01-16 - Update admin create user flow to send welcome email
+Task ID: US-005
+Status: Completed
+
+### What Was Done
+[Fill in implementation details]
+
+### Learnings
+[Capture patterns, decisions, lessons]
+
+---

@@ -16,7 +16,14 @@ export type EmailType =
 	| 'email_verification'
 	| 'team_invite'
 	| 'space_invite'
-	| 'notification';
+	| 'notification'
+	| 'welcome';
+
+/**
+ * Types of password reset tokens
+ * Must match password_reset_tokens.token_type CHECK constraint
+ */
+export type TokenType = 'reset' | 'welcome';
 
 /**
  * Email delivery status
@@ -54,6 +61,7 @@ export interface PasswordResetToken {
 	id: string;
 	userId: string;
 	tokenHash: string;
+	tokenType: TokenType;
 	expiresAt: Date;
 	usedAt: Date | null;
 	createdAt: Date;

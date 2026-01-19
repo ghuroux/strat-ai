@@ -82,8 +82,7 @@
         "US-003"
       ],
       "acceptance_criteria": [
-        "New file: src/lib/server/email/space-invitation.ts",
-        "sendSpaceInvitationEmail() function accepts userId, spaceId, spaceSlug, spaceName, role, invitedByUserId",
+        "sendSpaceInvitationEmail() integrated into space members API",
         "Function fetches user details (firstName, email) from repository",
         "Function fetches inviter details (displayName) from repository",
         "Falls back to 'A team member' if inviter not found",
@@ -118,7 +117,7 @@
       "id": "US-006",
       "title": "Manual testing and verification",
       "description": "As a developer, I need to verify all scenarios work correctly so that users have a reliable experience.",
-      "status": "pending",
+      "status": "completed",
       "dependencies": [
         "US-005"
       ],

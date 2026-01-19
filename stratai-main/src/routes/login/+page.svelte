@@ -1,13 +1,16 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import type { ActionData } from './$types';
+	import type { ActionData, PageData } from './$types';
 
 	// Svelte 5: Use $props for page data
-	let { form }: { form: ActionData } = $props();
+	let { form, data }: { form: ActionData; data: PageData } = $props();
 
 	// Svelte 5: Use $state for local reactive state
 	let loading = $state(false);
 	let showPassword = $state(false);
+
+	// Build form action URL, preserving returnUrl if present
+	const formAction = data.returnUrl ? `?/default&returnUrl=${encodeURIComponent(data.returnUrl)}` : '';
 </script>
 
 <svelte:head>
@@ -21,6 +24,7 @@
 
 		<form
 			method="POST"
+			action={formAction}
 			use:enhance={() => {
 				loading = true;
 				return async ({ update }) => {

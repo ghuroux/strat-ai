@@ -7,10 +7,11 @@
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { postgresSpaceMembershipsRepository } from '$lib/server/persistence';
+import { postgresSpaceMembershipsRepository, postgresUserRepository } from '$lib/server/persistence';
 import { canManageSpaceMembers, type SpaceRole, type SpaceMembershipWithUser } from '$lib/types/space-memberships';
 import { sql } from '$lib/server/persistence/db';
-import { sendSpaceInvitationEmail } from '$lib/server/email';
+import { sendEmail } from '$lib/server/email/sendgrid';
+import { getSpaceInvitationEmail } from '$lib/server/email/templates';
 
 /**
  * GET /api/spaces/[id]/members
@@ -155,62 +156,56 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 			);
 		}
 
+		// Get space details for email (need name, slug, type)
+		const spaceRows = await sql<{ name: string; slug: string; type: string }[]>`
+			SELECT name, slug, space_type as type FROM spaces WHERE id = ${spaceId} AND deleted_at IS NULL
+		`;
+		const space = spaceRows[0];
+
+		if (!space) {
+			return json({ error: 'Space not found' }, { status: 404 });
+		}
+
 		// Add the member (upsert pattern - updates role if already exists)
 		const membership = targetUserId
 			? await postgresSpaceMembershipsRepository.addUserMember(spaceId, targetUserId, role, userId)
 			: await postgresSpaceMembershipsRepository.addGroupMember(spaceId, groupId, role, userId);
 
-		// Send invitation email for user memberships (not org spaces, not self-add, not groups)
-		// Email failure should NOT block membership creation
-		if (targetUserId && targetUserId !== userId) {
+		// Send space invitation email (only for user memberships, not group or org spaces)
+		// Don't send if: org space, self-add, or group membership
+		if (targetUserId && space.type !== 'organization' && targetUserId !== userId) {
 			try {
-				// Fetch space details for the email
-				const spaceRows = await sql<{
-					slug: string;
-					name: string;
-					spaceType: string;
-				}[]>`
-					SELECT slug, name, space_type as spaceType
-					FROM spaces
-					WHERE id = ${spaceId}
-						AND deleted_at IS NULL
-				`;
+				// Get target user details
+				const targetUser = await postgresUserRepository.findById(targetUserId);
+				// Get inviter details
+				const inviter = await postgresUserRepository.findById(userId);
 
-				if (spaceRows.length > 0) {
-					const space = spaceRows[0];
+				if (targetUser?.email) {
+					const inviterName = inviter?.displayName || inviter?.firstName || inviter?.email || 'A team member';
+					const firstName = targetUser.firstName || targetUser.displayName || 'there';
 
-					// Don't send invitation emails for org spaces
-					// Org spaces have automatic membership - users don't need an "invitation"
-					if (space.spaceType !== 'organization') {
-						const emailSent = await sendSpaceInvitationEmail({
-							userId: targetUserId,
-							spaceId,
-							spaceSlug: space.slug,
-							spaceName: space.name,
-							role,
-							invitedByUserId: userId
-						});
+					const emailContent = getSpaceInvitationEmail({
+						firstName,
+						inviterName,
+						spaceName: space.name,
+						spaceSlug: space.slug,
+						role: role as 'admin' | 'member' | 'guest'
+					});
 
-						if (!emailSent) {
-							console.error(
-								'[SPACE_MEMBERS_API] Failed to send invitation email:',
-								{ spaceId, targetUserId, role }
-							);
-						}
-					}
-				} else {
-					console.error(
-						'[SPACE_MEMBERS_API] Could not fetch space details for email:',
-						{ spaceId }
-					);
+					await sendEmail({
+						to: targetUser.email,
+						subject: emailContent.subject,
+						html: emailContent.html,
+						text: emailContent.text,
+						orgId: locals.session.organizationId,
+						userId: targetUserId,
+						emailType: 'space_invite',
+						metadata: { spaceId, spaceName: space.name, role, invitedBy: userId }
+					});
 				}
 			} catch (emailError) {
-				// Log but don't fail the membership creation
-				console.error(
-					'[SPACE_MEMBERS_API] Error sending invitation email:',
-					emailError,
-					{ spaceId, targetUserId, role }
-				);
+				// Log but don't fail - membership was created successfully
+				console.error('Failed to send space invitation email:', emailError);
 			}
 		}
 

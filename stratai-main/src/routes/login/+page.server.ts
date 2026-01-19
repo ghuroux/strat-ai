@@ -9,6 +9,7 @@ import {
 } from '$lib/server/persistence';
 import { sql } from '$lib/server/persistence/db';
 import { getHomePageUrl, type UserPreferences } from '$lib/types/user';
+import { validateReturnUrl } from './+page';
 
 /**
  * User authentication - supports both env var passwords and database passwords
@@ -82,7 +83,7 @@ async function authenticateUser(
 }
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, url }) => {
 		const data = await request.formData();
 		const username = data.get('username')?.toString().trim() || null;
 		const password = data.get('password')?.toString() || '';
@@ -97,6 +98,15 @@ export const actions: Actions = {
 		// Create session with userId and organizationId
 		const token = createSession(authResult.userId, authResult.organizationId);
 		setSessionCookie(cookies, token);
+
+		// Check for returnUrl in query parameters
+		// The form action includes returnUrl as a query param (e.g., ?/default&returnUrl=/spaces/xyz)
+		const returnUrl = url.searchParams.get('returnUrl');
+
+		// If returnUrl is valid, use it; otherwise fall back to user preferences
+		if (validateReturnUrl(returnUrl)) {
+			throw redirect(303, returnUrl);
+		}
 
 		// Load user preferences to determine redirect destination
 		let redirectUrl = '/';

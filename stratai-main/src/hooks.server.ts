@@ -3,7 +3,7 @@ import { redirect } from '@sveltejs/kit';
 import { getSessionCookie, verifySession } from '$lib/server/session';
 import { postgresUserRepository, postgresOrgMembershipRepository } from '$lib/server/persistence';
 
-const PUBLIC_ROUTES = ['/login', '/logout', '/forgot-password', '/reset-password'];
+const PUBLIC_ROUTES = ['/login', '/logout', '/forgot-password', '/reset-password', '/set-password'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Debug logging for logout flow
@@ -72,13 +72,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (isLogoutRelated) {
 			console.log('[HOOKS] Redirecting to /login (no session, not public route)');
 		}
-		throw redirect(303, '/login');
+		// Include returnUrl so user can return to their intended destination after login
+		const returnUrl = event.url.pathname + event.url.search;
+		throw redirect(303, `/login?returnUrl=${encodeURIComponent(returnUrl)}`);
 	}
 
 	// Admin route protection - only owner/admin can access
 	if (event.url.pathname.startsWith('/admin')) {
 		if (!event.locals.session) {
-			throw redirect(303, '/login');
+			const adminReturnUrl = event.url.pathname + event.url.search;
+			throw redirect(303, `/login?returnUrl=${encodeURIComponent(adminReturnUrl)}`);
 		}
 		if (event.locals.session.role !== 'owner' && event.locals.session.role !== 'admin') {
 			throw redirect(303, '/');

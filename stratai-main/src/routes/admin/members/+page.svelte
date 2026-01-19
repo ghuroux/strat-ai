@@ -48,7 +48,6 @@
 		username: '',
 		firstName: '',
 		lastName: '',
-		password: '',
 		role: 'member' as 'owner' | 'admin' | 'member'
 	});
 
@@ -112,7 +111,6 @@
 			username: '',
 			firstName: '',
 			lastName: '',
-			password: '',
 			role: 'member'
 		};
 	}
@@ -162,7 +160,7 @@
 			class:active={activeTab === 'invitations'}
 			onclick={() => (activeTab = 'invitations')}
 		>
-			Invitations (0)
+			Invitations ({data.invitations.length})
 		</button>
 	</div>
 
@@ -205,7 +203,9 @@
 
 	{#if form?.success}
 		<div class="alert alert-success" transition:fly={{ y: -10, duration: 200 }}>
-			{#if form.tempPassword}
+			{#if form.welcomeEmailSent}
+				User created. Welcome email sent to {form.email}
+			{:else if form.tempPassword}
 				User created! Temporary password: <code>{form.tempPassword}</code>
 			{:else}
 				Operation completed successfully
@@ -337,13 +337,98 @@
 			</div>
 		{/if}
 	{:else}
-		<div class="empty-state">
-			<svg class="w-12 h-12 text-surface-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-			</svg>
-			<p>No pending invitations</p>
-			<p class="text-sm text-surface-500">Invitations feature coming soon</p>
-		</div>
+		<!-- Invitations Tab -->
+		{#if data.invitations.length > 0}
+			<div class="table-container">
+				<table class="data-table">
+					<thead>
+						<tr>
+							<th>User</th>
+							<th>Email</th>
+							<th>Status</th>
+							<th>Invited</th>
+							<th>Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each data.invitations as invitation (invitation.id)}
+							<tr>
+								<td class="user-cell">
+									<div class="user-info">
+										<span class="user-name">{invitation.displayName || invitation.username || 'New User'}</span>
+										{#if invitation.username}
+											<span class="user-username">@{invitation.username}</span>
+										{/if}
+									</div>
+								</td>
+								<td>{invitation.email}</td>
+								<td>
+									<span class="badge {invitation.status === 'pending' ? 'badge-yellow' : 'badge-red'}">
+										{invitation.status === 'pending' ? 'Pending' : 'Expired'}
+									</span>
+								</td>
+								<td class="date-cell">{formatDate(invitation.invitedAt)}</td>
+								<td class="actions-cell">
+									<form
+											method="POST"
+											action="?/resendWelcome"
+											use:enhance={() => {
+												return async ({ update }) => {
+													await update();
+												};
+											}}
+										>
+											<input type="hidden" name="userId" value={invitation.id} />
+											<button
+												type="submit"
+												class="btn-icon"
+												title="Resend welcome email"
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+												</svg>
+											</button>
+										</form>
+										<form
+											method="POST"
+											action="?/revokeInvitation"
+											use:enhance={() => {
+												return async ({ update }) => {
+													await update();
+												};
+											}}
+										>
+											<input type="hidden" name="userId" value={invitation.id} />
+											<button
+												type="submit"
+												class="btn-icon text-error-400"
+												title="Revoke invitation"
+												onclick={(e) => {
+													if (!confirm('Are you sure you want to revoke this invitation? The user will be deleted.')) {
+														e.preventDefault();
+													}
+												}}
+											>
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+												</svg>
+											</button>
+										</form>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{:else}
+			<div class="empty-state">
+				<svg class="w-12 h-12 text-surface-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+				</svg>
+				<p>No pending invitations</p>
+				<span class="text-sm text-surface-500">Users who haven't logged in yet will appear here</span>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -392,16 +477,18 @@
 						</div>
 					</div>
 					<div class="form-group">
-						<label for="create-password">Password</label>
-						<input type="text" id="create-password" name="password" bind:value={createForm.password} required placeholder="Enter password" />
-					</div>
-					<div class="form-group">
 						<label for="create-role">Role</label>
 						<select id="create-role" name="role" bind:value={createForm.role}>
 							<option value="member">Member</option>
 							<option value="admin">Admin</option>
 							<option value="owner">Owner</option>
 						</select>
+					</div>
+					<div class="info-message">
+						<svg class="info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+						</svg>
+						<span>A welcome email will be sent with a link to set password</span>
 					</div>
 				</div>
 				<div class="modal-footer">
@@ -772,6 +859,12 @@
 		color: #fca5a5;
 	}
 
+	.badge-yellow {
+		background: rgba(234, 179, 8, 0.15);
+		border-color: rgba(234, 179, 8, 0.3);
+		color: #fde047;
+	}
+
 	.date-cell {
 		font-size: 0.8125rem;
 		color: var(--color-surface-500);
@@ -899,6 +992,32 @@
 	.mt-4 { margin-top: 1rem; }
 	.text-error-400 { color: var(--color-error-400); }
 	.text-success-400 { color: var(--color-success-400); }
+
+	/* Info message for welcome email */
+	.info-message {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 1rem;
+		padding: 0.75rem 1rem;
+		background: rgba(59, 130, 246, 0.1);
+		border: 1px solid rgba(59, 130, 246, 0.25);
+		border-radius: 0.5rem;
+		color: #93c5fd;
+		font-size: 0.8125rem;
+	}
+
+	.info-icon {
+		width: 1rem;
+		height: 1rem;
+		flex-shrink: 0;
+	}
+
+	:global(html.light) .info-message {
+		background: rgba(59, 130, 246, 0.08);
+		border-color: rgba(59, 130, 246, 0.2);
+		color: #2563eb;
+	}
 
 	/* Page description */
 	.page-description {
@@ -1282,5 +1401,11 @@
 		background: rgba(239, 68, 68, 0.1);
 		border-color: rgba(239, 68, 68, 0.2);
 		color: #dc2626;
+	}
+
+	:global(html.light) .badge-yellow {
+		background: rgba(234, 179, 8, 0.1);
+		border-color: rgba(234, 179, 8, 0.2);
+		color: #ca8a04;
 	}
 </style>
