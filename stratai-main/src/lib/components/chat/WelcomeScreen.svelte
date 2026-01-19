@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
+	import { Sparkles, Zap } from 'lucide-svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import type { Assist } from '$lib/types/assists';
 	import { ASSIST_ICONS } from '$lib/config/assists';
+	import { settingsStore } from '$lib/stores/settings.svelte';
 
 	interface Props {
 		hasModel: boolean;
@@ -12,6 +14,16 @@
 	}
 
 	let { hasModel, onNewChat, space = null, activeAssist = null }: Props = $props();
+
+	// AUTO mode identifier
+	const AUTO_MODEL_ID = 'auto';
+
+	// Get reactive selectedModel
+	const selectedModel = $derived(settingsStore.selectedModel);
+
+	function selectAutoMode() {
+		settingsStore.setSelectedModel(AUTO_MODEL_ID);
+	}
 
 	// Get icon path for assist
 	function getAssistIconPath(iconName: string): string {
@@ -62,8 +74,64 @@
 </script>
 
 <div class="h-full flex items-center justify-center min-h-[60vh]" in:fade={{ duration: 300 }}>
-	<div class="text-center max-w-md">
-		{#if activeAssist}
+	{#if !selectedModel}
+		<!-- Model selection guidance for first-time users -->
+		<div class="max-w-md w-full px-4 text-center">
+			<div
+				class="mx-auto w-20 h-20 rounded-2xl mb-6
+						 bg-gradient-to-br from-primary-500/20 to-cyan-500/20
+						 border border-primary-500/30
+						 flex items-center justify-center"
+			>
+				<Sparkles class="w-10 h-10 text-primary-400" />
+			</div>
+
+			<h1 class="text-2xl font-bold text-zinc-100 mb-3">
+				Welcome to StratAI
+			</h1>
+
+			<p class="text-base text-zinc-400 mb-6">
+				To get started, select an AI model
+			</p>
+
+			<div class="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 mb-6 text-left">
+				<div class="flex items-start gap-3">
+					<div
+						class="flex-shrink-0 w-8 h-8 rounded-lg bg-primary-500/15
+									 flex items-center justify-center mt-0.5"
+					>
+						<Zap class="w-4 h-4 text-primary-400" />
+					</div>
+					<div>
+						<p class="text-sm font-medium text-zinc-200 mb-1">
+							We recommend AUTO mode
+						</p>
+						<p class="text-sm text-zinc-400 leading-relaxed">
+							StratAI will automatically choose the best model for each conversation based on complexity.
+						</p>
+					</div>
+				</div>
+			</div>
+
+			<button
+				onclick={selectAutoMode}
+				class="w-full inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl
+						 bg-primary-500 hover:bg-primary-600
+						 text-base font-semibold text-white
+						 transition-all duration-150
+						 shadow-lg shadow-primary-500/25"
+			>
+				<Sparkles class="w-5 h-5" />
+				Select AUTO Mode
+			</button>
+
+			<p class="mt-4 text-sm text-zinc-500">
+				Or select a specific model from the dropdown above
+			</p>
+		</div>
+	{:else}
+		<div class="text-center max-w-md">
+			{#if activeAssist}
 			<!-- ASSIST MODE: Show assist-specific welcome -->
 			<div
 				class="w-24 h-24 mx-auto mb-6 rounded-2xl flex items-center justify-center assist-icon-glow"
@@ -288,6 +356,7 @@
 		</div>
 		{/if}
 	</div>
+	{/if}
 </div>
 
 <style>
