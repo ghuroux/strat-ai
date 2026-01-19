@@ -145,28 +145,35 @@ echo "🤖 [$(date +%H:%M:%S)] [WAVE-2] Sub-agent implementing US-002 (haiku)...
 
 ## Model Selection
 
-For each story, determine the appropriate model before spawning the sub-agent:
+**Default: Sonnet.** Use Sonnet for all stories unless they're trivially simple.
 
-### Use Haiku (Fast, Cost-Effective)
+### Use Sonnet (Default - Thorough, Reliable)
 
-Use `model: "haiku"` when the story:
-- Has ≤ 3 acceptance criteria
-- Modifies only existing files (no new files)
-- Is a "polish", "fix", "update", or "cleanup" type
-- Has clear, simple implementation path
-- Doesn't involve database schema changes
-- Doesn't create new API endpoints
+Use `model: "sonnet"` for:
+- **All new files or components** - Sets patterns for the codebase
+- **Any business logic** - Needs reasoning about edge cases
+- **Database work** - Schema changes, queries, migrations
+- **API endpoints** - Request/response handling, error cases
+- **UI components** - State management, event handling
+- **Multi-file changes** - Coordination across files
+- **Anything you're uncertain about** - When in doubt, use Sonnet
 
-### Use Sonnet (Thorough, Complex Reasoning)
+### Use Haiku (Only for Trivial Fixes)
 
-Use `model: "sonnet"` (or omit model parameter for default) when the story:
-- Has > 3 acceptance criteria
-- Creates new files or components
-- Involves complex business logic
-- Has database changes
-- Creates new API endpoints
-- Is first in dependency chain (sets patterns for later stories)
-- Involves architecture decisions
+Use `model: "haiku"` **only** when ALL of these are true:
+- Single file modification (not creation)
+- ≤ 2 acceptance criteria
+- Obvious, mechanical change (typo fix, rename, add comment)
+- No logic changes, no state changes, no imports
+- You could describe the entire change in one sentence
+
+**Examples of Haiku-appropriate tasks:**
+- Fix a typo in a string
+- Update a CSS class name
+- Change a hardcoded value
+- Add a missing import
+
+**When in doubt, use Sonnet.** The time difference (~2min) is worth the reliability.
 
 ### Example Classification
 
@@ -174,11 +181,12 @@ Use `model: "sonnet"` (or omit model parameter for default) when the story:
 |------------|-------|-----------|
 | Create new utility function | sonnet | New file, sets patterns |
 | Add new API endpoint | sonnet | Complex, multiple concerns |
-| Update existing UI component | haiku | Modification only, clear scope |
-| Fix validation errors | haiku | Targeted fix, clear goal |
-| Add single field to form | haiku | Small, contained change |
+| Update existing UI component | sonnet | State/logic changes likely |
+| Fix validation errors | sonnet | Needs reasoning about causes |
+| Add single field to form | sonnet | State, validation, UI changes |
 | Implement new feature flow | sonnet | Multiple files, architecture |
-| Polish/cleanup code | haiku | Low complexity |
+| Fix typo in error message | haiku | Single string change |
+| Rename CSS class | haiku | Mechanical find/replace |
 
 ## Wave-Based Implementation Flow
 
