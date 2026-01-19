@@ -15,9 +15,12 @@ Extract this path and use it for ALL logging. **DO NOT use relative paths** - th
 
 At the start of your session:
 1. Extract the progress log path from your context (the `**Progress Log:**` line)
-2. Write to that FULL PATH:
+2. Capture the start time and write to the progress log:
 ```bash
-echo "🚀 [$(date +%H:%M:%S)] Orchestrator started (Phase 3 - Parallel Waves)" >> /full/path/from/context/.orchestrator-progress.log
+# Set up progress logging and timing
+PROGRESS_LOG="/full/path/from/context/.orchestrator-progress.log"  # Replace with actual path from context
+ORCHESTRATOR_START=$(date +%s)  # Capture start time for total duration tracking
+echo "🚀 [$(date +%H:%M:%S)] Orchestrator started (Phase 3 - Parallel Waves)" >> "$PROGRESS_LOG"
 ```
 
 **Log these events (always use the FULL PATH from context):**
@@ -27,23 +30,62 @@ echo "🚀 [$(date +%H:%M:%S)] Orchestrator started (Phase 3 - Parallel Waves)" 
 | Wave start | `🌊 [HH:MM:SS] Starting Wave N (X stories)` |
 | Starting story | `📋 [HH:MM:SS] [WAVE-N] Starting US-XXX: [title]` |
 | Sub-agent spawned | `🤖 [HH:MM:SS] [WAVE-N] Sub-agent implementing US-XXX (model)...` |
-| Sub-agent complete | `✅ [HH:MM:SS] [WAVE-N] US-XXX implementation complete` |
+| Sub-agent complete | `✅ [HH:MM:SS] [WAVE-N] US-XXX complete (Xm Ys)` |
 | Wave validation | `🔍 [HH:MM:SS] [WAVE-N] Running validation for wave...` |
 | Validation passed | `✅ [HH:MM:SS] [WAVE-N] Validation passed` |
 | Validation failed | `❌ [HH:MM:SS] [WAVE-N] Validation failed (fixing...)` |
 | Auto-fix starting | `🔧 [HH:MM:SS] [WAVE-N] Auto-fix for US-XXX...` |
 | Creating commit | `📝 [HH:MM:SS] Creating commit for US-XXX...` |
 | Commit created | `✅ [HH:MM:SS] Committed: [short hash] [message]` |
-| Wave complete | `🎉 [HH:MM:SS] Wave N COMPLETE (X stories)` |
-| Feature complete | `🏆 [HH:MM:SS] ALL WAVES COMPLETE - Feature done!` |
+| Wave complete | `🎉 [HH:MM:SS] Wave N COMPLETE (X stories, Xm Ys)` |
+| Feature complete | `🏆 [HH:MM:SS] ALL WAVES COMPLETE (total: Xm Ys)` |
+
+### Timing Instrumentation
+
+Track durations for performance analysis:
+
+```bash
+# At orchestrator start - capture start time
+ORCHESTRATOR_START=$(date +%s)
+
+# At wave start - capture wave start time
+WAVE_START=$(date +%s)
+
+# At story spawn - capture story start time (per story)
+US001_START=$(date +%s)
+
+# At story complete - calculate duration
+US001_END=$(date +%s)
+US001_DURATION=$((US001_END - US001_START))
+US001_MIN=$((US001_DURATION / 60))
+US001_SEC=$((US001_DURATION % 60))
+echo "✅ [$(date +%H:%M:%S)] [WAVE-N] US-001 complete (${US001_MIN}m ${US001_SEC}s)" >> "$PROGRESS_LOG"
+
+# At wave complete - calculate wave duration
+WAVE_END=$(date +%s)
+WAVE_DURATION=$((WAVE_END - WAVE_START))
+WAVE_MIN=$((WAVE_DURATION / 60))
+WAVE_SEC=$((WAVE_DURATION % 60))
+echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE (X stories, ${WAVE_MIN}m ${WAVE_SEC}s)" >> "$PROGRESS_LOG"
+
+# At feature complete - calculate total duration
+TOTAL_END=$(date +%s)
+TOTAL_DURATION=$((TOTAL_END - ORCHESTRATOR_START))
+TOTAL_MIN=$((TOTAL_DURATION / 60))
+TOTAL_SEC=$((TOTAL_DURATION % 60))
+echo "🏆 [$(date +%H:%M:%S)] ALL WAVES COMPLETE (total: ${TOTAL_MIN}m ${TOTAL_SEC}s)" >> "$PROGRESS_LOG"
+```
 
 **Example (replace path with your actual Progress Log path from context):**
 ```bash
 # If your context shows: **Progress Log:** /home/user/project/workspace/.orchestrator-progress.log
 PROGRESS_LOG="/home/user/project/workspace/.orchestrator-progress.log"
+ORCHESTRATOR_START=$(date +%s)
 
 echo "🌊 [$(date +%H:%M:%S)] Starting Wave 2 (2 stories)" >> "$PROGRESS_LOG"
+WAVE_START=$(date +%s)
 echo "📋 [$(date +%H:%M:%S)] [WAVE-2] Starting US-002: Integrate color generation" >> "$PROGRESS_LOG"
+US002_START=$(date +%s)
 echo "🤖 [$(date +%H:%M:%S)] [WAVE-2] Sub-agent implementing US-002 (haiku)..." >> "$PROGRESS_LOG"
 ```
 
@@ -144,9 +186,10 @@ Read `.wave-analysis.json` at the start to get the wave execution plan.
 
 For each wave (in order: wave_number 1, 2, 3...):
 
-### Step 1: Log Wave Start
+### Step 1: Log Wave Start and Capture Time
 
 ```bash
+WAVE_START=$(date +%s)
 echo "🌊 [$(date +%H:%M:%S)] Starting Wave [N] ([X] stories)" >> "$PROGRESS_LOG"
 ```
 
@@ -192,8 +235,10 @@ Task({
 - Use `run_in_background: true` for ALL of them
 - The tool will return task IDs immediately - don't wait for completion
 
-Log each spawn:
+Log each spawn and capture start time:
 ```bash
+# Capture start time for each story (for duration tracking)
+US002_START=$(date +%s)
 echo "📋 [$(date +%H:%M:%S)] [WAVE-N] Starting US-XXX: [title]" >> "$PROGRESS_LOG"
 echo "🤖 [$(date +%H:%M:%S)] [WAVE-N] Sub-agent implementing US-XXX (model)..." >> "$PROGRESS_LOG"
 ```
@@ -298,9 +343,14 @@ const result1 = TaskOutput({ task_id: "task_id_from_step_3", block: true, timeou
 const result2 = TaskOutput({ task_id: "task_id_from_step_3", block: true, timeout: 600000 });
 ```
 
-Log completions:
+Log completions with duration:
 ```bash
-echo "✅ [$(date +%H:%M:%S)] [WAVE-N] US-XXX implementation complete" >> "$PROGRESS_LOG"
+# Calculate duration for each story
+US002_END=$(date +%s)
+US002_DURATION=$((US002_END - US002_START))
+US002_MIN=$((US002_DURATION / 60))
+US002_SEC=$((US002_DURATION % 60))
+echo "✅ [$(date +%H:%M:%S)] [WAVE-N] US-002 complete (${US002_MIN}m ${US002_SEC}s)" >> "$PROGRESS_LOG"
 ```
 
 **Note:** For single-story waves (parallelism = 1), you can skip `run_in_background` and wait directly.
@@ -481,9 +531,14 @@ For each story in the completed wave:
 
 ### Step 9: Complete Wave and Continue
 
-Log wave completion:
+Log wave completion with duration:
 ```bash
-echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE ([X] stories)" >> "$PROGRESS_LOG"
+# Calculate wave duration
+WAVE_END=$(date +%s)
+WAVE_DURATION=$((WAVE_END - WAVE_START))
+WAVE_MIN=$((WAVE_DURATION / 60))
+WAVE_SEC=$((WAVE_DURATION % 60))
+echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE ([X] stories, ${WAVE_MIN}m ${WAVE_SEC}s)" >> "$PROGRESS_LOG"
 ```
 
 **Move to next wave:**
@@ -648,7 +703,20 @@ Write timestamp to .completed file:
 date +%Y-%m-%d-%H:%M:%S > .completed
 ```
 
-### 4. Final Commit
+### 4. Log Feature Completion with Total Time
+
+Log the feature completion with total execution time:
+
+```bash
+# Calculate total execution time
+TOTAL_END=$(date +%s)
+TOTAL_DURATION=$((TOTAL_END - ORCHESTRATOR_START))
+TOTAL_MIN=$((TOTAL_DURATION / 60))
+TOTAL_SEC=$((TOTAL_DURATION % 60))
+echo "🏆 [$(date +%H:%M:%S)] ALL WAVES COMPLETE (total: ${TOTAL_MIN}m ${TOTAL_SEC}s)" >> "$PROGRESS_LOG"
+```
+
+### 5. Final Commit
 
 Create a final commit for the feature:
 
