@@ -1,0 +1,272 @@
+<mxfile host="app.diagrams.net" modified="2026-01-19T08:00:00.000Z" agent="Claude" version="21.0.0">
+  <diagram name="Ralph Loop Workflow" id="ralph-workflow">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1200" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Title -->
+        <mxCell id="title" value="&lt;b&gt;Ralph Loop - Complete Workflow&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;" vertex="1" parent="1">
+          <mxGeometry x="600" y="20" width="400" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane: Human -->
+        <mxCell id="lane-human" value="👤 HUMAN" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1976d2;strokeWidth=2;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="1520" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h1" value="Write Feature Spec&#xa;docs/features/[name].md" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#bbdefb;strokeColor=#1976d2;" vertex="1" parent="lane-human">
+          <mxGeometry x="40" y="40" width="120" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h2" value="Answer&#xa;Clarifications&#xa;(1A, 2B)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbdefb;strokeColor=#1976d2;" vertex="1" parent="lane-human">
+          <mxGeometry x="400" y="50" width="100" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h3" value="Review &amp; Approve PRD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbdefb;strokeColor=#1976d2;" vertex="1" parent="lane-human">
+          <mxGeometry x="720" y="50" width="100" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h4" value="Run Daily Sync&#xa;branch-check.sh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbdefb;strokeColor=#1976d2;" vertex="1" parent="lane-human">
+          <mxGeometry x="880" y="50" width="100" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h5" value="Manual Fix&#xa;(if needed)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;" vertex="1" parent="lane-human">
+          <mxGeometry x="1180" y="40" width="80" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h6" value="Review &amp;&#xa;Merge PR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbdefb;strokeColor=#1976d2;" vertex="1" parent="lane-human">
+          <mxGeometry x="1380" y="50" width="100" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane: PRD Creator Agent -->
+        <mxCell id="lane-prd" value="🤖 PRD CREATOR AGENT" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=#f57c00;strokeWidth=2;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="240" width="1520" height="180" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1" value="Phase 1&#xa;RESEARCH&#xa;• Read spec&#xa;• Search codebase&#xa;• Review docs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;align=center;" vertex="1" parent="lane-prd">
+          <mxGeometry x="180" y="30" width="100" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p2" value="Phase 2&#xa;ANALYSIS&#xa;🔴 Blockers&#xa;🟡 Clarify&#xa;🟢 Suggest" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;align=center;" vertex="1" parent="lane-prd">
+          <mxGeometry x="300" y="30" width="100" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p3" value="Phase 3&#xa;DECISIONS&#xa;Document&#xa;answers" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;align=center;" vertex="1" parent="lane-prd">
+          <mxGeometry x="500" y="50" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p4" value="Phase 4&#xa;GENERATE&#xa;• prd.json&#xa;• progress.txt&#xa;• parent-task-id.txt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;align=center;" vertex="1" parent="lane-prd">
+          <mxGeometry x="540" y="30" width="120" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p5" value="Phase 5&#xa;WORKSPACE&#xa;• Create dir&#xa;• Feature branch&#xa;• Record in prd.json&#xa;• Commit" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;align=center;" vertex="1" parent="lane-prd">
+          <mxGeometry x="680" y="20" width="120" height="140" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p6" value="Phase 6&#xa;CONFIRM&#xa;Summary +&#xa;Next Steps" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;align=center;" vertex="1" parent="lane-prd">
+          <mxGeometry x="820" y="50" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane: Ralph Loop -->
+        <mxCell id="lane-ralph" value="🔄 RALPH LOOP (ralph.sh)" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#f3e5f5;strokeColor=#7b1fa2;strokeWidth=2;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="1520" height="200" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r1" value="PREFLIGHT&#xa;• Validate&#xa;• Check baseline&#xa;• Verify branch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;align=center;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="940" y="40" width="100" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r2" value="LOAD&#xa;STORY&#xa;from prd.json" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;align=center;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="1060" y="60" width="80" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r3" value="IMPLEMENT&#xa;Write code&#xa;Follow patterns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;align=center;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="1060" y="130" width="80" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r4" value="QUALITY&#xa;GATES&#xa;check/lint/test" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;align=center;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="1160" y="60" width="80" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r5" value="Pass?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="1165" y="130" width="70" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r6" value="COMMIT&#xa;&amp; UPDATE&#xa;progress.txt" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;align=center;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="1260" y="60" width="80" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r7" value="More?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="1265" y="130" width="70" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="r8" value="POSTFLIGHT&#xa;Archive&#xa;Extract patterns" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;align=center;" vertex="1" parent="lane-ralph">
+          <mxGeometry x="1360" y="60" width="100" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Swimlane: Git/System -->
+        <mxCell id="lane-git" value="📦 GIT / SYSTEM" style="swimlane;horizontal=0;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=#388e3c;strokeWidth=2;fontSize=14;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="620" width="1520" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="g1" value="feature/&#xa;branch&#xa;created" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#c8e6c9;strokeColor=#388e3c;" vertex="1" parent="lane-git">
+          <mxGeometry x="710" y="20" width="80" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="g2" value="commits&#xa;per story" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#c8e6c9;strokeColor=#388e3c;" vertex="1" parent="lane-git">
+          <mxGeometry x="1260" y="20" width="80" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="g3" value="merged&#xa;to main" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#c8e6c9;strokeColor=#388e3c;" vertex="1" parent="lane-git">
+          <mxGeometry x="1400" y="20" width="80" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Connectors -->
+        <!-- Human to PRD Creator -->
+        <mxCell id="c1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="h1" target="p1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- PRD internal flow -->
+        <mxCell id="c2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="p1" target="p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;dashed=1;" edge="1" parent="1" source="p2" target="h2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="h2" target="p3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="p3" target="p4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="p4" target="p5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="p5" target="g1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="p5" target="p6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;dashed=1;" edge="1" parent="1" source="p6" target="h3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Human approves, runs sync -->
+        <mxCell id="c10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="h3" target="h4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Human sync to Ralph -->
+        <mxCell id="c11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="h4" target="r1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Ralph loop internal -->
+        <mxCell id="c12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="r1" target="r2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="r2" target="r3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="r3" target="r4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="r4" target="r5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c16" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#388e3c;" edge="1" parent="1" source="r5" target="r6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c17" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#d32f2f;dashed=1;" edge="1" parent="1" source="r5" target="h5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;dashed=1;" edge="1" parent="1" source="h5" target="r4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="r6" target="g2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="r6" target="r7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c21" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#1976d2;curved=1;" edge="1" parent="1" source="r7" target="r2">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1300" y="590" />
+              <mxPoint x="1100" y="590" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="c22" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#388e3c;" edge="1" parent="1" source="r7" target="r8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;dashed=1;" edge="1" parent="1" source="r8" target="h6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="c24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeWidth=2;strokeColor=#333333;" edge="1" parent="1" source="h6" target="g3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Legend -->
+        <mxCell id="legend" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#999999;strokeWidth=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="760" width="300" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-title" value="&lt;b&gt;Legend&lt;/b&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="770" width="100" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-human" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#bbdefb;strokeColor=#1976d2;" vertex="1" parent="1">
+          <mxGeometry x="50" y="800" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-human-text" value="Human Action" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="80" y="800" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-agent" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe0b2;strokeColor=#f57c00;" vertex="1" parent="1">
+          <mxGeometry x="50" y="830" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-agent-text" value="Agent Action" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="80" y="830" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-loop" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1bee7;strokeColor=#7b1fa2;" vertex="1" parent="1">
+          <mxGeometry x="180" y="800" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-loop-text" value="Ralph Loop" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="210" y="800" width="80" height="20" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend-decision" value="" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff9c4;strokeColor=#f9a825;" vertex="1" parent="1">
+          <mxGeometry x="180" y="825" width="20" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="legend-decision-text" value="Decision" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="210" y="830" width="80" height="20" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
