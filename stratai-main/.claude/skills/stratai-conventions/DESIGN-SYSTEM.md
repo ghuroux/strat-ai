@@ -5,7 +5,8 @@
 StratAI follows a **premium, clean aesthetic** with consistent patterns across all components. This document is the authoritative reference for UI/UX implementation.
 
 **Design Principles:**
-- **Dark-first**: Dark theme default (zinc-950 background)
+- **Theme-aware**: MUST support both dark and light modes (see Theme Support below)
+- **Dark-first**: Dark theme default, but light mode is REQUIRED
 - **Subtle depth**: Semi-transparent backgrounds with blur effects
 - **Consistent spacing**: 4px base unit (Tailwind's spacing scale)
 - **Clear hierarchy**: Typography and color signal importance
@@ -13,25 +14,100 @@ StratAI follows a **premium, clean aesthetic** with consistent patterns across a
 
 ---
 
+## ⚠️ Theme Support (CRITICAL)
+
+### MANDATORY: All components MUST support both dark and light modes
+
+Never use hardcoded dark-mode-only colors. Always use the `dark:` prefix pattern.
+
+**The Pattern:**
+```svelte
+<!-- ✅ CORRECT: Theme-aware (light mode base, dark mode override) -->
+<div class="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100">
+
+<!-- ❌ WRONG: Dark-mode-only (invisible/unreadable in light mode!) -->
+<div class="bg-zinc-900 text-zinc-100">
+```
+
+### How Theming Works
+
+The app uses Tailwind's `class` strategy. The `<html>` element receives a `dark` class when dark mode is active:
+- **Light mode**: Classes apply as written (e.g., `bg-white`)
+- **Dark mode**: `dark:` prefixed classes override (e.g., `dark:bg-zinc-900`)
+
+### Theme-Aware Component Template
+
+```svelte
+<!-- Complete theme-aware structure -->
+<div class="
+  bg-white dark:bg-zinc-900
+  text-zinc-900 dark:text-zinc-100
+  border border-zinc-200 dark:border-zinc-700
+">
+  <h2 class="text-zinc-900 dark:text-zinc-100 font-semibold">Title</h2>
+  <p class="text-zinc-600 dark:text-zinc-400">Description</p>
+  <button class="
+    bg-zinc-100 dark:bg-zinc-800
+    hover:bg-zinc-200 dark:hover:bg-zinc-700
+    text-zinc-700 dark:text-zinc-300
+  ">
+    Action
+  </button>
+</div>
+```
+
+---
+
 ## Color Tokens
 
-### Surface Colors (Dark Mode)
+### Surface Colors (Theme-Aware)
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `bg-zinc-950` | `#0f0f11` | App background |
-| `bg-zinc-900` | `#18181b` | Cards, modals, sidebar |
-| `bg-zinc-800` | `#27272a` | Input backgrounds, elevated surfaces |
-| `bg-zinc-700` | `#3f3f46` | Borders, dividers, skeleton loaders |
+| Purpose | Light Mode | Dark Mode | Combined Class |
+|---------|------------|-----------|----------------|
+| App background | `bg-zinc-50` | `bg-zinc-950` | `bg-zinc-50 dark:bg-zinc-950` |
+| Cards, modals | `bg-white` | `bg-zinc-900` | `bg-white dark:bg-zinc-900` |
+| Elevated surfaces | `bg-zinc-100` | `bg-zinc-800` | `bg-zinc-100 dark:bg-zinc-800` |
+| Input backgrounds | `bg-zinc-100` | `bg-zinc-800` | `bg-zinc-100 dark:bg-zinc-800` |
+| Borders | `border-zinc-200` | `border-zinc-700` | `border-zinc-200 dark:border-zinc-700` |
+| Dividers | `border-zinc-200` | `border-zinc-700/50` | `border-zinc-200 dark:border-zinc-700/50` |
+| Skeleton loaders | `bg-zinc-200` | `bg-zinc-700` | `bg-zinc-200 dark:bg-zinc-700` |
 
-### Text Colors
+### Text Colors (Theme-Aware)
 
-| Token | Usage |
-|-------|-------|
-| `text-zinc-100` | Headings, primary text |
-| `text-zinc-200` | Body text, button labels |
-| `text-zinc-400` | Secondary text, descriptions |
-| `text-zinc-500` | Tertiary text, hints, timestamps |
+| Purpose | Light Mode | Dark Mode | Combined Class |
+|---------|------------|-----------|----------------|
+| Headings, primary | `text-zinc-900` | `text-zinc-100` | `text-zinc-900 dark:text-zinc-100` |
+| Body text | `text-zinc-800` | `text-zinc-200` | `text-zinc-800 dark:text-zinc-200` |
+| Secondary text | `text-zinc-600` | `text-zinc-400` | `text-zinc-600 dark:text-zinc-400` |
+| Tertiary, hints | `text-zinc-500` | `text-zinc-500` | `text-zinc-500` (same both modes) |
+| Placeholder | `placeholder:text-zinc-400` | `placeholder:text-zinc-500` | `placeholder:text-zinc-400 dark:placeholder:text-zinc-500` |
+
+### Hover States (Theme-Aware)
+
+| Purpose | Light Mode | Dark Mode | Combined Class |
+|---------|------------|-----------|----------------|
+| Surface hover | `hover:bg-zinc-100` | `hover:bg-zinc-800` | `hover:bg-zinc-100 dark:hover:bg-zinc-800` |
+| Text hover | `hover:text-zinc-900` | `hover:text-zinc-100` | `hover:text-zinc-900 dark:hover:text-zinc-100` |
+
+### Quick Copy-Paste Reference
+
+```svelte
+<!-- Surfaces -->
+bg-zinc-50 dark:bg-zinc-950           <!-- App background -->
+bg-white dark:bg-zinc-900              <!-- Cards/modals -->
+bg-zinc-100 dark:bg-zinc-800           <!-- Inputs, elevated -->
+border-zinc-200 dark:border-zinc-700   <!-- Borders -->
+
+<!-- Text -->
+text-zinc-900 dark:text-zinc-100       <!-- Primary text -->
+text-zinc-800 dark:text-zinc-200       <!-- Body text -->
+text-zinc-600 dark:text-zinc-400       <!-- Secondary text -->
+text-zinc-500                          <!-- Tertiary (same) -->
+
+<!-- Hover states -->
+hover:bg-zinc-100 dark:hover:bg-zinc-800
+hover:text-zinc-900 dark:hover:text-zinc-100
+```
 
 ### Primary Brand
 
@@ -45,17 +121,19 @@ StratAI follows a **premium, clean aesthetic** with consistent patterns across a
 |-------|-------|
 | `bg-primary-500` | Primary buttons |
 | `hover:bg-primary-600` | Primary button hover |
-| `text-primary-400` | Links, accents, interactive text |
+| `text-primary-400` | Links, accents (dark mode) |
+| `text-primary-500` | Links, accents (light mode) |
+| `text-primary-500 dark:text-primary-400` | Theme-aware links |
 | `bg-primary-500/15` | Tinted icon containers |
 
-### Semantic Colors
+### Semantic Colors (work in both themes)
 
-| State | Background | Border | Text |
-|-------|------------|--------|------|
-| **Success** | `bg-green-500/15` | `border-green-500/30` | `text-green-400` |
-| **Error** | `bg-red-500/15` | `border-red-500/30` | `text-red-400` |
-| **Warning** | `bg-amber-500/15` | `border-amber-500/30` | `text-amber-400` |
-| **Info** | `bg-primary-500/15` | `border-primary-500/30` | `text-primary-400` |
+| State | Background | Border | Text (Theme-Aware) |
+|-------|------------|--------|---------------------|
+| **Success** | `bg-green-500/15` | `border-green-500/30` | `text-green-600 dark:text-green-400` |
+| **Error** | `bg-red-500/15` | `border-red-500/30` | `text-red-600 dark:text-red-400` |
+| **Warning** | `bg-amber-500/15` | `border-amber-500/30` | `text-amber-600 dark:text-amber-400` |
+| **Info** | `bg-primary-500/15` | `border-primary-500/30` | `text-primary-600 dark:text-primary-400` |
 
 ### Role Colors (Memberships)
 
@@ -90,20 +168,20 @@ StratAI follows a **premium, clean aesthetic** with consistent patterns across a
 | `font-semibold` | 600 | Subheadings |
 | `font-bold` | 700 | Headings |
 
-### Common Combinations
+### Common Combinations (Theme-Aware)
 
 ```html
 <!-- Page heading -->
-<h1 class="text-2xl font-bold text-zinc-100">Welcome</h1>
+<h1 class="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Welcome</h1>
 
 <!-- Section heading -->
-<h2 class="text-lg font-semibold text-zinc-100">Settings</h2>
+<h2 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Settings</h2>
 
 <!-- Body text -->
-<p class="text-sm text-zinc-400">Description here...</p>
+<p class="text-sm text-zinc-600 dark:text-zinc-400">Description here...</p>
 
 <!-- Label -->
-<label class="text-sm font-medium text-zinc-200">Name</label>
+<label class="text-sm font-medium text-zinc-800 dark:text-zinc-200">Name</label>
 ```
 
 ---
@@ -139,7 +217,7 @@ Based on Tailwind's 4px unit. Common patterns:
 
 ### Buttons
 
-**Primary Button:**
+**Primary Button:** (same in both themes - brand color)
 ```svelte
 <button class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg
                bg-primary-500 hover:bg-primary-600
@@ -151,18 +229,19 @@ Based on Tailwind's 4px unit. Common patterns:
 </button>
 ```
 
-**Secondary Button:**
+**Secondary Button:** (theme-aware)
 ```svelte
 <button class="px-4 py-2 rounded-lg
-               bg-zinc-800 hover:bg-zinc-700
-               border border-zinc-600
-               text-sm font-medium text-zinc-200
+               bg-zinc-100 dark:bg-zinc-800
+               hover:bg-zinc-200 dark:hover:bg-zinc-700
+               border border-zinc-300 dark:border-zinc-600
+               text-sm font-medium text-zinc-800 dark:text-zinc-200
                transition-all duration-150">
   Cancel
 </button>
 ```
 
-**Destructive Button:**
+**Destructive Button:** (same in both themes)
 ```svelte
 <button class="inline-flex items-center gap-2 px-4 py-2 rounded-lg
                bg-red-600 hover:bg-red-700
@@ -173,22 +252,25 @@ Based on Tailwind's 4px unit. Common patterns:
 </button>
 ```
 
-**Ghost/Text Button:**
+**Ghost/Text Button:** (theme-aware)
 ```svelte
 <button class="px-3 py-1.5 rounded-md
-               text-sm font-medium text-zinc-400
-               hover:text-zinc-200 hover:bg-zinc-800
+               text-sm font-medium
+               text-zinc-600 dark:text-zinc-400
+               hover:text-zinc-900 dark:hover:text-zinc-200
+               hover:bg-zinc-100 dark:hover:bg-zinc-800
                transition-colors">
   View More
 </button>
 ```
 
-**Icon-Only Button:**
+**Icon-Only Button:** (theme-aware)
 ```svelte
 <button class="w-10 h-10 rounded-lg
                flex items-center justify-center
-               text-zinc-400 hover:text-zinc-200
-               hover:bg-zinc-800
+               text-zinc-600 dark:text-zinc-400
+               hover:text-zinc-900 dark:hover:text-zinc-200
+               hover:bg-zinc-100 dark:hover:bg-zinc-800
                transition-colors">
   <X class="w-5 h-5" />
 </button>
@@ -213,16 +295,17 @@ Based on Tailwind's 4px unit. Common patterns:
 </button>
 ```
 
-### Inputs
+### Inputs (Theme-Aware)
 
 **Text Input:**
 ```svelte
 <input
   type="text"
   class="w-full px-3 py-2 rounded-lg
-         bg-zinc-800 border border-zinc-700
-         text-sm text-zinc-100
-         placeholder:text-zinc-500
+         bg-zinc-100 dark:bg-zinc-800
+         border border-zinc-300 dark:border-zinc-700
+         text-sm text-zinc-900 dark:text-zinc-100
+         placeholder:text-zinc-400 dark:placeholder:text-zinc-500
          focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/50
          disabled:opacity-50 disabled:cursor-not-allowed"
   placeholder="Enter text..."
@@ -233,22 +316,24 @@ Based on Tailwind's 4px unit. Common patterns:
 ```svelte
 <textarea
   class="w-full px-3 py-2 rounded-lg resize-none
-         bg-zinc-800 border border-zinc-700
-         text-sm text-zinc-100
-         placeholder:text-zinc-500
+         bg-zinc-100 dark:bg-zinc-800
+         border border-zinc-300 dark:border-zinc-700
+         text-sm text-zinc-900 dark:text-zinc-100
+         placeholder:text-zinc-400 dark:placeholder:text-zinc-500
          focus:border-primary-500 focus:outline-none"
   rows="4"
   placeholder="Enter description..."
 />
 ```
 
-### Cards
+### Cards (Theme-Aware)
 
 **Standard Card:**
 ```svelte
 <div class="p-4 rounded-xl
-            bg-zinc-800/50 border border-zinc-700/50
-            hover:bg-zinc-800/70
+            bg-zinc-100/50 dark:bg-zinc-800/50
+            border border-zinc-200/50 dark:border-zinc-700/50
+            hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70
             transition-colors">
   <!-- content -->
 </div>
@@ -257,48 +342,51 @@ Based on Tailwind's 4px unit. Common patterns:
 **Interactive Card:**
 ```svelte
 <button class="w-full p-4 rounded-xl text-left
-               bg-zinc-800/50 border border-zinc-700/50
-               hover:bg-zinc-800/70 hover:border-zinc-600
+               bg-zinc-100/50 dark:bg-zinc-800/50
+               border border-zinc-200/50 dark:border-zinc-700/50
+               hover:bg-zinc-200/70 dark:hover:bg-zinc-800/70
+               hover:border-zinc-300 dark:hover:border-zinc-600
                transition-all duration-150">
   <!-- content -->
 </button>
 ```
 
-### Icon Containers
+### Icon Containers (Theme-Aware)
 
 Used for feature icons, status indicators, etc.
 
 ```svelte
 <!-- Standard icon container -->
 <div class="w-10 h-10 rounded-lg
-            bg-zinc-800/50 border border-zinc-700/50
+            bg-zinc-200/50 dark:bg-zinc-800/50
+            border border-zinc-300/50 dark:border-zinc-700/50
             flex items-center justify-center">
-  <Icon class="w-5 h-5 text-zinc-400" />
+  <Icon class="w-5 h-5 text-zinc-600 dark:text-zinc-400" />
 </div>
 
-<!-- Colored icon container -->
+<!-- Colored icon container (works in both themes) -->
 <div class="w-10 h-10 rounded-lg
             bg-primary-500/15 border border-primary-500/30
             flex items-center justify-center">
-  <Sparkles class="w-5 h-5 text-primary-400" />
+  <Sparkles class="w-5 h-5 text-primary-600 dark:text-primary-400" />
 </div>
 
-<!-- Error icon container -->
+<!-- Error icon container (works in both themes) -->
 <div class="w-10 h-10 rounded-lg
             bg-red-500/15 border border-red-500/30
             flex items-center justify-center">
-  <AlertTriangle class="w-5 h-5 text-red-400" />
+  <AlertTriangle class="w-5 h-5 text-red-600 dark:text-red-400" />
 </div>
 ```
 
-### Alert/Message Boxes
+### Alert/Message Boxes (Theme-Aware)
 
 **Info Box:**
 ```svelte
 <div class="p-4 rounded-lg bg-primary-500/10 border border-primary-500/20">
   <div class="flex items-start gap-3">
-    <Info class="w-5 h-5 text-primary-400 flex-shrink-0 mt-0.5" />
-    <p class="text-sm text-zinc-300">Information message here.</p>
+    <Info class="w-5 h-5 text-primary-600 dark:text-primary-400 flex-shrink-0 mt-0.5" />
+    <p class="text-sm text-zinc-700 dark:text-zinc-300">Information message here.</p>
   </div>
 </div>
 ```
@@ -307,8 +395,8 @@ Used for feature icons, status indicators, etc.
 ```svelte
 <div class="p-4 rounded-lg bg-amber-500/10 border border-amber-500/20">
   <div class="flex items-start gap-3">
-    <AlertTriangle class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-    <p class="text-sm text-zinc-300">Warning message here.</p>
+    <AlertTriangle class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+    <p class="text-sm text-zinc-700 dark:text-zinc-300">Warning message here.</p>
   </div>
 </div>
 ```
@@ -317,15 +405,15 @@ Used for feature icons, status indicators, etc.
 ```svelte
 <div class="p-4 rounded-lg bg-red-500/10 border border-red-500/20">
   <div class="flex items-start gap-3">
-    <AlertCircle class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-    <p class="text-sm text-zinc-300">Error message here.</p>
+    <AlertCircle class="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+    <p class="text-sm text-zinc-700 dark:text-zinc-300">Error message here.</p>
   </div>
 </div>
 ```
 
 ---
 
-## Modals
+## Modals (Theme-Aware)
 
 ### Standard Modal Structure
 
@@ -333,22 +421,26 @@ Used for feature icons, status indicators, etc.
 <!-- Backdrop -->
 <div
   class="fixed inset-0 z-50 flex items-center justify-center p-4
-         bg-black/60 backdrop-blur-sm"
+         bg-black/50 dark:bg-black/60 backdrop-blur-sm"
   transition:fade={{ duration: 150 }}
   onclick={onClose}
 >
   <!-- Modal -->
   <div
     class="w-full max-w-md
-           bg-zinc-900 border border-zinc-700/50 rounded-xl
-           shadow-2xl"
+           bg-white dark:bg-zinc-900
+           border border-zinc-200 dark:border-zinc-700/50
+           rounded-xl shadow-2xl"
     transition:fly={{ y: 20, duration: 200 }}
     onclick|stopPropagation
   >
     <!-- Header -->
-    <div class="flex items-center justify-between p-5 border-b border-zinc-700/50">
-      <h3 class="text-lg font-semibold text-zinc-100">Modal Title</h3>
-      <button onclick={onClose} class="text-zinc-400 hover:text-zinc-200">
+    <div class="flex items-center justify-between p-5
+                border-b border-zinc-200 dark:border-zinc-700/50">
+      <h3 class="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Modal Title</h3>
+      <button onclick={onClose}
+              class="text-zinc-500 dark:text-zinc-400
+                     hover:text-zinc-900 dark:hover:text-zinc-200">
         <X class="w-5 h-5" />
       </button>
     </div>
@@ -360,8 +452,10 @@ Used for feature icons, status indicators, etc.
 
     <!-- Footer -->
     <div class="flex items-center justify-end gap-3 p-4
-                border-t border-zinc-700/30 bg-zinc-900/50">
-      <button class="px-4 py-2 rounded-lg bg-zinc-800 ...">Cancel</button>
+                border-t border-zinc-100 dark:border-zinc-700/30
+                bg-zinc-50/50 dark:bg-zinc-900/50">
+      <button class="px-4 py-2 rounded-lg
+                     bg-zinc-100 dark:bg-zinc-800 ...">Cancel</button>
       <button class="px-4 py-2.5 rounded-lg bg-primary-500 ...">Confirm</button>
     </div>
   </div>
@@ -374,10 +468,11 @@ Used for feature icons, status indicators, etc.
 <!-- Desktop: centered, Mobile: bottom sheet -->
 <div class="fixed inset-0 z-50
             flex items-end md:items-center justify-center
-            p-0 md:p-4 bg-black/60 backdrop-blur-sm">
+            p-0 md:p-4 bg-black/50 dark:bg-black/60 backdrop-blur-sm">
   <div class="w-full md:max-w-lg
               max-h-[90vh] md:max-h-[85vh]
-              bg-zinc-900 border-t md:border border-zinc-700/50
+              bg-white dark:bg-zinc-900
+              border-t md:border border-zinc-200 dark:border-zinc-700/50
               rounded-t-2xl md:rounded-xl
               overflow-hidden flex flex-col">
     <!-- Content with safe area -->
@@ -390,24 +485,25 @@ Used for feature icons, status indicators, etc.
 
 ---
 
-## Empty States
+## Empty States (Theme-Aware)
 
 ```svelte
 <div class="flex flex-col items-center justify-center text-center py-16 px-8">
   <!-- Icon container -->
   <div class="w-16 h-16 rounded-2xl mb-4
-              bg-zinc-800/50 border border-zinc-700/50
+              bg-zinc-200/50 dark:bg-zinc-800/50
+              border border-zinc-300/50 dark:border-zinc-700/50
               flex items-center justify-center">
-    <Layers class="w-8 h-8 text-zinc-400" />
+    <Layers class="w-8 h-8 text-zinc-500 dark:text-zinc-400" />
   </div>
 
   <!-- Heading -->
-  <h3 class="text-lg font-semibold text-zinc-200 mb-2">
+  <h3 class="text-lg font-semibold text-zinc-800 dark:text-zinc-200 mb-2">
     No items yet
   </h3>
 
   <!-- Description -->
-  <p class="text-sm text-zinc-400 max-w-xs mb-5">
+  <p class="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs mb-5">
     Get started by creating your first item.
   </p>
 
@@ -422,24 +518,26 @@ Used for feature icons, status indicators, etc.
 
 ---
 
-## Loading States
+## Loading States (Theme-Aware)
 
 ### Skeleton Loader
 
 ```svelte
 <div class="animate-pulse">
   <!-- Card skeleton -->
-  <div class="p-4 rounded-xl bg-zinc-800/50 border border-zinc-700/50">
+  <div class="p-4 rounded-xl
+              bg-zinc-100/50 dark:bg-zinc-800/50
+              border border-zinc-200/50 dark:border-zinc-700/50">
     <div class="flex items-start gap-3">
       <!-- Icon placeholder -->
-      <div class="w-10 h-10 rounded-lg bg-zinc-700/70"></div>
+      <div class="w-10 h-10 rounded-lg bg-zinc-300/70 dark:bg-zinc-700/70"></div>
 
       <div class="flex-1 space-y-2">
         <!-- Title -->
-        <div class="h-4 bg-zinc-700/70 rounded-md w-3/4"></div>
+        <div class="h-4 bg-zinc-300/70 dark:bg-zinc-700/70 rounded-md w-3/4"></div>
         <!-- Description -->
-        <div class="h-3 bg-zinc-700/50 rounded w-full"></div>
-        <div class="h-3 bg-zinc-700/50 rounded w-2/3"></div>
+        <div class="h-3 bg-zinc-200/70 dark:bg-zinc-700/50 rounded w-full"></div>
+        <div class="h-3 bg-zinc-200/70 dark:bg-zinc-700/50 rounded w-2/3"></div>
       </div>
     </div>
   </div>
@@ -449,7 +547,8 @@ Used for feature icons, status indicators, etc.
 ### Loading Spinner (Inline SVG)
 
 ```svelte
-<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+<!-- Uses currentColor - add theme-aware text class to parent or element -->
+<svg class="w-5 h-5 animate-spin text-zinc-600 dark:text-zinc-400" fill="none" viewBox="0 0 24 24">
   <circle class="opacity-25" cx="12" cy="12" r="10"
           stroke="currentColor" stroke-width="4" />
   <path class="opacity-75" fill="currentColor"
@@ -461,11 +560,11 @@ Used for feature icons, status indicators, etc.
 
 ```svelte
 <div class="flex items-center gap-1">
-  <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"
+  <div class="w-2 h-2 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce"
        style="animation-delay: 0ms"></div>
-  <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"
+  <div class="w-2 h-2 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce"
        style="animation-delay: 150ms"></div>
-  <div class="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"
+  <div class="w-2 h-2 bg-zinc-500 dark:bg-zinc-400 rounded-full animate-bounce"
        style="animation-delay: 300ms"></div>
 </div>
 ```
@@ -604,16 +703,16 @@ Preferred touch target: **40px** (`w-10 h-10`)
 
 ## Quick Reference
 
-### Button Variants
+### Button Variants (Theme-Aware)
 
-| Variant | Background | Hover | Text |
-|---------|------------|-------|------|
-| Primary | `bg-primary-500` | `hover:bg-primary-600` | `text-white` |
-| Secondary | `bg-zinc-800 border-zinc-600` | `hover:bg-zinc-700` | `text-zinc-200` |
-| Destructive | `bg-red-600` | `hover:bg-red-700` | `text-white` |
-| Ghost | transparent | `hover:bg-zinc-800` | `text-zinc-400` |
+| Variant | Light Mode | Dark Mode | Text |
+|---------|------------|-----------|------|
+| Primary | `bg-primary-500` | same | `text-white` |
+| Secondary | `bg-zinc-100 border-zinc-300` | `dark:bg-zinc-800 dark:border-zinc-600` | `text-zinc-800 dark:text-zinc-200` |
+| Destructive | `bg-red-600` | same | `text-white` |
+| Ghost | `hover:bg-zinc-100` | `dark:hover:bg-zinc-800` | `text-zinc-600 dark:text-zinc-400` |
 
-### Semantic Backgrounds
+### Semantic Backgrounds (work in both themes)
 
 | State | Background | Border |
 |-------|------------|--------|

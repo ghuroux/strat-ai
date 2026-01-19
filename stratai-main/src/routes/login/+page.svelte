@@ -10,7 +10,9 @@
 	let showPassword = $state(false);
 
 	// Build form action URL, preserving returnUrl if present
-	const formAction = data.returnUrl ? `?/default&returnUrl=${encodeURIComponent(data.returnUrl)}` : '';
+	// Note: Don't use "?/default" - "default" is a reserved action name in SvelteKit
+	// Instead, use query params alone - the default action will be invoked automatically
+	const formAction = data.returnUrl ? `?returnUrl=${encodeURIComponent(data.returnUrl)}` : '';
 </script>
 
 <svelte:head>

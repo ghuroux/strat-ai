@@ -11,6 +11,10 @@ globs:
 
 # Creating Svelte Components
 
+> **⚠️ CRITICAL: Theme Support Required**
+> All components MUST support both dark and light modes. See `stratai-conventions/DESIGN-SYSTEM.md` for theme-aware patterns.
+> Never use dark-mode-only colors like `bg-zinc-900` without the light mode counterpart `bg-white dark:bg-zinc-900`.
+
 ## Component Location
 
 All components go in `src/lib/components/`, organized by feature:
