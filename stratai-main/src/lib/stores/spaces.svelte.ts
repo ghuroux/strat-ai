@@ -12,6 +12,7 @@ import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import type { Space, CreateSpaceInput, UpdateSpaceInput } from '$lib/types/spaces';
 import type { SpaceMembershipWithUser, SpaceRole } from '$lib/types/space-memberships';
 import { toastStore } from './toast.svelte';
+import { debugLog } from '$lib/utils/debug';
 
 class SpacesStore {
 	// Space cache by ID
@@ -98,7 +99,7 @@ class SpacesStore {
 				this._version++;
 			}
 		} catch (e) {
-			console.error('Failed to load spaces:', e);
+			debugLog('SPACES_STORE', 'Failed to load spaces:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load spaces';
 		} finally {
 			this.isLoading = false;
@@ -140,7 +141,7 @@ class SpacesStore {
 			}
 			return null;
 		} catch (e) {
-			console.error('Failed to create space:', e);
+			debugLog('SPACES_STORE', 'Failed to create space:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create space';
 			toastStore.error(this.error);
 			return null;
@@ -194,7 +195,7 @@ class SpacesStore {
 			}
 			return null;
 		} catch (e) {
-			console.error('Failed to update space:', e);
+			debugLog('SPACES_STORE', 'Failed to update space:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update space';
 			toastStore.error(this.error);
 			return null;
@@ -231,7 +232,7 @@ class SpacesStore {
 			toastStore.success('Space deleted');
 			return true;
 		} catch (e) {
-			console.error('Failed to delete space:', e);
+			debugLog('SPACES_STORE', 'Failed to delete space:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to delete space';
 			toastStore.error(this.error);
 			return false;
@@ -376,7 +377,7 @@ class SpacesStore {
 			toastStore.success('Member added');
 			return true;
 		} catch (e) {
-			console.error('Failed to add space member:', e);
+			debugLog('SPACES_STORE', 'Failed to add space member:', e);
 			this.lastMemberError = e instanceof Error ? e.message : 'Failed to add member';
 			toastStore.error(this.lastMemberError);
 			return false;
@@ -616,7 +617,7 @@ class SpacesStore {
 			this._version++;
 			return true;
 		} catch (e) {
-			console.error('Failed to pin space:', e);
+			debugLog('SPACES_STORE', 'Failed to pin space:', e);
 			this.lastPinError = e instanceof Error ? e.message : 'Failed to pin space';
 			toastStore.error(this.lastPinError);
 			return false;
@@ -669,7 +670,7 @@ class SpacesStore {
 			this._version++;
 			return true;
 		} catch (e) {
-			console.error('Failed to unpin space:', e);
+			debugLog('SPACES_STORE', 'Failed to unpin space:', e);
 			this.lastPinError = e instanceof Error ? e.message : 'Failed to unpin space';
 			toastStore.error(this.lastPinError);
 			return false;

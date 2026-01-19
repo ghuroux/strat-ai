@@ -21,6 +21,7 @@ import type {
 	AreaAccessSource
 } from '$lib/types/area-memberships';
 import { toastStore } from './toast.svelte';
+import { debugLog } from '$lib/utils/debug';
 
 class AreaStore {
 	// Area cache by ID
@@ -109,7 +110,7 @@ class AreaStore {
 				this._version++;
 			}
 		} catch (e) {
-			console.error('Failed to load areas:', e);
+			debugLog('AREAS_STORE', 'Failed to load areas:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load areas';
 		} finally {
 			this.isLoading = false;
@@ -156,7 +157,7 @@ class AreaStore {
 			}
 			return null;
 		} catch (e) {
-			console.error('Failed to create area:', e);
+			debugLog('AREAS_STORE', 'Failed to create area:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create area';
 			toastStore.error(this.error);
 			return null;
@@ -211,7 +212,7 @@ class AreaStore {
 			}
 			return null;
 		} catch (e) {
-			console.error('Failed to update area:', e);
+			debugLog('AREAS_STORE', 'Failed to update area:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update area';
 			toastStore.error(this.error);
 			return null;
@@ -277,7 +278,7 @@ class AreaStore {
 			toastStore.success('Area deleted');
 			return true;
 		} catch (e) {
-			console.error('Failed to delete area:', e);
+			debugLog('AREAS_STORE', 'Failed to delete area:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to delete area';
 			toastStore.error(this.error);
 			return false;
@@ -434,7 +435,7 @@ class AreaStore {
 
 			return members;
 		} catch (e) {
-			console.error('Failed to load area members:', e);
+			debugLog('AREAS_STORE', 'Failed to load area members:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load members';
 			return [];
 		} finally {
@@ -470,7 +471,7 @@ class AreaStore {
 			await this.loadMembers(areaId, true);
 			return true;
 		} catch (e) {
-			console.error('Failed to add area member:', e);
+			debugLog('AREAS_STORE', 'Failed to add area member:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to add member';
 			return false;
 		} finally {
@@ -504,7 +505,7 @@ class AreaStore {
 			this._version++;
 			return true;
 		} catch (e) {
-			console.error('Failed to remove area member:', e);
+			debugLog('AREAS_STORE', 'Failed to remove area member:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to remove member';
 			return false;
 		} finally {
@@ -544,7 +545,7 @@ class AreaStore {
 			this._version++;
 			return true;
 		} catch (e) {
-			console.error('Failed to update member role:', e);
+			debugLog('AREAS_STORE', 'Failed to update member role:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update role';
 			return false;
 		} finally {
@@ -618,7 +619,7 @@ class AreaStore {
 			this.sharedAreasLoaded = true;
 			this._version++;
 		} catch (e) {
-			console.error('Failed to load shared areas:', e);
+			debugLog('AREAS_STORE', 'Failed to load shared areas:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load shared areas';
 		} finally {
 			this.isLoading = false;

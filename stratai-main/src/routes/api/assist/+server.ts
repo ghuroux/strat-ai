@@ -3,6 +3,7 @@ import { createChatCompletion, mapErrorMessage, supportsExtendedThinking } from 
 import type { ChatCompletionRequest, ChatMessage, MessageContentBlock } from '$lib/types/api';
 import { getFullSystemPrompt } from '$lib/config/system-prompts';
 import { getAssistById } from '$lib/config/assists';
+import { debugLog } from '$lib/utils/debug';
 
 /**
  * Assist API endpoint
@@ -107,8 +108,6 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
 }
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	console.log('Assist API called');
-
 	// Verify session
 	if (!locals.session) {
 		return new Response(
@@ -164,7 +163,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Check if extended thinking is enabled
 	const thinkingEnabled = body.thinkingEnabled && supportsExtendedThinking(body.model);
 
-	console.log('Assist request:', {
+	debugLog('ASSIST', 'Request:', {
 		assistId: body.assistId,
 		assistName: assist.name,
 		model: body.model,

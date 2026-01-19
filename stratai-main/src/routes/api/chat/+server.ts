@@ -13,6 +13,7 @@ import { getToolCacheRepository, hashParams } from '$lib/server/persistence/tool
 import { postgresUsageRepository } from '$lib/server/persistence/usage-postgres';
 import { postgresRoutingDecisionsRepository } from '$lib/server/persistence/routing-decisions-postgres';
 import { postgresUserRepository } from '$lib/server/persistence/users-postgres';
+import { debugLog } from '$lib/utils/debug';
 import { getAssistById, TASK_BREAKDOWN_PHASE_PROMPTS } from '$lib/config/assists';
 import { estimateCost } from '$lib/config/model-pricing';
 import type { SpaceType } from '$lib/types/chat';
@@ -66,7 +67,7 @@ async function saveUsage(
 			estimatedCostMillicents
 		});
 
-		console.log(`[Usage] Saved: ${usage.totalTokens} tokens, ${context.model}, cost: ${estimatedCostMillicents} millicents`);
+		debugLog('USAGE', `Saved: ${usage.totalTokens} tokens, ${context.model}, cost: ${estimatedCostMillicents} millicents`);
 	} catch (error) {
 		// Log but don't fail the request - usage tracking is non-critical
 		console.error('[Usage] Failed to save usage:', error);
@@ -155,7 +156,7 @@ function addCacheBreakpoints(messages: ChatMessage[], model: string): ChatMessag
 
 	// Log cache allocation for debugging
 	if (existingCacheBreakpoints > 0) {
-		console.log(`[Cache] Breakpoints: ${existingCacheBreakpoints} (system layered) + ${cacheIndices.size} (history) = ${existingCacheBreakpoints + cacheIndices.size}/4`);
+		debugLog('CACHE', `Breakpoints: ${existingCacheBreakpoints} (system layered) + ${cacheIndices.size} (history) = ${existingCacheBreakpoints + cacheIndices.size}/4`);
 	}
 
 	return messages.map((msg, index) => {
@@ -395,18 +396,17 @@ function injectPlatformPrompt(
 ): ChatMessage[] {
 	// Plan Mode takes precedence - use specialized Plan Mode prompts
 	if (planModeContext) {
-		// Enhanced logging for Plan Mode testing
-		console.log('\n========== PLAN MODE ACTIVE ==========');
-		console.log(`[Plan Mode] Task: "${planModeContext.taskTitle}"`);
-		console.log(`[Plan Mode] Phase: ${planModeContext.phase}`);
-		console.log(`[Plan Mode] Exchange Count: ${planModeContext.exchangeCount || 0}`);
-		console.log(`[Plan Mode] Has Context: ${!!planModeContext.context}`);
+		debugLog('PLAN', '\n========== PLAN MODE ACTIVE ==========');
+		debugLog('PLAN', `Task: "${planModeContext.taskTitle}"`);
+		debugLog('PLAN', `Phase: ${planModeContext.phase}`);
+		debugLog('PLAN', `Exchange Count: ${planModeContext.exchangeCount || 0}`);
+		debugLog('PLAN', `Has Context: ${!!planModeContext.context}`);
 		if (planModeContext.context) {
-			console.log(`[Plan Mode] Context - Docs: ${planModeContext.context.documents?.length || 0}, Tasks: ${planModeContext.context.relatedTasks?.length || 0}`);
+			debugLog('PLAN', `Context - Docs: ${planModeContext.context.documents?.length || 0}, Tasks: ${planModeContext.context.relatedTasks?.length || 0}`);
 		}
-		console.log(`[Plan Mode] Priority: ${planModeContext.priority || 'normal'}`);
-		console.log(`[Plan Mode] Due: ${planModeContext.dueDate || 'none'}`);
-		console.log('=======================================\n');
+		debugLog('PLAN', `Priority: ${planModeContext.priority || 'normal'}`);
+		debugLog('PLAN', `Due: ${planModeContext.dueDate || 'none'}`);
+		debugLog('PLAN', '=======================================\n');
 
 		// Build task metadata context for time/date awareness
 		const taskMetadata: PlanModeTaskContext | undefined = planModeContext.createdAt
@@ -446,11 +446,11 @@ function injectPlatformPrompt(
 
 		// Log a preview of the Plan Mode prompt (first 800 chars)
 		const promptPreview = fullPrompt.length > 800 ? fullPrompt.slice(0, 800) + '...' : fullPrompt;
-		console.log('[Plan Mode] System Prompt Preview:');
-		console.log('---');
-		console.log(promptPreview);
-		console.log('---');
-		console.log(`[Plan Mode] Total prompt length: ${fullPrompt.length} chars\n`);
+		debugLog('PLAN', 'System Prompt Preview:');
+		debugLog('PLAN', '---');
+		debugLog('PLAN', promptPreview);
+		debugLog('PLAN', '---');
+		debugLog('PLAN', `Total prompt length: ${fullPrompt.length} chars\n`);
 
 		return injectSystemPrompt(messages, fullPrompt);
 	}
@@ -488,7 +488,7 @@ function injectPlatformPrompt(
 		const layeredSystemMessage = createLayeredSystemMessage(layers, existingContent);
 
 		// Log cache optimization info
-		console.log(`[Cache] Using layered caching: ${layers.map(l => l.name).join(' → ')}`);
+		debugLog('CACHE', `Using layered caching: ${layers.map(l => l.name).join(' → ')}`);
 
 		// Replace or add system message
 		if (systemIndex >= 0) {
@@ -730,11 +730,8 @@ function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messa
 }
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	console.log('Chat API called');
-
 	// Verify session
 	if (!locals.session) {
-		console.log('No session found');
 		return new Response(
 			JSON.stringify({ error: { message: 'Unauthorized', type: 'auth_error' } }),
 			{
@@ -755,7 +752,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		userTimezone = (preferences.timezone as string) || undefined;
 	} catch {
 		// Non-critical - temporal context will use default timezone
-		console.debug('[Chat API] Failed to fetch user timezone, using default');
+		debugLog('CHAT', 'Failed to fetch user timezone, using default');
 	}
 
 	// Parse request body
@@ -794,19 +791,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const isAutoModeRequest = isAutoMode(body.model);
 	const thinkingEnabled = body.thinkingEnabled && (isAutoModeRequest || supportsExtendedThinking(body.model));
 
-	console.log('Search debug:', {
-		bodySearchEnabled: body.searchEnabled,
-		braveConfigured,
-		searchEnabled
-	});
-
-	console.log('Thinking debug:', {
-		thinkingEnabled: body.thinkingEnabled,
-		isAutoMode: isAutoModeRequest,
-		modelSupportsThinking: supportsExtendedThinking(body.model),
-		actualThinkingEnabled: thinkingEnabled,
-		budgetTokens: body.thinkingBudgetTokens
-	});
+	debugLog('CHAT', 'Search enabled:', searchEnabled, 'configured:', braveConfigured);
+	debugLog('CHAT', 'Thinking enabled:', thinkingEnabled, 'model supports:', supportsExtendedThinking(body.model));
 
 	// Extract space, assist context, focused task, plan mode, and focus area (before removing client fields)
 	const space = body.space;
@@ -821,16 +807,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const areaId = body.areaId;
 
 	// Debug logging: What plan mode context did we receive?
-	console.log('\n========== CHAT API REQUEST ==========');
-	console.log(`[API] body.planMode received:`, body.planMode ? 'YES' : 'NO');
+	debugLog('CHAT', '========== CHAT API REQUEST ==========');
+	debugLog('CHAT', `body.planMode received:`, body.planMode ? 'YES' : 'NO');
 	if (body.planMode) {
-		console.log(`[API] planMode.taskId: ${body.planMode.taskId}`);
-		console.log(`[API] planMode.phase: ${body.planMode.phase}`);
-		console.log(`[API] planMode.exchangeCount: ${body.planMode.exchangeCount}`);
-	} else {
-		console.log('[API] NO PLAN MODE CONTEXT - This means frontend did not send planMode');
+		debugLog('CHAT', `planMode.taskId: ${body.planMode.taskId}`);
+		debugLog('CHAT', `planMode.phase: ${body.planMode.phase}`);
+		debugLog('CHAT', `planMode.exchangeCount: ${body.planMode.exchangeCount}`);
 	}
-	console.log('========================================\n');
+	debugLog('CHAT', '========================================\n');
 
 	// Fetch planning conversation context for subtasks
 	// This provides warm-start context from the Plan Mode conversation that created the subtask
@@ -870,7 +854,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					planningConversationSummary: summary
 				};
 
-				console.log(`[API] Loaded planning conversation context for subtask (${planningMessages.length} messages)`);
+				debugLog('CHAT', `Loaded planning conversation context for subtask (${planningMessages.length} messages)`);
 			}
 		} catch (error) {
 			console.warn('[API] Failed to load planning conversation context:', error);
@@ -929,13 +913,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 								};
 							})
 						);
-						console.log(`Space "${spaceData.name}" loaded with ${validDocs.length} document(s)`);
+						debugLog('CHAT', `Space "${spaceData.name}" loaded with ${validDocs.length} document(s)`);
 					}
 				}
 
 				// Log if space has context or documents
 				if (spaceData.context || spaceContext.contextDocuments?.length) {
-					console.log(`Space context loaded: "${spaceData.name}" (context: ${!!spaceData.context}, docs: ${spaceContext.contextDocuments?.length || 0})`);
+					debugLog('CHAT', `Space context loaded: "${spaceData.name}" (context: ${!!spaceData.context}, docs: ${spaceContext.contextDocuments?.length || 0})`);
 				}
 			}
 		} catch (error) {
@@ -952,7 +936,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			const focusArea = await postgresAreaRepository.findById(areaId, userId);
 
 			if (focusArea) {
-				console.log(`[DEBUG] Focus area found:`, {
+				debugLog('CHAT', `Focus area found:`, {
 					id: focusArea.id,
 					name: focusArea.name,
 					contextDocumentIds: focusArea.contextDocumentIds,
@@ -1002,11 +986,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 								};
 							})
 						);
-						console.log(`Focus area "${focusArea.name}" loaded with ${validDocs.length} document(s)`);
+						debugLog('CHAT', `Focus area "${focusArea.name}" loaded with ${validDocs.length} document(s)`);
 					}
 				}
 
-				console.log(`Focus area context loaded: "${focusArea.name}" in space "${focusArea.spaceId}"`);
+				debugLog('CHAT', `Focus area context loaded: "${focusArea.name}" in space "${focusArea.spaceId}"`);
 			}
 		} catch (error) {
 			// Log but don't fail - focus area context is optional enhancement
@@ -1030,7 +1014,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			// Add task description if available
 			if (task?.description) {
 				planModeContext = { ...planModeContext, description: task.description };
-				console.log(`Plan Mode: Task has description (${task.description.length} chars)`);
+				debugLog('PLAN', `Task has description (${task.description.length} chars)`);
 			}
 
 			// Attach context if we have documents or related tasks
@@ -1056,7 +1040,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					}
 				};
 
-				console.log(`Plan Mode context loaded: ${linkedDocs.length} documents, ${relatedTasksInfo.length} related tasks`);
+				debugLog('PLAN', `Context loaded: ${linkedDocs.length} documents, ${relatedTasksInfo.length} related tasks`);
 			}
 		} catch (error) {
 			// Log but don't fail - context is optional enhancement
@@ -1123,17 +1107,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		resolvedModel = routingDecision.selectedModel;
 
 		// Log routing decision
-		console.log('\n========== AUTO MODEL ROUTING ==========');
-		console.log(`[Router] Query: "${userQuery.slice(0, 100)}${userQuery.length > 100 ? '...' : ''}"`);
-		console.log(`[Router] Score: ${routingDecision.complexity.score}/100 (${routingDecision.tier})`);
-		console.log(`[Router] Confidence: ${(routingDecision.complexity.confidence * 100).toFixed(0)}%`);
-		console.log(`[Router] Selected: ${resolvedModel}`);
+		debugLog('ROUTER', '\n========== AUTO MODEL ROUTING ==========');
+		debugLog('ROUTER', `Query: "${userQuery.slice(0, 100)}${userQuery.length > 100 ? '...' : ''}"`);
+		debugLog('ROUTER', `Score: ${routingDecision.complexity.score}/100 (${routingDecision.tier})`);
+		debugLog('ROUTER', `Confidence: ${(routingDecision.complexity.confidence * 100).toFixed(0)}%`);
+		debugLog('ROUTER', `Selected: ${resolvedModel}`);
 		if (routingDecision.overrides.length > 0) {
-			console.log(`[Router] Overrides: ${routingDecision.overrides.map(o => o.type).join(', ')}`);
+			debugLog('ROUTER', `Overrides: ${routingDecision.overrides.map(o => o.type).join(', ')}`);
 		}
-		console.log(`[Router] Time: ${routingDecision.routingTimeMs.toFixed(2)}ms`);
-		console.log(`[Router] Reasoning: ${routingDecision.reasoning}`);
-		console.log('=========================================\n');
+		debugLog('ROUTER', `Time: ${routingDecision.routingTimeMs.toFixed(2)}ms`);
+		debugLog('ROUTER', `Reasoning: ${routingDecision.reasoning}`);
+		debugLog('ROUTER', '=========================================\n');
 
 		// Log routing decision to database for analytics (non-blocking)
 		postgresRoutingDecisionsRepository.create({
@@ -1169,7 +1153,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// If a custom system prompt is provided (e.g., for Page Discussion), inject it into messages
 	// This happens BEFORE platform prompt injection so both get composed properly
 	if (customSystemPrompt && typeof customSystemPrompt === 'string' && customSystemPrompt.trim()) {
-		console.log('[Chat] Custom system prompt provided, injecting into messages');
+		debugLog('CHAT', 'Custom system prompt provided, injecting into messages');
 		cleanBody.messages = injectSystemPrompt(cleanBody.messages as ChatMessage[], customSystemPrompt);
 	}
 
@@ -1177,7 +1161,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Reason: We enforce max_tokens=120 for brief responses, which conflicts with thinking.budget_tokens
 	const effectiveThinkingEnabled = thinkingEnabled && !(planModeContext?.phase === 'eliciting');
 	if (planModeContext?.phase === 'eliciting' && thinkingEnabled) {
-		console.log('[Plan Mode] Extended thinking disabled during eliciting phase (max_tokens constraint)');
+		debugLog('PLAN', 'Extended thinking disabled during eliciting phase (max_tokens constraint)');
 	}
 
 	// Add thinking config if enabled AND resolved model supports it
@@ -1187,22 +1171,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			type: 'enabled',
 			budget_tokens: body.thinkingBudgetTokens || 10000
 		};
-		console.log(`[Thinking] Enabled for ${resolvedModel} with budget ${body.thinkingBudgetTokens || 10000} tokens`);
+		debugLog('CHAT', `Thinking enabled for ${resolvedModel} with budget ${body.thinkingBudgetTokens || 10000} tokens`);
 	} else if (effectiveThinkingEnabled && !supportsExtendedThinking(resolvedModel)) {
-		console.log(`[Thinking] Warning: Requested but ${resolvedModel} doesn't support it - this shouldn't happen with AUTO routing`);
+		debugLog('CHAT', `Warning: Thinking requested but ${resolvedModel} doesn't support it - this shouldn't happen with AUTO routing`);
 	}
 
 	try {
-		console.log('Forwarding to LiteLLM:', cleanBody.model, cleanBody.messages.length, 'messages', searchEnabled ? '(search enabled)' : '', thinkingEnabled ? '(thinking enabled)' : '');
-
-		// Log message structure for debugging vision messages
-		cleanBody.messages.forEach((msg, idx) => {
-			const contentType = Array.isArray(msg.content) ? 'array' : typeof msg.content;
-			const contentPreview = Array.isArray(msg.content)
-				? `[${msg.content.map(c => c.type).join(', ')}]`
-				: (typeof msg.content === 'string' ? msg.content.slice(0, 50) + '...' : String(msg.content));
-			console.log(`  Message ${idx}: role=${msg.role}, contentType=${contentType}, preview=${contentPreview}`);
-		});
+		debugLog('CHAT', 'Forwarding to LiteLLM:', cleanBody.model, cleanBody.messages.length, 'messages', searchEnabled ? '(search enabled)' : '', thinkingEnabled ? '(thinking enabled)' : '');
 
 		// Determine if we need tool handling:
 		// 1. Web search is enabled
@@ -1233,7 +1208,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				Array.isArray(m.content) &&
 				m.content.some((c: MessageContentBlock) => 'cache_control' in c)
 			).length;
-			console.log(`Cache breakpoints: ${cachedCount}/${validatedMessages.length} messages marked for caching`);
+			debugLog('CACHE', `Cache breakpoints: ${cachedCount}/${validatedMessages.length} messages marked for caching`);
 		}
 
 		// Build request options
@@ -1249,24 +1224,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			// Exchange 2+: 300 char limit → ~100 tokens
 			const tokenLimit = (planModeContext.exchangeCount || 0) >= 2 ? 100 : 120;
 			requestOptions.max_tokens = tokenLimit;
-			console.log(`[Plan Mode] Elicitation constraint: max_tokens=${tokenLimit} (exchange ${planModeContext.exchangeCount || 0})`);
+			debugLog('PLAN', `Elicitation constraint: max_tokens=${tokenLimit} (exchange ${planModeContext.exchangeCount || 0})`);
 		}
 
 		// Standard streaming response without tools
 		const litellmResponse = await createChatCompletion(requestOptions);
-		console.log('LiteLLM response status:', litellmResponse.status);
+		debugLog('CHAT', 'LiteLLM response status:', litellmResponse.status);
 
 		// Log cache statistics if available (for monitoring prompt caching effectiveness)
 		const cacheHeader = litellmResponse.headers.get('x-litellm-cache-key');
 		if (cacheHeader) {
-			console.log('Cache key:', cacheHeader);
+			debugLog('CACHE', 'Cache key:', cacheHeader);
 		}
 
 		// Check for cache statistics in response headers (Anthropic returns these)
 		const cacheCreation = litellmResponse.headers.get('x-cache-creation-input-tokens');
 		const cacheRead = litellmResponse.headers.get('x-cache-read-input-tokens');
 		if (cacheCreation || cacheRead) {
-			console.log('Cache stats:', {
+			debugLog('CACHE', 'Cache stats:', {
 				created: cacheCreation || '0',
 				read: cacheRead || '0',
 				savings: cacheRead ? `${Math.round(parseInt(cacheRead) * 0.9)} tokens at 90% off` : 'N/A'
@@ -1403,7 +1378,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					// Exchange 2+: 300 char limit → ~100 tokens
 					const tokenLimit = (planModeContext.exchangeCount || 0) >= 2 ? 100 : 120;
 					toolRequestOptions.max_tokens = tokenLimit;
-					console.log(`[Plan Mode] Elicitation constraint (tools): max_tokens=${tokenLimit}`);
+					debugLog('PLAN', `Elicitation constraint (tools): max_tokens=${tokenLimit}`);
 				}
 
 				// Make initial request with tools (non-streaming to detect tool use)
@@ -1422,7 +1397,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 				}
 
 				const responseData = await initialResponse.json();
-				console.log('Initial response:', JSON.stringify(responseData, null, 2).slice(0, 1000));
+				debugLog('CHAT', 'Initial response:', JSON.stringify(responseData, null, 2).slice(0, 1000));
 
 				// Extract and send any thinking content from the initial response
 				// This happens BEFORE tool execution for the premium UX
@@ -1448,7 +1423,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 				const toolCalls = message?.tool_calls;
 
 				if (toolCalls && toolCalls.length > 0) {
-					console.log(`Processing ${toolCalls.length} tool calls`);
+					debugLog('TOOLS', `Processing ${toolCalls.length} tool calls`);
 
 					// Collect ALL sources and tool results
 					const allSources: Array<{ title: string; url: string; snippet: string }> = [];
@@ -1483,11 +1458,11 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 							const query = args.query;
 
 							if (query) {
-								console.log('Executing web search:', query);
+								debugLog('TOOLS', 'Executing web search:', query);
 
 								try {
 									const searchResults = await searchWeb(query);
-									console.log('Search returned', searchResults.length, 'results for:', query);
+									debugLog('TOOLS', 'Search returned', searchResults.length, 'results for:', query);
 
 									// Collect sources
 									allSources.push(...searchResults.map(r => ({
@@ -1525,7 +1500,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 							const filename = args.filename;
 
 							if (filename) {
-								console.log('Reading document:', filename);
+								debugLog('TOOLS', 'Reading document:', filename);
 
 								// Cache scope with fallback hierarchy:
 								// 1. taskId - most specific, cache per task (Plan Mode)
@@ -1548,7 +1523,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 										: focusArea?.spaceId || spaceInfo?.id
 											? 'space'
 											: 'none';
-								console.log(`[Cache] Scope: ${cacheScopeType} (${cacheScope || 'null'})`);
+								debugLog('CACHE', `Scope: ${cacheScopeType} (${cacheScope || 'null'})`);
 
 								const paramsHash = hashParams({ filename });
 								const cacheUserId = userId || 'anonymous';
@@ -1564,7 +1539,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 											cacheUserId
 										);
 										if (cachedResult) {
-											console.log(`[Cache] HIT for document: ${filename} (${cacheScopeType}: ${cacheScope})`);
+											debugLog('CACHE', `HIT for document: ${filename} (${cacheScopeType}: ${cacheScope})`);
 											// Use cached result
 											toolResults.push({
 												tool_call_id: toolCall.id,
@@ -1580,7 +1555,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 								// Look up document in available documents
 								const doc = availableDocuments.get(filename);
 								if (doc) {
-									console.log(`Document found: ${filename} (${doc.charCount} chars)`);
+									debugLog('TOOLS', `Document found: ${filename} (${doc.charCount} chars)`);
 
 									// Send status update for UX feedback
 									sendSSE(controller, encoder, {
@@ -1604,7 +1579,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 												doc.charCount,
 												cacheUserId
 											);
-											console.log(`[Cache] STORED document: ${filename} (${cacheScopeType}: ${cacheScope})`);
+											debugLog('CACHE', `STORED document: ${filename} (${cacheScopeType}: ${cacheScope})`);
 										} catch (cacheError) {
 											console.warn('Failed to cache document:', cacheError);
 										}
@@ -1668,8 +1643,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 						}))
 					];
 
-					console.log('Sending', toolResults.length, 'tool results to LLM');
-					console.log('Messages being sent:', JSON.stringify(messagesWithToolResults.slice(-4), null, 2).slice(0, 1000));
+					debugLog('TOOLS', 'Sending', toolResults.length, 'tool results to LLM');
 
 					// Send status update - now processing results
 					sendSSE(controller, encoder, { type: 'status', status: 'processing' });
@@ -1689,7 +1663,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 						stream: true
 					});
 
-					console.log('Final response status:', finalResponse.status, finalResponse.ok);
+					debugLog('CHAT', 'Final response status:', finalResponse.status, finalResponse.ok);
 
 					if (!finalResponse.ok) {
 						const errorText = await finalResponse.text();
@@ -1699,10 +1673,10 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 							error: 'Failed to get final response'
 						});
 					} else {
-						console.log('Starting to stream final response...');
+						debugLog('CHAT', 'Starting to stream final response...');
 						// Stream the final response with usage tracking and routing decision
 						await streamToController(finalResponse, controller, encoder, thinkingEnabled, usageContext, routingDecision);
-						console.log('Finished streaming final response');
+						debugLog('CHAT', 'Finished streaming final response');
 
 						// Send sources after content (deduplicated)
 						if (allSources.length > 0) {
@@ -1748,7 +1722,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					const cacheRead = usage.cache_read_input_tokens || 0;
 
 					if (cacheCreation > 0 || cacheRead > 0) {
-						console.log(`[Cache] ${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
+						debugLog('CACHE', `${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
 					}
 
 					saveUsage(usageContext, {
@@ -1898,7 +1872,7 @@ async function streamToController(
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) {
-			console.log(`Stream complete. Total chunks processed: ${chunkCount}`);
+			debugLog('STREAM', `Stream complete. Total chunks processed: ${chunkCount}`);
 			// If we were in thinking mode at the end, close it
 			if (isThinking) {
 				sendSSE(controller, encoder, { type: 'thinking_end' });
@@ -1909,10 +1883,10 @@ async function streamToController(
 				const cacheRead = usageData.cache_read_input_tokens || 0;
 
 				if (cacheCreation > 0 || cacheRead > 0) {
-					console.log(`[Cache] ${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
+					debugLog('CACHE', `${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
 				}
 
-				console.log(`[Usage Debug] streamToController saving for ${usageContext.model}:`, JSON.stringify(usageData));
+				debugLog('USAGE', `streamToController saving for ${usageContext.model}:`, JSON.stringify(usageData));
 				saveUsage(usageContext, {
 					promptTokens: usageData.prompt_tokens || 0,
 					completionTokens: usageData.completion_tokens || 0,
@@ -1940,7 +1914,7 @@ async function streamToController(
 					});
 				}
 			} else if (usageContext) {
-				console.log(`[Usage Debug] streamToController: no usage data for ${usageContext.model}`);
+				debugLog('USAGE', `streamToController: no usage data for ${usageContext.model}`);
 			}
 			break;
 		}
@@ -1950,7 +1924,7 @@ async function streamToController(
 
 		// Log first chunk to see format
 		if (chunkCount === 0) {
-			console.log('First stream chunk:', decoded.slice(0, 500));
+			debugLog('STREAM', 'First stream chunk:', decoded.slice(0, 500));
 		}
 		chunkCount++;
 
@@ -1961,7 +1935,7 @@ async function streamToController(
 			if (line.startsWith('data: ')) {
 				const data = line.slice(6);
 				if (data === '[DONE]') {
-					console.log('Received [DONE] signal');
+					debugLog('STREAM', 'Received [DONE] signal');
 					continue;
 				}
 
@@ -1980,7 +1954,7 @@ async function streamToController(
 
 					// Log chunks to debug thinking content format
 					if (thinkingEnabled && chunkCount <= 10) {
-						console.log(`Stream chunk #${chunkCount}:`, JSON.stringify(delta).slice(0, 800));
+						debugLog('STREAM', `Stream chunk #${chunkCount}:`, JSON.stringify(delta).slice(0, 800));
 					}
 
 					if (delta) {
@@ -2138,9 +2112,9 @@ function streamResponse(
 					if (done) {
 						// Debug: log full usage data structure for debugging cache issues
 						if (usageData) {
-							console.log(`[Usage Debug] Stream done for ${usageContext?.model || 'unknown'}:`, JSON.stringify(usageData));
+							debugLog('USAGE', `Stream done for ${usageContext?.model || 'unknown'}:`, JSON.stringify(usageData));
 						} else {
-							console.log(`[Usage Debug] Stream done for ${usageContext?.model || 'unknown'}: NO usage data captured`);
+							debugLog('USAGE', `Stream done for ${usageContext?.model || 'unknown'}: NO usage data captured`);
 						}
 
 						// Save usage if we have context and data
@@ -2150,7 +2124,7 @@ function streamResponse(
 							const cacheRead = usageData.cache_read_input_tokens || cacheHeaders?.cacheRead || 0;
 
 							if (cacheCreation > 0 || cacheRead > 0) {
-								console.log(`[Cache] ${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
+								debugLog('CACHE', `${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
 							}
 
 							saveUsage(usageContext, {
@@ -2206,7 +2180,7 @@ function streamResponse(
 								// Debug: log final chunks to understand format differences between providers
 								const finishReason = chunk.choices?.[0]?.finish_reason;
 								if (finishReason || chunk.usage) {
-									console.log('[Usage Debug] Final chunk:', JSON.stringify(chunk).slice(0, 800));
+									debugLog('USAGE', 'Final chunk:', JSON.stringify(chunk).slice(0, 800));
 								}
 
 								// Capture usage from final chunk (LiteLLM includes this with stream_options.include_usage)
@@ -2223,7 +2197,7 @@ function streamResponse(
 
 								// Log first few chunks to debug thinking content
 								if (!hasReceivedContent && thinkingEnabled) {
-									console.log('Stream chunk (thinking enabled):', JSON.stringify(chunk).slice(0, 500));
+									debugLog('STREAM', 'Stream chunk (thinking enabled):', JSON.stringify(chunk).slice(0, 500));
 								}
 
 								if (delta) {

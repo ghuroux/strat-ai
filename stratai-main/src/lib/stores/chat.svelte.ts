@@ -15,6 +15,7 @@ import { ASSISTS } from '$lib/config/assists';
 import { generateUUID } from '$lib/utils/uuid';
 import { generationActivityStore } from '$lib/stores/generationActivity.svelte';
 import { toastStore } from './toast.svelte';
+import { debugLog } from '$lib/utils/debug';
 
 const STORAGE_KEY = 'strathost-conversations';
 const MAX_CONVERSATIONS = 50;
@@ -120,7 +121,7 @@ class ChatStore {
 				}
 			}
 		} catch (e) {
-			console.warn('Failed to hydrate chat store from localStorage:', e);
+			debugLog('CHAT_STORE', 'Failed to hydrate from localStorage:', e);
 		}
 
 		this.initialized = true;
@@ -169,7 +170,7 @@ class ChatStore {
 				this.persistToLocalStorage();
 			}
 		} catch (e) {
-			console.warn('Failed to sync from API, using localStorage:', e);
+			debugLog('CHAT_STORE', 'Failed to sync from API, using localStorage:', e);
 			this.syncError = e instanceof Error ? e.message : 'Sync failed';
 			toastStore.error('Failed to sync conversations');
 		} finally {
@@ -215,7 +216,7 @@ class ChatStore {
 				});
 			}
 		} catch (e) {
-			console.warn('Failed to sync conversation to API:', e);
+			debugLog('CHAT_STORE', 'Failed to sync conversation to API:', e);
 		} finally {
 			this.isSyncing = false;
 			// Process next in queue
@@ -235,7 +236,7 @@ class ChatStore {
 			});
 			return true;
 		} catch (e) {
-			console.warn('Failed to delete conversation from API:', e);
+			debugLog('CHAT_STORE', 'Failed to delete conversation from API:', e);
 			return false;
 		}
 	}
@@ -261,7 +262,7 @@ class ChatStore {
 
 				// Success - if we had to reduce, log it
 				if (limit < MAX_CONVERSATIONS) {
-					console.info(`localStorage quota: reduced cache to ${limit} conversations`);
+					debugLog('CHAT_STORE', `localStorage quota: reduced cache to ${limit} conversations`);
 				}
 				return;
 			} catch (e) {
@@ -269,7 +270,7 @@ class ChatStore {
 					// Reduce limit and try again
 					limit = Math.floor(limit * 0.6); // Reduce by 40% each iteration
 					if (limit < MIN_CONVERSATIONS_ON_QUOTA) {
-						console.warn(`localStorage quota exceeded. Clearing local cache. Data is safe in database.`);
+						debugLog('CHAT_STORE', `localStorage quota exceeded. Clearing local cache. Data is safe in database.`);
 						// Last resort: clear and only save active conversation
 						try {
 							const activeConv = this.activeConversationId
@@ -287,7 +288,7 @@ class ChatStore {
 						return;
 					}
 				} else {
-					console.warn('Failed to persist chat store:', e);
+					debugLog('CHAT_STORE', 'Failed to persist chat store:', e);
 					return;
 				}
 			}
@@ -525,7 +526,7 @@ class ChatStore {
 			fetch(`/api/conversations/${id}/viewed`, {
 				method: 'POST'
 			}).catch((err) => {
-				console.warn('Failed to mark conversation as viewed:', err);
+				debugLog('CHAT_STORE', 'Failed to mark conversation as viewed:', err);
 			});
 		}
 	}
@@ -1142,8 +1143,8 @@ class ChatStore {
 			this.schedulePersist();
 			this.syncToApi(imported);
 			return newId;
-		} catch {
-			console.error('Failed to import conversation');
+		} catch (e) {
+			console.error('Failed to import conversation:', e);
 			return null;
 		}
 	}
