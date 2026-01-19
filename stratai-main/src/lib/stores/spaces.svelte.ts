@@ -31,6 +31,9 @@ class SpacesStore {
 	// Track if spaces have been loaded
 	private loaded = $state(false);
 
+	// Guard flags for preventing duplicate operations
+	private _creatingSpace = $state(false);
+
 	// ============================================
 	// MEMBER MANAGEMENT STATE
 	// ============================================
@@ -110,6 +113,13 @@ class SpacesStore {
 	 * Create a new custom space
 	 */
 	async createSpace(input: CreateSpaceInput): Promise<Space | null> {
+		// Guard: Reject concurrent create calls
+		if (this._creatingSpace) {
+			console.warn('SpacesStore.createSpace: Already creating space, rejecting duplicate call');
+			return null;
+		}
+
+		this._creatingSpace = true;
 		this.isLoading = true;
 		this.error = null;
 
@@ -147,6 +157,7 @@ class SpacesStore {
 			return null;
 		} finally {
 			this.isLoading = false;
+			this._creatingSpace = false;
 		}
 	}
 

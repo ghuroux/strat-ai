@@ -64,6 +64,9 @@ class AreaStore {
 	// Track which area members have been loaded
 	private loadedAreaMembers = new Set<string>();
 
+	// Guard flags for preventing duplicate operations
+	private _creatingArea = $state(false);
+
 	/**
 	 * Load all areas for a space
 	 */
@@ -121,6 +124,13 @@ class AreaStore {
 	 * Create a new area
 	 */
 	async createArea(input: CreateAreaInput): Promise<Area | null> {
+		// Guard: Reject concurrent create calls
+		if (this._creatingArea) {
+			console.warn('AreasStore.createArea: Already creating area, rejecting duplicate call');
+			return null;
+		}
+
+		this._creatingArea = true;
 		this.isLoading = true;
 		this.error = null;
 
@@ -163,6 +173,7 @@ class AreaStore {
 			return null;
 		} finally {
 			this.isLoading = false;
+			this._creatingArea = false;
 		}
 	}
 

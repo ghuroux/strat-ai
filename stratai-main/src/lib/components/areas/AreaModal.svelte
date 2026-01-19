@@ -164,6 +164,12 @@
 	}
 
 	async function handleSubmit() {
+		// Guard: Prevent duplicate submissions
+		if (isSubmitting) {
+			console.warn('AreaModal.handleSubmit: Already submitting, rejecting duplicate call');
+			return;
+		}
+
 		// Validate (General areas keep their name)
 		const trimmedName = name.trim();
 		if (!trimmedName && !isGeneral) {
@@ -322,7 +328,15 @@
 								onclick={handleDelete}
 								disabled={isSubmitting}
 							>
-								{isSubmitting ? 'Deleting...' : 'Delete'}
+								{#if isSubmitting}
+									<svg class="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+										<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+										<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+									</svg>
+									Deleting...
+								{:else}
+									Delete
+								{/if}
 							</button>
 						</div>
 					</div>
@@ -589,7 +603,15 @@
 									class="btn-primary"
 									disabled={isSubmitting || (!name.trim() && !isGeneral)}
 								>
-									{isSubmitting ? 'Saving...' : submitLabel}
+									{#if isSubmitting}
+										<svg class="animate-spin w-4 h-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+											<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+											<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+										</svg>
+										{isEditMode ? 'Saving...' : 'Creating...'}
+									{:else}
+										{submitLabel}
+									{/if}
 								</button>
 							</div>
 						</div>
@@ -947,6 +969,9 @@
 	.btn-secondary,
 	.btn-danger,
 	.btn-danger-outline {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		padding: 0.5rem 1rem;
 		font-size: 0.875rem;
 		font-weight: 500;

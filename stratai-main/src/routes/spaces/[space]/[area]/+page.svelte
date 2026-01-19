@@ -12,7 +12,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { fly, fade } from 'svelte/transition';
-	import { Clock, AlertCircle, RotateCcw } from 'lucide-svelte';
+	import { Clock, AlertCircle, RotateCcw, X, Paperclip } from 'lucide-svelte';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
@@ -255,8 +255,16 @@
 	let showSlowWarning = $state(false);
 	let streamingTimedOut = $state(false);
 	let lastMessageContent = $state<string | null>(null);
+	let lastMessageAttachments = $state<FileAttachment[] | undefined>(undefined);
 	let slowWarningTimeout: ReturnType<typeof setTimeout> | null = null;
 	let hardTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	// Failed message state
+	let failedMessage = $state<{
+		content: string;
+		attachments?: FileAttachment[];
+		error: string;
+	} | null>(null);
 
 	// Parse task suggestions from the last assistant message
 	let currentSuggestionInfo = $derived.by(() => {
@@ -476,8 +484,20 @@
 	function retryLastMessage() {
 		if (lastMessageContent) {
 			streamingTimedOut = false;
-			handleSend(lastMessageContent);
+			handleSend(lastMessageContent, lastMessageAttachments);
 		}
+	}
+
+	function retryFailedMessage() {
+		if (failedMessage) {
+			const { content, attachments } = failedMessage;
+			failedMessage = null;
+			handleSend(content, attachments);
+		}
+	}
+
+	function dismissFailedMessage() {
+		failedMessage = null;
 	}
 
 	// Chat handlers
@@ -542,8 +562,12 @@
 		clearStreamingTimeouts();
 		streamingTimedOut = false;
 
-		// Store message content for retry
+		// Clear any previous failed message state
+		failedMessage = null;
+
+		// Store message content and attachments for retry
 		lastMessageContent = content;
+		lastMessageAttachments = attachments;
 
 		if (chatStore.isSecondOpinionOpen) {
 			chatStore.closeSecondOpinion();
@@ -754,11 +778,17 @@
 			if (err instanceof Error && err.name === 'AbortError') {
 				chatStore.updateMessage(conversationId!, assistantMessageId, { isStreaming: false });
 			} else {
-				chatStore.updateMessage(conversationId!, assistantMessageId, {
-					isStreaming: false,
+				// Remove the failed assistant message
+				chatStore.deleteMessagesFromIndex(conversationId!, messages.length - 1);
+
+				// Set failed message state for retry UI
+				failedMessage = {
+					content,
+					attachments,
 					error: err instanceof Error ? err.message : 'Unknown error'
-				});
-				toastStore.error(err instanceof Error ? err.message : 'Failed to get response');
+				};
+
+				toastStore.error(err instanceof Error ? err.message : 'Failed to send message');
 			}
 			// Clear timeouts on error
 			clearStreamingTimeouts();
@@ -1154,6 +1184,8 @@
 			if (err instanceof Error && err.name === 'AbortError') {
 				chatStore.updateMessage(conversationId!, assistantMessageId, { isStreaming: false });
 			} else {
+				// For edit/resend/regenerate flows, just show the error in the message
+				// (no failed message state since we don't have the original user message)
 				chatStore.updateMessage(conversationId!, assistantMessageId, {
 					isStreaming: false,
 					error: err instanceof Error ? err.message : 'Unknown error'
@@ -1698,8 +1730,60 @@
 				{/if}
 			</ChatMessageList>
 
-			<!-- Streaming timeout warnings/errors -->
+			<!-- Failed message and streaming timeout warnings/errors -->
 			<div class="px-4 pb-2">
+				{#if failedMessage}
+					<div class="max-w-3xl mx-auto mb-4 rounded-xl bg-red-500/10 border border-red-500/30 overflow-hidden">
+						<!-- Error header -->
+						<div class="flex items-center gap-3 px-4 py-3 border-b border-red-500/20">
+							<div class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-500/15 flex items-center justify-center">
+								<AlertCircle class="w-4 h-4 text-red-400" />
+							</div>
+							<div class="flex-1 min-w-0">
+								<p class="text-sm font-medium text-zinc-200">Failed to send</p>
+								<p class="text-xs text-zinc-400 mt-0.5">{failedMessage.error}</p>
+							</div>
+							<button
+								onclick={dismissFailedMessage}
+								class="flex-shrink-0 p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-zinc-200 transition-colors"
+								title="Dismiss"
+							>
+								<X size={16} />
+							</button>
+						</div>
+
+						<!-- Message preview -->
+						<div class="px-4 py-3 bg-red-500/5">
+							<div class="text-sm text-zinc-300">
+								{#if failedMessage.content.length > 200}
+									{failedMessage.content.slice(0, 200)}...
+								{:else}
+									{failedMessage.content}
+								{/if}
+							</div>
+							{#if failedMessage.attachments && failedMessage.attachments.length > 0}
+								<div class="flex items-center gap-1.5 mt-2 text-xs text-zinc-400">
+									<Paperclip size={12} />
+									<span>{failedMessage.attachments.length} attachment{failedMessage.attachments.length === 1 ? '' : 's'}</span>
+								</div>
+							{/if}
+						</div>
+
+						<!-- Retry button -->
+						<div class="px-4 py-3 flex justify-end">
+							<button
+								onclick={retryFailedMessage}
+								class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+									   bg-primary-600 hover:bg-primary-500 text-white
+									   text-sm font-medium transition-colors"
+							>
+								<RotateCcw size={14} />
+								Retry
+							</button>
+						</div>
+					</div>
+				{/if}
+
 				{#if showSlowWarning && chatStore.isStreaming}
 					<div class="flex items-center gap-2 px-3 py-2 mt-2 rounded-lg
 								bg-amber-500/10 border border-amber-500/20 max-w-3xl mx-auto">
