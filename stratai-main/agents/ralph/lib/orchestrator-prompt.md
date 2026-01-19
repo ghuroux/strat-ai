@@ -280,6 +280,13 @@ You are implementing a user story for the Ralph Loop.
 1. **CLAUDE.md** - Development principles, decision log, known issues
 2. **stratai-main/.claude/skills/stratai-conventions/SKILL.md** - Core conventions for ALL work
    - Quick refs: SVELTE5.md, POSTGRES.md, API-PATTERNS.md, PROMPTS.md
+3. **Feature Spec (from docs_reviewed)** - If the PRD research includes `docs_reviewed` files, **READ THEM FIRST**. These often contain:
+   - Exact UX specifications with code samples
+   - Design tokens and styling requirements
+   - Implementation patterns to follow
+   - Edge cases and acceptance criteria details
+
+   The spec file is your primary source of truth for HOW to implement. The PRD acceptance criteria tell you WHAT to verify.
 
 ### Skill Selection (Read based on what you're implementing)
 
