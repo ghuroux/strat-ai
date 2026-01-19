@@ -640,9 +640,21 @@ if [ -f "$WORKSPACE_DIR/.feature-branch" ]; then
     fi
 
   elif [[ $REPLY =~ ^[Kk]$ ]]; then
-    echo "   Feature branch kept: $FEATURE_BRANCH"
+    cd "$PROJECT_DIR" || exit 1
+
+    # Ensure we're on the feature branch for testing
+    CURRENT_BRANCH=$(git branch --show-current)
+    if [ "$CURRENT_BRANCH" != "$FEATURE_BRANCH" ]; then
+      echo "   Switching to feature branch for testing..."
+      git checkout "$FEATURE_BRANCH" 2>/dev/null || true
+    fi
+
+    print_success "Ready for testing on: $FEATURE_BRANCH"
     echo ""
-    echo "   To merge later:"
+    echo "   To test:"
+    echo "     npm run dev"
+    echo ""
+    echo "   After testing, to merge:"
     echo "     git checkout main"
     echo "     git merge $FEATURE_BRANCH"
     echo "     git branch -d $FEATURE_BRANCH"
@@ -650,10 +662,25 @@ if [ -f "$WORKSPACE_DIR/.feature-branch" ]; then
 
   else
     echo "   No changes made to branches."
+
+    # Still ensure we're on the feature branch
+    cd "$PROJECT_DIR" || exit 1
+    CURRENT_BRANCH=$(git branch --show-current)
+    if [ "$CURRENT_BRANCH" != "$FEATURE_BRANCH" ]; then
+      echo "   Switching to feature branch..."
+      git checkout "$FEATURE_BRANCH" 2>/dev/null || true
+    fi
+    echo "   Currently on: $(git branch --show-current)"
   fi
 fi
 
 echo ""
 print_success "Ralph loop complete!"
+echo ""
+
+# Final branch status
+cd "$PROJECT_DIR" 2>/dev/null || true
+FINAL_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "   📍 Current branch: $FINAL_BRANCH"
 echo ""
 exit 0
