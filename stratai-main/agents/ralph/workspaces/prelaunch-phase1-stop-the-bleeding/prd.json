@@ -1,0 +1,130 @@
+{
+  "feature": "Pre-Launch Phase 1: Stop the Bleeding",
+  "created": "2026-01-19",
+  "parent_task_id": "prelaunch-phase1-stop-the-bleeding",
+  "branch": "feature/prelaunch-phase1-stop-the-bleeding",
+  "base_branch": "main",
+  "research": {
+    "similar_patterns": [
+      "src/lib/stores/toast.svelte.ts - Toast store with error/success/warning methods",
+      "src/lib/stores/spaces.svelte.ts - Store pattern with error catching",
+      "src/lib/stores/areas.svelte.ts - Store pattern with error catching",
+      "src/lib/stores/chat.svelte.ts - Streaming state management with abort controller",
+      "src/lib/stores/settings.svelte.ts - Settings persistence with setSelectedModel()",
+      "src/lib/components/chat/WelcomeScreen.svelte - Conditional rendering based on hasModel",
+      "src/lib/components/ModelSelector.svelte - AUTO_MODEL_ID constant"
+    ],
+    "related_commits": [],
+    "docs_reviewed": [
+      "docs/features/prelaunch-phase1-stop-the-bleeding.md"
+    ],
+    "decisions_made": [
+      {
+        "question": "Any existing error pages to consider?",
+        "decision": "No error pages exist - confirmed via glob search",
+        "rationale": "Clean slate for US-001 implementation"
+      },
+      {
+        "question": "Does chatStore have stopStreaming method?",
+        "decision": "Yes, chatStore.stopStreaming() exists at line 820",
+        "rationale": "US-002 can use existing method for timeout handling"
+      },
+      {
+        "question": "Where is AUTO_MODEL_ID defined?",
+        "decision": "ModelSelector.svelte line 10: const AUTO_MODEL_ID = 'auto'",
+        "rationale": "US-003 should define locally or import from a shared location"
+      }
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Add Root Error Boundary",
+      "description": "As a user, I need graceful error handling when something crashes so that I can understand what went wrong and recover.",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "src/routes/+error.svelte exists with full-screen centered layout",
+        "Uses AlertTriangle icon from lucide-svelte (not inline SVG)",
+        "Shows user-friendly error message from $page.error?.message (not stack trace)",
+        "Displays error status code when available (e.g., 'Error 404')",
+        "Has 'Go Home' button with Home icon that navigates to / via goto('/')",
+        "Has 'Try Again' button with RefreshCw icon that calls location.reload()",
+        "Matches app styling: zinc-950 background, zinc text colors",
+        "Primary button uses bg-primary-500 hover:bg-primary-600",
+        "Secondary button uses bg-zinc-800 hover:bg-zinc-700 border-zinc-700",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Add Streaming Timeout with User Feedback",
+      "description": "As a user, I need feedback when AI response takes too long or fails so that I'm not left wondering if the app is broken.",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "After 15s of streaming, inline amber warning appears below streaming indicator",
+        "Warning uses Clock icon from lucide-svelte with animate-pulse class",
+        "Warning text: 'Taking longer than expected...'",
+        "After 60s timeout, streaming stops via chatStore.stopStreaming()",
+        "Error card replaces streaming indicator with AlertCircle icon in red container",
+        "Error toast fires: 'Response timed out. Please try again.'",
+        "'Retry' button with RotateCcw icon appears in error card",
+        "Clicking retry resends exact same message content (store lastMessageContent)",
+        "Timeouts cleared when streaming completes normally",
+        "Timeouts cleared when user sends a new message",
+        "Works in both main chat (/) and area chat (/spaces/[space]/[area])",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Add Model Selection Guidance for First-Time Users",
+      "description": "As a first-time user, I need clear guidance on how to start chatting so that I don't get stuck on a disabled input field.",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "When no model selected, model selection guidance shows instead of normal welcome content in WelcomeScreen.svelte",
+        "Uses Sparkles icon in gradient icon container (from-primary-500/20 to-cyan-500/20)",
+        "Heading: 'Welcome to StratAI'",
+        "Subheading: 'To get started, select an AI model'",
+        "Recommendation box explains AUTO mode benefit with Zap icon",
+        "'Select AUTO Mode' button is full-width with primary styling and shadow glow",
+        "Clicking button sets settingsStore.selectedModel to 'auto' via settingsStore.setSelectedModel('auto')",
+        "After model selection, component re-renders to show normal welcome content",
+        "Secondary text mentions 'dropdown above' to guide eye to header",
+        "Works for both new users and users who cleared their settings",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Wire Toast Notifications to Store Operations",
+      "description": "As a user, I need feedback when my actions succeed or fail so that I know the app is responding to my input.",
+      "status": "pending",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "toastStore imported in src/lib/stores/spaces.svelte.ts",
+        "toastStore imported in src/lib/stores/areas.svelte.ts",
+        "toastStore imported in src/lib/stores/chat.svelte.ts",
+        "spaces.svelte.ts createSpace(): success toast 'Space created', error toast with message",
+        "spaces.svelte.ts updateSpace(): success toast 'Space updated', error toast with message",
+        "spaces.svelte.ts deleteSpace(): success toast 'Space deleted', error toast with message",
+        "spaces.svelte.ts addMember(): success toast 'Member added', error toast with message",
+        "spaces.svelte.ts removeMember(): success toast 'Member removed', error toast with message",
+        "spaces.svelte.ts pinSpace()/unpinSpace(): error toast only (success is visually obvious)",
+        "areas.svelte.ts createArea(): success toast 'Area created', error toast with message",
+        "areas.svelte.ts updateArea(): success toast 'Area updated', error toast with message",
+        "areas.svelte.ts deleteArea(): success toast 'Area deleted', error toast with message",
+        "chat.svelte.ts syncFromApi(): error toast 'Failed to sync conversations' (error only)",
+        "chat.svelte.ts deleteConversation(): success toast 'Conversation deleted', error toast with message",
+        "No duplicate toasts (error toast shows the actual error message)",
+        "npm run check passes",
+        "npm run lint passes"
+      ]
+    }
+  ]
+}

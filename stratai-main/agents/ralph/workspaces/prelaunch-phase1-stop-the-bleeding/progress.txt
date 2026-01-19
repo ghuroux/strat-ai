@@ -1,0 +1,34 @@
+# Ralph Progress Log
+
+## Feature: Pre-Launch Phase 1: Stop the Bleeding
+**Parent Task:** prelaunch-phase1-stop-the-bleeding
+**Branch:** feature/prelaunch-phase1-stop-the-bleeding
+**Started:** 2026-01-19
+**Status:** Ready to begin
+
+## Decisions Made During PRD Creation
+- No existing error pages found - clean slate for US-001
+- chatStore.stopStreaming() exists and can be used for timeout handling in US-002
+- AUTO_MODEL_ID = 'auto' defined in ModelSelector.svelte; US-003 will define locally
+- All three stores (spaces, areas, chat) follow same error catching pattern without toasts
+
+## Codebase Patterns Discovered
+- Toast API: toastStore.success(message), toastStore.error(message), toastStore.warning(message)
+- Svelte 5 runes: $state for mutable, $derived for computed
+- Icon library: lucide-svelte (AlertTriangle, Home, RefreshCw, Clock, AlertCircle, RotateCcw, Sparkles, Zap)
+- Color palette: zinc-950 (background), zinc-100/200/400/500 (text), primary-500 (brand blue)
+- Store error pattern: catch block sets this.error = message, but no toast
+
+## Stories
+| ID | Title | Status |
+|----|-------|--------|
+| US-001 | Add Root Error Boundary | pending |
+| US-002 | Add Streaming Timeout with User Feedback | pending |
+| US-003 | Add Model Selection Guidance for First-Time Users | pending |
+| US-004 | Wire Toast Notifications to Store Operations | pending |
+
+## Implementation Notes
+- US-001, US-003, US-004 have no dependencies and can potentially run in parallel
+- US-002 modifies two files: +page.svelte and spaces/[space]/[area]/+page.svelte
+- All stories are frontend-only, no database changes required
+- Detailed code snippets provided in spec file for each story
