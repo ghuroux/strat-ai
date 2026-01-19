@@ -207,6 +207,7 @@ class SpacesStore {
 	/**
 	 * Delete a custom space
 	 * Note: System spaces cannot be deleted
+	 * Returns cascade counts for toast message (US-008)
 	 */
 	async deleteSpace(id: string): Promise<boolean> {
 		this.isLoading = true;
@@ -225,11 +226,30 @@ class SpacesStore {
 				throw new Error(errorData.error || `Delete failed: ${response.status}`);
 			}
 
+			// Parse response to get cascade counts (US-008 format)
+			const data = await response.json();
+
 			// Remove from caches
 			this.spaces.delete(id);
 			this.spacesBySlug.delete(space.slug);
 			this._version++;
-			toastStore.success('Space deleted');
+
+			// Build toast message with cascade counts (AC #10, #11)
+			const areas = data.deleted?.areas ?? 0;
+			const tasks = data.deleted?.tasks ?? 0;
+			const conversations = data.deleted?.conversations ?? 0;
+
+			if (areas > 0 || tasks > 0 || conversations > 0) {
+				const parts: string[] = [];
+				if (areas > 0) parts.push(`${areas} area${areas !== 1 ? 's' : ''}`);
+				if (tasks > 0) parts.push(`${tasks} task${tasks !== 1 ? 's' : ''}`);
+				if (conversations > 0)
+					parts.push(`${conversations} conversation${conversations !== 1 ? 's' : ''}`);
+				toastStore.success(`Space deleted along with ${parts.join(', ')}.`);
+			} else {
+				toastStore.success('Space deleted.');
+			}
+
 			return true;
 		} catch (e) {
 			debugLog('SPACES_STORE', 'Failed to delete space:', e);

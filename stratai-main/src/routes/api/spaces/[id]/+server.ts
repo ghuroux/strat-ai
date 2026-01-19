@@ -204,9 +204,14 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
+		// US-008: Return cascade counts in standardized format
 		return json({
 			success: true,
-			...result
+			deleted: {
+				areas: result.areasDeleted,
+				tasks: result.tasksDeleted,
+				conversations: result.conversationsDeleted
+			}
 		});
 	} catch (error) {
 		console.error('Failed to delete space:', error);
