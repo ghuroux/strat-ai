@@ -102,6 +102,7 @@ Claude Code has access to specialized skills and commands. **Before working on r
 | Creating API endpoints | `stratai-main/.claude/skills/creating-endpoints/SKILL.md` | Any new `+server.ts` file in `src/routes/api/` |
 | Working with PostgreSQL | `stratai-main/.claude/skills/working-with-postgres/SKILL.md` | Any `*-postgres.ts` file or SQL query work |
 | Managing Svelte 5 stores | `stratai-main/.claude/skills/managing-state/SKILL.md` | Any `.svelte.ts` file in `src/lib/stores/` |
+| Writing smoke tests | `stratai-main/.claude/skills/writing-smoke-tests/SKILL.md` | Major features needing Playwright browser tests |
 | StratAI conventions | `stratai-main/.claude/skills/stratai-conventions/SKILL.md` | General coding, bug fixes, refactoring, architecture |
 
 **Quick references within StratAI conventions skill:**
@@ -128,6 +129,7 @@ Claude Code has access to specialized skills and commands. **Before working on r
 - An API endpoint → **READ** `creating-endpoints/SKILL.md`
 - Database code → **READ** `working-with-postgres/SKILL.md`
 - A Svelte 5 store → **READ** `managing-state/SKILL.md`
+- Smoke tests for major features → **READ** `writing-smoke-tests/SKILL.md`
 - Any StratAI code → **REFERENCE** `stratai-conventions/SKILL.md`
 
 **ALWAYS check** `stratai-conventions/SKILL.md` for:
