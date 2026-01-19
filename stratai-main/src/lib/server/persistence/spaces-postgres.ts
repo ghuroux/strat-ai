@@ -269,25 +269,88 @@ export const postgresSpaceRepository: SpaceRepository = {
 
 	/**
 	 * Soft delete a custom space (system spaces cannot be deleted)
+	 * Cascades to related data: areas, tasks, conversations, space_memberships
 	 */
-	async delete(id: string, userId: string): Promise<boolean> {
+	async delete(id: string, userId: string): Promise<{
+		areasDeleted: number;
+		tasksDeleted: number;
+		conversationsDeleted: number;
+	} | null> {
 		const existing = await this.findById(id, userId);
-		if (!existing) return false;
+		if (!existing) return null;
 
 		if (existing.type === 'system') {
 			throw new Error('Cannot delete system spaces');
 		}
 
-		const result = await sql`
-			UPDATE spaces
-			SET deleted_at = NOW()
-			WHERE id = ${id}
-			  AND user_id = ${userId}
-			  AND type = 'custom'
-			  AND deleted_at IS NULL
-			RETURNING id
-		`;
-		return result.length > 0;
+		// Use transaction to ensure atomicity
+		const counts = await sql.begin(async (tx) => {
+			// 1. Get all area IDs for this space
+			const areaRows = await tx<{ id: string }[]>`
+				SELECT id FROM areas
+				WHERE space_id = ${id}
+				  AND deleted_at IS NULL
+			`;
+			const areaIds = areaRows.map((row) => row.id);
+
+			// 2. Soft delete conversations in these areas
+			let conversationsResult;
+			if (areaIds.length > 0) {
+				conversationsResult = await tx`
+					UPDATE conversations
+					SET deleted_at = NOW()
+					WHERE area_id = ANY(${areaIds})
+					  AND deleted_at IS NULL
+				`;
+			} else {
+				conversationsResult = { count: 0 };
+			}
+
+			// 3. Soft delete tasks in these areas
+			let tasksResult;
+			if (areaIds.length > 0) {
+				tasksResult = await tx`
+					UPDATE tasks
+					SET deleted_at = NOW()
+					WHERE area_id = ANY(${areaIds})
+					  AND deleted_at IS NULL
+				`;
+			} else {
+				tasksResult = { count: 0 };
+			}
+
+			// 4. Soft delete all areas in this space
+			const areasResult = await tx`
+				UPDATE areas
+				SET deleted_at = NOW()
+				WHERE space_id = ${id}
+				  AND deleted_at IS NULL
+			`;
+
+			// 5. Hard delete space_memberships for this space
+			await tx`
+				DELETE FROM space_memberships
+				WHERE space_id = ${id}
+			`;
+
+			// 6. Soft delete the space itself
+			await tx`
+				UPDATE spaces
+				SET deleted_at = NOW()
+				WHERE id = ${id}
+				  AND user_id = ${userId}
+				  AND type = 'custom'
+				  AND deleted_at IS NULL
+			`;
+
+			return {
+				areasDeleted: areasResult.count,
+				tasksDeleted: tasksResult.count,
+				conversationsDeleted: conversationsResult.count
+			};
+		});
+
+		return counts;
 	},
 
 	/**

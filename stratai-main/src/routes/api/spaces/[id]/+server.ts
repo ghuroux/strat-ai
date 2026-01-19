@@ -173,6 +173,7 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 /**
  * DELETE /api/spaces/[id]
  * Soft deletes a custom space. Only owners can delete. System spaces cannot be deleted.
+ * Cascades deletion to all related areas, tasks, conversations, and memberships.
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	if (!locals.session) {
@@ -197,13 +198,16 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			);
 		}
 
-		const deleted = await postgresSpaceRepository.delete(spaceId, userId);
+		const result = await postgresSpaceRepository.delete(spaceId, userId);
 
-		if (!deleted) {
+		if (!result) {
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
-		return json({ success: true });
+		return json({
+			success: true,
+			...result
+		});
 	} catch (error) {
 		console.error('Failed to delete space:', error);
 

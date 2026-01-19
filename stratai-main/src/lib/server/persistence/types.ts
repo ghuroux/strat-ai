@@ -332,7 +332,11 @@ export interface SpaceRepository {
 	findById(id: string, userId: string): Promise<Space | null>;
 	create(input: CreateSpaceInput, userId: string): Promise<Space>;
 	update(id: string, updates: UpdateSpaceInput, userId: string): Promise<Space | null>;
-	delete(id: string, userId: string): Promise<boolean>;
+	delete(id: string, userId: string): Promise<{
+		areasDeleted: number;
+		tasksDeleted: number;
+		conversationsDeleted: number;
+	} | null>;
 	ensureSystemSpaces(userId: string): Promise<void>;
 	reorder(orderedIds: string[], userId: string): Promise<void>;
 	getCustomSpaceCount(userId: string): Promise<number>;
