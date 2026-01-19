@@ -21,6 +21,8 @@
 	import ShareSpaceModal from './ShareSpaceModal.svelte';
 	import SharedWithMeSection from './SharedWithMeSection.svelte';
 	import { SkeletonCard } from '$lib/components/skeletons';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { LayoutGrid } from 'lucide-svelte';
 	import { getSpaceIconPath } from '$lib/config/space-icons';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { userStore } from '$lib/stores/user.svelte';
@@ -326,6 +328,19 @@
 						{#each Array(3) as _, i (i)}
 							<SkeletonCard />
 						{/each}
+					{:else if areas.length === 0}
+						<!-- Empty State: No areas -->
+						<div class="col-span-full">
+							<EmptyState
+								icon={LayoutGrid}
+								iconColor="text-primary-400"
+								heading="Create Your First Area"
+								description="Areas organize focused discussions within your space. Create an area to start collaborating with your team."
+								ctaLabel="Create Area"
+								onCtaClick={onCreateArea}
+								size="md"
+							/>
+						</div>
 					{:else}
 						{#each areasWithCounts as area (area.id)}
 							<AreaCard

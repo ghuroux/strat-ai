@@ -8,6 +8,8 @@
 	import ConversationItem from './ConversationItem.svelte';
 	import ClearConversationsModal from './ClearConversationsModal.svelte';
 	import { SkeletonList } from '$lib/components/skeletons';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { MessageSquare } from 'lucide-svelte';
 
 	interface Props {
 		onNewChat: () => void;
@@ -262,8 +264,9 @@
 				<SkeletonList count={5} variant="conversation" gap="xs" />
 			</div>
 		{:else if !hasResults}
-			<div class="px-4 py-8 text-center text-surface-500">
-				{#if searchQuery}
+			{#if searchQuery}
+				<!-- Search no results -->
+				<div class="px-4 py-8 text-center text-surface-500">
 					<svg
 						class="w-10 h-10 mx-auto mb-3 text-surface-600"
 						fill="none"
@@ -279,24 +282,21 @@
 					</svg>
 					<p class="text-sm">No results for "{searchQuery}"</p>
 					<p class="text-xs text-surface-600 mt-1">Try a different search term</p>
-				{:else}
-					<svg
-						class="w-12 h-12 mx-auto mb-3 text-surface-600"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="1.5"
-							d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-						/>
-					</svg>
-					<p class="text-sm">No conversations yet</p>
-					<p class="text-xs text-surface-600 mt-1">Start a new chat to begin</p>
-				{/if}
-			</div>
+				</div>
+			{:else}
+				<!-- Empty State: No conversations -->
+				<div class="px-4">
+					<EmptyState
+						icon={MessageSquare}
+						iconColor="text-primary-400"
+						heading="No conversations yet"
+						description="Start a new chat to begin conversing with AI."
+						ctaLabel="New Chat"
+						onCtaClick={onNewChat}
+						size="sm"
+					/>
+				</div>
+			{/if}
 		{:else}
 			<!-- Pinned Section -->
 			{#if hasPinnedResults}

@@ -7,6 +7,8 @@
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import { SpaceModal } from '$lib/components/spaces';
 	import { SkeletonCard } from '$lib/components/skeletons';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { Layers } from 'lucide-svelte';
 	import type { SpaceConfig, SpaceType } from '$lib/types/chat';
 	import type { Space } from '$lib/types/spaces';
 
@@ -187,13 +189,26 @@
 		</p>
 
 		<!-- Space Cards -->
-		<div class="grid gap-4 sm:grid-cols-2">
-			{#if spacesStore.isLoading}
-				<!-- Loading skeletons - maintain grid layout -->
+		{#if spacesStore.isLoading}
+			<!-- Loading skeletons - maintain grid layout -->
+			<div class="grid gap-4 sm:grid-cols-2">
 				{#each Array(6) as _, i (i)}
 					<SkeletonCard />
 				{/each}
-			{:else}
+			</div>
+		{:else if customSpaces.length === 0}
+			<!-- Empty State: No custom spaces -->
+			<EmptyState
+				icon={Layers}
+				iconColor="text-primary-400"
+				heading="Create Your First Space"
+				description="Spaces help you organize your work and conversations into focused contexts. System spaces are always available, but you can create custom spaces for your specific needs."
+				ctaLabel="Create Space"
+				onCtaClick={() => showCreateModal = true}
+				size="lg"
+			/>
+		{:else}
+			<div class="grid gap-4 sm:grid-cols-2">
 				{#each allSpaces as space}
 					{@const accent = getAccentClass(space)}
 					{@const isCustom = 'isCustom' in space && space.isCustom}
@@ -258,14 +273,7 @@
 						Create a custom space for your specific needs
 					</p>
 				</button>
-			{/if}
-		</div>
-
-		<!-- Hint text -->
-		{#if customSpaces.length === 0}
-			<p class="mt-8 text-sm text-surface-500">
-				Create custom spaces to organize your work and conversations
-			</p>
+			</div>
 		{/if}
 	</div>
 </main>
