@@ -8,6 +8,7 @@
 	import { userStore } from '$lib/stores/user.svelte';
 	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { Menu, X } from 'lucide-svelte';
 	import ModelSelector from '../ModelSelector.svelte';
 	import ModelBadge from '../ModelBadge.svelte';
 	import PlanningTasksIndicator from '../tasks/PlanningTasksIndicator.svelte';
@@ -156,22 +157,24 @@
 <header class="h-16 px-4 flex items-center border-b border-surface-800 bg-surface-900/80 backdrop-blur-xl overflow-visible relative z-40">
 	<!-- Left: Sidebar Toggle & Logo -->
 	<div class="flex items-center gap-3 min-w-0">
-		<!-- Sidebar Toggle -->
+		<!-- Mobile Sidebar Toggle - Shows X when open, Menu when closed -->
 		<button
 			type="button"
-			class="btn-icon lg:hidden"
+			class="btn-icon md:hidden w-9 h-9"
 			onclick={toggleSidebar}
 			aria-label="Toggle sidebar"
 		>
-			<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-			</svg>
+			{#if settingsStore.sidebarOpen}
+				<X size={24} />
+			{:else}
+				<Menu size={24} />
+			{/if}
 		</button>
 
 		<!-- Desktop Sidebar Toggle -->
 		<button
 			type="button"
-			class="btn-icon hidden lg:flex"
+			class="btn-icon hidden md:flex"
 			onclick={toggleSidebar}
 			aria-label="Toggle sidebar"
 		>

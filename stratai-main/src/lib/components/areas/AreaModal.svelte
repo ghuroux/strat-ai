@@ -277,7 +277,7 @@
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+		class="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4 bg-black/60 backdrop-blur-sm"
 		transition:fade={{ duration: 150 }}
 		onclick={handleBackdropClick}
 	>
@@ -628,9 +628,17 @@
 		max-width: 28rem;
 		background: rgb(23, 23, 23);
 		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 0.75rem;
+		border-radius: 0.75rem 0.75rem 0 0;
 		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
 		overflow: hidden;
+		padding-bottom: env(safe-area-inset-bottom);
+	}
+
+	@media (min-width: 768px) {
+		.modal-container {
+			border-radius: 0.75rem;
+			padding-bottom: 0;
+		}
 	}
 
 	.modal-header {

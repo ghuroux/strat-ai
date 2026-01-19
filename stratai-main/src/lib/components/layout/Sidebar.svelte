@@ -176,13 +176,21 @@
 	function closeSidebar() {
 		settingsStore.setSidebarOpen(false);
 	}
+
+	// Close sidebar on mobile when navigating (conversation click, new chat)
+	function handleMobileNavigation() {
+		// Only close on mobile (< 768px)
+		if (window.innerWidth < 768) {
+			closeSidebar();
+		}
+	}
 </script>
 
 <!-- Mobile backdrop -->
 {#if settingsStore.sidebarOpen}
 	<button
 		type="button"
-		class="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden"
+		class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden"
 		onclick={closeSidebar}
 		transition:fade={{ duration: 200 }}
 		aria-label="Close sidebar"
@@ -192,14 +200,14 @@
 <!-- Sidebar -->
 <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 <aside
-	class="fixed lg:relative z-50 h-full w-[280px] bg-surface-900 border-r border-surface-800
-		   flex flex-col transform transition-transform duration-300 ease-out
-		   {settingsStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-0 lg:border-0 lg:overflow-hidden'}"
+	class="fixed md:relative z-50 h-full w-72 bg-surface-900 border-r border-surface-800
+		   flex flex-col transform transition-transform duration-200 ease-out shadow-2xl md:shadow-none
+		   {settingsStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 md:w-0 md:border-0 md:overflow-hidden'}"
 	onclick={handleSidebarClick}
 >
 	<!-- New Chat Button -->
 	<div class="p-4 border-b border-surface-800">
-		<button type="button" class="btn-primary w-full flex items-center justify-center gap-2" onclick={onNewChat}>
+		<button type="button" class="btn-primary w-full flex items-center justify-center gap-2" onclick={() => { onNewChat(); handleMobileNavigation(); }}>
 			<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
 			</svg>
@@ -313,7 +321,7 @@
 							active={conversation.id === chatStore.activeConversationId}
 							menuOpen={openMenuId === conversation.id}
 							onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
-							onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+							onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); handleMobileNavigation(); }}
 							ondelete={() => handleDeleteConversation(conversation.id)}
 							onpin={() => handlePinConversation(conversation.id)}
 							onrename={(title) => handleRenameConversation(conversation.id, title)}
@@ -346,7 +354,7 @@
 						active={conversation.id === chatStore.activeConversationId}
 						menuOpen={openMenuId === conversation.id}
 						onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
-						onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+						onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); handleMobileNavigation(); }}
 						ondelete={() => handleDeleteConversation(conversation.id)}
 						onpin={() => handlePinConversation(conversation.id)}
 						onrename={(title) => handleRenameConversation(conversation.id, title)}
@@ -388,7 +396,7 @@
 								active={conversation.id === chatStore.activeConversationId}
 								menuOpen={openMenuId === conversation.id}
 								onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
-								onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+								onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); handleMobileNavigation(); }}
 								ondelete={() => handleDeleteConversation(conversation.id)}
 								onpin={() => handlePinConversation(conversation.id)}
 								onrename={(title) => handleRenameConversation(conversation.id, title)}
@@ -432,7 +440,7 @@
 								active={conversation.id === chatStore.activeConversationId}
 								menuOpen={openMenuId === conversation.id}
 								onMenuToggle={(isOpen) => handleMenuToggle(conversation.id, isOpen)}
-								onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); }}
+								onclick={() => { closeAllMenus(); handleConversationClick(conversation.id); handleMobileNavigation(); }}
 								ondelete={() => handleDeleteConversation(conversation.id)}
 								onpin={() => handlePinConversation(conversation.id)}
 								onrename={(title) => handleRenameConversation(conversation.id, title)}

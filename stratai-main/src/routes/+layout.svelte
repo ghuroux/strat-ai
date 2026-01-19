@@ -68,7 +68,27 @@
 			}
 		};
 		mediaQuery.addEventListener('change', handleChange);
-		return () => mediaQuery.removeEventListener('change', handleChange);
+
+		// Mobile sidebar management: auto-close on resize to mobile, auto-open on desktop
+		const desktopMediaQuery = window.matchMedia('(min-width: 768px)');
+		const handleSidebarResize = (e: MediaQueryListEvent | MediaQueryList) => {
+			if (e.matches) {
+				// Desktop: open sidebar by default
+				settingsStore.setSidebarOpen(true);
+			} else {
+				// Mobile: close sidebar by default
+				settingsStore.setSidebarOpen(false);
+			}
+		};
+		// Set initial state
+		handleSidebarResize(desktopMediaQuery);
+		// Listen for changes
+		desktopMediaQuery.addEventListener('change', handleSidebarResize);
+
+		return () => {
+			mediaQuery.removeEventListener('change', handleChange);
+			desktopMediaQuery.removeEventListener('change', handleSidebarResize);
+		};
 	});
 
 	/**
