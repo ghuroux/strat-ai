@@ -9,7 +9,10 @@ export { sendEmail } from './sendgrid';
 export {
 	getPasswordResetEmail,
 	createPasswordResetLink,
+	createSetPasswordLink,
+	getWelcomeEmail,
 	getSpaceInviteEmail,
-	createSpaceInviteLink
+	createSpaceInviteLink,
+	getSpaceInvitationEmail,
+	createSpaceLink
 } from './templates';
-export { sendSpaceInvitationEmail, createSpaceLink } from './space-invitation';
