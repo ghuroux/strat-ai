@@ -270,9 +270,15 @@ if ! git -C "$PROJECT_DIR" rev-parse --git-dir > /dev/null 2>&1; then
 else
   cd "$PROJECT_DIR" || exit 1
 
-  # Get feature name for branch
-  FEATURE_NAME=$(jq -r '.feature_name // .feature // "unknown"' "$PRD_FILE" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
-  FEATURE_BRANCH="feature/$FEATURE_NAME"
+  # Get feature branch name - prefer explicit branch field, fall back to deriving from feature name
+  EXPLICIT_BRANCH=$(jq -r '.branch // empty' "$PRD_FILE" 2>/dev/null || echo "")
+  if [ -n "$EXPLICIT_BRANCH" ]; then
+    FEATURE_BRANCH="$EXPLICIT_BRANCH"
+  else
+    # Derive from feature name - sanitize: lowercase, spaces to hyphens, remove special chars
+    FEATURE_NAME=$(jq -r '.feature_name // .feature // "unknown"' "$PRD_FILE" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
+    FEATURE_BRANCH="feature/$FEATURE_NAME"
+  fi
 
   # Check current branch
   CURRENT_BRANCH=$(git branch --show-current)
