@@ -74,7 +74,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		  AND created_at >= date_trunc('month', CURRENT_DATE)
 	`;
 	const spendMillicents = parseInt(spendResult[0]?.totalCostMillicents || '0', 10);
-	const spendDollars = spendMillicents / 100 / 100; // millicents -> cents -> dollars
+	// 1 millicent = 1/1000 of a cent, so 1 dollar = 100,000 millicents
+	const spendDollars = spendMillicents / 100000;
 
 	// Get org budget
 	const orgBudgetResult = await sql<OrgBudgetRow[]>`
