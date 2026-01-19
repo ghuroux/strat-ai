@@ -19,7 +19,7 @@ import { PAGE_TYPE_LABELS } from '$lib/types/page';
 
 // Model for extraction (using Haiku for cost efficiency)
 const EXTRACTION_MODEL = 'claude-haiku-4-5';
-const EXTRACTION_MAX_TOKENS = 16000; // Increased to handle longer content
+const EXTRACTION_MAX_TOKENS = 32000; // Increased to handle longer content and verbose TipTap JSON
 
 function getBaseUrl(): string {
 	return env.LITELLM_BASE_URL || 'http://localhost:4000';
@@ -444,12 +444,27 @@ async function callExtractionAPI(
 				};
 			}
 
-			userPrompt = `Structure this content as a ${PAGE_TYPE_LABELS[pageType]}:\n\n${lastAssistant.content}`;
+			// IMPORTANT: Preserve ALL content - do not summarize or condense
+			userPrompt = `Convert this content into a ${PAGE_TYPE_LABELS[pageType]} document.
+
+CRITICAL: You must include ALL of the content below - do not summarize, condense, or leave anything out.
+Convert the formatting to appropriate TipTap nodes (headings, paragraphs, lists, code blocks, etc.) while preserving every piece of information.
+
+Content to convert:
+
+${lastAssistant.content}`;
 			break;
 		}
 
 		case 'full_conversation':
-			userPrompt = `Convert this entire conversation into a structured ${PAGE_TYPE_LABELS[pageType]}. Include all relevant information from both user questions and assistant responses:\n\n${messagesToText(messages)}`;
+			userPrompt = `Convert this entire conversation into a ${PAGE_TYPE_LABELS[pageType]} document.
+
+CRITICAL: Include ALL content from the conversation - do not summarize or condense.
+Preserve the full context of questions and responses. Use appropriate headings, paragraphs, lists, and code blocks.
+
+Conversation:
+
+${messagesToText(messages)}`;
 			break;
 
 		case 'custom':
