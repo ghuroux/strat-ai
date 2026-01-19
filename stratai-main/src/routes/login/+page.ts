@@ -10,11 +10,12 @@ import type { PageLoad } from './$types';
 /**
  * Validate that a return URL is safe to redirect to.
  * Must be a relative path (starts with /), no protocol-relative, no javascript: URLs.
+ * Prefixed with _ to be valid SvelteKit export.
  *
  * @param url - The URL to validate
  * @returns true if the URL is safe for redirecting
  */
-export function validateReturnUrl(url: string | null): url is string {
+function validateReturnUrl(url: string | null): url is string {
 	if (!url) return false;
 
 	// Must start with single forward slash (relative path)
