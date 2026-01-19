@@ -297,19 +297,26 @@ mv agents/ralph/parent-task-id.txt agents/ralph/workspaces/{parent-task-id}/pare
 
 **⚠️ CRITICAL: You MUST commit the workspace. Ralph's preflight will fail without this.**
 
+**📚 Reference:** See `agents/ralph/skills/branch-management.md` for full branch protocol.
+
 Execute these commands in sequence:
 
 ```bash
 # 1. Create and checkout feature branch
 git checkout -b feature/{parent-task-id}
 
-# 2. Stage the workspace files
+# 2. Update prd.json to record branch info (IMPORTANT for branch verification)
+# Add these fields to prd.json:
+#   "branch": "feature/{parent-task-id}",
+#   "base_branch": "main",
+
+# 3. Stage the workspace files
 git add agents/ralph/workspaces/{parent-task-id}/
 
-# 3. Also stage the markdown PRD if you created one
+# 4. Also stage the markdown PRD if you created one
 git add tasks/prd-*.md 2>/dev/null || true
 
-# 4. Commit with descriptive message
+# 5. Commit with descriptive message
 git commit -m "feat: create PRD workspace for {feature-name}
 
 - Created workspace: agents/ralph/workspaces/{parent-task-id}/
@@ -328,6 +335,22 @@ Expected output:
 - "nothing to commit, working tree clean"
 
 **If git status shows uncommitted changes, the commit FAILED. Investigate and fix before proceeding.**
+
+### Step 5.5: Migration Naming Convention
+
+**⚠️ CRITICAL: Use TIMESTAMPS, not sequential numbers for migrations.**
+
+Sequential numbers (039, 040) cause collisions when parallel branches create migrations.
+
+**Format:** `YYYYMMDD_HHMMSS_description.sql`
+
+**Example:**
+```bash
+# Instead of: 039-welcome-tokens.sql
+# Use: 20260119_093000_welcome_tokens.sql
+```
+
+This ensures migrations never collide, even when multiple feature branches are active.
 
 ---
 
@@ -395,19 +418,38 @@ Ralph will:
 - ✅ Archive and extract patterns when complete
 - ✅ Mark workspace as completed
 
-**For parallel execution**, you can run multiple Ralph instances:
+### 🔄 Daily Sync Protocol (IMPORTANT)
+
+**Before EACH coding session, run:**
+
+```bash
+./agents/ralph/validation/branch-check.sh workspaces/{parent-task-id}
+```
+
+This verifies:
+- ✅ You're on the correct branch (matches prd.json)
+- ✅ Branch is synced with main (prevents merge conflicts)
+- ✅ No uncommitted changes blocking work
+
+**If you skip this, branches will diverge and you'll have painful merges!**
+
+### Parallel Execution
+
+You can run multiple Ralph instances:
 ```bash
 # Terminal 1
 ./ralph.sh workspaces/feature-a
 
 # Terminal 2
 ./ralph.sh workspaces/feature-b
-
-# Terminal 3
-./ralph.sh workspaces/feature-c
 ```
 
-Each workspace is isolated - no conflicts! 🎉
+**⚠️ Note:** Workspaces isolate PRD state, but NOT:
+- Migration numbers (use timestamps to avoid collision)
+- Shared code files (coordinate if touching same files)
+- Git branches (still need to merge to main)
+
+See `agents/ralph/skills/branch-management.md` for full protocol.
 
 ### Additional Commands
 - List workspaces: `./ralph.sh --list`
