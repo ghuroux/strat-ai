@@ -413,10 +413,12 @@ export const postgresSpaceRepository: SpaceRepository = {
 				UNION
 
 				-- Spaces with direct user membership (isPinned from space_memberships)
+				-- Exclude self-memberships where user is also the owner (their isPinned is in spaces table)
 				SELECT DISTINCT s.id, sm.role as access_role, sm.is_pinned as is_pinned
 				FROM spaces s
 				JOIN space_memberships sm ON s.id = sm.space_id
 				WHERE sm.user_id = ${userId}::uuid
+					AND s.user_id != ${userId}::uuid  -- Exclude owned spaces (prevent isPinned conflict)
 					AND s.deleted_at IS NULL
 
 				UNION
@@ -427,6 +429,7 @@ export const postgresSpaceRepository: SpaceRepository = {
 				JOIN space_memberships sm ON s.id = sm.space_id
 				JOIN group_memberships gm ON sm.group_id = gm.group_id
 				WHERE gm.user_id = ${userId}::uuid
+					AND s.user_id != ${userId}::uuid  -- Exclude owned spaces (prevent isPinned conflict)
 					AND s.deleted_at IS NULL
 			),
 			best_access AS (

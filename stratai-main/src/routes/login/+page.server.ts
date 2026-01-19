@@ -9,7 +9,7 @@ import {
 } from '$lib/server/persistence';
 import { sql } from '$lib/server/persistence/db';
 import { getHomePageUrl, type UserPreferences } from '$lib/types/user';
-import { validateReturnUrl } from './+page';
+import { _validateReturnUrl } from './+page';
 
 /**
  * User authentication - supports both env var passwords and database passwords
@@ -104,7 +104,7 @@ export const actions: Actions = {
 		const returnUrl = url.searchParams.get('returnUrl');
 
 		// If returnUrl is valid, use it; otherwise fall back to user preferences
-		if (validateReturnUrl(returnUrl)) {
+		if (_validateReturnUrl(returnUrl)) {
 			throw redirect(303, returnUrl);
 		}
 

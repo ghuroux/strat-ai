@@ -390,7 +390,25 @@
 		// Validate area exists (use proper space ID for lookup)
 		const loadedArea = areaStore.getAreaBySlug(loadedSpace.id, areaParam);
 		if (!loadedArea) {
-			toastStore.error('Area not found');
+			// Area not in store - check if it exists but user lacks access
+			try {
+				const lookupRes = await fetch(`/api/areas/lookup?spaceId=${loadedSpace.id}&slug=${areaParam}`);
+				if (lookupRes.ok) {
+					const lookupData = await lookupRes.json();
+					if (lookupData.exists && !lookupData.hasAccess) {
+						// Area exists but user can't access it
+						const areaName = lookupData.areaName || 'this area';
+						toastStore.error(`You don't have access to ${areaName}`);
+					} else {
+						// Area genuinely doesn't exist
+						toastStore.error('Area not found');
+					}
+				} else {
+					toastStore.error('Area not found');
+				}
+			} catch {
+				toastStore.error('Area not found');
+			}
 			goto(`/spaces/${spaceParam}`);
 			return;
 		}
