@@ -1955,6 +1955,7 @@
 				messages={messages}
 				areaId={area.id}
 				suggestedPageType={pageSuggestionPageType ?? undefined}
+				sourceMessageId={createPageFromMessageId}
 				onClose={handleCreatePageModalClose}
 				onCreated={handlePageCreated}
 			/>

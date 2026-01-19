@@ -30,11 +30,24 @@
 		messages: Message[];
 		areaId: string;
 		suggestedPageType?: PageType; // Optional pre-selected type from page suggestion (P6-IN-01)
+		sourceMessageId?: string | null; // Optional: specific message to create page from (when clicking "create page" on a message)
 		onClose: () => void;
 		onCreated: (pageId: string) => void;
 	}
 
-	let { isOpen, conversationId, messages, areaId, suggestedPageType, onClose, onCreated }: Props = $props();
+	let { isOpen, conversationId, messages, areaId, suggestedPageType, sourceMessageId = null, onClose, onCreated }: Props = $props();
+
+	// When sourceMessageId is provided, filter messages to include only up to that message
+	// This ensures we create a page from the specific response the user clicked, not the last one
+	let effectiveMessages = $derived.by(() => {
+		if (!sourceMessageId) return messages;
+
+		const messageIndex = messages.findIndex(m => m.id === sourceMessageId);
+		if (messageIndex === -1) return messages;
+
+		// Include all messages up to and including the source message
+		return messages.slice(0, messageIndex + 1);
+	});
 
 	// Get all page types for dropdown
 	const pageTypes = getAllPageTypes();
@@ -55,19 +68,19 @@
 
 	// Initialize with AI suggestions when modal opens
 	$effect(() => {
-		if (isOpen && messages.length > 0) {
+		if (isOpen && effectiveMessages.length > 0) {
 			// Use suggested page type if provided (P6-IN-01), otherwise detect
 			if (suggestedPageType) {
 				suggestedType = suggestedPageType;
 				selectedPageType = suggestedPageType;
 			} else {
-				const detection = detectPageType(messages);
+				const detection = detectPageType(effectiveMessages);
 				suggestedType = detection.pageType;
 				selectedPageType = detection.pageType;
 			}
 
-			// Suggest title
-			suggestedTitle = suggestTitle(messages);
+			// Suggest title based on effective messages (may be filtered to specific message)
+			suggestedTitle = suggestTitle(effectiveMessages);
 			title = suggestedTitle;
 
 			// Reset state
@@ -104,7 +117,7 @@
 	// Extract content when extraction type or page type changes
 	// Returns true if extraction succeeded, false otherwise
 	async function handleExtract(): Promise<boolean> {
-		if (!messages.length) {
+		if (!effectiveMessages.length) {
 			error = 'No messages to extract from';
 			return false;
 		}
@@ -114,11 +127,12 @@
 
 		try {
 			console.log('[CreatePageModal] Calling extract API with extractionType:', extractionType);
+			console.log('[CreatePageModal] Using', effectiveMessages.length, 'messages (sourceMessageId:', sourceMessageId, ')');
 			const response = await fetch('/api/pages/extract', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					messages,
+					messages: effectiveMessages,
 					extractionType,
 					pageType: selectedPageType,
 					customInstructions: extractionType === 'custom' ? customInstructions : undefined

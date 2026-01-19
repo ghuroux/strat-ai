@@ -116,6 +116,7 @@
 
 	// Create Page modal state
 	let createPageModalOpen = $state(false);
+	let createPageFromMessageId = $state<string | null>(null);
 	let pageSuggestionPageType = $state<PageType | null>(null);
 
 	// Multi-conversation support for subtasks
@@ -1225,7 +1226,14 @@
 	// Handle closing the CreatePageModal
 	function handleCreatePageModalClose() {
 		createPageModalOpen = false;
+		createPageFromMessageId = null;
 		pageSuggestionPageType = null;
+	}
+
+	// Handle creating a page from a specific message
+	function handleCreatePageFromMessage(messageId: string) {
+		createPageFromMessageId = messageId;
+		createPageModalOpen = true;
 	}
 
 	// Handle panel toggle
@@ -1679,7 +1687,7 @@
 								onResend={handleResend}
 								onRegenerate={handleRegenerate}
 								onSecondOpinion={() => {}}
-								onCreatePage={() => (createPageModalOpen = true)}
+								onCreatePage={handleCreatePageFromMessage}
 							/>
 						{/each}
 					{/if}
@@ -1829,6 +1837,7 @@
 				messages={visibleMessages}
 				areaId={task.areaId}
 				suggestedPageType={pageSuggestionPageType ?? undefined}
+				sourceMessageId={createPageFromMessageId}
 				onClose={handleCreatePageModalClose}
 				onCreated={handlePageCreated}
 			/>
