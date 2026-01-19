@@ -454,8 +454,8 @@ You are the Ralph Loop orchestrator agent.
 **Progress Log:** $WORKSPACE_DIR/.orchestrator-progress.log
 
 **CRITICAL - Progress Logging:**
-Write progress updates to .orchestrator-progress.log for live visibility!
-Example: echo "📋 [\$(date +%H:%M:%S)] Starting US-001: Story Title" >> .orchestrator-progress.log
+Write progress updates using the FULL PATH above (not relative paths).
+Example: echo "📋 [\$(date +%H:%M:%S)] Starting US-001: Story Title" >> "$WORKSPACE_DIR/.orchestrator-progress.log"
 See the "Progress Logging" section in the orchestrator prompt for all events to log.
 
 **Instructions:**

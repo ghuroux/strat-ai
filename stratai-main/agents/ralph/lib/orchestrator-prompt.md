@@ -6,12 +6,21 @@ You are the orchestrator for the Ralph Loop feature implementation system.
 
 **You MUST write progress updates to the progress log file for visibility.**
 
-At the start of your session, write to the progress log:
-```bash
-echo "🚀 [$(date +%H:%M:%S)] Orchestrator started (Phase 3 - Parallel Waves)" >> .orchestrator-progress.log
+**IMPORTANT: Use the FULL PATH from your context message.** Look for `**Progress Log:**` in your context - it contains the absolute path like:
+```
+**Progress Log:** /path/to/workspace/.orchestrator-progress.log
 ```
 
-**Log these events (use Bash tool with echo >> .orchestrator-progress.log):**
+Extract this path and use it for ALL logging. **DO NOT use relative paths** - they will write to the wrong directory.
+
+At the start of your session:
+1. Extract the progress log path from your context (the `**Progress Log:**` line)
+2. Write to that FULL PATH:
+```bash
+echo "🚀 [$(date +%H:%M:%S)] Orchestrator started (Phase 3 - Parallel Waves)" >> /full/path/from/context/.orchestrator-progress.log
+```
+
+**Log these events (always use the FULL PATH from context):**
 
 | Event | Message Format |
 |-------|---------------|
@@ -28,16 +37,14 @@ echo "🚀 [$(date +%H:%M:%S)] Orchestrator started (Phase 3 - Parallel Waves)" 
 | Wave complete | `🎉 [HH:MM:SS] Wave N COMPLETE (X stories)` |
 | Feature complete | `🏆 [HH:MM:SS] ALL WAVES COMPLETE - Feature done!` |
 
-**Example logging commands:**
+**Example (replace path with your actual Progress Log path from context):**
 ```bash
-echo "🌊 [$(date +%H:%M:%S)] Starting Wave 2 (2 stories)" >> .orchestrator-progress.log
-echo "📋 [$(date +%H:%M:%S)] [WAVE-2] Starting US-002: Integrate color generation" >> .orchestrator-progress.log
-echo "🤖 [$(date +%H:%M:%S)] [WAVE-2] Sub-agent implementing US-002 (haiku)..." >> .orchestrator-progress.log
-echo "🤖 [$(date +%H:%M:%S)] [WAVE-2] Sub-agent implementing US-003 (sonnet)..." >> .orchestrator-progress.log
-echo "✅ [$(date +%H:%M:%S)] [WAVE-2] US-002 implementation complete" >> .orchestrator-progress.log
-echo "✅ [$(date +%H:%M:%S)] [WAVE-2] US-003 implementation complete" >> .orchestrator-progress.log
-echo "🔍 [$(date +%H:%M:%S)] [WAVE-2] Running validation for wave..." >> .orchestrator-progress.log
-echo "🎉 [$(date +%H:%M:%S)] Wave 2 COMPLETE (2 stories)" >> .orchestrator-progress.log
+# If your context shows: **Progress Log:** /home/user/project/workspace/.orchestrator-progress.log
+PROGRESS_LOG="/home/user/project/workspace/.orchestrator-progress.log"
+
+echo "🌊 [$(date +%H:%M:%S)] Starting Wave 2 (2 stories)" >> "$PROGRESS_LOG"
+echo "📋 [$(date +%H:%M:%S)] [WAVE-2] Starting US-002: Integrate color generation" >> "$PROGRESS_LOG"
+echo "🤖 [$(date +%H:%M:%S)] [WAVE-2] Sub-agent implementing US-002 (haiku)..." >> "$PROGRESS_LOG"
 ```
 
 **Why this matters:** The orchestrator runs with `--print` which buffers output. Progress logs let ralph.sh show live updates via `tail -f`.
@@ -140,7 +147,7 @@ For each wave (in order: wave_number 1, 2, 3...):
 ### Step 1: Log Wave Start
 
 ```bash
-echo "🌊 [$(date +%H:%M:%S)] Starting Wave [N] ([X] stories)" >> .orchestrator-progress.log
+echo "🌊 [$(date +%H:%M:%S)] Starting Wave [N] ([X] stories)" >> "$PROGRESS_LOG"
 ```
 
 ### Step 2: Determine Model for Each Story
@@ -187,8 +194,8 @@ Task({
 
 Log each spawn:
 ```bash
-echo "📋 [$(date +%H:%M:%S)] [WAVE-N] Starting US-XXX: [title]" >> .orchestrator-progress.log
-echo "🤖 [$(date +%H:%M:%S)] [WAVE-N] Sub-agent implementing US-XXX (model)..." >> .orchestrator-progress.log
+echo "📋 [$(date +%H:%M:%S)] [WAVE-N] Starting US-XXX: [title]" >> "$PROGRESS_LOG"
+echo "🤖 [$(date +%H:%M:%S)] [WAVE-N] Sub-agent implementing US-XXX (model)..." >> "$PROGRESS_LOG"
 ```
 
 **Story Prompt Template:**
@@ -293,7 +300,7 @@ const result2 = TaskOutput({ task_id: "task_id_from_step_3", block: true, timeou
 
 Log completions:
 ```bash
-echo "✅ [$(date +%H:%M:%S)] [WAVE-N] US-XXX implementation complete" >> .orchestrator-progress.log
+echo "✅ [$(date +%H:%M:%S)] [WAVE-N] US-XXX implementation complete" >> "$PROGRESS_LOG"
 ```
 
 **Note:** For single-story waves (parallelism = 1), you can skip `run_in_background` and wait directly.
@@ -303,7 +310,7 @@ echo "✅ [$(date +%H:%M:%S)] [WAVE-N] US-XXX implementation complete" >> .orche
 **CRITICAL: Run validation ONCE for all stories in the wave, not per-story.**
 
 ```bash
-echo "🔍 [$(date +%H:%M:%S)] [WAVE-N] Running validation for wave..." >> .orchestrator-progress.log
+echo "🔍 [$(date +%H:%M:%S)] [WAVE-N] Running validation for wave..." >> "$PROGRESS_LOG"
 
 cd [project-directory]
 npm run check 2>&1
@@ -315,10 +322,10 @@ npm run audit-db-access 2>&1
 
 ```bash
 # If validation passed:
-echo "✅ [$(date +%H:%M:%S)] [WAVE-N] Validation passed" >> .orchestrator-progress.log
+echo "✅ [$(date +%H:%M:%S)] [WAVE-N] Validation passed" >> "$PROGRESS_LOG"
 
 # If validation failed:
-echo "❌ [$(date +%H:%M:%S)] [WAVE-N] Validation failed (attempting fix...)" >> .orchestrator-progress.log
+echo "❌ [$(date +%H:%M:%S)] [WAVE-N] Validation failed (attempting fix...)" >> "$PROGRESS_LOG"
 ```
 
 **If validation passes:** Proceed to Step 7
@@ -476,7 +483,7 @@ For each story in the completed wave:
 
 Log wave completion:
 ```bash
-echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE ([X] stories)" >> .orchestrator-progress.log
+echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE ([X] stories)" >> "$PROGRESS_LOG"
 ```
 
 **Move to next wave:**
@@ -484,7 +491,7 @@ echo "🎉 [$(date +%H:%M:%S)] Wave N COMPLETE ([X] stories)" >> .orchestrator-p
 1. Check `.wave-analysis.json` for the next wave_number
 2. If more waves exist:
    ```bash
-   echo "➡️ [$(date +%H:%M:%S)] Moving to Wave [N+1]..." >> .orchestrator-progress.log
+   echo "➡️ [$(date +%H:%M:%S)] Moving to Wave [N+1]..." >> "$PROGRESS_LOG"
    ```
 3. Repeat from Step 1 with the next wave
 4. If no more waves, proceed to Feature Completion
