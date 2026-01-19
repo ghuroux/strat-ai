@@ -203,7 +203,11 @@ export interface DocumentRepository {
 	findByHash(contentHash: string, userId: string): Promise<Document | null>;
 	create(input: CreateDocumentInput, userId: string): Promise<Document>;
 	update(id: string, updates: UpdateDocumentInput, userId: string): Promise<Document | null>;
-	delete(id: string, userId: string): Promise<void>;
+	delete(id: string, userId: string): Promise<{
+		areasUpdated: number;
+		sharesDeleted: number;
+		taskLinksDeleted: number;
+	}>;
 	// Task-document linking
 	linkToTask(
 		documentId: string,

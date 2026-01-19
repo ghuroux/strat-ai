@@ -125,7 +125,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 /**
  * DELETE /api/documents/[id]
- * Soft delete a document
+ * Soft delete a document with cascade cleanup
+ * Returns cleanup counts for verification
  */
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	try {
@@ -136,15 +137,12 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		const userId = locals.session.userId;
 		const { id } = params;
 
-		// Verify document exists
-		const existing = await postgresDocumentRepository.findById(id, userId);
-		if (!existing) {
-			return json({ error: 'Document not found' }, { status: 404 });
-		}
+		const cleanupCounts = await postgresDocumentRepository.delete(id, userId);
 
-		await postgresDocumentRepository.delete(id, userId);
-
-		return json({ success: true });
+		return json({
+			success: true,
+			cleanup: cleanupCounts
+		});
 	} catch (error) {
 		console.error('Failed to delete document:', error);
 		return json(

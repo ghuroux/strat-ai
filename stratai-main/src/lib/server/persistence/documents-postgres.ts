@@ -173,16 +173,70 @@ export const postgresDocumentRepository: DocumentRepository = {
 	},
 
 	/**
-	 * Soft delete a document
+	 * Soft delete a document with cascade cleanup
+	 *
+	 * Cascade operations (all within transaction):
+	 * 1. Remove from all areas' contextDocumentIds arrays
+	 * 2. Delete all document_area_shares records (ON DELETE CASCADE)
+	 * 3. Delete all task_documents links (ON DELETE CASCADE)
+	 * 4. Soft delete the document itself
+	 *
+	 * @returns Cleanup counts for verification
 	 */
-	async delete(id: string, userId: string): Promise<void> {
-		await sql`
-			UPDATE documents
-			SET deleted_at = NOW()
-			WHERE id = ${id}
-			  AND user_id = ${userId}
-			  AND deleted_at IS NULL
-		`;
+	async delete(id: string, userId: string): Promise<{
+		areasUpdated: number;
+		sharesDeleted: number;
+		taskLinksDeleted: number;
+	}> {
+		// Verify ownership before deletion
+		const doc = await this.findById(id, userId);
+		if (!doc) {
+			throw new Error('Document not found or access denied');
+		}
+
+		// Execute all cascade operations in a transaction
+		return await sql.begin(async (tx) => {
+			// 1. Remove document from all areas' contextDocumentIds arrays
+			const areasResult = await tx`
+				UPDATE areas
+				SET context_document_ids = array_remove(context_document_ids, ${id}),
+				    updated_at = NOW()
+				WHERE ${id} = ANY(context_document_ids)
+				  AND deleted_at IS NULL
+			`;
+			const areasUpdated = areasResult.count;
+
+			// 2. Count and delete document_area_shares (cascade will auto-delete, but we count first)
+			const shareCountRows = await tx<{ count: number }[]>`
+				SELECT COUNT(*)::int as count
+				FROM document_area_shares
+				WHERE document_id = ${id}
+			`;
+			const sharesDeleted = shareCountRows[0]?.count ?? 0;
+
+			// 3. Count and delete task_documents links (cascade will auto-delete, but we count first)
+			const taskLinkCountRows = await tx<{ count: number }[]>`
+				SELECT COUNT(*)::int as count
+				FROM task_documents
+				WHERE document_id = ${id}
+			`;
+			const taskLinksDeleted = taskLinkCountRows[0]?.count ?? 0;
+
+			// 4. Soft delete the document (CASCADE constraints will handle junction tables)
+			await tx`
+				UPDATE documents
+				SET deleted_at = NOW()
+				WHERE id = ${id}
+				  AND user_id = ${userId}
+				  AND deleted_at IS NULL
+			`;
+
+			return {
+				areasUpdated,
+				sharesDeleted,
+				taskLinksDeleted
+			};
+		});
 	},
 
 	/**
