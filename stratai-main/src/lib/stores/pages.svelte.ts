@@ -22,6 +22,7 @@ import type {
 	PageConversationRelationship,
 	TipTapContent
 } from '$lib/types/page';
+import { areaStore } from './areas.svelte';
 
 /**
  * Pages Store - manages pages with API sync
@@ -506,6 +507,59 @@ class PageStore {
 	getPagesForTask(taskId: string): Page[] {
 		void this._version;
 		return this.pageList.filter((p) => p.taskId === taskId);
+	}
+
+	/**
+	 * Get all pages for a Space (across all accessible areas)
+	 * Filters by accessible areas and excludes soft-deleted pages
+	 */
+	getPagesForSpace(spaceId: string): Page[] {
+		void this._version;
+
+		// Get accessible areas for this Space
+		const accessibleAreas = areaStore.getAreasForSpace(spaceId);
+		const areaIds = accessibleAreas.map((a) => a.id);
+
+		// Filter pages: must be in accessible area and not deleted
+		return this.pageList.filter(
+			(page) => areaIds.includes(page.areaId) && !page.deletedAt
+		);
+	}
+
+	/**
+	 * Get count of pages for a Space
+	 */
+	getPageCountForSpace(spaceId: string): number {
+		return this.getPagesForSpace(spaceId).length;
+	}
+
+	/**
+	 * Get recently edited pages by user in a Space
+	 * Note: Currently filters by page creator (userId) since we don't track who last edited
+	 * @param userId - User ID to filter by
+	 * @param spaceId - Space ID to filter by
+	 * @param limit - Maximum number of pages to return (default: 3)
+	 * @returns Pages created by user, updated in last 30 days, sorted by most recent
+	 */
+	getRecentlyEditedByUser(userId: string, spaceId: string, limit: number = 3): Page[] {
+		void this._version;
+
+		// Get pages for this Space
+		const spacePages = this.getPagesForSpace(spaceId);
+
+		// Calculate 30 days ago timestamp
+		const thirtyDaysAgo = new Date();
+		thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+		// Filter by user (creator) and recency, then sort and limit
+		return spacePages
+			.filter(
+				(page) =>
+					page.userId === userId &&
+					new Date(page.updatedAt).getTime() > thirtyDaysAgo.getTime()
+			)
+			.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+			.slice(0, limit);
 	}
 
 	/**
