@@ -81,23 +81,97 @@
 	let maxAttempts = 6;
 
 	// =============================================================================
+	// LocalStorage Persistence (Daily Mode Only)
+	// =============================================================================
+
+	const STORAGE_KEY = 'stratai-wordle-daily';
+
+	interface SavedGameState {
+		date: string;
+		guesses: GuessResult[];
+		letterStates: [string, LetterState][];
+		gameState: GameState;
+	}
+
+	function saveGameState() {
+		if (mode !== 'daily' || typeof window === 'undefined') return;
+
+		const state: SavedGameState = {
+			date: getTodayDateString(),
+			guesses,
+			letterStates: Array.from(letterStates.entries()),
+			gameState
+		};
+
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+		} catch (e) {
+			console.warn('Failed to save Wordle state:', e);
+		}
+	}
+
+	function loadGameState(): boolean {
+		if (typeof window === 'undefined') return false;
+
+		try {
+			const saved = localStorage.getItem(STORAGE_KEY);
+			if (!saved) return false;
+
+			const state: SavedGameState = JSON.parse(saved);
+
+			// Only restore if it's the same day
+			if (state.date !== getTodayDateString()) {
+				localStorage.removeItem(STORAGE_KEY);
+				return false;
+			}
+
+			// Restore state
+			guesses = state.guesses;
+			letterStates = new Map(state.letterStates);
+			gameState = state.gameState;
+
+			return true;
+		} catch (e) {
+			console.warn('Failed to load Wordle state:', e);
+			localStorage.removeItem(STORAGE_KEY);
+			return false;
+		}
+	}
+
+	function clearGameState() {
+		if (typeof window === 'undefined') return;
+		localStorage.removeItem(STORAGE_KEY);
+	}
+
+	// =============================================================================
 	// Game Logic
 	// =============================================================================
 
 	function initGame(newMode: GameMode) {
 		mode = newMode;
-		gameState = 'playing';
 		currentGuess = '';
-		guesses = [];
-		letterStates = new Map();
 		shake = false;
 		showConfetti = false;
 
 		if (newMode === 'daily') {
 			targetWord = getDailyWord();
+
+			// Try to restore saved state for daily mode
+			const restored = loadGameState();
+			if (!restored) {
+				// Fresh game
+				gameState = 'playing';
+				guesses = [];
+				letterStates = new Map();
+			}
+
 			checkDailyCompletion();
 		} else {
+			// Practice mode - always fresh game, clear any saved state
 			targetWord = getRandomWord();
+			gameState = 'playing';
+			guesses = [];
+			letterStates = new Map();
 			dailyCompleted = false;
 			dailyScore = null;
 		}
@@ -239,11 +313,18 @@
 			const score = 7 - guesses.length; // 6 for 1 guess, 1 for 6 guesses
 			if (mode === 'daily') {
 				saveScore(score);
+				clearGameState(); // Server is source of truth for completed games
 			}
 			toastStore.success(getWinMessage(guesses.length), 3000);
 		} else if (guesses.length >= maxAttempts) {
 			gameState = 'lost';
+			if (mode === 'daily') {
+				clearGameState(); // Game over, no need to persist
+			}
 			toastStore.error(`The word was: ${targetWord.toUpperCase()}`, 4000);
+		} else {
+			// Game still in progress - save state for later
+			saveGameState();
 		}
 
 		currentGuess = '';

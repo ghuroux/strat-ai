@@ -11,7 +11,7 @@
 	};
 </script>
 
-<div class="fixed bottom-4 right-4 z-50 flex flex-col gap-3 pb-[env(safe-area-inset-bottom)]">
+<div class="fixed bottom-4 right-4 z-[100] flex flex-col gap-3 pb-[env(safe-area-inset-bottom)]">
 	{#each toastStore.toasts as toast (toast.id)}
 		<div
 			in:fly={{ y: 50, duration: 300, easing: (t) => t * (2 - t) }}
