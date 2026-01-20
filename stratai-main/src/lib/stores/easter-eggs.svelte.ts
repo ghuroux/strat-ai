@@ -36,6 +36,12 @@ class EasterEggsStore {
 	// Barrel roll state
 	barrelRollActive = $state(false);
 
+	// Matrix rain state (for hacker theme entrance)
+	matrixRainActive = $state(false);
+
+	// Confetti state (for party mode and celebrations)
+	confettiActive = $state(false);
+
 	constructor() {
 		// Load from localStorage on client
 		if (typeof window !== 'undefined') {
@@ -154,6 +160,37 @@ class EasterEggsStore {
 		setTimeout(() => {
 			this.barrelRollActive = false;
 		}, 1000);
+	}
+
+	/**
+	 * Trigger matrix rain animation (hacker theme entrance)
+	 */
+	triggerMatrixRain(): void {
+		if (this.matrixRainActive) return;
+		this.matrixRainActive = true;
+	}
+
+	/**
+	 * Called when matrix rain animation completes
+	 */
+	onMatrixRainComplete(): void {
+		this.matrixRainActive = false;
+	}
+
+	/**
+	 * Trigger confetti celebration!
+	 * Used for party mode, milestones, achievements, etc.
+	 */
+	triggerConfetti(): void {
+		if (this.confettiActive) return;
+		this.confettiActive = true;
+	}
+
+	/**
+	 * Called when confetti animation completes
+	 */
+	onConfettiComplete(): void {
+		this.confettiActive = false;
 	}
 
 	/**

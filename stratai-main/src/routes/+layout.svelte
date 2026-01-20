@@ -4,6 +4,7 @@
 	import MoveChatModal from '$lib/components/chat/MoveChatModal.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import KeyboardShortcutsModal from '$lib/components/KeyboardShortcutsModal.svelte';
+	import MatrixRain from '$lib/components/effects/MatrixRain.svelte';
 	import { SnakeGame, WordleGame } from '$lib/components/games';
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import { commandPaletteStore } from '$lib/stores/commandPalette.svelte';
@@ -268,3 +269,11 @@
 	isOpen={gameStore.isWordleOpen}
 	onClose={() => gameStore.closeWordle()}
 />
+
+<!-- Matrix Rain Effect (Hacker Mode) -->
+{#if easterEggsStore.matrixRainActive}
+	<MatrixRain
+		duration={3000}
+		onComplete={() => easterEggsStore.onMatrixRainComplete()}
+	/>
+{/if}

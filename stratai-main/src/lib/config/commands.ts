@@ -218,15 +218,23 @@ export function getStaticCommands(): Command[] {
 					body.classList.remove('theme-hacker');
 					toastStore.info('Exiting the Matrix...', 3000);
 				} else {
-					// Enable hacker mode - also force dark theme for best effect
+					// Enable hacker mode with dramatic entrance!
+					// 1. Force dark theme first (required for hacker theme)
 					settingsStore.setTheme('dark');
-					body.classList.add('theme-hacker');
-					const isFirstTime = easterEggsStore.discover('hacker-theme');
-					if (isFirstTime) {
-						toastStore.discovery('Welcome to the Matrix. You found a secret theme!', 5000);
-					} else {
-						toastStore.success('Hacker mode activated. Type again to exit.', 3000);
-					}
+
+					// 2. Trigger matrix rain animation
+					easterEggsStore.triggerMatrixRain();
+
+					// 3. Apply hacker theme after short delay (so rain shows on dark bg first)
+					setTimeout(() => {
+						body.classList.add('theme-hacker');
+						const isFirstTime = easterEggsStore.discover('hacker-theme');
+						if (isFirstTime) {
+							toastStore.discovery('Welcome to the Matrix. You found a secret theme!', 5000);
+						} else {
+							toastStore.success('Hacker mode activated. Type again to exit.', 3000);
+						}
+					}, 500);
 				}
 			}
 		}
