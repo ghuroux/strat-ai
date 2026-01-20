@@ -50,10 +50,10 @@ CREATE INDEX IF NOT EXISTS idx_game_scores_user_best
     ON game_scores(user_id, game_type, score DESC);
 
 -- Recent scores (for weekly leaderboards)
--- Partial index only includes last 7 days - needs periodic reindex or date filtering in query
+-- Regular index on created_at - filter at query time with WHERE created_at > NOW() - INTERVAL '7 days'
+-- (Partial indexes can't use NOW() as it's not immutable)
 CREATE INDEX IF NOT EXISTS idx_game_scores_recent
-    ON game_scores(org_id, game_type, created_at DESC)
-    WHERE created_at > (NOW() - INTERVAL '7 days');
+    ON game_scores(org_id, game_type, created_at DESC);
 
 -- User lookup (for "my recent games" queries)
 CREATE INDEX IF NOT EXISTS idx_game_scores_user_recent

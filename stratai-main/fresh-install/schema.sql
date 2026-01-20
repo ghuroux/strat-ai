@@ -840,7 +840,7 @@ CREATE TABLE game_scores (
 
 CREATE INDEX idx_game_scores_org_leaderboard ON game_scores(org_id, game_type, score DESC);
 CREATE INDEX idx_game_scores_user_best ON game_scores(user_id, game_type, score DESC);
-CREATE INDEX idx_game_scores_recent ON game_scores(org_id, game_type, created_at DESC) WHERE created_at > (NOW() - INTERVAL '7 days');
+CREATE INDEX idx_game_scores_recent ON game_scores(org_id, game_type, created_at DESC);
 CREATE INDEX idx_game_scores_user_recent ON game_scores(user_id, created_at DESC);
 
 -- ============================================================================
