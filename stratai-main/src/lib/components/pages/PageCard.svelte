@@ -22,23 +22,25 @@
 	import { PAGE_TYPE_LABELS } from '$lib/types/page';
 
 	// Extended Page type with metadata from API
+	// For Space-level views, we need area context and ownership info
 	interface PageWithMetadata extends Page {
-		areaName: string;
-		areaSlug: string;
-		creatorName: string | null;
-		isOwnedByUser: boolean;
+		areaName?: string;
+		areaSlug?: string;
+		creatorName?: string | null;
+		isOwnedByUser?: boolean;
 	}
 
 	// Props
 	interface Props {
 		page: PageWithMetadata;
+		spaceSlug?: string; // Space slug for navigation (required for Space-level views)
 		highlight?: boolean;
 		onclick?: () => void;
 		onDelete?: (page: PageWithMetadata) => void;
 		onShare?: (page: PageWithMetadata) => void;
 	}
 
-	let { page, highlight = false, onclick, onDelete, onShare }: Props = $props();
+	let { page, spaceSlug, highlight = false, onclick, onDelete, onShare }: Props = $props();
 
 	// Menu state
 	let menuOpen = $state(false);
@@ -61,8 +63,9 @@
 	function handleViewClick(e: MouseEvent) {
 		e.stopPropagation();
 		menuOpen = false;
-		const spaceSlug = page.spaceId; // Will be resolved by SvelteKit routing
-		goto(`/spaces/${spaceSlug}/${page.areaSlug}/page/${page.id}`);
+		if (spaceSlug && page.areaSlug) {
+			goto(`/spaces/${spaceSlug}/${page.areaSlug}/pages/${page.id}`);
+		}
 	}
 
 	// Handle delete click
@@ -83,34 +86,14 @@
 	function handleCardClick() {
 		if (onclick) {
 			onclick();
-		} else {
-			// Default: navigate to page editor
-			const spaceSlug = page.spaceId;
-			goto(`/spaces/${spaceSlug}/${page.areaSlug}/page/${page.id}`);
-		}
-	}
-
-	// Get type icon component
-	function getTypeIcon(pageType: PageType) {
-		switch (pageType) {
-			case 'general':
-			case 'proposal':
-			case 'project_brief':
-			case 'weekly_update':
-			case 'technical_spec':
-				return FileEdit;
-			case 'meeting_notes':
-				return Users;
-			case 'decision_record':
-				return Scale;
-			default:
-				return FileEdit;
+		} else if (spaceSlug && page.areaSlug) {
+			// Default: navigate to page editor (only if we have routing info)
+			goto(`/spaces/${spaceSlug}/${page.areaSlug}/pages/${page.id}`);
 		}
 	}
 
 	// Derived values
 	const typeLabel = $derived(PAGE_TYPE_LABELS[page.pageType] || page.pageType);
-	const typeIcon = $derived(getTypeIcon(page.pageType));
 	const truncatedTitle = $derived(
 		page.title.length > 50 ? page.title.substring(0, 50) + '...' : page.title
 	);
@@ -143,7 +126,13 @@
 		<!-- Top row: Icon + Title + Lock -->
 		<div class="card-header">
 			<div class="card-icon">
-				<svelte:component this={typeIcon} size={20} />
+				{#if page.pageType === 'meeting_notes'}
+					<Users size={20} />
+				{:else if page.pageType === 'decision_record'}
+					<Scale size={20} />
+				{:else}
+					<FileEdit size={20} />
+				{/if}
 			</div>
 			<h3 class="card-title">{truncatedTitle}</h3>
 			{#if page.visibility === 'private'}
@@ -151,10 +140,12 @@
 			{/if}
 		</div>
 
-		<!-- Area badge -->
-		<div class="area-badge">
-			{page.areaName}
-		</div>
+		<!-- Area badge (only shown in Space-level views) -->
+		{#if page.areaName}
+			<div class="area-badge">
+				{page.areaName}
+			</div>
+		{/if}
 
 		<!-- Metadata row: Type + Word count -->
 		<div class="card-meta">
@@ -166,7 +157,7 @@
 		<!-- Footer: Timestamp + Ownership -->
 		<div class="card-footer">
 			<span class="updated">{formatRelativeTime(page.updatedAt)}</span>
-			{#if !page.isOwnedByUser && page.creatorName}
+			{#if page.isOwnedByUser === false && page.creatorName}
 				<span class="shared-by">Shared by {page.creatorName}</span>
 			{/if}
 		</div>
@@ -318,7 +309,7 @@
 		}
 	}
 
-	.lock-icon {
+	.card-header :global(.lock-icon) {
 		flex-shrink: 0;
 		color: rgb(161, 161, 170);
 		margin-top: 2px;
