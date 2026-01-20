@@ -2,6 +2,7 @@
 	import { userStore } from '$lib/stores/user.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { applyTheme } from '$lib/utils/theme';
 	import type { ThemePreference } from '$lib/types/user';
 
 	let selectedTheme = $state<ThemePreference>(userStore.user?.preferences?.theme ?? settingsStore.theme);
@@ -45,19 +46,6 @@
 			toastStore.error('Failed to save theme preference');
 		} finally {
 			isSaving = false;
-		}
-	}
-
-	function applyTheme(theme: ThemePreference) {
-		const root = document.documentElement;
-
-		if (theme === 'system') {
-			const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-			root.classList.toggle('light', !prefersDark);
-			root.classList.toggle('dark', prefersDark);
-		} else {
-			root.classList.toggle('light', theme === 'light');
-			root.classList.toggle('dark', theme === 'dark');
 		}
 	}
 

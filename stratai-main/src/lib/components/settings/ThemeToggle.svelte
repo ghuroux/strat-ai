@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { applyTheme } from '$lib/utils/theme';
 
 	type Theme = 'dark' | 'light' | 'system';
 
@@ -13,20 +14,7 @@
 
 	function setTheme(theme: Theme) {
 		settingsStore.setTheme(theme);
-		applyTheme(theme);
-	}
-
-	function applyTheme(theme: Theme) {
-		const root = document.documentElement;
-
-		if (theme === 'system') {
-			const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-			root.classList.toggle('light', !prefersDark);
-			root.classList.toggle('dark', prefersDark);
-		} else {
-			root.classList.toggle('light', theme === 'light');
-			root.classList.toggle('dark', theme === 'dark');
-		}
+		applyTheme(theme); // Uses utility that exits easter egg themes
 	}
 </script>
 
