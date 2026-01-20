@@ -4,69 +4,62 @@
   "waves": [
     {
       "wave_number": 1,
-      "stories": ["US-004"],
-      "parallelism": 1,
-      "rationale": "US-004 adds Space-level page aggregation methods to pageStore. This creates the contract (interface) that multiple downstream stories depend on. Must complete first to establish the data access layer.",
+      "stories": ["US-001", "US-004", "US-007", "US-016"],
+      "parallelism": 4,
+      "rationale": "Foundation wave with no dependencies. US-001 creates SpaceNavigation.svelte, US-004 adds methods to pageStore, US-007 creates API endpoint, US-016 adds optimistic update methods to pageStore. US-004 and US-016 both modify pageStore but add different methods (read vs write) with minimal conflict risk. All other files are distinct.",
       "estimated_time_min": 3
     },
     {
       "wave_number": 2,
-      "stories": ["US-001", "US-006", "US-007"],
-      "parallelism": 3,
-      "rationale": "US-001 (SpaceNavigation.svelte), US-006 (pages/+page.ts), US-007 (api/pages/+server.ts) touch completely different files and have no shared dependencies beyond the completed US-004 store methods. These can safely run in parallel: UI component vs route loader vs API endpoint.",
+      "stories": ["US-002", "US-006", "US-009", "US-012", "US-014", "US-015"],
+      "parallelism": 6,
+      "rationale": "US-002 creates individual nav button components (new files in nav/ subdirectory). US-006 creates page route loader (contract dependency on US-007 API). US-009, US-012, US-014, US-015 create standalone components with no shared files. All files are distinct, enabling full parallelization.",
       "estimated_time_min": 3
     },
     {
       "wave_number": 3,
-      "stories": ["US-002"],
-      "parallelism": 1,
-      "rationale": "US-002 creates individual nav button components that US-001 (SpaceNavigation) will import. Must wait for US-001 to complete to understand the integration pattern, though they touch different files (nav/*.svelte vs SpaceNavigation.svelte).",
+      "stories": ["US-005", "US-011", "US-013"],
+      "parallelism": 3,
+      "rationale": "US-005 modifies PagesNavButton from US-002. US-011 creates PageFilterBar (new file). US-013 creates/extends PageCard (new file). No file conflicts between these three stories.",
       "estimated_time_min": 3
     },
     {
       "wave_number": 4,
-      "stories": ["US-005", "US-008", "US-014", "US-015"],
-      "parallelism": 4,
-      "rationale": "US-005 (wire pageCount to PagesNavButton.svelte), US-008 (pages dashboard +page.svelte), US-014 (SelectAreaModal.svelte), US-015 (PageEmptyState.svelte) all touch different files. US-005 depends on US-004 (store methods) and US-002 (button component). US-008 depends on US-006 (load function). All prerequisites met, no file conflicts.",
+      "stories": ["US-010"],
+      "parallelism": 1,
+      "rationale": "US-010 creates AllPagesSection which integrates PageFilterBar (US-011), PagesGrid (US-012), and PageCard (US-013). Must wait for these dependencies to complete.",
       "estimated_time_min": 3
     },
     {
       "wave_number": 5,
-      "stories": ["US-009", "US-010", "US-011", "US-012", "US-013"],
-      "parallelism": 5,
-      "rationale": "All section components for the pages dashboard: RecentlyEditedSection, AllPagesSection, PageFilterBar, PagesGrid, PageCard. Each is a separate .svelte file with no overlap. US-008 (parent dashboard) is complete, providing integration context. These leaf components can be built in parallel.",
+      "stories": ["US-008"],
+      "parallelism": 1,
+      "rationale": "US-008 creates main pages dashboard +page.svelte, integrating RecentlyEditedSection (US-009), AllPagesSection (US-010), and SelectAreaModal (US-014). Must wait for US-010 completion.",
       "estimated_time_min": 3
     },
     {
       "wave_number": 6,
       "stories": ["US-003"],
       "parallelism": 1,
-      "rationale": "US-003 modifies SpaceDashboard.svelte to integrate the new SpaceNavigation component. Must wait until US-001 (SpaceNavigation) and US-002 (nav buttons) are complete and US-005 has wired the page count. This is an integration story that touches an existing file, so serialize to avoid conflicts.",
+      "rationale": "US-003 integrates SpaceNavigation (US-001) into SpaceDashboard. Must wait for US-001 completion and US-005 (which modified a nav button component).",
       "estimated_time_min": 3
     },
     {
       "wave_number": 7,
-      "stories": ["US-016"],
-      "parallelism": 1,
-      "rationale": "US-016 adds optimistic update methods (addPage, refreshPagesForSpace) to pageStore. This modifies the same file as US-004 (pages.svelte.ts). Must serialize to avoid file conflict. Creates contract for US-017.",
-      "estimated_time_min": 3
-    },
-    {
-      "wave_number": 8,
       "stories": ["US-017", "US-018", "US-019", "US-020"],
       "parallelism": 4,
-      "rationale": "US-017 (optimistic updates in creation flows), US-018 (loading states), US-019 (accessibility), US-020 (mobile responsiveness) are all enhancement stories that touch different aspects of existing components. US-017 depends on US-016 (optimistic methods). US-018/19/20 are polish passes across multiple files with no direct conflicts. Can run in parallel as they address orthogonal concerns.",
+      "rationale": "Polish and enhancement wave. US-017 updates page creation flows (searches codebase, modifies multiple files but distinct from others). US-018 adds loading states to +page.svelte (may conflict with US-008 changes, but US-008 is complete). US-019 adds accessibility (modifies components from US-008). US-020 adds mobile responsiveness (CSS changes across components). Potential minor conflicts but since these are enhancement layers on completed components, parallelization is reasonably safe with careful merge conflict resolution if needed.",
       "estimated_time_min": 3
     }
   ],
-  "estimated_wave_time_min": 24,
-  "time_savings_percent": 60,
-  "confidence": "high",
+  "estimated_wave_time_min": 21,
+  "time_savings_percent": 65,
+  "confidence": "medium",
   "risks": [
-    "US-004 and US-016 both modify pages.svelte.ts - correctly serialized in waves 1 and 7",
-    "US-001 and US-002 both work on navigation components - serialized (wave 2 then 3) to ensure clean integration pattern",
-    "US-003 integrates SpaceNavigation into SpaceDashboard - delayed to wave 6 after all nav components complete",
-    "US-017 modifies page creation flows across multiple files - potential conflicts if those files are being modified by US-018/19/20, but those are polish passes on different concerns (loading/a11y/mobile) so likely safe",
-    "Wave 5 has 5 parallel stories building leaf components - high parallelism but low risk since they're all net-new files"
+    "US-004 and US-016 both modify pageStore.svelte.ts - may have merge conflicts if methods touch overlapping code sections",
+    "US-018 and US-019 both modify +page.svelte from US-008 - may have merge conflicts in final wave",
+    "US-017 searches for 'createPage' across codebase - scope is unclear, may conflict with other stories if page creation logic is in modified files",
+    "US-013 'Create or extend' PageCard is ambiguous - if file already exists and was modified by earlier stories, may have conflicts",
+    "Wave 7 parallelization assumes enhancement stories can safely layer on completed components - may require sequential execution if conflicts arise"
   ]
 }

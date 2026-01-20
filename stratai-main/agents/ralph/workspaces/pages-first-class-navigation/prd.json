@@ -54,7 +54,8 @@
         "Component supports dark and light mode via CSS custom properties",
         "npm run check passes with 0 errors",
         "npm run lint passes with 0 errors"
-      ]
+      ],
+      "status": "completed"
     },
     {
       "id": "US-002",
@@ -115,7 +116,8 @@
         "TypeScript types are correct (no any types)",
         "npm run check passes with 0 errors",
         "npm run audit-db-access shows 0 violations"
-      ]
+      ],
+      "status": "completed"
     },
     {
       "id": "US-005",
@@ -184,37 +186,133 @@
         "tables": {
           "pages": {
             "columns": {
-              "id": { "sqlName": "id", "jsName": "id", "type": "TEXT", "nullable": false },
-              "area_id": { "sqlName": "area_id", "jsName": "areaId", "type": "TEXT", "nullable": false },
-              "space_id": { "sqlName": "space_id", "jsName": "spaceId", "type": "TEXT", "nullable": false },
-              "page_type": { "sqlName": "page_type", "jsName": "pageType", "type": "TEXT", "nullable": false },
-              "title": { "sqlName": "title", "jsName": "title", "type": "TEXT", "nullable": false },
-              "content": { "sqlName": "content", "jsName": "content", "type": "JSONB", "nullable": false },
-              "visibility": { "sqlName": "visibility", "jsName": "visibility", "type": "TEXT", "nullable": false },
-              "created_by": { "sqlName": "created_by", "jsName": "createdBy", "type": "TEXT", "nullable": false },
-              "updated_by": { "sqlName": "updated_by", "jsName": "updatedBy", "type": "TEXT", "nullable": true },
-              "created_at": { "sqlName": "created_at", "jsName": "createdAt", "type": "TIMESTAMPTZ", "nullable": false },
-              "updated_at": { "sqlName": "updated_at", "jsName": "updatedAt", "type": "TIMESTAMPTZ", "nullable": false },
-              "deleted_at": { "sqlName": "deleted_at", "jsName": "deletedAt", "type": "TIMESTAMPTZ", "nullable": true }
+              "id": {
+                "sqlName": "id",
+                "jsName": "id",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "area_id": {
+                "sqlName": "area_id",
+                "jsName": "areaId",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "space_id": {
+                "sqlName": "space_id",
+                "jsName": "spaceId",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "page_type": {
+                "sqlName": "page_type",
+                "jsName": "pageType",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "title": {
+                "sqlName": "title",
+                "jsName": "title",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "content": {
+                "sqlName": "content",
+                "jsName": "content",
+                "type": "JSONB",
+                "nullable": false
+              },
+              "visibility": {
+                "sqlName": "visibility",
+                "jsName": "visibility",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "created_by": {
+                "sqlName": "created_by",
+                "jsName": "createdBy",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "updated_by": {
+                "sqlName": "updated_by",
+                "jsName": "updatedBy",
+                "type": "TEXT",
+                "nullable": true
+              },
+              "created_at": {
+                "sqlName": "created_at",
+                "jsName": "createdAt",
+                "type": "TIMESTAMPTZ",
+                "nullable": false
+              },
+              "updated_at": {
+                "sqlName": "updated_at",
+                "jsName": "updatedAt",
+                "type": "TIMESTAMPTZ",
+                "nullable": false
+              },
+              "deleted_at": {
+                "sqlName": "deleted_at",
+                "jsName": "deletedAt",
+                "type": "TIMESTAMPTZ",
+                "nullable": true
+              }
             }
           },
           "areas": {
             "columns": {
-              "id": { "sqlName": "id", "jsName": "id", "type": "TEXT", "nullable": false },
-              "space_id": { "sqlName": "space_id", "jsName": "spaceId", "type": "TEXT", "nullable": false },
-              "name": { "sqlName": "name", "jsName": "name", "type": "TEXT", "nullable": false },
-              "slug": { "sqlName": "slug", "jsName": "slug", "type": "TEXT", "nullable": false },
-              "is_restricted": { "sqlName": "is_restricted", "jsName": "isRestricted", "type": "BOOLEAN", "nullable": false }
+              "id": {
+                "sqlName": "id",
+                "jsName": "id",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "space_id": {
+                "sqlName": "space_id",
+                "jsName": "spaceId",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "name": {
+                "sqlName": "name",
+                "jsName": "name",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "slug": {
+                "sqlName": "slug",
+                "jsName": "slug",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "is_restricted": {
+                "sqlName": "is_restricted",
+                "jsName": "isRestricted",
+                "type": "BOOLEAN",
+                "nullable": false
+              }
             }
           },
           "area_memberships": {
             "columns": {
-              "area_id": { "sqlName": "area_id", "jsName": "areaId", "type": "TEXT", "nullable": false },
-              "user_id": { "sqlName": "user_id", "jsName": "userId", "type": "TEXT", "nullable": true }
+              "area_id": {
+                "sqlName": "area_id",
+                "jsName": "areaId",
+                "type": "TEXT",
+                "nullable": false
+              },
+              "user_id": {
+                "sqlName": "user_id",
+                "jsName": "userId",
+                "type": "TEXT",
+                "nullable": true
+              }
             }
           }
         }
-      }
+      },
+      "status": "completed"
     },
     {
       "id": "US-008",
@@ -390,7 +488,8 @@
         "TypeScript types are correct",
         "npm run check passes with 0 errors",
         "npm run audit-db-access shows 0 violations"
-      ]
+      ],
+      "status": "completed"
     },
     {
       "id": "US-017",
