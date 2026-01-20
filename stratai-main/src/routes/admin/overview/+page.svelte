@@ -27,7 +27,7 @@
 	}
 
 	// Calculate max value for chart scaling
-	const maxRequests = $derived(() => {
+	const maxRequests = $derived.by(() => {
 		if (data.dailyUsage.length === 0) return 100;
 		return Math.max(...data.dailyUsage.map((d) => d.totalRequests), 1);
 	});
@@ -93,7 +93,7 @@
 				<div class="chart-container">
 					<div class="chart-bars">
 						{#each data.dailyUsage as day}
-							{@const heightPercent = (day.totalRequests / maxRequests()) * 100}
+							{@const heightPercent = (day.totalRequests / maxRequests) * 100}
 							<div class="bar-column">
 								<div class="bar-value">{day.totalRequests}</div>
 								<div class="bar" style="height: {Math.max(heightPercent, 2)}%"></div>
