@@ -37,7 +37,7 @@ export interface Message {
 	isStreaming?: boolean;
 	error?: string;
 	// Web search and document reading fields
-	searchStatus?: 'searching' | 'reading_document' | 'complete';
+	searchStatus?: 'searching' | 'reading_document' | 'browsing' | 'complete';
 	searchQuery?: string;
 	sources?: SearchSource[];
 	// File attachments
@@ -47,6 +47,8 @@ export interface Message {
 	isThinking?: boolean;
 	// Hidden messages (not shown in UI but included in API context)
 	hidden?: boolean;
+	// Commerce content (product search, checkout, etc.)
+	commerce?: import('$lib/types/commerce').CommerceMessageContent;
 }
 
 export interface SummaryPoint {

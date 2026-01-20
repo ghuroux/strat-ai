@@ -1,0 +1,16 @@
+{
+  "searchInput": "input[data-ref='search-input'], input[name='search'], #search",
+  "searchButton": "button[data-ref='search-submit'], button[type='submit']",
+  "productCard": "article.product-card",
+  "productName": "[class*='product-card-module_product-title'], .product-title",
+  "productPrice": "[class*='product-card-price-module_price'], .price",
+  "productImage": "img[class*='product-card-image'], img[class*='product-image']",
+  "productLink": "a[class*='product-card-module_link-underlay'], a[href*='PLID']",
+  "productRating": "[class*='card-reviews'], .star-rating, .rating",
+  "productReviewCount": "[class*='review-count'], .reviews",
+  "addToCart": "[data-ref='add-to-cart-button'], button[class*='add-to-cart'], #add-to-cart",
+  "cartIcon": "[data-ref='cart-icon'], .cart-icon, #cart",
+  "cartCount": "[data-ref='cart-count'], .cart-count, .badge",
+  "checkoutButton": "[data-ref='checkout-button'], .checkout-button, #checkout",
+  "loginIndicator": "[data-ref='account-menu'], .account-name, .user-menu"
+}

@@ -12,7 +12,7 @@
 	 * 1. Processing (brief) → 2. Reasoning/Searching → 3. Generating
 	 */
 
-	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'generating' | 'complete';
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'generating' | 'complete';
 
 	interface Props {
 		state: AIState;
@@ -43,6 +43,7 @@
 			case 'reasoning': return 'Reasoning';
 			case 'searching': return 'Searching';
 			case 'reading_document': return 'Reading';
+			case 'browsing': return 'Browsing';
 			case 'generating': return 'Writing';
 			default: return '';
 		}
@@ -54,6 +55,7 @@
 			case 'reasoning': return 'Thinking through the problem';
 			case 'searching': return searchQuery ? `"${searchQuery}"` : 'the web';
 			case 'reading_document': return searchQuery ? `"${searchQuery}"` : 'reference documents';
+			case 'browsing': return searchQuery ? searchQuery : 'retailer sites';
 			case 'generating': return 'Crafting response';
 			default: return '';
 		}
@@ -67,6 +69,7 @@
 		class:state-reasoning={state === 'reasoning'}
 		class:state-searching={state === 'searching'}
 		class:state-reading-document={state === 'reading_document'}
+		class:state-browsing={state === 'browsing'}
 		class:state-generating={state === 'generating'}
 		in:scale={{ duration: 400, start: 0.9, opacity: 0, easing: backOut }}
 		out:fade={{ duration: 300, easing: cubicOut }}

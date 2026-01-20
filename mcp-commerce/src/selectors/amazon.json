@@ -1,0 +1,16 @@
+{
+  "searchInput": "#twotabsearchtextbox, input[name='field-keywords'], #nav-search-bar-form input[type='text']",
+  "searchButton": "#nav-search-submit-button, input[type='submit'].nav-input",
+  "productCard": "[data-component-type='s-search-result'], .s-result-item[data-asin]",
+  "productName": "h2 a span, .a-size-medium.a-text-normal, .a-size-base-plus",
+  "productPrice": ".a-price .a-offscreen, .a-price-whole, .a-color-price",
+  "productImage": ".s-image, img.s-image",
+  "productLink": "h2 a.a-link-normal, a.a-link-normal.s-no-outline",
+  "productRating": ".a-icon-star-small .a-icon-alt, .a-icon-star .a-icon-alt",
+  "productReviewCount": ".a-size-base.s-underline-text, span[aria-label*='reviews']",
+  "addToCart": "#add-to-cart-button, input[name='submit.add-to-cart']",
+  "cartIcon": "#nav-cart, #nav-cart-count-container",
+  "cartCount": "#nav-cart-count",
+  "checkoutButton": "#sc-buy-box-ptc-button, input[name='proceedToRetailCheckout']",
+  "loginIndicator": "#nav-link-accountList-nav-line-1, #nav-al-your-account"
+}

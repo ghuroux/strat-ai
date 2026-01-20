@@ -68,8 +68,8 @@ export interface ParameterConstraints {
 export interface ModelCapabilities {
 	/** Display name for the model */
 	displayName: string;
-	/** Provider (anthropic, openai, meta, amazon, deepseek, mistral, google) */
-	provider: 'anthropic' | 'openai' | 'meta' | 'amazon' | 'deepseek' | 'mistral' | 'google';
+	/** Provider (anthropic, openai, meta, amazon, deepseek, mistral, google, minimax, moonshot) */
+	provider: 'anthropic' | 'openai' | 'meta' | 'amazon' | 'deepseek' | 'mistral' | 'google' | 'minimax' | 'moonshot';
 	/** Context window size in tokens */
 	contextWindow: number;
 	/** Maximum output tokens */
@@ -554,6 +554,18 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		description: 'Latest flagship reasoning model for complex tasks'
 	},
 
+	'gemini-3-flash': {
+		displayName: 'Gemini 3 Flash',
+		provider: 'google',
+		contextWindow: 1048576, // 1M context
+		maxOutputTokens: 65536,
+		supportsThinking: true, // Granular thinking control (minimal, low, medium, high)
+		supportsVision: true,
+		supportsTools: true,
+		description: 'Fast frontier-class performance at low cost',
+		pricing: { input: 0.5, output: 3 }
+	},
+
 	'gemini-2.5-pro': {
 		displayName: 'Gemini 2.5 Pro',
 		provider: 'google',
@@ -574,6 +586,51 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Best price-performance with thinking support'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - MiniMax
+	// ============================================
+
+	'minimax-m2': {
+		displayName: 'MiniMax M2',
+		provider: 'minimax',
+		contextWindow: 1000000, // 1M context
+		maxOutputTokens: 8192,
+		supportsThinking: true, // Hybrid-attention reasoning model
+		supportsVision: false,
+		supportsTools: true,
+		description: '456B hybrid MoE model with strong reasoning'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - Google Gemma
+	// ============================================
+
+	'gemma-3-27b': {
+		displayName: 'Gemma 3 27B',
+		provider: 'google',
+		contextWindow: 128000, // 128K context
+		maxOutputTokens: 8192,
+		supportsThinking: false,
+		supportsVision: true, // Multimodal: text + image input
+		supportsTools: true,
+		description: 'Google open-weight multimodal model'
+	},
+
+	// ============================================
+	// AWS BEDROCK MODELS - Moonshot
+	// ============================================
+
+	'kimi-k2-thinking': {
+		displayName: 'Kimi K2 Thinking',
+		provider: 'moonshot',
+		contextWindow: 256000, // 256K context
+		maxOutputTokens: 8192,
+		supportsThinking: true, // Strong reasoning with thinking tokens
+		supportsVision: false,
+		supportsTools: true, // Excellent agentic capabilities
+		description: '1T MoE (32B active) with deep reasoning'
 	}
 	// Note: deep-research-pro-preview requires the Interactions API (async polling)
 	// and cannot be used through standard chat completions. Consider implementing
@@ -644,7 +701,9 @@ export function getModelsByProvider(): Record<string, string[]> {
 		amazon: [],
 		deepseek: [],
 		mistral: [],
-		google: []
+		google: [],
+		minimax: [],
+		moonshot: []
 	};
 	for (const [id, caps] of Object.entries(MODEL_CAPABILITIES)) {
 		if (result[caps.provider]) {
@@ -665,7 +724,9 @@ export function getProviderDisplayName(provider: string): string {
 		amazon: 'Amazon',
 		deepseek: 'DeepSeek',
 		mistral: 'Mistral AI',
-		google: 'Google'
+		google: 'Google',
+		minimax: 'MiniMax',
+		moonshot: 'Moonshot'
 	};
 	return displayNames[provider] || provider;
 }

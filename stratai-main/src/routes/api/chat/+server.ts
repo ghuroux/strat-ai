@@ -19,6 +19,8 @@ import { estimateCost } from '$lib/config/model-pricing';
 import type { SpaceType } from '$lib/types/chat';
 import { isSystemSpace } from '$lib/types/spaces';
 import { generateSummaryOnDemand, needsSummarization } from '$lib/server/summarization';
+import { commerceTools, executeCommerceTool, isCommerceTool } from '$lib/server/commerce/tools';
+import type { CommerceMessageContent } from '$lib/types/commerce';
 
 /**
  * Context for tracking usage across streaming responses
@@ -639,8 +641,10 @@ interface DocumentInfo {
  * Get the appropriate tool format for the model
  * Anthropic uses input_schema, OpenAI uses type:'function' with parameters
  * Optionally includes document reading tool when documents are available
+ * Optionally includes commerce tools for shopping functionality
  */
-function getToolsForModel(model: string, includeDocumentTool: boolean = false): ToolDefinition[] {
+function getToolsForModel(model: string, options: { includeDocumentTool?: boolean; includeCommerceTools?: boolean } = {}): ToolDefinition[] {
+	const { includeDocumentTool = false, includeCommerceTools = false } = options;
 	const lowerModel = model.toLowerCase();
 
 	// Check if it's an Anthropic/Claude model
@@ -648,6 +652,9 @@ function getToolsForModel(model: string, includeDocumentTool: boolean = false): 
 		const tools = [webSearchToolAnthropic];
 		if (includeDocumentTool) {
 			tools.push(readDocumentToolAnthropic);
+		}
+		if (includeCommerceTools) {
+			tools.push(...commerceTools);
 		}
 		return tools;
 	}
@@ -657,6 +664,10 @@ function getToolsForModel(model: string, includeDocumentTool: boolean = false): 
 	const tools: any[] = [webSearchToolOpenAI];
 	if (includeDocumentTool) {
 		tools.push(readDocumentToolOpenAI);
+	}
+	if (includeCommerceTools) {
+		// Commerce tools are already in Anthropic format which works with most models
+		tools.push(...commerceTools);
 	}
 	// Cast to unknown first, then to ToolDefinition[] to satisfy type checker
 	return tools as unknown as ToolDefinition[];
@@ -670,13 +681,43 @@ const searchSystemMessage = `You have access to web search. When you use the web
 4. Always cite your sources by mentioning which results you drew information from
 5. For weather, prices, or time-sensitive data, note that the information comes from web search and may need verification`;
 
+// System message for commerce tools
+const commerceSystemMessage = `You have access to commerce tools for searching and comparing products on South African e-commerce sites.
+
+IMPORTANT: When the user asks about products, prices, shopping, or wants to buy something, you MUST use the commerce_search tool. Do NOT answer from your training data.
+
+Available commerce tools:
+- commerce_search: Search for products on Takealot and Amazon.co.za. Use this when users ask about products, want to compare options, or mention a budget/price range.
+- commerce_get_product: Get detailed product information
+- commerce_add_to_cart: Add items to the shopping cart
+- commerce_checkout: Preview the checkout before purchase
+
+Budget/Price handling - IMPORTANT:
+- When user says "R5000" or "under R5000", pass max_price: 5000 (the number five thousand)
+- When user says "R500", pass max_price: 500 (five hundred)
+- When user says "R10000", pass max_price: 10000 (ten thousand)
+- Always pass the EXACT number the user mentions - do not drop zeros!
+
+Examples of when to use commerce_search:
+- "Find me wireless earbuds under R500" → max_price: 500
+- "Products under R5000" → max_price: 5000
+- "Budget of R1500" → max_price: 1500
+
+When presenting search results:
+1. Highlight the best options based on price, rating, and value
+2. Always mention the actual price and which site it's from
+3. If a user mentions a budget, filter and prioritize results within that budget`;
+
 /**
- * Prepare messages with search system context
- * Adds or augments the system message with search instructions
+ * Prepare messages with search and commerce system context
+ * Adds or augments the system message with tool instructions
  * Preserves cache_control if present on the system message
  */
 function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messages']): ChatCompletionRequest['messages'] {
 	const result = [...messages];
+
+	// Combined context for all tools
+	const toolContext = `${searchSystemMessage}\n\n${commerceSystemMessage}`;
 
 	// Check if there's already a system message
 	const systemIndex = result.findIndex(m => m.role === 'system');
@@ -694,13 +735,13 @@ function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messa
 			if ('text' in lastBlock) {
 				blocks[blocks.length - 1] = {
 					...lastBlock,
-					text: `${lastBlock.text}\n\n${searchSystemMessage}`
+					text: `${lastBlock.text}\n\n${toolContext}`
 				};
 			} else {
 				// Add as new block (preserving cache_control on existing block)
 				blocks.push({
 					type: 'text' as const,
-					text: searchSystemMessage
+					text: toolContext
 				});
 			}
 
@@ -715,14 +756,14 @@ function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messa
 				: JSON.stringify(existingSystem.content);
 			result[systemIndex] = {
 				...existingSystem,
-				content: `${existingContent}\n\n${searchSystemMessage}`
+				content: `${existingContent}\n\n${toolContext}`
 			};
 		}
 	} else {
 		// Add new system message at the beginning
 		result.unshift({
 			role: 'system',
-			content: searchSystemMessage
+			content: toolContext
 		});
 	}
 
@@ -1399,11 +1440,13 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 
 			try {
 				// Build request options with optional max_tokens constraint
+				// Enable commerce tools for product search/purchase functionality
+				const includeCommerceTools = true; // TODO: Control via space setting or feature flag
 				const toolRequestOptions: typeof body & { max_tokens?: number } = {
 					...body,
 					messages: finalMessages,
 					stream: false,
-					tools: getToolsForModel(body.model, hasDocuments)
+					tools: getToolsForModel(body.model, { includeDocumentTool: hasDocuments, includeCommerceTools })
 				};
 
 				// Structural constraint: limit response length during ALL of Plan Mode elicitation
@@ -1638,6 +1681,50 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 									content: 'No filename provided for read_document'
 								});
 							}
+						} else if (isCommerceTool(toolCall.function?.name || '')) {
+							// Commerce tool - product search, cart, checkout
+							const toolName = toolCall.function?.name || '';
+							const args = JSON.parse(toolCall.function?.arguments || '{}');
+
+							debugLog('TOOLS', `Executing commerce tool: ${toolName}`, args);
+
+							// Send browsing status for commerce operations
+							const statusMessage = toolName === 'commerce_search'
+								? `Searching for: ${args.query}`
+								: toolName === 'commerce_get_product'
+									? 'Getting product details'
+									: toolName === 'commerce_add_to_cart'
+										? 'Adding to cart'
+										: 'Processing checkout';
+
+							sendSSE(controller, encoder, {
+								type: 'status',
+								status: 'browsing',
+								query: statusMessage
+							});
+
+							try {
+								const { result, commerceData } = await executeCommerceTool(toolName, args);
+
+								toolResults.push({
+									tool_call_id: toolCall.id,
+									content: result
+								});
+
+								// Send commerce data via SSE for UI rendering
+								if (commerceData) {
+									sendSSE(controller, encoder, {
+										type: 'commerce',
+										data: commerceData
+									});
+								}
+							} catch (commerceError) {
+								console.error('Commerce tool error:', commerceError);
+								toolResults.push({
+									tool_call_id: toolCall.id,
+									content: `Commerce operation failed: ${commerceError instanceof Error ? commerceError.message : 'Unknown error'}`
+								});
+							}
 						} else {
 							// Unknown tool - still need to provide a result
 							toolResults.push({
@@ -1693,7 +1780,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					const finalResponse = await createChatCompletionWithTools({
 						...body,
 						messages: [...messagesWithToolResults, synthesisInstruction],
-						tools: getToolsForModel(body.model),
+						tools: getToolsForModel(body.model, { includeCommerceTools }),
 						stream: true
 					});
 

@@ -741,6 +741,10 @@
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: 'searching', searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'browsing') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'browsing', searchQuery: parsed.query
+									});
 								} else if (parsed.status === 'reading_document') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: 'reading_document', searchQuery: parsed.query
@@ -763,6 +767,8 @@
 								chatStore.appendToThinking(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'thinking_end') {
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: false });
+							} else if (parsed.type === 'commerce') {
+								chatStore.updateMessage(conversationId!, assistantMessageId, { commerce: parsed.data });
 							} else if (parsed.type === 'content') {
 								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'sources') {
@@ -1174,12 +1180,20 @@
 						try {
 							const parsed = JSON.parse(data);
 
-							if (parsed.type === 'thinking_start') {
+							if (parsed.type === 'status') {
+								if (parsed.status === 'browsing') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'browsing', searchQuery: parsed.query
+									});
+								}
+							} else if (parsed.type === 'thinking_start') {
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: true });
 							} else if (parsed.type === 'thinking') {
 								chatStore.appendToThinking(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'thinking_end') {
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: false });
+							} else if (parsed.type === 'commerce') {
+								chatStore.updateMessage(conversationId!, assistantMessageId, { commerce: parsed.data });
 							} else if (parsed.type === 'content') {
 								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'sources') {

@@ -75,8 +75,35 @@ services:
     networks:
       - stratai_network
 
+  # MCP Commerce - Multi-retailer browser automation
+  mcp-commerce:
+    build:
+      context: ./mcp-commerce
+      dockerfile: Dockerfile
+    container_name: mcp_commerce
+    ports:
+      - "9223:9223"
+    environment:
+      - MCP_PORT=9223
+      - MCP_HEADLESS=true
+      - MCP_SESSION_TTL=1800000
+      - MCP_PROFILES_DIR=/data/profiles
+    volumes:
+      - mcp_commerce_profiles:/data/profiles
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9223/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - stratai_network
+
 volumes:
   postgres_data:
+    driver: local
+  mcp_commerce_profiles:
     driver: local
 
 networks:

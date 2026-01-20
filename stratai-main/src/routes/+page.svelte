@@ -499,6 +499,12 @@
 										searchStatus: 'searching',
 										searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'browsing') {
+									// Commerce browsing - searching e-commerce sites
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'browsing',
+										searchQuery: parsed.query
+									});
 								} else if (parsed.status === 'processing') {
 									// Sources have been found, now processing with LLM
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
@@ -529,6 +535,11 @@
 								// Thinking phase is complete, now generating response
 								chatStore.updateMessage(conversationId!, assistantMessageId, {
 									isThinking: false
+								});
+							} else if (parsed.type === 'commerce') {
+								// Commerce tool result - product search, checkout preview, etc.
+								chatStore.updateMessage(conversationId!, assistantMessageId, {
+									commerce: parsed.data
 								});
 							} else if (parsed.type === 'content') {
 								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.content);

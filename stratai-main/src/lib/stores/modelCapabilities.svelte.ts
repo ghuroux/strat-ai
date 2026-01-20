@@ -176,7 +176,7 @@ class ModelCapabilitiesStore {
 	/**
 	 * Get provider for a model
 	 */
-	getProvider(modelId: string): 'anthropic' | 'openai' | 'meta' | 'amazon' | 'deepseek' | 'mistral' | 'google' {
+	getProvider(modelId: string): 'anthropic' | 'openai' | 'meta' | 'amazon' | 'deepseek' | 'mistral' | 'google' | 'minimax' | 'moonshot' {
 		return this.getCapabilities(modelId).provider;
 	}
 

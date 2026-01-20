@@ -9,6 +9,7 @@
 	import ThinkingDisplay from './chat/ThinkingDisplay.svelte';
 	import CodeBlockDownloader from './chat/CodeBlockDownloader.svelte';
 	import { extractCodeBlocks } from '$lib/utils/codeBlocks';
+	import { ProductComparison, CheckoutPreview, OrderConfirmation } from './commerce';
 
 	// Svelte 5: Use $props instead of export let
 	let {
@@ -40,6 +41,7 @@
 	let isStreaming = $derived(message.isStreaming && !!message.content);
 	let isSearching = $derived(message.searchStatus === 'searching');
 	let isReadingDocument = $derived(message.searchStatus === 'reading_document');
+	let isBrowsing = $derived(message.searchStatus === 'browsing');
 	let hasSources = $derived(message.sources && message.sources.length > 0);
 	let hasAttachments = $derived(message.attachments && message.attachments.length > 0);
 	let displayContent = $derived(message.content);
@@ -47,6 +49,8 @@
 	let hasThinking = $derived(!!message.thinking);
 	let isThinking = $derived(!!message.isThinking);
 	let hasContent = $derived(!!message.content);
+	// Commerce content
+	let hasCommerce = $derived(!!message.commerce);
 
 	// Code blocks detection for download feature
 	let hasCodeBlocks = $derived(
@@ -54,11 +58,12 @@
 	);
 
 	// Unified AI state for the indicator
-	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'generating' | 'complete';
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'generating' | 'complete';
 	let aiState = $derived<AIState>(
 		!message.isStreaming && !isThinking ? 'complete' :
 		isSearching ? 'searching' :
 		isReadingDocument ? 'reading_document' :
+		isBrowsing ? 'browsing' :
 		isThinking ? 'reasoning' :
 		isStreaming ? 'generating' :
 		isStreamingEmpty ? 'processing' :
@@ -67,7 +72,7 @@
 
 	// Show the unified indicator (not during extended thinking - that has its own display)
 	let showUnifiedIndicator = $derived(
-		(aiState === 'processing' || aiState === 'searching' || aiState === 'reading_document') && !isThinking && !hasThinking
+		(aiState === 'processing' || aiState === 'searching' || aiState === 'reading_document' || aiState === 'browsing') && !isThinking && !hasThinking
 	);
 
 	// Track if this is the first content after thinking (for animation)
@@ -325,6 +330,22 @@
 						{#if hasCodeBlocks && !isStreaming && !isStreamingEmpty}
 							<CodeBlockDownloader content={displayContent} />
 						{/if}
+					{/if}
+
+					<!-- Commerce content (product search results, checkout, etc.) -->
+					{#if hasCommerce && message.commerce}
+						<div class="commerce-content mt-4" in:fly={{ y: 20, duration: 300 }}>
+							{#if message.commerce.type === 'search_results' && message.commerce.searchResults}
+								<ProductComparison
+									query={message.commerce.searchResults.query}
+									products={message.commerce.searchResults.products}
+								/>
+							{:else if message.commerce.type === 'checkout_preview' && message.commerce.checkoutPreview}
+								<CheckoutPreview preview={message.commerce.checkoutPreview} />
+							{:else if message.commerce.type === 'order_confirmation' && message.commerce.orderConfirmation}
+								<OrderConfirmation order={message.commerce.orderConfirmation} />
+							{/if}
+						</div>
 					{/if}
 				{/if}
 
