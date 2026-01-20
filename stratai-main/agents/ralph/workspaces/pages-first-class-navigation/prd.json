@@ -1,0 +1,465 @@
+{
+  "feature_name": "Pages First-Class Navigation",
+  "parent_task_id": "pages-first-class-navigation",
+  "created": "2026-01-20",
+  "branch": "feature/pages-first-class-navigation",
+  "base_branch": "main",
+  "research": {
+    "similar_patterns": [
+      "src/lib/components/spaces/SpaceDashboard.svelte - Current text navigation pattern",
+      "src/lib/stores/pages.svelte.ts - Page store with area-level methods",
+      "src/routes/spaces/[space]/tasks/+page.svelte - Existing Space-level aggregation view",
+      "src/routes/spaces/[space]/documents/+page.svelte - Existing Space-level dashboard pattern"
+    ],
+    "related_commits": [],
+    "docs_reviewed": [
+      "docs/database/SCHEMA_REFERENCE.md",
+      "stratai-main/docs/features/PAGES_FIRST_CLASS_NAVIGATION.md",
+      "CLAUDE.md"
+    ],
+    "decisions_made": [
+      {
+        "question": "Icon navigation vs text buttons",
+        "decision": "Icon navigation with lucide-svelte components",
+        "rationale": "Scales to mobile, consistent with Area toolbar, modern aesthetic"
+      },
+      {
+        "question": "Real-time updates for newly created pages",
+        "decision": "4-layer defense (optimistic update + highlight + force refresh + toast)",
+        "rationale": "Critical UX requirement - ensures pages always appear immediately after creation"
+      },
+      {
+        "question": "Space-level vs Area-level access",
+        "decision": "Both paths remain valid - dual access model",
+        "rationale": "Space-level for discovery, Area-level for focused context - serve different needs"
+      }
+    ]
+  },
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Create icon-based Space navigation component",
+      "description": "As a user, I want to see icon-based navigation in the Space header so that I can access Tasks, Documents, Pages, and Members on mobile and desktop.",
+      "acceptance_criteria": [
+        "Create src/lib/components/spaces/SpaceNavigation.svelte component",
+        "Component renders 4 navigation items: Tasks (CheckCircle), Documents (File), Pages (FileEdit), Members (Users)",
+        "Uses lucide-svelte icons with size 16px and stroke-width 1.5",
+        "Desktop (>768px): Shows icon + label below + count badge",
+        "Mobile (<768px): Shows icon + count badge only (labels hidden via CSS)",
+        "Count badges display for Tasks, Pages, and Members when count > 0",
+        "Hover state scales icon to 1.1x with smooth transition",
+        "Tooltips appear on hover showing label + count (e.g., 'Pages (12)')",
+        "All buttons have aria-label attributes for accessibility",
+        "Keyboard navigation works (Tab to focus, Enter to activate)",
+        "Component supports dark and light mode via CSS custom properties",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-002",
+      "title": "Create individual navigation button components",
+      "description": "As a developer, I need separate button components for each navigation item to maintain modularity and testability.",
+      "acceptance_criteria": [
+        "Create src/lib/components/spaces/nav/TasksNavButton.svelte",
+        "Create src/lib/components/spaces/nav/DocumentsNavButton.svelte",
+        "Create src/lib/components/spaces/nav/PagesNavButton.svelte",
+        "Create src/lib/components/spaces/nav/MembersNavButton.svelte",
+        "Each button accepts props: count (number), spaceSlug (string), onclick (function)",
+        "Each button renders correct lucide-svelte icon",
+        "Badge displays when count > 0",
+        "Clicking Tasks button navigates to /spaces/{spaceSlug}/tasks",
+        "Clicking Documents button navigates to /spaces/{spaceSlug}/documents",
+        "Clicking Pages button navigates to /spaces/{spaceSlug}/pages",
+        "Clicking Members button triggers Members modal (onclick handler)",
+        "Focus indicators visible (WCAG AA compliance)",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-003",
+      "title": "Integrate SpaceNavigation into SpaceDashboard",
+      "description": "As a user, I want the new icon navigation to replace the text navigation in the Space dashboard.",
+      "acceptance_criteria": [
+        "Modify src/lib/components/spaces/SpaceDashboard.svelte",
+        "Replace existing .space-nav section (lines 282-303) with SpaceNavigation component import",
+        "Pass required props: taskCount, pageCount, memberCount, spaceSlug",
+        "Pass onclick handlers for navigation and modal triggers",
+        "Remove old text-based nav links markup",
+        "Remove old .nav-link CSS rules",
+        "Verify layout remains centered (max-width: 1200px)",
+        "Verify responsive behavior works (desktop shows labels, mobile hides them)",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors",
+        "Test in browser: Navigation renders and all buttons clickable"
+      ]
+    },
+    {
+      "id": "US-004",
+      "title": "Add Space-level page aggregation methods to pageStore",
+      "description": "As a developer, I need methods to get all pages across areas in a Space and calculate page counts for the badge.",
+      "acceptance_criteria": [
+        "Modify src/lib/stores/pages.svelte.ts",
+        "Add getPagesForSpace(spaceId: string): Page[] method",
+        "Method filters pages by accessible areas (uses areaStore.getAreasForSpace)",
+        "Method excludes soft-deleted pages (deletedAt !== null)",
+        "Method sorts by updatedAt DESC (most recent first)",
+        "Add getPageCountForSpace(spaceId: string): number method",
+        "Method returns pages.length from getPagesForSpace",
+        "Add getRecentlyEditedByUser(userId: string, spaceId: string, limit?: number): Page[] method",
+        "Method filters by updatedBy === userId",
+        "Method defaults to limit = 3",
+        "Method returns empty array if no pages edited in last 30 days",
+        "All methods trigger reactivity via this._version counter",
+        "TypeScript types are correct (no any types)",
+        "npm run check passes with 0 errors",
+        "npm run audit-db-access shows 0 violations"
+      ]
+    },
+    {
+      "id": "US-005",
+      "title": "Wire page count to PagesNavButton",
+      "description": "As a user, I want to see the total number of pages in my Space displayed as a badge on the Pages button.",
+      "acceptance_criteria": [
+        "Modify src/lib/components/spaces/nav/PagesNavButton.svelte",
+        "Import pageStore from $lib/stores/pages.svelte",
+        "Derive pageCount using $derived(pageStore.getPageCountForSpace(spaceId))",
+        "Display badge when pageCount > 0",
+        "Badge shows actual count (e.g., '12')",
+        "Badge uses CSS: position: absolute, top: -6px, right: -8px",
+        "Badge background: var(--accent-500), color: white",
+        "Tooltip shows 'Pages (12)' with count",
+        "Badge hidden when pageCount === 0",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors",
+        "Test in browser: Badge displays correct count"
+      ]
+    },
+    {
+      "id": "US-006",
+      "title": "Create Space pages route with load function",
+      "description": "As a user, I want to navigate to /spaces/{space}/pages and see a dashboard of all my pages.",
+      "acceptance_criteria": [
+        "Create src/routes/spaces/[space]/pages/+page.ts",
+        "Implement PageLoad function that fetches pages data",
+        "Extract URL query params: area, type, owned",
+        "Call GET /api/spaces/{spaceSlug}/pages with query params",
+        "Handle 401 (unauthorized) gracefully",
+        "Handle 404 (space not found) with error() helper",
+        "Return { pages, recentlyEdited, counts, filters, areas, space } to component",
+        "Load function runs on both server and client",
+        "TypeScript types are correct (use PageLoad from ./$types)",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-007",
+      "title": "Create GET /api/spaces/:spaceSlug/pages endpoint",
+      "description": "As a developer, I need an API endpoint to fetch all pages for a Space with optional filters.",
+      "acceptance_criteria": [
+        "Create src/routes/api/spaces/[space]/pages/+server.ts",
+        "Implement GET handler using RequestHandler type",
+        "Verify user authentication via locals.session",
+        "Extract query params: area, type, owned",
+        "Fetch Space by slug using spacesPostgres.findBySlug",
+        "Verify user is Space member via space_memberships table",
+        "Query accessible areas using WITH clause (isRestricted = false OR explicit area_membership)",
+        "Join pages table with accessible_areas CTE",
+        "Apply filters: areaSlug, pageType, createdBy",
+        "Calculate counts: total, byArea, byType, ownedByMe, sharedWithMe",
+        "Query recently edited pages (updatedBy = userId, last 30 days, limit 3)",
+        "Return JSON: { pages: PageWithMetadata[], recentlyEdited: Page[], counts }",
+        "Use camelCase for all column access (e.g., row.areaId NOT row.area_id)",
+        "Handle nullable columns with ?? operator",
+        "Return 401 if not authenticated",
+        "Return 403 if not Space member",
+        "Return 404 if Space not found",
+        "npm run check passes with 0 errors",
+        "npm run audit-db-access shows 0 violations",
+        "Test with curl: Returns valid JSON response"
+      ],
+      "schema_context": {
+        "tables": {
+          "pages": {
+            "columns": {
+              "id": { "sqlName": "id", "jsName": "id", "type": "TEXT", "nullable": false },
+              "area_id": { "sqlName": "area_id", "jsName": "areaId", "type": "TEXT", "nullable": false },
+              "space_id": { "sqlName": "space_id", "jsName": "spaceId", "type": "TEXT", "nullable": false },
+              "page_type": { "sqlName": "page_type", "jsName": "pageType", "type": "TEXT", "nullable": false },
+              "title": { "sqlName": "title", "jsName": "title", "type": "TEXT", "nullable": false },
+              "content": { "sqlName": "content", "jsName": "content", "type": "JSONB", "nullable": false },
+              "visibility": { "sqlName": "visibility", "jsName": "visibility", "type": "TEXT", "nullable": false },
+              "created_by": { "sqlName": "created_by", "jsName": "createdBy", "type": "TEXT", "nullable": false },
+              "updated_by": { "sqlName": "updated_by", "jsName": "updatedBy", "type": "TEXT", "nullable": true },
+              "created_at": { "sqlName": "created_at", "jsName": "createdAt", "type": "TIMESTAMPTZ", "nullable": false },
+              "updated_at": { "sqlName": "updated_at", "jsName": "updatedAt", "type": "TIMESTAMPTZ", "nullable": false },
+              "deleted_at": { "sqlName": "deleted_at", "jsName": "deletedAt", "type": "TIMESTAMPTZ", "nullable": true }
+            }
+          },
+          "areas": {
+            "columns": {
+              "id": { "sqlName": "id", "jsName": "id", "type": "TEXT", "nullable": false },
+              "space_id": { "sqlName": "space_id", "jsName": "spaceId", "type": "TEXT", "nullable": false },
+              "name": { "sqlName": "name", "jsName": "name", "type": "TEXT", "nullable": false },
+              "slug": { "sqlName": "slug", "jsName": "slug", "type": "TEXT", "nullable": false },
+              "is_restricted": { "sqlName": "is_restricted", "jsName": "isRestricted", "type": "BOOLEAN", "nullable": false }
+            }
+          },
+          "area_memberships": {
+            "columns": {
+              "area_id": { "sqlName": "area_id", "jsName": "areaId", "type": "TEXT", "nullable": false },
+              "user_id": { "sqlName": "user_id", "jsName": "userId", "type": "TEXT", "nullable": true }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "US-008",
+      "title": "Create Space pages dashboard component",
+      "description": "As a user, I want to see a dashboard showing all my pages with filtering and search capabilities.",
+      "acceptance_criteria": [
+        "Create src/routes/spaces/[space]/pages/+page.svelte",
+        "Import data from load function via $props()",
+        "Render header with Space name breadcrumb and [+ New Page] button",
+        "Clicking [+ New Page] opens SelectAreaModal",
+        "Extract createdPageId from URL query param ?created=",
+        "Call pageStore.refreshPagesForSpace(spaceId) in onMount (Layer 3 defense)",
+        "Conditionally render RecentlyEditedSection if recentlyEdited.length > 0",
+        "Always render AllPagesSection with pages data",
+        "Render SelectAreaModal with isOpen, areas, onSelect, onClose props",
+        "onSelect navigates to /spaces/{spaceSlug}/{areaSlug}/pages/new",
+        "Component supports dark and light mode",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors",
+        "Test in browser: Dashboard renders, sections display correctly"
+      ]
+    },
+    {
+      "id": "US-009",
+      "title": "Create RecentlyEditedSection component",
+      "description": "As a user, I want to see the 3 most recent pages I edited for quick access.",
+      "acceptance_criteria": [
+        "Create src/lib/components/pages/RecentlyEditedSection.svelte",
+        "Accept props: pages (Page[]), createdPageId (string | null)",
+        "Render section header: 'Recently Edited by You'",
+        "Display pages in horizontal scrolling row (.cards-horizontal)",
+        "Each page rendered using PageCard component",
+        "Pass highlight={page.id === createdPageId} to PageCard",
+        "Section hidden if pages.length === 0 (no section header shown)",
+        "Mobile: Enable horizontal scroll with scroll-snap",
+        "Desktop: Show all 3 cards side-by-side",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-010",
+      "title": "Create AllPagesSection component",
+      "description": "As a user, I want to see all my pages in a filterable grid layout.",
+      "acceptance_criteria": [
+        "Create src/lib/components/pages/AllPagesSection.svelte",
+        "Accept props: pages (PageWithMetadata[]), counts, filters, createdPageId",
+        "Render section header: 'All Pages'",
+        "Render PageFilterBar with counts and currentFilters",
+        "Render PagesGrid with filtered pages",
+        "Pass highlight={page.id === createdPageId} to PageCard",
+        "Show PageEmptyState if pages.length === 0",
+        "Empty state differs based on filters (no pages vs no matches)",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-011",
+      "title": "Create PageFilterBar component",
+      "description": "As a user, I want to filter pages by search term, ownership, area, and type.",
+      "acceptance_criteria": [
+        "Create src/lib/components/pages/PageFilterBar.svelte",
+        "Accept props: counts, currentFilters",
+        "Render search input with placeholder '🔍 Search pages...'",
+        "Render Ownership dropdown: All pages, Owned by me (count), Shared with me (count)",
+        "Render Area dropdown: All areas, [Area list with counts]",
+        "Render Type dropdown: All types, [Page types with counts]",
+        "Search filters pages client-side by title (case-insensitive)",
+        "Changing dropdowns updates URL query params using goto()",
+        "Use keepFocus: true to maintain input focus",
+        "Dropdowns use native <select> elements for mobile compatibility",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "Create PagesGrid component",
+      "description": "As a user, I want to see pages in a responsive grid layout.",
+      "acceptance_criteria": [
+        "Create src/lib/components/pages/PagesGrid.svelte",
+        "Accept props: pages (PageWithMetadata[]), createdPageId",
+        "Use CSS Grid: repeat(auto-fill, minmax(280px, 1fr))",
+        "Gap: 1rem between cards",
+        "Tablet (<1024px): 2 columns",
+        "Mobile (<640px): 1 column",
+        "Each page rendered using PageCard component",
+        "Pass highlight prop to cards",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-013",
+      "title": "Create or extend PageCard component with metadata",
+      "description": "As a user, I want page cards to show type icon, title, area badge, word count, timestamp, and ownership.",
+      "acceptance_criteria": [
+        "Modify or create src/lib/components/pages/PageCard.svelte",
+        "Accept props: page (PageWithMetadata), highlight (boolean)",
+        "Render type icon based on pageType (FileEdit, Scale, Users from lucide-svelte)",
+        "Render lock icon if visibility === 'private'",
+        "Render title truncated at 50 characters",
+        "Render area badge as pill with area name",
+        "Calculate and display word count (content length / 5)",
+        "Display relative timestamp using formatRelativeTime helper",
+        "Show 'Shared by [Name]' if isOwnedByUser === false",
+        "Apply .newly-created class when highlight === true",
+        "Implement highlight-pulse animation (2s duration, green border + shadow)",
+        "Card hover: border color changes, translateY(-2px)",
+        "Card clickable: Navigates to page editor on click",
+        "3-dot menu with View/Share/Delete options (dropdown)",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-014",
+      "title": "Create SelectAreaModal component",
+      "description": "As a user, I want to select which area to create a new page in.",
+      "acceptance_criteria": [
+        "Create src/lib/components/pages/SelectAreaModal.svelte",
+        "Accept props: isOpen (boolean), areas (Area[]), onSelect (function), onClose (function)",
+        "Render modal overlay when isOpen === true",
+        "Modal title: 'Create New Page'",
+        "Modal body text: 'Pages belong to an area. Which area should this page be created in?'",
+        "Render <select> dropdown with area options",
+        "Each option shows area name",
+        "Footer buttons: [Cancel] [Continue]",
+        "Cancel closes modal without action",
+        "Continue calls onSelect(selectedAreaSlug) and closes modal",
+        "Continue disabled until area selected",
+        "Modal focus trapping works (Tab cycles through elements)",
+        "Escape key closes modal",
+        "Click outside modal closes modal",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-015",
+      "title": "Create PageEmptyState component",
+      "description": "As a user, I want helpful empty states when no pages exist or no pages match filters.",
+      "acceptance_criteria": [
+        "Create src/lib/components/pages/PageEmptyState.svelte",
+        "Accept props: reason ('no-pages' | 'no-matches')",
+        "For 'no-pages': Show FileEdit icon, 'No pages yet' heading",
+        "For 'no-pages': Show descriptive text about creating pages in areas",
+        "For 'no-pages': Show [Browse Areas] button",
+        "For 'no-matches': Show Search icon, 'No pages match your filters' heading",
+        "For 'no-matches': Show text about adjusting filters",
+        "For 'no-matches': Show [Clear Filters] button",
+        "Empty states centered with padding",
+        "Icons use rgba(255, 255, 255, 0.2) color",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-016",
+      "title": "Implement optimistic page addition to pageStore",
+      "description": "As a developer, I need to add newly created pages to the store immediately to prevent race conditions.",
+      "acceptance_criteria": [
+        "Modify src/lib/stores/pages.svelte.ts",
+        "Add addPage(page: Page): void method",
+        "Method sets page in this.pages SvelteMap",
+        "Method increments this._version counter for reactivity",
+        "Add refreshPagesForSpace(spaceId: string): Promise<void> method",
+        "Method fetches GET /api/spaces/{spaceId}/pages",
+        "Method updates this.pages with fetched pages",
+        "Method increments this._version counter",
+        "Both methods are public (exported)",
+        "TypeScript types are correct",
+        "npm run check passes with 0 errors",
+        "npm run audit-db-access shows 0 violations"
+      ]
+    },
+    {
+      "id": "US-017",
+      "title": "Update page creation flows with optimistic updates",
+      "description": "As a user, I want newly created pages to appear immediately in the pages dashboard without delay.",
+      "acceptance_criteria": [
+        "Identify all page creation flows in codebase (search for 'createPage')",
+        "After successful page creation API call, add pageStore.addPage(newPage)",
+        "Add toast.success('Page created successfully') notification",
+        "Navigate to /spaces/{spaceSlug}/pages?created={newPage.id} with goto()",
+        "Ensure navigation happens AFTER addPage() call",
+        "Test flow: Create page → immediately navigate → page visible with green pulse",
+        "Verify no race conditions (page always appears)",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors",
+        "Test in browser: Page appears immediately after creation"
+      ]
+    },
+    {
+      "id": "US-018",
+      "title": "Add loading states to pages dashboard",
+      "description": "As a user, I want to see skeleton cards while pages are loading.",
+      "acceptance_criteria": [
+        "Create loading state in +page.svelte",
+        "Show skeleton cards in PagesGrid while isLoading === true",
+        "Skeleton cards maintain grid layout (3 columns → 2 → 1)",
+        "Skeleton cards have pulsing animation",
+        "Show spinner in filter dropdowns during navigation",
+        "Disable [+ New Page] button while loading",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-019",
+      "title": "Add accessibility improvements",
+      "description": "As a user with accessibility needs, I want the pages dashboard to be fully keyboard navigable and screen reader friendly.",
+      "acceptance_criteria": [
+        "All interactive elements have aria-label attributes",
+        "Tooltips appear on focus (not just hover)",
+        "Keyboard navigation: Tab through elements, Enter to activate",
+        "Screen reader announces page count: 'Pages, 12 items'",
+        "Focus indicators visible (2px outline, WCAG AA)",
+        "Modal focus trapping works correctly",
+        "aria-live region announces filter result counts",
+        "Color contrast meets WCAG AA (4.5:1 for text)",
+        "Test with VoiceOver (macOS) or NVDA (Windows)",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors"
+      ]
+    },
+    {
+      "id": "US-020",
+      "title": "Add mobile responsiveness testing and fixes",
+      "description": "As a mobile user, I want the pages dashboard to work smoothly on small screens.",
+      "acceptance_criteria": [
+        "Test on viewport width 320px (iPhone SE)",
+        "Navigation icons visible without labels (<768px)",
+        "Cards stack vertically in single column (<640px)",
+        "Filter dropdowns usable on mobile (native select works)",
+        "Horizontal scroll works for Recently Edited section",
+        "Touch interactions smooth (no hover dependencies)",
+        "No horizontal overflow on any screen size",
+        "Text remains readable (min 14px font size)",
+        "Buttons have min 44x44px touch target",
+        "npm run check passes with 0 errors",
+        "npm run lint passes with 0 errors",
+        "Test in browser: Resize window, verify all breakpoints work"
+      ]
+    }
+  ]
+}
