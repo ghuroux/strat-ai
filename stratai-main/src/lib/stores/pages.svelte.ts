@@ -97,6 +97,46 @@ class PageStore {
 	// =====================================================
 
 	/**
+	 * Add a page to the store (optimistic update)
+	 * Used for immediate UI updates before server confirmation
+	 */
+	addPage(page: Page): void {
+		this.pages.set(page.id, page);
+		this._version++;
+	}
+
+	/**
+	 * Refresh all pages for a Space
+	 * Fetches pages from all accessible areas in the Space
+	 */
+	async refreshPagesForSpace(spaceId: string): Promise<void> {
+		this.isLoading = true;
+		this.error = null;
+
+		try {
+			const response = await fetch(`/api/spaces/${spaceId}/pages`);
+
+			if (!response.ok) {
+				if (response.status === 401) return;
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.pages) {
+				for (const page of data.pages) {
+					this.pages.set(page.id, this.parseDates(page));
+				}
+				this._version++;
+			}
+		} catch (e) {
+			console.error('Failed to refresh pages for space:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to refresh pages for space';
+		} finally {
+			this.isLoading = false;
+		}
+	}
+
+	/**
 	 * Load pages for an area
 	 */
 	async loadPages(areaId: string): Promise<void> {
