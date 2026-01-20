@@ -84,23 +84,77 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 		const ownedFilter = url.searchParams.get('owned'); // "me" | "shared"
 
 		// Query accessible areas in this Space using CTE
-		// This mirrors the logic from areas-postgres.ts
+		// This mirrors the full access control logic from areas-postgres.ts findAllAccessible()
 		const pagesWithMetadata = await sql<PageWithMetadata[]>`
 			WITH accessible_areas AS (
-				-- Areas user can access in this Space
-				SELECT a.id, a.name, a.slug
+				-- Areas user owns (legacy user_id)
+				SELECT DISTINCT a.id, a.name, a.slug
 				FROM areas a
-				LEFT JOIN area_memberships am ON a.id = am.area_id AND am.user_id = ${userId}
-				LEFT JOIN space_memberships sm ON a.space_id = sm.space_id AND sm.user_id = ${userId}
 				WHERE a.space_id = ${spaceId}
-					AND a.deleted_at IS NULL
-					AND (
-						-- Non-restricted area (all Space members can see)
-						COALESCE(a.is_restricted, false) = false
-						OR
-						-- Restricted area with explicit membership
-						am.user_id IS NOT NULL
-					)
+				  AND a.user_id = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas user created
+				SELECT DISTINCT a.id, a.name, a.slug
+				FROM areas a
+				WHERE a.space_id = ${spaceId}
+				  AND a.created_by = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas with direct user membership
+				SELECT DISTINCT a.id, a.name, a.slug
+				FROM areas a
+				JOIN area_memberships am ON a.id = am.area_id
+				WHERE a.space_id = ${spaceId}
+				  AND am.user_id = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas with group membership
+				SELECT DISTINCT a.id, a.name, a.slug
+				FROM areas a
+				JOIN area_memberships am ON a.id = am.area_id
+				JOIN group_memberships gm ON am.group_id = gm.group_id
+				WHERE a.space_id = ${spaceId}
+				  AND gm.user_id = ${userId}::uuid
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Non-restricted areas for space owners and members (NOT guests)
+				SELECT DISTINCT a.id, a.name, a.slug
+				FROM areas a
+				JOIN spaces s ON a.space_id = s.id
+				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
+				WHERE a.space_id = ${spaceId}
+				  AND a.deleted_at IS NULL
+				  AND s.deleted_at IS NULL
+				  AND COALESCE(a.is_restricted, false) = false
+				  AND (
+				    s.user_id = ${userId}
+				    OR sm.role IN ('owner', 'admin', 'member')
+				  )
+
+				UNION
+
+				-- General areas are ALWAYS visible to space members (not guests)
+				SELECT DISTINCT a.id, a.name, a.slug
+				FROM areas a
+				JOIN spaces s ON a.space_id = s.id
+				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
+				WHERE a.space_id = ${spaceId}
+				  AND a.deleted_at IS NULL
+				  AND s.deleted_at IS NULL
+				  AND a.is_general = true
+				  AND (
+				    s.user_id = ${userId}
+				    OR sm.role IN ('owner', 'admin', 'member')
+				  )
 			)
 			SELECT
 				p.id,
@@ -133,18 +187,77 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 		`;
 
 		// Query recently edited pages (pages owned by user, updated in last 30 days, limit 3)
-		// Note: pages table doesn't have updated_by column, using user_id (owner) as proxy
+		// Note: pages table uses user_id for ownership (no updated_by column)
 		const recentlyEditedRows = await sql<PageRow[]>`
 			WITH accessible_areas AS (
-				SELECT a.id
+				-- Areas user owns (legacy user_id)
+				SELECT DISTINCT a.id
 				FROM areas a
-				LEFT JOIN area_memberships am ON a.id = am.area_id AND am.user_id = ${userId}
 				WHERE a.space_id = ${spaceId}
-					AND a.deleted_at IS NULL
-					AND (
-						COALESCE(a.is_restricted, false) = false
-						OR am.user_id IS NOT NULL
-					)
+				  AND a.user_id = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas user created
+				SELECT DISTINCT a.id
+				FROM areas a
+				WHERE a.space_id = ${spaceId}
+				  AND a.created_by = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas with direct user membership
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN area_memberships am ON a.id = am.area_id
+				WHERE a.space_id = ${spaceId}
+				  AND am.user_id = ${userId}
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Areas with group membership
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN area_memberships am ON a.id = am.area_id
+				JOIN group_memberships gm ON am.group_id = gm.group_id
+				WHERE a.space_id = ${spaceId}
+				  AND gm.user_id = ${userId}::uuid
+				  AND a.deleted_at IS NULL
+
+				UNION
+
+				-- Non-restricted areas for space owners and members (NOT guests)
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN spaces s ON a.space_id = s.id
+				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
+				WHERE a.space_id = ${spaceId}
+				  AND a.deleted_at IS NULL
+				  AND s.deleted_at IS NULL
+				  AND COALESCE(a.is_restricted, false) = false
+				  AND (
+				    s.user_id = ${userId}
+				    OR sm.role IN ('owner', 'admin', 'member')
+				  )
+
+				UNION
+
+				-- General areas are ALWAYS visible to space members (not guests)
+				SELECT DISTINCT a.id
+				FROM areas a
+				JOIN spaces s ON a.space_id = s.id
+				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
+				WHERE a.space_id = ${spaceId}
+				  AND a.deleted_at IS NULL
+				  AND s.deleted_at IS NULL
+				  AND a.is_general = true
+				  AND (
+				    s.user_id = ${userId}
+				    OR sm.role IN ('owner', 'admin', 'member')
+				  )
 			)
 			SELECT p.*
 			FROM pages p
