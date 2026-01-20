@@ -14,6 +14,7 @@ export { default as EditorChatPanel } from './EditorChatPanel.svelte';
 // List components
 export { default as PageList } from './PageList.svelte';
 export { default as PageCard } from './PageCard.svelte';
+export { default as PageEmptyState } from './PageEmptyState.svelte';
 
 // Template components
 export { default as TemplateSelector } from './TemplateSelector.svelte';
