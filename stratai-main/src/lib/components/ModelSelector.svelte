@@ -174,10 +174,25 @@
 
 	// Get display name from model capabilities or fallback to ID parsing
 	function getDisplayName(modelId: string): string {
+		// First try exact match
 		const caps = modelCapabilitiesStore.capabilities[modelId];
 		if (caps?.displayName) {
 			return caps.displayName;
 		}
+
+		// Try to find a matching base model (e.g., "claude-sonnet-4-5-20250514" → "claude-sonnet-4-5")
+		// This handles LiteLLM returning versioned model IDs
+		const normalizedId = modelId
+			.replace(/-\d{8}$/, '') // Remove date suffix (e.g., -20250514)
+			.replace(/-v\d+$/, ''); // Remove version suffix (e.g., -v2)
+
+		if (normalizedId !== modelId) {
+			const normalizedCaps = modelCapabilitiesStore.capabilities[normalizedId];
+			if (normalizedCaps?.displayName) {
+				return normalizedCaps.displayName;
+			}
+		}
+
 		// Fallback: parse from model ID
 		const parts = modelId.split('/');
 		return parts[parts.length - 1];
