@@ -5,6 +5,7 @@
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import KeyboardShortcutsModal from '$lib/components/KeyboardShortcutsModal.svelte';
 	import MatrixRain from '$lib/components/effects/MatrixRain.svelte';
+	import Confetti from '$lib/components/effects/Confetti.svelte';
 	import { SnakeGame, WordleGame } from '$lib/components/games';
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import { commandPaletteStore } from '$lib/stores/commandPalette.svelte';
@@ -275,5 +276,14 @@
 	<MatrixRain
 		duration={3000}
 		onComplete={() => easterEggsStore.onMatrixRainComplete()}
+	/>
+{/if}
+
+<!-- Confetti Effect (Party Mode & Celebrations) -->
+{#if easterEggsStore.confettiActive}
+	<Confetti
+		duration={5000}
+		particleCount={350}
+		onComplete={() => easterEggsStore.onConfettiComplete()}
 	/>
 {/if}

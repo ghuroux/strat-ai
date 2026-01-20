@@ -145,14 +145,22 @@
 		// Set sending state
 		isSending = true;
 
-		// Easter eggs: Check for special phrases
+		// Easter eggs: Check for special phrases and hijack conversation if matched
 		const lowerInput = input.trim().toLowerCase();
-		if (lowerInput === 'do a barrel roll' || lowerInput === 'do a barrelroll') {
-			triggerBarrelRoll();
-		} else if (lowerInput === 'ship it' || lowerInput === 'ship it!') {
-			triggerShipIt();
+		const easterEggHandled = handleEasterEggCommand(lowerInput, input.trim());
+
+		if (easterEggHandled) {
+			// Easter egg handled - clear input and return without sending to LLM
+			input = '';
+			pendingAttachments = [];
+			if (textarea) {
+				textarea.style.height = '';
+			}
+			isSending = false;
+			return;
 		}
 
+		// Normal flow - send to LLM
 		onsend?.(input.trim(), pendingAttachments.length > 0 ? [...pendingAttachments] : undefined);
 		input = '';
 		pendingAttachments = [];
@@ -163,6 +171,556 @@
 
 		// Reset sending state after submission
 		isSending = false;
+	}
+
+	/**
+	 * Handle easter egg commands by hijacking the conversation.
+	 * Returns true if an easter egg was triggered (conversation hijacked).
+	 */
+	function handleEasterEggCommand(lowerInput: string, originalInput: string): boolean {
+		// Define easter egg patterns and their handlers
+		const easterEggs: Array<{
+			patterns: string[];
+			handler: () => void;
+			response: string;
+		}> = [
+			// Visual effect easter eggs
+			{
+				patterns: ['do a barrel roll', 'do a barrelroll'],
+				handler: triggerBarrelRoll,
+				response: getBarrelRollResponse()
+			},
+			{
+				patterns: ['ship it', 'ship it!'],
+				handler: triggerShipIt,
+				response: getShipItResponse()
+			},
+			{
+				patterns: ['enable party mode', 'party mode', 'party time'],
+				handler: triggerPartyMode,
+				response: getPartyModeResponse()
+			},
+			{
+				patterns: ['show me the matrix', 'enter the matrix', 'matrix mode'],
+				handler: triggerMatrixRain,
+				response: getMatrixResponse()
+			},
+			// Classic programmer easter eggs (no animation)
+			{
+				patterns: ['what is the meaning of life', 'what is the meaning of life?', 'meaning of life', 'meaning of life?'],
+				handler: () => {}, // No visual effect, just the response
+				response: getMeaningOfLifeResponse()
+			},
+			{
+				patterns: ['sudo make me a sandwich', 'sudo make me a sandwich.'],
+				handler: () => {},
+				response: getSudoSandwichResponse()
+			},
+			{
+				patterns: ['hello world', 'hello, world', 'hello world!', 'hello, world!'],
+				handler: triggerHelloWorld,
+				response: getHelloWorldResponse()
+			},
+			{
+				patterns: ["there's no place like 127.0.0.1", 'theres no place like 127.0.0.1', 'no place like 127.0.0.1', '127.0.0.1'],
+				handler: () => {},
+				response: getLocalhostResponse()
+			}
+		];
+
+		// Find matching easter egg
+		for (const egg of easterEggs) {
+			if (egg.patterns.includes(lowerInput)) {
+				// Add messages to conversation
+				addEasterEggConversation(originalInput, egg.response);
+				// Trigger the effect
+				egg.handler();
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Add easter egg messages to the conversation (user message + AI response)
+	 */
+	function addEasterEggConversation(userMessage: string, aiResponse: string): void {
+		// Ensure we have an active conversation
+		let convId = chatStore.activeConversationId;
+		if (!convId) {
+			convId = chatStore.createConversation(settingsStore.selectedModel || 'gpt-4o');
+		}
+
+		// Add user message
+		chatStore.addMessage(convId, {
+			role: 'user',
+			content: userMessage
+		});
+
+		// Add AI response after a tiny delay (feels more natural)
+		setTimeout(() => {
+			chatStore.addMessage(convId!, {
+				role: 'assistant',
+				content: aiResponse
+			});
+		}, 300);
+	}
+
+	// Easter egg response generators with ASCII art
+	function getBarrelRollResponse(): string {
+		const responses = [
+			`Wheeee! 🌀 That was fun!
+
+\`\`\`
+    ___
+   /   \\
+  | o o |  ← me rn
+   \\ ~ /
+    ~~~
+   SPINNING!
+\`\`\`
+
+Did you know this is a classic Google easter egg? I couldn't resist adding it here too.`,
+
+			`*spins dramatically* 🎡
+
+\`\`\`
+  ╭──────────╮
+  │  BARREL  │  ←───╮
+  │   ROLL   │      │ rotation
+  ╰──────────╯  ────╯
+\`\`\`
+
+Aileron roll, technically, but who's counting?`,
+
+			`🌀 WHEEEEE! I love a good spin!
+
+\`\`\`
+   ↻ ↻ ↻ ↻ ↻
+  ╭─────────╮
+  │ WHEEEEE │
+  ╰─────────╯
+   ↺ ↺ ↺ ↺ ↺
+\`\`\`
+
+Thanks for the ride! Want to go again?`,
+
+			`*does a flip* 🎢 Nailed it!
+
+\`\`\`
+      🎢
+     /  \\
+    /    \\
+   ↺      ↻
+  BARREL ROLL
+   COMPLETE!
+\`\`\`
+
+10/10 execution. The judges are impressed.`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	function getShipItResponse(): string {
+		const responses = [
+			`🚀 TO THE MOON!
+
+\`\`\`
+        🌙
+       *  *
+      *    *
+     🚀
+    /|\\
+   / | \\
+  /  |  \\
+ ────┴────
+  LIFTOFF!
+\`\`\`
+
+That's the spirit - ship it and iterate!`,
+
+			`🚀 SHIPPED!
+
+\`\`\`
+  ╔═══════════════╗
+  ║  DEPLOYMENT   ║
+  ║    STATUS:    ║
+  ║  ✓ SUCCESS    ║
+  ╚═══════════════╝
+\`\`\`
+
+Remember: done is better than perfect. Let's gooo!`,
+
+			`*deploys to production* 🚀
+
+\`\`\`
+  ┌─────────────┐
+  │ git push    │
+  │ origin main │
+  └──────┬──────┘
+         │
+         ▼
+     🚀 SHIPPED!
+\`\`\`
+
+It's live, baby! No ragrets!`,
+
+			`🚀 Houston, we have liftoff!
+
+\`\`\`
+     *  .  *
+   .    🚀    .
+  *   /    \\   *
+     / SHIP \\
+    /   IT   \\
+   ────────────
+\`\`\`
+
+Another successful deployment! The code is in orbit!`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	function getPartyModeResponse(): string {
+		const responses = [
+			`🎉 PARTY TIME!
+
+\`\`\`
+  🎊  *  🎈  *  🎊
+    \\  |  /
+  *──PARTY──*
+    /  |  \\
+  🎈  *  🎊  *  🎈
+\`\`\`
+
+Let the confetti rain! Sometimes you just gotta celebrate the little wins.`,
+
+			`🎊 WOOHOO!
+
+\`\`\`
+  ╔═══════════════════╗
+  ║ 🎉 PARTY MODE 🎉 ║
+  ║    ACTIVATED!     ║
+  ╚═══════════════════╝
+       🎈 🎊 🎈
+\`\`\`
+
+*throws confetti everywhere* Life's too short not to party!`,
+
+			`🥳 IT'S A PARTY!
+
+\`\`\`
+    🎈     🎈
+   /|\\   /|\\
+  🎉│🎉 🎊│🎊
+    │     │
+   💃    🕺
+  DANCE FLOOR
+\`\`\`
+
+Dancing is optional but highly encouraged!`,
+
+			`🎉 CELEBRATION MODE!
+
+\`\`\`
+  *  🎊  *  🎈  *
+   \\ \\|/ /
+    \\═══/
+     ║🎉║
+     ║🎉║
+    /═══\\
+   / /|\\ \\
+  *  🎈  *  🎊  *
+\`\`\`
+
+Quick, look busy... I mean, look like you're celebrating!`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	function getMatrixResponse(): string {
+		const responses = [
+			`🟢 Welcome to the Matrix.
+
+\`\`\`
+  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+  ░ Wake up, Neo...           ░
+  ░ The Matrix has you...     ░
+  ░ Follow the white rabbit.  ░
+  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+       01001101 01000001
+       01010100 01010010
+       01001001 01011000
+\`\`\`
+
+There is no spoon. But there ARE easter eggs.`,
+
+			`🐇 Follow the white rabbit...
+
+\`\`\`
+   ╔══════════════════════════╗
+   ║  THE MATRIX HAS YOU...   ║
+   ║                          ║
+   ║   > Take the red pill    ║
+   ║     Take the blue pill   ║
+   ╚══════════════════════════╝
+        (\\(\\
+        ( -.-)  ← white rabbit
+        o_(")(")
+\`\`\`
+
+You chose the red pill. Welcome to the real world.`,
+
+			`🖥️ System breach detected...
+
+\`\`\`
+  01001000 01000101 01001100
+  01001100 01001111 00100000
+  01001110 01000101 01001111
+
+  > Accessing mainframe...
+  > Decrypting reality...
+  > WELCOME TO THE MATRIX
+\`\`\`
+
+I know Kung Fu. Well, I know JavaScript. Close enough.`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	function getMeaningOfLifeResponse(): string {
+		const responses = [
+			`🌌 Ah, the ultimate question...
+
+\`\`\`
+  ╔═══════════════════════════════════╗
+  ║                                   ║
+  ║              42                   ║
+  ║                                   ║
+  ╚═══════════════════════════════════╝
+\`\`\`
+
+The answer to Life, the Universe, and Everything.
+
+*"I checked it very thoroughly,"* said the computer, *"and that quite definitely is the answer."*
+
+— The Hitchhiker's Guide to the Galaxy`,
+
+			`🤔 Computing the answer to Life, the Universe, and Everything...
+
+\`\`\`
+  Processing: ████████████████ 100%
+
+  Result:
+  ┌─────────────────────────┐
+  │                         │
+  │     >>> 42 <<<          │
+  │                         │
+  └─────────────────────────┘
+\`\`\`
+
+The problem, of course, is that we never really knew the question.
+
+*Don't Panic.* 🐬`,
+
+			`✨ After 7.5 million years of computation...
+
+\`\`\`
+       *    .  *       *
+    .    *        .        .
+  .   ╔═════════════════╗   *
+     *║   ANSWER: 42    ║  .
+  .   ╚═════════════════╝    .
+    *     .    *    .     *
+       .      *       .
+\`\`\`
+
+*"Forty-two!"* yelled Loonquawl. *"Is that all you've got to show for seven and a half million years' work?"*
+
+*"I checked it very thoroughly,"* said Deep Thought. *"The Answer is definitely Forty-Two."*`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	function getSudoSandwichResponse(): string {
+		const responses = [
+			`🥪 Okay.
+
+\`\`\`
+  $ sudo make me a sandwich
+  [sudo] password for user: ********
+
+  ┌─────────────────────────────┐
+  │ ≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋ │  ← bread
+  │ 🥬🥬🥬🥬🥬🥬🥬🥬🥬🥬🥬🥬 │  ← lettuce
+  │ 🍅🍅🍅🍅🍅🍅🍅🍅🍅🍅🍅🍅 │  ← tomato
+  │ 🧀🧀🧀🧀🧀🧀🧀🧀🧀🧀🧀🧀 │  ← cheese
+  │ 🥓🥓🥓🥓🥓🥓🥓🥓🥓🥓🥓🥓 │  ← bacon
+  │ ≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋≋ │  ← bread
+  └─────────────────────────────┘
+
+  Sandwich created successfully.
+\`\`\`
+
+You DID say sudo... 🤷`,
+
+			`🥪 Permission granted.
+
+\`\`\`
+  ╭──────────────────────────────╮
+  │    SANDWICH CONSTRUCTION     │
+  │         IN PROGRESS          │
+  ├──────────────────────────────┤
+  │  [████████████████] 100%     │
+  │                              │
+  │  Ingredients loaded:         │
+  │  ✓ Bread (artisan)           │
+  │  ✓ Mystery meat              │
+  │  ✓ Questionable cheese       │
+  │  ✓ Existential lettuce       │
+  ╰──────────────────────────────╯
+\`\`\`
+
+Here you go. One sandwich, made with ROOT privileges.`,
+
+			`🥪 As you wish.
+
+\`\`\`
+        ____________________
+       /                    \\
+      |  ==================  |
+      |  ~~~~~~~~~~~~~~~~~~  |
+      |  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  |
+      |  ==================  |
+       \\____________________/
+
+  $ whoami
+  sandwich_maker
+\`\`\`
+
+Remember: with great power comes great sandwiches.`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	function getHelloWorldResponse(): string {
+		const responses = [
+			`👋 Hello, World!
+
+\`\`\`
+  ╔══════════════════════════════════════╗
+  ║                                      ║
+  ║   console.log("Hello, World!");      ║
+  ║   print("Hello, World!")             ║
+  ║   System.out.println("Hello!");      ║
+  ║   fmt.Println("Hello, World!")       ║
+  ║   puts "Hello, World!"               ║
+  ║                                      ║
+  ╚══════════════════════════════════════╝
+\`\`\`
+
+The sacred first words of every programmer. Welcome, fellow coder!
+
+You've just initialized a beautiful friendship. 🤝`,
+
+			`🌍 Hello, World!
+
+\`\`\`
+  ┌────────────────────────────────┐
+  │  PROGRAM: hello_world          │
+  │  STATUS: Running               │
+  │  OUTPUT:                       │
+  │  ┌──────────────────────────┐  │
+  │  │  > Hello, World!         │  │
+  │  │  > Process exited (0)    │  │
+  │  └──────────────────────────┘  │
+  └────────────────────────────────┘
+\`\`\`
+
+The most written, most copied, most celebrated two words in programming history.
+
+Welcome to StratAI! Your journey begins here. 🚀`,
+
+			`👨‍💻 *beep boop*
+
+\`\`\`
+     _   _      _ _
+    | | | |    | | |
+    | |_| | ___| | | ___
+    |  _  |/ _ \\ | |/ _ \\
+    | | | |  __/ | | (_) |
+    \\_| |_/\\___|_|_|\\___/
+
+    __        __         _     _
+    \\ \\      / /__  _ __| | __| |
+     \\ \\ /\\ / / _ \\| '__| |/ _\` |
+      \\ V  V / (_) | |  | | (_| |
+       \\_/\\_/ \\___/|_|  |_|\\__,_|
+\`\`\`
+
+The tradition continues! Every great codebase starts here.
+
+Fun fact: "Hello World" first appeared in a 1972 C tutorial. You're part of history! 📜`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	function getLocalhostResponse(): string {
+		const responses = [
+			`🏠 There's no place like home.
+
+\`\`\`
+  ╔═══════════════════════════════════╗
+  ║                                   ║
+  ║   🏠 127.0.0.1 🏠                ║
+  ║      localhost                    ║
+  ║      ::1                          ║
+  ║                                   ║
+  ║   Home is where the server is.    ║
+  ║                                   ║
+  ╚═══════════════════════════════════╝
+\`\`\`
+
+*clicks ruby slippers together*
+
+No latency, no firewalls, no DNS issues. Just pure, local bliss.`,
+
+			`🌐 Home sweet home.
+
+\`\`\`
+  $ ping 127.0.0.1
+  PING 127.0.0.1: 64 bytes
+  ────────────────────────
+  time=0.000ms  ← instant!
+  time=0.000ms  ← still instant!
+  time=0.000ms  ← you get the idea
+
+  --- localhost statistics ---
+  0% packet loss
+  ∞% cozy vibes
+\`\`\`
+
+Where every request is a round-trip to yourself. Very zen. 🧘`,
+
+			`💻 127.0.0.1 — The loopback address.
+
+\`\`\`
+  ┌─────────────────────────────┐
+  │  NETWORK TOPOLOGY           │
+  │                             │
+  │    Internet                 │
+  │       │                     │
+  │    Router ← scary out here  │
+  │       │                     │
+  │    [YOU] ←── 127.0.0.1      │
+  │     🏠 (safe zone)          │
+  └─────────────────────────────┘
+\`\`\`
+
+*There's no place like 127.0.0.1* — The Wizard of Oz, developer edition.`
+		];
+		return responses[Math.floor(Math.random() * responses.length)];
 	}
 
 	/**
@@ -237,6 +795,62 @@
 			];
 			const message = messages[Math.floor(Math.random() * messages.length)];
 			toastStore.success(message, 3000);
+		}
+	}
+
+	/**
+	 * Easter egg: Enable party mode with confetti!
+	 */
+	function triggerPartyMode() {
+		const isFirstTime = easterEggsStore.discover('party-mode');
+
+		// Trigger confetti via the store (rendered in layout)
+		easterEggsStore.triggerConfetti();
+
+		// Show toast
+		if (isFirstTime) {
+			toastStore.discovery('🎉 PARTY MODE ACTIVATED! You found the celebration!', 4000);
+		} else {
+			const messages = [
+				'🎊 Party time!',
+				'🎉 Let\'s celebrate!',
+				'🥳 Woohoo!',
+				'🎈 Party on!',
+				'✨ Time to celebrate!'
+			];
+			const message = messages[Math.floor(Math.random() * messages.length)];
+			toastStore.success(message, 3000);
+		}
+	}
+
+	/**
+	 * Easter egg: Show Matrix rain effect
+	 */
+	function triggerMatrixRain() {
+		const isFirstTime = easterEggsStore.discover('matrix-rain');
+
+		// Trigger matrix rain via the store (rendered in layout)
+		easterEggsStore.triggerMatrixRain();
+
+		// Show toast
+		if (isFirstTime) {
+			toastStore.discovery('🟢 You found the Matrix! Follow the white rabbit...', 4000);
+		} else {
+			toastStore.success('Welcome back to the Matrix.', 3000);
+		}
+	}
+
+	/**
+	 * Easter egg: Hello World - the classic programmer greeting
+	 */
+	function triggerHelloWorld() {
+		const isFirstTime = easterEggsStore.discover('hello-world');
+
+		// Subtle celebration for the classic
+		if (isFirstTime) {
+			toastStore.discovery('👋 You speak the ancient tongue! Welcome, fellow coder.', 4000);
+		} else {
+			toastStore.info('Hello again, friend!', 2000);
 		}
 	}
 
