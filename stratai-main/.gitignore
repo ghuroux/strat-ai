@@ -27,3 +27,7 @@ agents/ralph/workspaces/*/.ralph-lint-baseline
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+# Ralph workspace tracking files
+agents/ralph/workspaces/*/.start-time
+agents/ralph/workspaces/*/.orchestrator-context.txt
+agents/ralph/workspaces/*/.orchestrator-progress.log
