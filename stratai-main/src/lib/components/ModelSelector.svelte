@@ -94,6 +94,17 @@
 
 		for (const model of models) {
 			const displayName = getDisplayName(model.id);
+
+			// Debug logging for Sonnet models
+			if (model.id.includes('sonnet-4')) {
+				console.log('[ModelSelector] Sonnet 4 model:', {
+					id: model.id,
+					displayName,
+					mode: model.mode,
+					contextWindow: (model as any).max_input_tokens || (model as any).max_tokens
+				});
+			}
+
 			if (!byDisplayName.has(displayName)) {
 				byDisplayName.set(displayName, []);
 			}
@@ -180,9 +191,13 @@
 			return caps.displayName;
 		}
 
-		// Try to find a matching base model (e.g., "claude-sonnet-4-5-20250514" → "claude-sonnet-4-5")
-		// This handles LiteLLM returning versioned model IDs
+		// Try to find a matching base model by normalizing the ID
+		// This handles LiteLLM returning variations like:
+		// - "claude-sonnet-4.5" → "claude-sonnet-4-5" (dot to dash)
+		// - "claude-sonnet-4-5-20250514" → "claude-sonnet-4-5" (date suffix)
+		// - "claude-sonnet-4-5-v2" → "claude-sonnet-4-5" (version suffix)
 		const normalizedId = modelId
+			.replace(/\./g, '-') // Convert dots to dashes (e.g., 4.5 → 4-5)
 			.replace(/-\d{8}$/, '') // Remove date suffix (e.g., -20250514)
 			.replace(/-v\d+$/, ''); // Remove version suffix (e.g., -v2)
 
