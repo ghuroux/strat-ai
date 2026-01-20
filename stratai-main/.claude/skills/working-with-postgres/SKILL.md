@@ -437,37 +437,19 @@ await sql`
 
 ## Schema Migration
 
-Create schema files in `src/lib/server/persistence/`:
+**For new tables and schema changes, see the dedicated migration skill:**
 
-```sql
--- src/lib/server/persistence/items-schema.sql
-CREATE TABLE IF NOT EXISTS items (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    space_id TEXT NOT NULL,
-    title TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active',
-    priority TEXT NOT NULL DEFAULT 'normal',
+→ `.claude/skills/database-migrations/SKILL.md`
 
-    -- JSONB columns
-    metadata JSONB,
-    tags JSONB DEFAULT '[]',
+Covers:
+- Migration naming convention (`YYYYMMDD_NNN_description.sql`)
+- File structure and templates
+- Idempotency patterns
+- Running migrations
+- Rollback planning
+- Testing checklist
 
-    -- Timestamps
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ
-);
-
--- Indexes
-CREATE INDEX IF NOT EXISTS idx_items_user_space
-    ON items(user_id, space_id)
-    WHERE deleted_at IS NULL;
-
-CREATE INDEX IF NOT EXISTS idx_items_status
-    ON items(status)
-    WHERE deleted_at IS NULL;
-```
+Quick reference - base schemas live in `src/lib/server/persistence/*-schema.sql`, but new tables should be created via migrations.
 
 ## TypeScript Row Types
 

@@ -1,9 +1,9 @@
 -- ============================================================================
 -- StratAI Fresh Install Schema
 -- ============================================================================
--- Generated: 2026-01-19
--- Updated: Added token_type to password_reset_tokens (migration 039)
---          Added welcome, space_invite to email_logs types (migrations 039, 040)
+-- Generated: 2026-01-20
+-- Updated: V2 migration system (20260120_001_game_scores)
+--          Added game_scores table for org-wide mini-game leaderboards
 --
 -- This is the complete database schema for StratAI.
 -- Run this on a fresh PostgreSQL 15+ database.
@@ -822,7 +822,29 @@ CREATE TRIGGER update_model_rankings_updated_at
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
--- 15. SCHEMA MIGRATIONS TRACKING
+-- 15. GAME SCORES (Mini-game Leaderboards)
+-- ============================================================================
+
+CREATE TABLE game_scores (
+    id TEXT PRIMARY KEY DEFAULT ('gs_' || EXTRACT(EPOCH FROM now())::bigint || '_' || substr(md5(random()::text), 1, 8)),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    game_type TEXT NOT NULL,
+    score INTEGER NOT NULL,
+    level INTEGER,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT game_scores_score_positive CHECK (score >= 0),
+    CONSTRAINT game_scores_valid_game_type CHECK (game_type IN ('snake', 'wordle', 'tictactoe'))
+);
+
+CREATE INDEX idx_game_scores_org_leaderboard ON game_scores(org_id, game_type, score DESC);
+CREATE INDEX idx_game_scores_user_best ON game_scores(user_id, game_type, score DESC);
+CREATE INDEX idx_game_scores_recent ON game_scores(org_id, game_type, created_at DESC) WHERE created_at > (NOW() - INTERVAL '7 days');
+CREATE INDEX idx_game_scores_user_recent ON game_scores(user_id, created_at DESC);
+
+-- ============================================================================
+-- 16. SCHEMA MIGRATIONS TRACKING
 -- ============================================================================
 
 CREATE TABLE schema_migrations (
@@ -830,8 +852,10 @@ CREATE TABLE schema_migrations (
     applied_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Mark this as version 040 (fresh install)
-INSERT INTO schema_migrations (version) VALUES ('040-fresh-install');
+-- Mark baseline versions (fresh install includes all migrations through V2)
+INSERT INTO schema_migrations (version) VALUES
+    ('040-fresh-install'),
+    ('20260120_001_game_scores');
 
 -- ============================================================================
 -- DONE!

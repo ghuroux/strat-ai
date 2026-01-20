@@ -85,6 +85,54 @@
 		return family?.isOpenSource ?? false;
 	}
 
+	// Deduplicate models by preferring IDs in MODEL_CAPABILITIES
+	// This handles LiteLLM returning multiple aliases for the same model
+	// (e.g., claude-sonnet-4-20250514 AND claude-sonnet-4-5-20250514)
+	let deduplicatedModels = $derived.by(() => {
+		// Group models by their display name
+		const byDisplayName = new Map<string, LiteLLMModel[]>();
+
+		for (const model of models) {
+			const displayName = getDisplayName(model.id);
+			if (!byDisplayName.has(displayName)) {
+				byDisplayName.set(displayName, []);
+			}
+			byDisplayName.get(displayName)!.push(model);
+		}
+
+		// For each display name group, select the best representative model ID
+		const result: LiteLLMModel[] = [];
+
+		for (const [displayName, duplicates] of byDisplayName) {
+			if (duplicates.length === 1) {
+				// No duplicates - keep the model as-is
+				result.push(duplicates[0]);
+				continue;
+			}
+
+			// Multiple models with same display name - pick the canonical one
+
+			// Strategy 1: Prefer model ID that exists in MODEL_CAPABILITIES (our source of truth)
+			const inCapabilities = duplicates.find(m =>
+				modelCapabilitiesStore.capabilities[m.id] !== undefined
+			);
+
+			if (inCapabilities) {
+				result.push(inCapabilities);
+				continue;
+			}
+
+			// Strategy 2: No match in capabilities - prefer shortest ID (usually canonical)
+			// e.g., "claude-sonnet-4-5" is shorter than "claude-sonnet-4-5-20250514"
+			const shortest = duplicates.reduce((a, b) =>
+				a.id.length <= b.id.length ? a : b
+			);
+			result.push(shortest);
+		}
+
+		return result;
+	});
+
 	// Group and sort models
 	interface ModelGroup {
 		category: 'proprietary' | 'opensource';
@@ -96,7 +144,7 @@
 	let groupedModels = $derived.by(() => {
 		const groups: Map<string, ModelGroup> = new Map();
 
-		for (const model of models) {
+		for (const model of deduplicatedModels) {
 			const family = getModelFamily(model.id);
 			const familyName = family?.name ?? 'Other';
 			const category = family?.isOpenSource ? 'opensource' : 'proprietary';

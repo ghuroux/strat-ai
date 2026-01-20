@@ -156,12 +156,17 @@ async function setupDatabase() {
 			console.log(colors.yellow(`No migrations directory found at ${MIGRATIONS_DIR}`));
 		} else {
 			const migrationFiles = readdirSync(MIGRATIONS_DIR)
-				.filter((f) => f.endsWith('.sql'))
+				.filter((f) => {
+					// Only .sql files, ignore directories (like _v1-baseline)
+					if (!f.endsWith('.sql')) return false;
+					// Ignore any entries starting with _ (archive directories)
+					if (f.startsWith('_')) return false;
+					return true;
+				})
 				.sort((a, b) => {
-					// Sort by leading number
-					const numA = parseInt(a.match(/^(\d+)/)?.[1] || '0');
-					const numB = parseInt(b.match(/^(\d+)/)?.[1] || '0');
-					return numA - numB;
+					// Sort alphabetically - works for both old (0xx) and new (YYYYMMDD_NNN) naming
+					// New format: 20260120_001_description.sql sorts chronologically by design
+					return a.localeCompare(b);
 				});
 
 			for (const file of migrationFiles) {

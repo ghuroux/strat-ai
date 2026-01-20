@@ -84,8 +84,11 @@ npm run check            # TypeScript check
 npm run build            # Production build
 docker-compose up -d     # Start LiteLLM
 
-# Database migrations (see .claude/commands/db-migrate.md for details)
-node -e "import('postgres').then(({default:postgres})=>{import('fs').then(fs=>{const sql=postgres(process.env.DATABASE_URL||'postgres://ghuroux@localhost:5432/stratai');const schemas=['schema.sql','users-schema.sql','organizations-schema.sql','org-memberships-schema.sql','user-id-mappings-schema.sql','tasks-schema.sql','documents-schema.sql','focus-areas-schema.sql','spaces-schema.sql','arena-schema.sql','tool-cache-schema.sql'];(async()=>{for(const file of schemas){console.log(\`Running: \${file}\`);const schema=fs.readFileSync(\`src/lib/server/persistence/\${file}\`,'utf-8');await sql.unsafe(schema).catch(e=>console.log(\`Notice: \${e.message}\`))}await sql.end();console.log('✅ Migrations complete')})()})})"
+# Database setup & migrations
+npx tsx scripts/setup-db.ts    # Full setup (schemas + migrations)
+
+# Fresh install (new database)
+psql -d stratai -f fresh-install/schema.sql
 ```
 
 ---
@@ -101,6 +104,7 @@ Claude Code has access to specialized skills and commands. **Before working on r
 | Creating Svelte components | `stratai-main/.claude/skills/creating-components/SKILL.md` | Any new `.svelte` file in `src/lib/components/` |
 | Creating API endpoints | `stratai-main/.claude/skills/creating-endpoints/SKILL.md` | Any new `+server.ts` file in `src/routes/api/` |
 | Working with PostgreSQL | `stratai-main/.claude/skills/working-with-postgres/SKILL.md` | Any `*-postgres.ts` file or SQL query work |
+| Database migrations | `stratai-main/.claude/skills/database-migrations/SKILL.md` | New tables, schema changes, indexes, constraints |
 | Managing Svelte 5 stores | `stratai-main/.claude/skills/managing-state/SKILL.md` | Any `.svelte.ts` file in `src/lib/stores/` |
 | Writing smoke tests | `stratai-main/.claude/skills/writing-smoke-tests/SKILL.md` | Major features needing Playwright browser tests |
 | StratAI conventions | `stratai-main/.claude/skills/stratai-conventions/SKILL.md` | General coding, bug fixes, refactoring, architecture |
@@ -300,6 +304,8 @@ Don't revisit without good reason:
 | postgres.js camelCase standard | Database columns use snake_case, postgres.js transforms to camelCase at runtime. ALWAYS access as camelCase (row.userId not row.user_id) |
 | Database standardization project | Systematic fix of snake_case bugs + comprehensive docs. 6-phase plan over 2 weeks. Critical for reliable development. |
 | Theme support mandatory | All UI components MUST support both dark AND light modes using `dark:` prefix pattern. Light mode is base, dark mode overrides. Prevents "invisible in light mode" bugs. See `DESIGN-SYSTEM.md`. |
+| V2 migration system | Archive v1 (002-040) in `_v1-baseline/`, new format `YYYYMMDD_NNN_description.sql`. Date-prefixed for chronological sorting, supports parallel development. Fresh installs use consolidated `fresh-install/schema.sql`. |
+| game_scores org-scoped | Leaderboards scoped to org (not global) for enterprise privacy. CHECK constraint enforces known game types. Partial index for efficient weekly leaderboards. |
 
 ---
 

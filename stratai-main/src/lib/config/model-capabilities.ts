@@ -97,6 +97,29 @@ export interface ModelCapabilities {
 
 export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 	// ============================================
+	// AUTO MODE - Smart Model Routing
+	// ============================================
+
+	'auto': {
+		displayName: 'AUTO - Smart Routing',
+		provider: 'anthropic', // Default preference (user can override via provider buttons)
+		contextWindow: 200000, // Representative of router's capability
+		maxOutputTokens: 64000, // Representative of router's capability
+		supportsThinking: true, // Router can select thinking-capable models
+		supportsVision: true, // Router can select vision-capable models
+		supportsTools: true, // Router can select tool-capable models
+		description: 'Automatic model selection based on query complexity, features, and user preferences',
+		// Note: No pricing - calculated dynamically based on actual model selected by router
+		taskPlanning: {
+			tier: 'recommended',
+			structuredOutput: 'reliable',
+			verbosity: 'concise',
+			needsFewShotExamples: false,
+			planningNote: 'Automatically selects the best model for planning tasks'
+		}
+	},
+
+	// ============================================
 	// ANTHROPIC CLAUDE MODELS
 	// ============================================
 

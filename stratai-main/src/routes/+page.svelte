@@ -340,7 +340,8 @@
 			return;
 		}
 
-		// Validate image attachments against model capabilities (check the model that will actually be used)
+		// Validate image attachments against model capabilities
+		// Note: AUTO mode capabilities assume router selects vision-capable model when images present
 		const hasImages = hasImageAttachments(attachments);
 		if (hasImages && !modelSupportsVision(modelToUse)) {
 			const modelName = modelCapabilitiesStore.getDisplayName(modelToUse);
