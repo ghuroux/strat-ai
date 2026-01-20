@@ -14,6 +14,7 @@ const STORAGE_KEY = 'strathost-settings';
 export interface UserSettings {
 	selectedModel: string;
 	sidebarOpen: boolean;
+	spaceConversationsOpen: boolean; // Space dashboard conversations panel
 	theme: 'dark' | 'light' | 'system';
 	sendOnEnter: boolean;
 	showTimestamps: boolean;
@@ -34,6 +35,7 @@ export interface UserSettings {
 const defaultSettings: UserSettings = {
 	selectedModel: '',
 	sidebarOpen: true,
+	spaceConversationsOpen: false, // Default: collapsed on page load
 	theme: 'dark',
 	sendOnEnter: true,
 	showTimestamps: true,
@@ -96,6 +98,10 @@ class SettingsStore {
 
 	get sidebarOpen(): boolean {
 		return this.settings.sidebarOpen;
+	}
+
+	get spaceConversationsOpen(): boolean {
+		return this.settings.spaceConversationsOpen;
 	}
 
 	get theme(): 'dark' | 'light' | 'system' {
@@ -233,6 +239,16 @@ class SettingsStore {
 
 	toggleSidebar(): void {
 		this.settings.sidebarOpen = !this.settings.sidebarOpen;
+		this.persist();
+	}
+
+	setSpaceConversationsOpen(open: boolean): void {
+		this.settings.spaceConversationsOpen = open;
+		this.persist();
+	}
+
+	toggleSpaceConversations(): void {
+		this.settings.spaceConversationsOpen = !this.settings.spaceConversationsOpen;
 		this.persist();
 	}
 

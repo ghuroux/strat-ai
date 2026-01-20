@@ -275,3 +275,5 @@ async function canDeleteSpace(spaceId: string): Promise<boolean> {
 - [ACCESS_PATTERNS.md](./ACCESS_PATTERNS.md) - Query patterns
 - [POSTGRES_JS_GUIDE.md](./POSTGRES_JS_GUIDE.md) - Column transformation
 
+
+

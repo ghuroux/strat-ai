@@ -4,6 +4,7 @@
 	import MoveChatModal from '$lib/components/chat/MoveChatModal.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import KeyboardShortcutsModal from '$lib/components/KeyboardShortcutsModal.svelte';
+	import { SnakeGame, WordleGame } from '$lib/components/games';
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import { commandPaletteStore } from '$lib/stores/commandPalette.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -11,6 +12,7 @@
 	import { userStore } from '$lib/stores/user.svelte';
 	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { gameStore } from '$lib/stores/games.svelte';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
@@ -253,4 +255,16 @@
 <KeyboardShortcutsModal
 	open={showShortcutsModal}
 	onClose={() => showShortcutsModal = false}
+/>
+
+<!-- Snake Game Modal -->
+<SnakeGame
+	isOpen={gameStore.isSnakeOpen}
+	onClose={() => gameStore.closeSnake()}
+/>
+
+<!-- Wordle Game Modal -->
+<WordleGame
+	isOpen={gameStore.isWordleOpen}
+	onClose={() => gameStore.closeWordle()}
 />

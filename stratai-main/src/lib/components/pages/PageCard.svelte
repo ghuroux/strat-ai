@@ -94,20 +94,18 @@
 
 	// Derived values
 	const typeLabel = $derived(PAGE_TYPE_LABELS[page.pageType] || page.pageType);
-	const truncatedTitle = $derived(
-		page.title.length > 50 ? page.title.substring(0, 50) + '...' : page.title
-	);
 
-	// Format relative time
-	function formatRelativeTime(date: Date): string {
+	// Format relative time (handles both Date objects and ISO strings from API)
+	function formatRelativeTime(date: Date | string): string {
+		const d = typeof date === 'string' ? new Date(date) : date;
 		const now = new Date();
-		const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+		const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
 
 		if (diff < 60) return 'Just now';
 		if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
 		if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
 		if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-		return date.toLocaleDateString();
+		return d.toLocaleDateString();
 	}
 
 	// Calculate word count (content length / 5)
@@ -116,16 +114,24 @@
 
 <svelte:window onclick={handleClickOutside} />
 
-<div class="page-card-wrapper">
+<div class="group relative">
 	<button
 		type="button"
-		class="page-card"
+		class="page-card flex flex-col gap-3 p-5 pt-4 w-full text-left cursor-pointer
+			   bg-white dark:bg-zinc-900
+			   border border-zinc-200 dark:border-zinc-700
+			   rounded-xl
+			   transition-all duration-150
+			   hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/10 dark:hover:shadow-black/30
+			   hover:border-zinc-400 dark:hover:border-zinc-600"
 		class:newly-created={highlight}
 		onclick={handleCardClick}
 	>
-		<!-- Top row: Icon + Title + Lock -->
-		<div class="card-header">
-			<div class="card-icon">
+		<!-- Top row: Icon + Title -->
+		<div class="flex items-start gap-3">
+			<div class="flex items-center justify-center w-10 h-10 rounded-lg flex-shrink-0
+						bg-zinc-100 dark:bg-zinc-800
+						text-zinc-500 dark:text-zinc-400">
 				{#if page.pageType === 'meeting_notes'}
 					<Users size={20} />
 				{:else if page.pageType === 'decision_record'}
@@ -134,40 +140,52 @@
 					<FileEdit size={20} />
 				{/if}
 			</div>
-			<h3 class="card-title">{truncatedTitle}</h3>
-			{#if page.visibility === 'private'}
-				<Lock class="lock-icon" size={14} />
-			{/if}
+			<h3 class="flex-1 text-base font-semibold leading-snug min-w-0 pr-6
+					   text-zinc-900 dark:text-zinc-100
+					   line-clamp-2">
+				{page.title}
+			</h3>
 		</div>
 
 		<!-- Area badge (only shown in Space-level views) -->
 		{#if page.areaName}
-			<div class="area-badge">
+			<div class="inline-block w-fit px-2.5 py-1 rounded-full text-xs font-medium
+						bg-zinc-100 dark:bg-zinc-800
+						border border-zinc-200 dark:border-zinc-700
+						text-zinc-600 dark:text-zinc-400">
 				{page.areaName}
 			</div>
 		{/if}
 
 		<!-- Metadata row: Type + Word count -->
-		<div class="card-meta">
-			<span class="page-type">{typeLabel}</span>
-			<span class="separator">·</span>
-			<span class="word-count">{wordCount} words</span>
+		<div class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+			<span class="font-medium">{typeLabel}</span>
+			<span class="opacity-50">·</span>
+			<span>{wordCount} words</span>
 		</div>
 
-		<!-- Footer: Timestamp + Ownership -->
-		<div class="card-footer">
-			<span class="updated">{formatRelativeTime(page.updatedAt)}</span>
+		<!-- Footer: Lock + Timestamp + Ownership -->
+		<div class="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+			{#if page.visibility === 'private'}
+				<Lock size={12} class="flex-shrink-0" />
+			{/if}
+			<span>{formatRelativeTime(page.updatedAt)}</span>
 			{#if page.isOwnedByUser === false && page.creatorName}
-				<span class="shared-by">Shared by {page.creatorName}</span>
+				<span class="italic">Shared by {page.creatorName}</span>
 			{/if}
 		</div>
 	</button>
 
 	<!-- 3-dot menu button -->
-	<div class="menu-container">
+	<div class="absolute top-3 right-3 z-10">
 		<button
 			type="button"
-			class="menu-button"
+			class="flex items-center justify-center w-7 h-7 rounded-md
+				   text-zinc-400 dark:text-zinc-500
+				   opacity-0 group-hover:opacity-100 aria-expanded:opacity-100
+				   hover:bg-zinc-100 dark:hover:bg-zinc-800
+				   hover:text-zinc-900 dark:hover:text-zinc-100
+				   transition-all duration-150"
 			bind:this={menuButtonRef}
 			onclick={toggleMenu}
 			aria-label="Page options"
@@ -177,20 +195,48 @@
 		</button>
 
 		{#if menuOpen}
-			<div class="menu-dropdown" role="menu">
-				<button type="button" class="menu-item" onclick={handleViewClick} role="menuitem">
+			<div class="absolute top-full right-0 mt-1 min-w-40 p-1 z-50
+						bg-white dark:bg-zinc-900
+						border border-zinc-200 dark:border-zinc-700
+						rounded-lg shadow-lg shadow-black/10 dark:shadow-black/30"
+				 role="menu">
+				<button
+					type="button"
+					class="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-left text-sm
+						   text-zinc-700 dark:text-zinc-200
+						   hover:bg-zinc-100 dark:hover:bg-zinc-800
+						   transition-colors"
+					onclick={handleViewClick}
+					role="menuitem"
+				>
 					<Eye size={16} />
 					<span>View</span>
 				</button>
 				{#if onShare}
-					<button type="button" class="menu-item" onclick={handleShareClick} role="menuitem">
+					<button
+						type="button"
+						class="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-left text-sm
+							   text-zinc-700 dark:text-zinc-200
+							   hover:bg-zinc-100 dark:hover:bg-zinc-800
+							   transition-colors"
+						onclick={handleShareClick}
+						role="menuitem"
+					>
 						<Share2 size={16} />
 						<span>Share</span>
 					</button>
 				{/if}
 				{#if onDelete}
-					<div class="menu-divider"></div>
-					<button type="button" class="menu-item menu-item-danger" onclick={handleDeleteClick} role="menuitem">
+					<div class="my-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
+					<button
+						type="button"
+						class="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-left text-sm
+							   text-red-600 dark:text-red-400
+							   hover:bg-red-500/10
+							   transition-colors"
+						onclick={handleDeleteClick}
+						role="menuitem"
+					>
 						<Trash2 size={16} />
 						<span>Delete</span>
 					</button>
@@ -217,286 +263,7 @@
 		}
 	}
 
-	.page-card-wrapper {
-		position: relative;
-	}
-
-	.page-card {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		padding: 1.25rem;
-		padding-top: 1rem;
-		background: rgb(255, 255, 255);
-		background: var(--color-surface-card, rgb(255, 255, 255));
-		border: 1px solid rgb(228, 228, 231);
-		border: 1px solid var(--color-border, rgb(228, 228, 231));
-		border-radius: 12px;
-		cursor: pointer;
-		transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
-		text-align: left;
-		width: 100%;
-	}
-
-	/* Theme-aware colors */
-	@media (prefers-color-scheme: dark) {
-		.page-card {
-			background: rgb(24, 24, 27);
-			background: var(--color-surface-card, rgb(24, 24, 27));
-			border-color: rgb(63, 63, 70);
-			border-color: var(--color-border, rgb(63, 63, 70));
-		}
-	}
-
-	.page-card:hover {
-		transform: translateY(-2px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-		border-color: rgb(161, 161, 170);
-		border-color: var(--color-border-hover, rgb(161, 161, 170));
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.page-card:hover {
-			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-			border-color: rgb(113, 113, 122);
-			border-color: var(--color-border-hover, rgb(113, 113, 122));
-		}
-	}
-
 	.page-card.newly-created {
 		animation: highlight-pulse 2s ease-out;
-	}
-
-	/* Card header with icon + title + lock */
-	.card-header {
-		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-	}
-
-	.card-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 40px;
-		height: 40px;
-		background: rgb(244, 244, 245);
-		border-radius: 8px;
-		color: rgb(113, 113, 122);
-		flex-shrink: 0;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.card-icon {
-			background: rgb(39, 39, 42);
-			color: rgb(161, 161, 170);
-		}
-	}
-
-	.card-title {
-		flex: 1;
-		font-size: 1rem;
-		font-weight: 600;
-		color: rgb(24, 24, 27);
-		margin: 0;
-		line-height: 1.5;
-		min-width: 0;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.card-title {
-			color: rgb(250, 250, 250);
-		}
-	}
-
-	.card-header :global(.lock-icon) {
-		flex-shrink: 0;
-		color: rgb(161, 161, 170);
-		margin-top: 2px;
-	}
-
-	/* Area badge */
-	.area-badge {
-		display: inline-block;
-		padding: 0.25rem 0.625rem;
-		background: rgb(244, 244, 245);
-		border: 1px solid rgb(228, 228, 231);
-		border-radius: 9999px;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: rgb(63, 63, 70);
-		width: fit-content;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.area-badge {
-			background: rgb(39, 39, 42);
-			border-color: rgb(63, 63, 70);
-			color: rgb(212, 212, 216);
-		}
-	}
-
-	/* Metadata row */
-	.card-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.8125rem;
-		color: rgb(113, 113, 122);
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.card-meta {
-			color: rgb(161, 161, 170);
-		}
-	}
-
-	.page-type {
-		font-weight: 500;
-	}
-
-	.separator {
-		opacity: 0.5;
-	}
-
-	/* Footer */
-	.card-footer {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.75rem;
-		color: rgb(161, 161, 170);
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.card-footer {
-			color: rgb(113, 113, 122);
-		}
-	}
-
-	.shared-by {
-		font-style: italic;
-	}
-
-	/* Menu container */
-	.menu-container {
-		position: absolute;
-		top: 0.75rem;
-		right: 0.75rem;
-		z-index: 10;
-	}
-
-	.menu-button {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		padding: 0;
-		border: none;
-		background: transparent;
-		border-radius: 6px;
-		color: rgb(161, 161, 170);
-		cursor: pointer;
-		opacity: 0;
-		transition: opacity 150ms ease, background-color 100ms ease, color 100ms ease;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.menu-button {
-			color: rgb(113, 113, 122);
-		}
-	}
-
-	.page-card-wrapper:hover .menu-button,
-	.menu-button[aria-expanded="true"] {
-		opacity: 1;
-	}
-
-	.menu-button:hover {
-		background: rgb(244, 244, 245);
-		color: rgb(24, 24, 27);
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.menu-button:hover {
-			background: rgb(39, 39, 42);
-			color: rgb(250, 250, 250);
-		}
-	}
-
-	/* Dropdown menu */
-	.menu-dropdown {
-		position: absolute;
-		top: 100%;
-		right: 0;
-		margin-top: 4px;
-		min-width: 160px;
-		background: rgb(255, 255, 255);
-		border: 1px solid rgb(228, 228, 231);
-		border-radius: 8px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-		padding: 4px;
-		z-index: 100;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.menu-dropdown {
-			background: rgb(24, 24, 27);
-			border-color: rgb(63, 63, 70);
-			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-		}
-	}
-
-	.menu-item {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-		width: 100%;
-		padding: 0.5rem 0.75rem;
-		border: none;
-		background: transparent;
-		color: rgb(39, 39, 42);
-		font-size: 0.875rem;
-		border-radius: 6px;
-		cursor: pointer;
-		transition: background-color 100ms ease;
-		text-align: left;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.menu-item {
-			color: rgb(250, 250, 250);
-		}
-	}
-
-	.menu-item:hover {
-		background: rgb(244, 244, 245);
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.menu-item:hover {
-			background: rgb(39, 39, 42);
-		}
-	}
-
-	.menu-item-danger {
-		color: #ef4444;
-	}
-
-	.menu-item-danger:hover {
-		background: rgba(239, 68, 68, 0.1);
-	}
-
-	.menu-divider {
-		height: 1px;
-		background: rgb(228, 228, 231);
-		margin: 4px 0;
-	}
-
-	@media (prefers-color-scheme: dark) {
-		.menu-divider {
-			background: rgb(63, 63, 70);
-		}
 	}
 </style>

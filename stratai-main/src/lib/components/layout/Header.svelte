@@ -14,6 +14,7 @@
 	import PlanningTasksIndicator from '../tasks/PlanningTasksIndicator.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { SpaceModal, SpaceNavTabs } from '../spaces';
+	import MoreNavMenu from './MoreNavMenu.svelte';
 	import type { CreateSpaceInput, UpdateSpaceInput, Space } from '$lib/types/spaces';
 	import { MAX_CUSTOM_SPACES } from '$lib/types/spaces';
 
@@ -73,6 +74,10 @@
 
 	function toggleSidebar() {
 		settingsStore.toggleSidebar();
+	}
+
+	function handleToggleSpaceConversations() {
+		settingsStore.toggleSpaceConversations();
 	}
 
 	function handleModelChange(model: string) {
@@ -157,43 +162,43 @@
 <header class="h-16 px-4 flex items-center border-b border-surface-800 bg-surface-900/80 backdrop-blur-xl overflow-visible relative z-40">
 	<!-- Left: Sidebar Toggle & Logo -->
 	<div class="flex items-center gap-3 min-w-0">
-		<!-- Mobile Sidebar Toggle - Shows X when open, Menu when closed -->
+		<!-- Sidebar Toggle (All screen sizes) -->
 		<button
 			type="button"
-			class="btn-icon md:hidden w-9 h-9"
-			onclick={toggleSidebar}
-			aria-label="Toggle sidebar"
+			class="btn-icon w-9 h-9"
+			onclick={isSpaceDashboard ? handleToggleSpaceConversations : toggleSidebar}
+			aria-label={isSpaceDashboard ? "Toggle space conversations" : "Toggle sidebar"}
 		>
-			{#if settingsStore.sidebarOpen}
-				<X size={24} />
+			{#if isSpaceDashboard}
+				<!-- Space dashboard: show space conversations state -->
+				{#if settingsStore.spaceConversationsOpen}
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+					</svg>
+				{:else}
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+					</svg>
+				{/if}
 			{:else}
-				<Menu size={24} />
+				<!-- Main chat: show main sidebar state -->
+				{#if settingsStore.sidebarOpen}
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+					</svg>
+				{:else}
+					<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+					</svg>
+				{/if}
 			{/if}
 		</button>
 
-		<!-- Desktop Sidebar Toggle -->
-		<button
-			type="button"
-			class="btn-icon hidden md:flex"
-			onclick={toggleSidebar}
-			aria-label="Toggle sidebar"
-		>
-			{#if settingsStore.sidebarOpen}
-				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-				</svg>
-			{:else}
-				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-				</svg>
-			{/if}
-		</button>
-
-		<!-- Logo (with easter egg on 7 rapid clicks) -->
+		<!-- Logo (with easter egg on 7 rapid clicks) - Hidden on mobile -->
 		<a
 			bind:this={logoElement}
 			href="/"
-			class="flex items-center gap-2 hover:opacity-90 transition-opacity"
+			class="hidden sm:flex items-center gap-2 hover:opacity-90 transition-opacity"
 			onclick={handleLogoClick}
 		>
 			<div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: var(--gradient-primary);">
@@ -206,13 +211,50 @@
 					/>
 				</svg>
 			</div>
-			<span class="font-bold text-lg text-gradient hidden sm:inline">StratAI</span>
+			<span class="font-bold text-lg text-gradient">StratAI</span>
 		</a>
 
-		<!-- Spaces Navigation (Desktop) - Pinned spaces with dropdown -->
+		<!-- Mobile/Tablet: Icon Navigation (<768px) -->
+		<div class="flex md:hidden items-center gap-1 ml-2">
+			<!-- Main Chat Icon -->
+			<a
+				href="/"
+				class="flex items-center justify-center w-9 h-9 rounded-lg
+				       transition-colors"
+				class:bg-primary-500={isMainChat}
+				class:text-white={isMainChat}
+				class:text-surface-400={!isMainChat}
+				class:hover:text-surface-100={!isMainChat}
+				class:hover:bg-surface-800={!isMainChat}
+				title="Main Chat"
+			>
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+				</svg>
+			</a>
+			<!-- Arena Icon -->
+			<a
+				href="/arena"
+				class="flex items-center justify-center w-9 h-9 rounded-lg
+				       transition-colors"
+				class:bg-primary-500={isArena}
+				class:text-white={isArena}
+				class:text-surface-400={!isArena}
+				class:hover:text-surface-100={!isArena}
+				class:hover:bg-surface-800={!isArena}
+				title="Arena"
+			>
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+				</svg>
+			</a>
+			<!-- Spaces Dropdown -->
+			<MoreNavMenu {currentUserId} {currentSpaceSlug} />
+		</div>
+
+		<!-- Desktop: Spaces Navigation (≥768px) -->
 		<div class="hidden md:flex items-center gap-1 ml-2">
 			<SpaceNavTabs {currentUserId} {currentSpaceSlug} />
-
 			<!-- Main Chat Button -->
 			<a
 				href="/"
@@ -224,54 +266,27 @@
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
 				</svg>
 			</a>
+			<!-- Arena Link (Desktop) -->
+			<a
+				href="/arena"
+				class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg text-sm font-medium
+				       border transition-all"
+				class:bg-primary-500={isArena}
+				class:text-white={isArena}
+				class:border-primary-500={isArena}
+				class:bg-surface-800={!isArena}
+				class:text-surface-300={!isArena}
+				class:hover:bg-surface-700={!isArena}
+				class:hover:text-surface-100={!isArena}
+				class:border-surface-700={!isArena}
+				class:hover:border-surface-600={!isArena}
+			>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+				</svg>
+				<span>Arena</span>
+			</a>
 		</div>
-
-		<!-- Mobile Chat Button -->
-		<a
-			href="/"
-			class="flex md:hidden items-center gap-1.5 px-3 py-1.5 ml-2 rounded-lg text-sm font-medium
-				   border transition-all"
-			class:bg-primary-500={isMainChat}
-			class:text-white={isMainChat}
-			class:border-primary-500={isMainChat}
-			class:bg-surface-800={!isMainChat}
-			class:text-surface-300={!isMainChat}
-			class:hover:bg-surface-700={!isMainChat}
-			class:hover:text-surface-100={!isMainChat}
-			class:border-surface-700={!isMainChat}
-			class:hover:border-surface-600={!isMainChat}
-		>
-			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-			</svg>
-			<span class="hidden sm:inline">Chat</span>
-		</a>
-
-		<!-- Mobile Spaces Link -->
-		<a
-			href="/spaces"
-			class="flex md:hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
-				   bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-surface-100
-				   border border-surface-700 hover:border-surface-600 transition-all"
-		>
-			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-			</svg>
-			<span class="hidden sm:inline">Spaces</span>
-		</a>
-
-		<!-- Arena Link -->
-		<a
-			href="/arena"
-			class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
-				   bg-surface-800 text-surface-300 hover:bg-surface-700 hover:text-surface-100
-				   border border-surface-700 hover:border-surface-600 transition-all"
-		>
-			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-			</svg>
-			<span class="hidden sm:inline">Arena</span>
-		</a>
 	</div>
 
 	<!-- Center: Model Selector (hide on Space Dashboard and Arena, show when no messages elsewhere) -->
@@ -280,7 +295,7 @@
 		<div class="flex-1"></div>
 	{:else if !chatStore.messages || chatStore.messages.length === 0}
 		<div class="flex-1 flex justify-center">
-			<div class="w-full max-w-xs">
+			<div class="w-full max-w-[240px] sm:max-w-[280px] lg:max-w-xs">
 				<ModelSelector
 					{selectedModel}
 					{routedModel}

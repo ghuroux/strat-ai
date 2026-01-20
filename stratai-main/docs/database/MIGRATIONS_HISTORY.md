@@ -151,3 +151,5 @@ CREATE INDEX IF NOT EXISTS idx_name ON table_name(column);
 - [SCHEMA_REFERENCE.md](./SCHEMA_REFERENCE.md) - Current schema
 - [RELATIONSHIPS.md](./RELATIONSHIPS.md) - Entity relationships
 
+
+

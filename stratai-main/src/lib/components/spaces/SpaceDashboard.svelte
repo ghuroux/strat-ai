@@ -264,7 +264,7 @@
 	<header class="dashboard-header">
 		<div class="header-content">
 			<div class="space-info">
-				<div class="space-icon-wrapper">
+				<div class="space-icon-wrapper mt-4">
 					{#if isCustomSpace && space.icon}
 						<!-- Custom space with icon -->
 						<svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -287,6 +287,7 @@
 			<!-- Navigation -->
 			<SpaceNavigation
 				{spaceSlug}
+				{spaceColor}
 				{taskCount}
 				{pageCount}
 				{memberCount}

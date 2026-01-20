@@ -49,6 +49,17 @@
 	let error = $state(false);
 	let isOpen = $state(false);
 	let dropdownRef: HTMLDivElement | undefined = $state();
+	let isCollapsed = $state(false);
+
+	// Responsive state: collapse at <1024px
+	$effect(() => {
+		const handleResize = () => {
+			isCollapsed = window.innerWidth < 1024;
+		};
+		handleResize();
+		window.addEventListener('resize', handleResize);
+		return () => window.removeEventListener('resize', handleResize);
+	});
 
 	// Model family definitions for grouping
 	type ModelFamily = {
@@ -182,6 +193,32 @@
 	// Separate proprietary and open source groups
 	let proprietaryGroups = $derived(groupedModels.filter(g => g.category === 'proprietary'));
 	let opensourceGroups = $derived(groupedModels.filter(g => g.category === 'opensource'));
+
+	// Get abbreviated name for collapsed state
+	function getAbbreviatedName(modelId: string): string {
+		const displayName = getDisplayName(modelId);
+
+		if (modelId.toLowerCase() === AUTO_MODEL_ID) {
+			return 'AUTO';
+		}
+
+		// "Claude Sonnet 4.5" → "CS 4.5"
+		// "GPT-4 Turbo" → "GPT-4"
+		const words = displayName.split(/[\s-]/);
+		if (words.length >= 2) {
+			// Check if second word is a number (e.g., "GPT-4")
+			if (/^\d/.test(words[1])) {
+				return `${words[0].slice(0, 3)} ${words[1]}`;
+			}
+			// Otherwise create initials
+			const initials = words.slice(0, 2).map(w => w[0].toUpperCase()).join('');
+			const version = words.find(w => /^\d/.test(w));
+			return version ? `${initials} ${version}` : initials;
+		}
+
+		// Fallback: truncate to 8 chars
+		return displayName.slice(0, 8);
+	}
 
 	// Get display name from model capabilities or fallback to ID parsing
 	function getDisplayName(modelId: string): string {
@@ -402,38 +439,48 @@
 						</svg>
 						AUTO
 					</span>
-					{#if routedModel}
+					{#if routedModel && !isCollapsed}
 						<span class="text-surface-400 text-sm">using</span>
 						<span class="px-1.5 py-0.5 rounded text-xs font-medium {getProviderColor(getProvider(routedModel))}">
 							{getProvider(routedModel)}
 						</span>
 						<span class="truncate text-surface-200">{getDisplayName(routedModel)}</span>
-					{:else}
+					{:else if routedModel && isCollapsed}
+						<span class="truncate text-surface-200 text-sm">
+							{getAbbreviatedName(routedModel)}
+						</span>
+					{:else if !routedModel && !isCollapsed}
 						<span class="text-surface-400 text-sm">Smart model routing</span>
 					{/if}
 				{:else if selectedModel}
 					<span class="px-1.5 py-0.5 rounded text-xs font-medium {getProviderColor(getProvider(selectedModel))}">
 						{getProvider(selectedModel)}
 					</span>
-					<span class="truncate text-surface-100">{getDisplayName(selectedModel)}</span>
-					<!-- Capability badges for selected model -->
-					<div class="flex items-center gap-1 ml-1">
-						{#if modelHasThinking(selectedModel)}
-							<span class="text-amber-400" title="Supports extended thinking">
-								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-								</svg>
-							</span>
-						{/if}
-						{#if modelHasVision(selectedModel)}
-							<span class="text-blue-400" title="Supports image analysis">
-								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-								</svg>
-							</span>
-						{/if}
-					</div>
+					{#if isCollapsed}
+						<span class="truncate text-surface-100 text-sm">
+							{getAbbreviatedName(selectedModel)}
+						</span>
+					{:else}
+						<span class="truncate text-surface-100">{getDisplayName(selectedModel)}</span>
+						<!-- Capability badges for selected model (only when not collapsed) -->
+						<div class="flex items-center gap-1 ml-1">
+							{#if modelHasThinking(selectedModel)}
+								<span class="text-amber-400" title="Supports extended thinking">
+									<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+									</svg>
+								</span>
+							{/if}
+							{#if modelHasVision(selectedModel)}
+								<span class="text-blue-400" title="Supports image analysis">
+									<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+									</svg>
+								</span>
+							{/if}
+						</div>
+					{/if}
 				{:else}
 					<span class="text-surface-500">Select a model</span>
 				{/if}

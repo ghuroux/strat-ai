@@ -29,7 +29,8 @@ import {
 	Layers,
 	Terminal,
 	FileText,
-	FilePlus
+	FilePlus,
+	Gamepad2
 } from 'lucide-svelte';
 import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
 import { toastStore } from '$lib/stores/toast.svelte';
@@ -40,6 +41,7 @@ import { settingsStore } from '$lib/stores/settings.svelte';
 import { chatStore } from '$lib/stores/chat.svelte';
 import { userStore } from '$lib/stores/user.svelte';
 import { pageStore } from '$lib/stores/pages.svelte';
+import { gameStore } from '$lib/stores/games.svelte';
 import type { Conversation } from '$lib/types/chat';
 
 // =============================================================================
@@ -137,6 +139,24 @@ export function getStaticCommands(): Command[] {
 			keywords: ['sidebar', 'panel', 'toggle', 'hide', 'show', 'collapse'],
 			shortcut: '⌘\\',
 			action: () => settingsStore.toggleSidebar()
+		},
+		{
+			id: 'action-play-snake',
+			label: 'Play Snake',
+			description: 'Quick dopamine hit between tasks',
+			category: 'action',
+			icon: Gamepad2,
+			keywords: ['snake', 'game', 'play', 'fun', 'break', 'arcade', 'mini'],
+			action: () => gameStore.openSnake()
+		},
+		{
+			id: 'action-play-wordle',
+			label: 'Play Wordle',
+			description: 'Daily word puzzle - guess the 5-letter word',
+			category: 'action',
+			icon: Gamepad2,
+			keywords: ['wordle', 'game', 'play', 'word', 'puzzle', 'guess', 'daily', 'letters'],
+			action: () => gameStore.openWordle()
 		},
 
 		// =========================================================================

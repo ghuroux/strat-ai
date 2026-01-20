@@ -15,15 +15,19 @@
 	import { goto } from '$app/navigation';
 	import { SpaceDashboard, SpaceModal, SpaceSettingsPanel } from '$lib/components/spaces';
 	import { AreaModal, AreaEditPanel, DeleteAreaModal } from '$lib/components/areas';
+	import SpaceConversationsDrawer from '$lib/components/spaces/SpaceConversationsDrawer.svelte';
+	import SelectAreaModal from '$lib/components/pages/SelectAreaModal.svelte';
 	import Header from '$lib/components/layout/Header.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Space } from '$lib/types/spaces';
 	import type { Area, CreateAreaInput, UpdateAreaInput } from '$lib/types/areas';
 	import type { CreateTaskInput, Task } from '$lib/types/tasks';
+	import type { Conversation } from '$lib/types/chat';
 
 	// Get space from route param (slug from URL)
 	let spaceParam = $derived($page.params.space);
@@ -48,7 +52,7 @@
 	// Areas with stats (conversation count, last activity)
 	let areasWithStats = $derived.by(() => {
 		return areas.map((area) => {
-			// Get conversations for this area
+			// Get conversations for this area (simple areaId filter)
 			const conversations = chatStore.getConversationsByArea(area.id);
 			const lastConv = conversations[0]; // Already sorted by updatedAt
 
@@ -60,13 +64,28 @@
 		});
 	});
 
-	// Get recent conversations for this space (using proper ID)
+	// Get recent conversations for this space (using area IDs as proxy)
 	let recentConversations = $derived.by(() => {
 		if (!spaceFromStore) return [];
-		// Filter conversations by proper space ID
+
+		const areaIds = new Set(areas.map(a => a.id));
+
+		// Filter by conversations that belong to any area in this space
 		return chatStore.conversationList
-			.filter((c) => c.spaceId === spaceFromStore.id)
+			.filter((c) => c.areaId && areaIds.has(c.areaId))
 			.slice(0, 10);
+	});
+
+	// Get all conversations for this space (for conversations drawer)
+	// Filter by conversations that belong to any area in this space
+	let spaceConversations = $derived.by(() => {
+		if (!spaceFromStore) return [];
+
+		const areaIds = new Set(areas.map(a => a.id));
+
+		return chatStore.conversationList
+			.filter((c) => c.areaId && areaIds.has(c.areaId))
+			.sort((a, b) => b.updatedAt - a.updatedAt);
 	});
 
 	// Get active tasks for this space (parent tasks only, not subtasks, using proper ID)
@@ -95,6 +114,10 @@
 	// Delete area modal state
 	let showDeleteAreaModal = $state(false);
 	let deletingArea = $state<Area | null>(null);
+
+	// Space conversations drawer state
+	let showConversationsDrawer = $state(false);
+	let showNewChatAreaModal = $state(false);
 
 	// Computed counts for the area being deleted
 	let deletingAreaConversationCount = $derived.by(() => {
@@ -255,6 +278,63 @@
 		}
 	}
 
+	// Space conversations drawer handlers
+	function handleSelectConversation(conv: Conversation) {
+		if (!conv.areaId) return;
+
+		// Find the area
+		const area = areas.find(a => a.id === conv.areaId);
+		if (!area) return;
+
+		// Navigate to area with conversation ID in query param
+		goto(`/spaces/${spaceParam}/${area.slug}?conversation=${conv.id}`);
+	}
+
+	function handleNewChatAreaSelect(areaSlug: string) {
+		showNewChatAreaModal = false;
+		goto(`/spaces/${spaceParam}/${areaSlug}`);
+	}
+
+	function handleToggleConversations() {
+		settingsStore.toggleSpaceConversations();
+	}
+
+	// Conversation actions
+	function handlePinConversation(id: string, pinned: boolean) {
+		chatStore.togglePin(id);
+	}
+
+	function handleRenameConversation(id: string, newTitle: string) {
+		chatStore.updateConversationTitle(id, newTitle);
+		toastStore.success('Conversation renamed');
+	}
+
+	function handleExportConversation(id: string) {
+		const json = chatStore.exportConversation(id);
+		if (json) {
+			const blob = new Blob([json], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `conversation-${id}.json`;
+			a.click();
+			URL.revokeObjectURL(url);
+			toastStore.success('Conversation exported');
+		}
+	}
+
+	async function handleDeleteConversation(id: string) {
+		if (confirm('Delete this conversation? This cannot be undone.')) {
+			await chatStore.deleteConversation(id);
+			// Toast is shown by the store itself
+		}
+	}
+
+	// Sync drawer state with settings store
+	$effect(() => {
+		showConversationsDrawer = settingsStore.spaceConversationsOpen;
+	});
+
 	// Task handlers
 	function handleTaskClick(task: any) {
 		// Navigate to task focus mode
@@ -357,6 +437,31 @@
 			onUpdate={handleSpaceUpdate}
 		/>
 	{/if}
+
+	<!-- Space Conversations Drawer -->
+	{#if spaceFromStore}
+		<SpaceConversationsDrawer
+			open={showConversationsDrawer}
+			space={spaceFromStore}
+			{areas}
+			conversations={spaceConversations}
+			onClose={handleToggleConversations}
+			onSelectConversation={handleSelectConversation}
+			onNewChat={() => showNewChatAreaModal = true}
+			onPinConversation={handlePinConversation}
+			onRenameConversation={handleRenameConversation}
+			onExportConversation={handleExportConversation}
+			onDeleteConversation={handleDeleteConversation}
+		/>
+	{/if}
+
+	<!-- Select Area Modal (for New Chat) -->
+	<SelectAreaModal
+		isOpen={showNewChatAreaModal}
+		{areas}
+		onSelect={handleNewChatAreaSelect}
+		onClose={() => showNewChatAreaModal = false}
+	/>
 </div>
 
 <style>

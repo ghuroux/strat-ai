@@ -73,13 +73,15 @@
 		</a>
 	{/each}
 
-	<!-- Show separator if there are pinned spaces -->
+	<!-- Show separator if there are pinned spaces (desktop only) -->
 	{#if pinnedSpaces.length > 0}
-		<span class="space-nav-separator"></span>
+		<span class="space-nav-separator hidden lg:inline-block"></span>
 	{/if}
 
-	<!-- All Spaces Dropdown -->
-	<AllSpacesDropdown {currentUserId} {currentSpaceSlug} />
+	<!-- All Spaces Dropdown (Desktop ≥1024px only) -->
+	<div class="hidden lg:block">
+		<AllSpacesDropdown {currentUserId} {currentSpaceSlug} />
+	</div>
 </nav>
 
 <!-- Context Menu -->

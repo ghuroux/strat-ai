@@ -57,217 +57,120 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const spaceSlug = params.space;
 
 	try {
+		console.log('[Pages API] Starting request for space:', spaceSlug, 'user:', userId);
+
 		// Resolve space slug/ID to proper space ID
 		const spaceId = await resolveSpaceIdAccessible(spaceSlug, userId);
+		console.log('[Pages API] Resolved spaceId:', spaceId);
 		if (!spaceId) {
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
 		// Check if user is a Space member
 		const access = await postgresSpaceMembershipsRepository.canAccessSpace(userId, spaceId);
+		console.log('[Pages API] Access check result:', access);
 		if (!access.hasAccess) {
 			return json({ error: 'Access denied' }, { status: 403 });
 		}
 
 		// Get space details
 		const space = await postgresSpaceRepository.findByIdAccessible(spaceId, userId);
+		console.log('[Pages API] Space details:', space?.name);
 		if (!space) {
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
 		// Get accessible areas for this space
+		console.log('[Pages API] Fetching accessible areas...');
 		const areas = await postgresAreaRepository.findAllAccessible(userId, spaceId);
+		console.log('[Pages API] Found', areas.length, 'accessible areas');
 
 		// Extract query parameters
 		const areaFilter = url.searchParams.get('area');
 		const typeFilter = url.searchParams.get('type');
 		const ownedFilter = url.searchParams.get('owned'); // "me" | "shared"
 
-		// Query accessible areas in this Space using CTE
-		// This mirrors the full access control logic from areas-postgres.ts findAllAccessible()
-		const pagesWithMetadata = await sql<PageWithMetadata[]>`
-			WITH accessible_areas AS (
-				-- Areas user owns (legacy user_id)
-				SELECT DISTINCT a.id, a.name, a.slug
-				FROM areas a
-				WHERE a.space_id = ${spaceId}
-				  AND a.user_id = ${userId}
-				  AND a.deleted_at IS NULL
+		// Get area IDs from the already-fetched areas
+		const areaIds = areas.map(a => a.id);
 
-				UNION
+		// If no areas, return empty
+		if (areaIds.length === 0) {
+			return json({
+				pages: [],
+				recentlyEdited: [],
+				counts: { total: 0, byArea: {}, byType: {}, ownedByMe: 0, sharedWithMe: 0 },
+				areas: [],
+				space: { id: space.id, name: space.name, slug: space.slug }
+			});
+		}
 
-				-- Areas user created
-				SELECT DISTINCT a.id, a.name, a.slug
-				FROM areas a
-				WHERE a.space_id = ${spaceId}
-				  AND a.created_by = ${userId}
-				  AND a.deleted_at IS NULL
+		// Simplified query using pre-fetched area IDs (no complex CTE needed!)
+		console.log('[Pages API] Starting main pages query...');
+		console.log('[Pages API] Filters - area:', areaFilter, 'type:', typeFilter, 'owned:', ownedFilter);
+		console.log('[Pages API] Using', areaIds.length, 'pre-fetched area IDs:', areaIds);
+		let pagesWithMetadata: PageWithMetadata[];
+		try {
+			// Build area lookup map for metadata
+			const areaLookup = new Map(areas.map(a => [a.id, { name: a.name, slug: a.slug }]));
 
-				UNION
+			// Simple query - just get pages from accessible areas
+			// Note: pages.user_id is TEXT, users.id is UUID - need to cast for the JOIN
+			const rows = await sql<(PageRow & { creatorName: string | null })[]>`
+				SELECT
+					p.*,
+					u.display_name as creator_name
+				FROM pages p
+				LEFT JOIN users u ON p.user_id::uuid = u.id
+				LEFT JOIN areas a ON p.area_id = a.id
+				WHERE p.deleted_at IS NULL
+					AND p.area_id = ANY(${areaIds})
+					${areaFilter ? sql`AND a.slug = ${areaFilter}` : sql``}
+					${typeFilter ? sql`AND p.page_type = ${typeFilter}` : sql``}
+					${ownedFilter === 'me' ? sql`AND p.user_id = ${userId}` : sql``}
+					${ownedFilter === 'shared' ? sql`AND p.user_id != ${userId}` : sql``}
+				ORDER BY p.updated_at DESC
+			`;
 
-				-- Areas with direct user membership
-				SELECT DISTINCT a.id, a.name, a.slug
-				FROM areas a
-				JOIN area_memberships am ON a.id = am.area_id
-				WHERE a.space_id = ${spaceId}
-				  AND am.user_id = ${userId}
-				  AND a.deleted_at IS NULL
+			// Add area metadata from lookup
+			pagesWithMetadata = rows.map(row => {
+				const areaInfo = areaLookup.get(row.areaId) || { name: 'Unknown', slug: '' };
+				return {
+					...row,
+					areaName: areaInfo.name,
+					areaSlug: areaInfo.slug,
+					creatorName: row.creatorName,
+					isOwnedByUser: row.userId === userId
+				};
+			});
+		} catch (queryError) {
+			console.error('[Pages API] Main query FAILED:', queryError);
+			console.error('[Pages API] Error message:', queryError instanceof Error ? queryError.message : String(queryError));
+			console.error('[Pages API] Area IDs were:', areaIds);
+			throw queryError;
+		}
 
-				UNION
-
-				-- Areas with group membership
-				SELECT DISTINCT a.id, a.name, a.slug
-				FROM areas a
-				JOIN area_memberships am ON a.id = am.area_id
-				JOIN group_memberships gm ON am.group_id = gm.group_id
-				WHERE a.space_id = ${spaceId}
-				  AND gm.user_id = ${userId}::uuid
-				  AND a.deleted_at IS NULL
-
-				UNION
-
-				-- Non-restricted areas for space owners and members (NOT guests)
-				SELECT DISTINCT a.id, a.name, a.slug
-				FROM areas a
-				JOIN spaces s ON a.space_id = s.id
-				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
-				WHERE a.space_id = ${spaceId}
-				  AND a.deleted_at IS NULL
-				  AND s.deleted_at IS NULL
-				  AND COALESCE(a.is_restricted, false) = false
-				  AND (
-				    s.user_id = ${userId}
-				    OR sm.role IN ('owner', 'admin', 'member')
-				  )
-
-				UNION
-
-				-- General areas are ALWAYS visible to space members (not guests)
-				SELECT DISTINCT a.id, a.name, a.slug
-				FROM areas a
-				JOIN spaces s ON a.space_id = s.id
-				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
-				WHERE a.space_id = ${spaceId}
-				  AND a.deleted_at IS NULL
-				  AND s.deleted_at IS NULL
-				  AND a.is_general = true
-				  AND (
-				    s.user_id = ${userId}
-				    OR sm.role IN ('owner', 'admin', 'member')
-				  )
-			)
-			SELECT
-				p.id,
-				p.user_id,
-				p.area_id,
-				p.task_id,
-				p.title,
-				p.content,
-				p.content_text,
-				p.page_type,
-				p.visibility,
-				p.source_conversation_id,
-				p.word_count,
-				p.created_at,
-				p.updated_at,
-				p.deleted_at,
-				a.name as area_name,
-				a.slug as area_slug,
-				u.display_name as creator_name,
-				CASE WHEN p.user_id = ${userId} THEN true ELSE false END as is_owned_by_user
-			FROM pages p
-			JOIN accessible_areas a ON p.area_id = a.id
-			LEFT JOIN users u ON p.user_id = u.id
-			WHERE p.deleted_at IS NULL
-				${areaFilter ? sql`AND a.slug = ${areaFilter}` : sql``}
-				${typeFilter ? sql`AND p.page_type = ${typeFilter}` : sql``}
-				${ownedFilter === 'me' ? sql`AND p.user_id = ${userId}` : sql``}
-				${ownedFilter === 'shared' ? sql`AND p.user_id != ${userId}` : sql``}
-			ORDER BY p.updated_at DESC
-		`;
+		console.log('[Pages API] Main query returned', pagesWithMetadata.length, 'pages');
 
 		// Query recently edited pages (pages owned by user, updated in last 30 days, limit 3)
-		// Note: pages table uses user_id for ownership (no updated_by column)
-		const recentlyEditedRows = await sql<PageRow[]>`
-			WITH accessible_areas AS (
-				-- Areas user owns (legacy user_id)
-				SELECT DISTINCT a.id
-				FROM areas a
-				WHERE a.space_id = ${spaceId}
-				  AND a.user_id = ${userId}
-				  AND a.deleted_at IS NULL
-
-				UNION
-
-				-- Areas user created
-				SELECT DISTINCT a.id
-				FROM areas a
-				WHERE a.space_id = ${spaceId}
-				  AND a.created_by = ${userId}
-				  AND a.deleted_at IS NULL
-
-				UNION
-
-				-- Areas with direct user membership
-				SELECT DISTINCT a.id
-				FROM areas a
-				JOIN area_memberships am ON a.id = am.area_id
-				WHERE a.space_id = ${spaceId}
-				  AND am.user_id = ${userId}
-				  AND a.deleted_at IS NULL
-
-				UNION
-
-				-- Areas with group membership
-				SELECT DISTINCT a.id
-				FROM areas a
-				JOIN area_memberships am ON a.id = am.area_id
-				JOIN group_memberships gm ON am.group_id = gm.group_id
-				WHERE a.space_id = ${spaceId}
-				  AND gm.user_id = ${userId}::uuid
-				  AND a.deleted_at IS NULL
-
-				UNION
-
-				-- Non-restricted areas for space owners and members (NOT guests)
-				SELECT DISTINCT a.id
-				FROM areas a
-				JOIN spaces s ON a.space_id = s.id
-				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
-				WHERE a.space_id = ${spaceId}
-				  AND a.deleted_at IS NULL
-				  AND s.deleted_at IS NULL
-				  AND COALESCE(a.is_restricted, false) = false
-				  AND (
-				    s.user_id = ${userId}
-				    OR sm.role IN ('owner', 'admin', 'member')
-				  )
-
-				UNION
-
-				-- General areas are ALWAYS visible to space members (not guests)
-				SELECT DISTINCT a.id
-				FROM areas a
-				JOIN spaces s ON a.space_id = s.id
-				LEFT JOIN space_memberships sm ON s.id = sm.space_id AND sm.user_id = ${userId}
-				WHERE a.space_id = ${spaceId}
-				  AND a.deleted_at IS NULL
-				  AND s.deleted_at IS NULL
-				  AND a.is_general = true
-				  AND (
-				    s.user_id = ${userId}
-				    OR sm.role IN ('owner', 'admin', 'member')
-				  )
-			)
-			SELECT p.*
-			FROM pages p
-			JOIN accessible_areas a ON p.area_id = a.id
-			WHERE p.deleted_at IS NULL
-				AND p.user_id = ${userId}
-				AND p.updated_at > NOW() - INTERVAL '30 days'
-			ORDER BY p.updated_at DESC
-			LIMIT 3
-		`;
+		// Using pre-fetched areaIds (no complex CTE needed!)
+		console.log('[Pages API] Executing recently edited query...');
+		let recentlyEditedRows: PageRow[];
+		try {
+			recentlyEditedRows = await sql<PageRow[]>`
+				SELECT p.*
+				FROM pages p
+				WHERE p.deleted_at IS NULL
+					AND p.area_id = ANY(${areaIds})
+					AND p.user_id = ${userId}
+					AND p.updated_at > NOW() - INTERVAL '30 days'
+				ORDER BY p.updated_at DESC
+				LIMIT 3
+			`;
+		} catch (recentError) {
+			console.error('[Pages API] Recently edited query FAILED:', recentError);
+			throw recentError;
+		}
+		console.log('[Pages API] Recently edited query returned', recentlyEditedRows.length, 'pages');
 
 		// Calculate counts
 		const counts: PageCounts = {
@@ -328,6 +231,10 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 		return json(response);
 	} catch (error) {
 		console.error('Failed to fetch pages:', error);
+		// Log the full error stack for debugging
+		if (error instanceof Error) {
+			console.error('Error stack:', error.stack);
+		}
 		return json(
 			{
 				error: 'Failed to fetch pages',

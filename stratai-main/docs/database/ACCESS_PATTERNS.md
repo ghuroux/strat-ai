@@ -429,3 +429,5 @@ const rows = await sql<{ spaceId: string }[]>`...`;
 - [SCHEMA_REFERENCE.md](./SCHEMA_REFERENCE.md) - Table schemas
 - [RELATIONSHIPS.md](./RELATIONSHIPS.md) - Entity relationships
 
+
+

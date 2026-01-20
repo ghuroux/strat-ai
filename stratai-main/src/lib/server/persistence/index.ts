@@ -28,5 +28,9 @@ export type { SpaceAccessResult } from './space-memberships-postgres';
 
 export { sql, testConnection, closeConnection } from './db';
 
+// Game scores (mini-games)
+export { postgresGameScoresRepository } from './game-scores-postgres';
+export type { GameScore, GameScoreInput, GameScoreWithUser, GameType } from './game-scores-postgres';
+
 // Backwards compatibility - re-export areas as focusAreas
 export { postgresAreaRepository as postgresFocusAreaRepository } from './areas-postgres';

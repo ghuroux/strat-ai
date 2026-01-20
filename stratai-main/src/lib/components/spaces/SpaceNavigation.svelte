@@ -11,6 +11,7 @@
 
 	interface Props {
 		spaceSlug: string;
+		spaceColor?: string;
 		taskCount?: number;
 		pageCount?: number;
 		memberCount?: number;
@@ -19,6 +20,7 @@
 
 	let {
 		spaceSlug,
+		spaceColor = '#3b82f6',
 		taskCount = 0,
 		pageCount = 0,
 		memberCount = 0,
@@ -34,7 +36,7 @@
 	}
 </script>
 
-<nav class="space-nav" aria-label="Space navigation">
+<nav class="space-nav" aria-label="Space navigation" style="--space-color: {spaceColor}">
 	<!-- Tasks -->
 	<a
 		href="/spaces/{spaceSlug}/tasks"
@@ -134,7 +136,7 @@
 	}
 
 	.nav-item:hover .icon-wrapper {
-		color: rgb(24 24 27); /* zinc-900 (light) */
+		color: var(--space-color, rgb(24 24 27));
 	}
 
 	@media (prefers-color-scheme: dark) {
@@ -143,7 +145,7 @@
 		}
 
 		.nav-item:hover .icon-wrapper {
-			color: rgba(255, 255, 255, 0.9);
+			color: var(--space-color, rgba(255, 255, 255, 0.9));
 		}
 	}
 
@@ -155,7 +157,7 @@
 	}
 
 	.nav-item:hover .label {
-		color: rgb(24 24 27); /* zinc-900 (light) */
+		color: var(--space-color, rgb(24 24 27));
 	}
 
 	@media (prefers-color-scheme: dark) {
@@ -164,7 +166,7 @@
 		}
 
 		.nav-item:hover .label {
-			color: rgba(255, 255, 255, 0.8);
+			color: var(--space-color, rgba(255, 255, 255, 0.8));
 		}
 	}
 
