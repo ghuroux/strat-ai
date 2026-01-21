@@ -537,22 +537,76 @@ interface BuyError {
 
 ## Test Plan
 
-### POC Test Sequence
+### Backend Tests (MCP Commerce Server)
 
-| Test ID | Merchant | Scenario | Expected Outcome |
-|---------|----------|----------|------------------|
-| **T1** | Takealot | Stop before confirm | Screenshot of "Place Order" page |
-| **T2** | Takealot | Full purchase | Real order ~R50, order ID captured |
-| **T3** | Amazon | Stop before confirm | Screenshot of final checkout |
-| **T4** | Amazon | Full purchase | Real order ~R50, order ID captured |
-| **T5** | Takealot | Out of stock item | Graceful error message |
-| **T6** | Both | 3D Secure flow | Bank app prompt, approval works |
-| **T7** | Both | 3D Secure timeout | Timeout message after 3 min |
+| ID | Scenario | Setup | Action | Acceptance Criteria |
+|----|----------|-------|--------|---------------------|
+| **B1** | Takealot login | Valid credentials in .env | Call /buy endpoint | Browser session authenticated, no login page visible |
+| **B2** | Takealot add to cart | Product URL | Execute add-to-cart | Cart count increases, product visible in cart |
+| **B3** | Takealot checkout navigation | Item in cart | Navigate to checkout | Address & payment visible, correct total displayed |
+| **B4** | Takealot stop before confirm | At checkout | Capture state | Screenshot saved + page URL contains `/checkout` |
+| **B5** | Takealot full purchase | Complete flow | Click "Place Order" | Order ID returned in response, confirmation page URL captured |
+| **B6** | Takealot out of stock | Unavailable product URL | Attempt add-to-cart | Error code `OUT_OF_STOCK`, message contains "unavailable" or "out of stock" |
+| **B7** | Amazon login | Valid credentials | Call /buy endpoint | Authenticated session, account page accessible |
+| **B8** | Amazon full purchase | Complete flow | Execute buy | Order ID returned in response |
+| **B9** | 3D Secure detection | Purchase requiring 3D | Reach payment step | Status `awaiting_payment`, 3D Secure iframe/redirect detected |
+| **B10** | 3D Secure timeout | No approval given | Wait 3 minutes | Error code `TIMEOUT`, order NOT placed, cart cleared or abandoned |
+| **B11** | Price changed | Product with updated price | Compare at checkout | Error code `PRICE_CHANGED`, `newPrice` field populated with current price |
+| **B12** | Session expired | Stale/expired cookies | Attempt any action | Error code `SESSION_EXPIRED`, clear message to re-authenticate |
+| **B13** | Status updates stream | During purchase | Monitor SSE/polling | Receive sequential steps: `adding_to_cart` → `checkout` → `awaiting_payment` → `complete` |
 
-### Suggested Test Items
+### Frontend Tests (StratAI)
 
-- **Takealot**: Cheap phone accessories, stationery (R20-R100)
-- **Amazon**: Basic tech accessories, books (R50-R150)
+| ID | Scenario | Setup | Action | Acceptance Criteria |
+|----|----------|-------|--------|---------------------|
+| **F1** | Price tier display | Products across price range | Search "speakers under R2000" | Grid shows 🏷️ Budget / ⚖️ Best Value / ✨ Premium badges correctly distributed |
+| **F2** | Buy button click | Product card visible | Click "Buy" button | Modal opens immediately, NO message added to chat history |
+| **F3** | Modal confirmation state | Modal open | Observe modal content | Shows: product image, name, price, merchant logo, delivery estimate, "Confirm Purchase" button |
+| **F4** | Modal progress state | User clicks confirm | Observe during purchase | Shows steps with ✅ (done) / ⏳ (in progress) indicators, "Check your banking app" message visible |
+| **F5** | Modal success state | Purchase completes | Observe final modal | Shows: ✅ checkmark, order ID, expected delivery, "View on [Merchant]" link, "Done" button |
+| **F6** | Modal error state | Purchase fails | Observe error modal | Shows: error icon, clear error message, "Try Again" and "Cancel" buttons |
+| **F7** | AI confirmation message | Modal closed after success | Check chat panel | Assistant message appears with order summary, NO user prompt precedes it |
+| **F8** | Cancel mid-purchase | Modal showing progress | Click X or "Cancel" | Modal closes, purchase aborted, no order placed, no chat message |
+| **F9** | Price changed handling | Backend returns `PRICE_CHANGED` | Observe modal | Shows "Price is now R[new]. Continue?" with "Yes, buy at new price" / "Cancel" options |
+| **F10** | Modal keyboard accessibility | Modal open | Press Escape | Modal closes (only in confirmation state, not during progress) |
+
+### End-to-End Tests
+
+| ID | Scenario | Flow | Acceptance Criteria |
+|----|----------|------|---------------------|
+| **E2E1** | Happy path - Takealot | Search → Click Buy → Confirm → 3D Secure → Done | Order placed, AI confirms in chat, order visible on Takealot account |
+| **E2E2** | Happy path - Amazon | Search → Click Buy → Confirm → 3D Secure → Done | Order placed, AI confirms in chat, order visible on Amazon account |
+| **E2E3** | Error recovery flow | Trigger error → See error modal → Click retry → Success | User recovers from error without leaving chat interface |
+| **E2E4** | Multi-product session | Buy item A → Success → Buy item B → Success | Both orders placed, both confirmations in chat history |
+
+### Test Data
+
+**Suggested Test Items (cheap, easily returnable):**
+
+| Merchant | Category | Price Range | Notes |
+|----------|----------|-------------|-------|
+| Takealot | Phone accessories (cables, cases) | R20-R50 | Easy to find, quick delivery |
+| Takealot | Stationery (pens, notebooks) | R30-R80 | Low value, returnable |
+| Amazon | Tech accessories | R50-R150 | Check .co.za availability |
+| Amazon | Books (paperback) | R100-R200 | Easy returns |
+
+**Out of Stock Test Items:**
+- Search for discontinued products or limited editions
+- Or temporarily use a product URL that's been delisted
+
+### Test Execution Order
+
+For POC validation, execute in this order:
+
+1. **B1-B4**: Validate Takealot automation up to checkout (no purchase)
+2. **F1-F3**: Validate frontend modal basics
+3. **B5**: First real Takealot purchase (~R50 item)
+4. **F4-F7**: Validate full frontend flow with real purchase
+5. **E2E1**: Full end-to-end Takealot
+6. **B7-B8**: Amazon automation + purchase
+7. **E2E2**: Full end-to-end Amazon
+8. **B6, B9-B12**: Error scenarios
+9. **F8-F10**: Frontend error handling
 
 ---
 
