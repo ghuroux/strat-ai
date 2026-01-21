@@ -1,0 +1,722 @@
+{
+  "id": "takealot-v1.0.0",
+  "siteId": "takealot",
+  "version": "1.0.0",
+  "createdAt": "2026-01-21T00:00:00.000Z",
+  "updatedAt": "2026-01-21T00:00:00.000Z",
+  "discoverySessionId": null,
+
+  "baseUrl": "https://www.takealot.com",
+  "defaultTimeout": 15000,
+
+  "auth": {
+    "loginUrl": "https://www.takealot.com/account/login",
+
+    "loggedInIndicators": [
+      {
+        "primary": "text=/Hi \\w/",
+        "fallbacks": [
+          "[data-ref='account-menu']",
+          "text=Logout"
+        ],
+        "visualDescription": "Header showing 'Hi [Name]' with user's first name",
+        "confidence": 0.8
+      }
+    ],
+
+    "loggedOutIndicators": [
+      {
+        "primary": "header a:has-text('Login')",
+        "fallbacks": [
+          "nav a:has-text('Login')",
+          "a[href*='/account/login']",
+          "a:has-text('Register')"
+        ],
+        "visualDescription": "Login link in header, often next to Register link",
+        "confidence": 0.9
+      }
+    ],
+
+    "loginForm": {
+      "emailInput": {
+        "primary": "input[name='email']",
+        "fallbacks": [
+          "[data-ref='email-input']",
+          "input[type='email']",
+          "#email"
+        ],
+        "visualDescription": "Email input field on login form",
+        "confidence": 0.9
+      },
+      "passwordInput": {
+        "primary": "input[name='password']",
+        "fallbacks": [
+          "[data-ref='password-input']",
+          "input[type='password']",
+          "#password"
+        ],
+        "visualDescription": "Password input field on login form",
+        "confidence": 0.9
+      },
+      "submitButton": {
+        "primary": "button[type='submit']",
+        "fallbacks": [
+          "[data-ref='login-submit-button']",
+          "button:has-text('Login')",
+          "button:has-text('Sign in')"
+        ],
+        "visualDescription": "Blue login button below the password field",
+        "confidence": 0.8
+      }
+    },
+
+    "screenshots": {
+      "loggedIn": "logged-in-header.jpg",
+      "loggedOut": "logged-out-header.jpg",
+      "loginPage": "login-page.jpg"
+    }
+  },
+
+  "search": {
+    "searchInput": {
+      "primary": "input[data-ref='search-input']",
+      "fallbacks": [
+        "input[name='search']",
+        "#search"
+      ],
+      "visualDescription": "Search bar at top of page with placeholder 'Search for products, brands...'",
+      "confidence": 0.9
+    },
+
+    "searchButton": {
+      "primary": "button[data-ref='search-submit']",
+      "fallbacks": [
+        "button[type='submit']"
+      ],
+      "visualDescription": "Magnifying glass icon button next to search bar",
+      "confidence": 0.8
+    },
+
+    "resultsContainer": {
+      "primary": "[data-ref='search-results']",
+      "fallbacks": [
+        ".search-results",
+        "main"
+      ],
+      "visualDescription": "Grid of product cards showing search results",
+      "confidence": 0.7
+    },
+
+    "productCard": {
+      "primary": "article.product-card",
+      "fallbacks": [
+        "[data-ref='product-card']",
+        ".product-card"
+      ],
+      "visualDescription": "Individual product card with image, title, and price",
+      "confidence": 0.9
+    },
+
+    "productData": {
+      "name": {
+        "primary": "[class*='product-card-module_product-title']",
+        "fallbacks": [
+          ".product-title"
+        ],
+        "visualDescription": "Product name text below image",
+        "confidence": 0.8
+      },
+      "price": {
+        "primary": "[class*='product-card-price-module_price']",
+        "fallbacks": [
+          ".price"
+        ],
+        "visualDescription": "Price in Rands, format 'R 1,234'",
+        "confidence": 0.8
+      },
+      "link": {
+        "primary": "a[class*='product-card-module_link-underlay']",
+        "fallbacks": [
+          "a[href*='PLID']"
+        ],
+        "visualDescription": "Clickable link covering product card",
+        "confidence": 0.8
+      },
+      "image": {
+        "primary": "img[class*='product-card-image']",
+        "fallbacks": [
+          "img[class*='product-image']"
+        ],
+        "visualDescription": "Product thumbnail image",
+        "confidence": 0.8
+      },
+      "rating": {
+        "primary": "[class*='card-reviews']",
+        "fallbacks": [
+          ".star-rating",
+          ".rating"
+        ],
+        "visualDescription": "Star rating display (e.g., 4.5 stars)",
+        "confidence": 0.6
+      },
+      "reviewCount": {
+        "primary": "[class*='review-count']",
+        "fallbacks": [
+          ".reviews"
+        ],
+        "visualDescription": "Review count in parentheses, e.g., '(123)'",
+        "confidence": 0.6
+      }
+    },
+
+    "pagination": {
+      "nextButton": {
+        "primary": "[data-ref='pagination-next']",
+        "fallbacks": [
+          "a:has-text('Next')",
+          ".pagination-next"
+        ],
+        "visualDescription": "Next page button in pagination controls",
+        "confidence": 0.5
+      }
+    }
+  },
+
+  "productPage": {
+    "name": {
+      "primary": "h1",
+      "fallbacks": [
+        ".product-title",
+        "[data-ref='product-title']"
+      ],
+      "visualDescription": "Large product name at top of page",
+      "confidence": 0.9
+    },
+
+    "price": {
+      "primary": ".buybox-module_price",
+      "fallbacks": [
+        "[data-ref='price']",
+        ".price"
+      ],
+      "visualDescription": "Large price in buybox, format 'R 1,234'",
+      "confidence": 0.9
+    },
+
+    "image": {
+      "primary": ".gallery-module_image img",
+      "fallbacks": [
+        ".product-image img"
+      ],
+      "visualDescription": "Main product image in gallery on left side",
+      "confidence": 0.8
+    },
+
+    "rating": {
+      "primary": ".rating",
+      "fallbacks": [
+        "[data-ref='rating']"
+      ],
+      "visualDescription": "Star rating near product title",
+      "confidence": 0.6
+    },
+
+    "reviewCount": {
+      "primary": ".review-count",
+      "fallbacks": [
+        "[data-ref='review-count']"
+      ],
+      "visualDescription": "Review count, e.g., '(1,234 reviews)'",
+      "confidence": 0.6
+    },
+
+    "stockStatus": {
+      "primary": "[data-ref='stock-status']",
+      "fallbacks": [
+        ".stock-status"
+      ],
+      "visualDescription": "Stock availability indicator",
+      "confidence": 0.5
+    },
+
+    "outOfStockIndicators": [
+      {
+        "primary": "text=Out of Stock",
+        "fallbacks": [
+          "text=Sold Out",
+          "text=Currently Unavailable"
+        ],
+        "visualDescription": "Red text indicating product is unavailable",
+        "confidence": 0.9
+      }
+    ],
+
+    "addToCart": {
+      "primary": "[data-ref='add-to-cart-button']",
+      "fallbacks": [
+        "button:has-text('Buy')",
+        "button:has-text('Add to Cart')",
+        "button[class*='add-to-cart']",
+        ".add-to-cart-button",
+        "#add-to-cart"
+      ],
+      "visualDescription": "Green or blue 'Buy' button in the buybox on right side of page",
+      "confidence": 0.9
+    },
+
+    "quantityInput": {
+      "primary": "[data-ref='quantity-input']",
+      "fallbacks": [
+        "input[type='number']",
+        ".quantity-input"
+      ],
+      "visualDescription": "Quantity selector, usually shows '1' by default",
+      "confidence": 0.5
+    }
+  },
+
+  "cart": {
+    "cartIcon": {
+      "primary": "[data-ref='cart-icon']",
+      "fallbacks": [
+        ".cart-icon",
+        "#cart"
+      ],
+      "visualDescription": "Shopping cart icon in header, may show item count",
+      "confidence": 0.8
+    },
+
+    "cartCount": {
+      "primary": "[data-ref='cart-count']",
+      "fallbacks": [
+        ".cart-count",
+        ".badge"
+      ],
+      "visualDescription": "Number badge on cart icon showing item count",
+      "confidence": 0.7
+    },
+
+    "cartUrl": "/cart",
+
+    "cartItem": {
+      "primary": ".cart-item",
+      "fallbacks": [
+        "[data-ref='cart-item']"
+      ],
+      "visualDescription": "Individual item row in cart with image, name, and price",
+      "confidence": 0.8
+    },
+
+    "cartItemData": {
+      "name": {
+        "primary": ".product-title",
+        "fallbacks": [
+          "[data-ref='product-title']"
+        ],
+        "visualDescription": "Product name in cart item row",
+        "confidence": 0.8
+      },
+      "price": {
+        "primary": ".price",
+        "fallbacks": [
+          "[data-ref='price']"
+        ],
+        "visualDescription": "Price of cart item",
+        "confidence": 0.8
+      },
+      "quantity": {
+        "primary": "input[type='number']",
+        "fallbacks": [
+          ".quantity"
+        ],
+        "visualDescription": "Quantity input or display for cart item",
+        "confidence": 0.7
+      }
+    },
+
+    "removeButton": {
+      "primary": "[data-ref='remove-item']",
+      "fallbacks": [
+        "button:has-text('Remove')",
+        ".remove-button"
+      ],
+      "visualDescription": "Remove/delete button for cart item, often trash icon",
+      "confidence": 0.7
+    },
+
+    "subtotal": {
+      "primary": ".subtotal",
+      "fallbacks": [
+        "[data-ref='subtotal']"
+      ],
+      "visualDescription": "Subtotal before shipping in cart summary",
+      "confidence": 0.7
+    },
+
+    "checkoutButton": {
+      "primary": "[data-ref='checkout-button']",
+      "fallbacks": [
+        "[data-ref='proceed-to-checkout']",
+        "button:has-text('Proceed to Checkout')",
+        "a:has-text('Proceed to Checkout')",
+        ".checkout-button"
+      ],
+      "visualDescription": "Large 'Proceed to Checkout' button, usually green or blue",
+      "confidence": 0.9
+    }
+  },
+
+  "checkout": {
+    "checkoutUrl": "/checkout",
+
+    "shippingAddress": {
+      "container": {
+        "primary": "[data-ref='shipping-section']",
+        "fallbacks": [
+          ".shipping-address",
+          ".delivery-address"
+        ],
+        "visualDescription": "Shipping/delivery address section in checkout",
+        "confidence": 0.6
+      }
+    },
+
+    "paymentMethod": {
+      "container": {
+        "primary": "[data-ref='payment-section']",
+        "fallbacks": [
+          ".payment-method",
+          ".payment-options"
+        ],
+        "visualDescription": "Payment method selection section in checkout",
+        "confidence": 0.6
+      },
+      "savedPayment": {
+        "primary": "[data-ref='saved-payment']",
+        "fallbacks": [
+          ".saved-card",
+          "text=ending in"
+        ],
+        "visualDescription": "Saved credit card option showing last 4 digits",
+        "confidence": 0.5
+      }
+    },
+
+    "orderSummary": {
+      "subtotal": {
+        "primary": "[data-ref='subtotal']",
+        "fallbacks": [
+          ".subtotal"
+        ],
+        "visualDescription": "Order subtotal in checkout summary",
+        "confidence": 0.7
+      },
+      "shipping": {
+        "primary": "[data-ref='shipping']",
+        "fallbacks": [
+          ".shipping"
+        ],
+        "visualDescription": "Shipping cost in checkout summary",
+        "confidence": 0.7
+      },
+      "tax": {
+        "primary": "[data-ref='tax']",
+        "fallbacks": [
+          ".tax",
+          ".vat"
+        ],
+        "visualDescription": "VAT/tax amount in checkout summary",
+        "confidence": 0.5
+      },
+      "total": {
+        "primary": "[data-ref='total']",
+        "fallbacks": [
+          ".total",
+          ".order-total"
+        ],
+        "visualDescription": "Final total amount including shipping and tax",
+        "confidence": 0.8
+      }
+    },
+
+    "placeOrderButton": {
+      "primary": "[data-ref='place-order-button']",
+      "fallbacks": [
+        "button:has-text('Place Order')",
+        "button:has-text('Confirm Order')",
+        "button:has-text('Complete Purchase')",
+        "button:has-text('Pay Now')",
+        ".place-order-button",
+        "button[class*='place-order']"
+      ],
+      "visualDescription": "Final purchase button, usually large and prominently colored",
+      "confidence": 0.9
+    },
+
+    "confirmationIndicators": [
+      {
+        "primary": "[data-ref='order-confirmation']",
+        "fallbacks": [
+          "text=Thank you for your order",
+          "text=Order Confirmed",
+          ".order-confirmation"
+        ],
+        "visualDescription": "Order confirmation message with order number",
+        "confidence": 0.9
+      }
+    ],
+
+    "orderIdSelector": {
+      "primary": "[data-ref='order-id']",
+      "fallbacks": [
+        ".order-id",
+        ".order-number"
+      ],
+      "visualDescription": "Order ID/number display, often format '#1234567'",
+      "confidence": 0.7
+    }
+  },
+
+  "flows": {
+    "search": {
+      "name": "search",
+      "description": "Search for products on Takealot",
+      "steps": [
+        {
+          "id": "navigate-search",
+          "name": "Navigate to search results",
+          "action": "navigate",
+          "value": "https://www.takealot.com/all?qsearch={{query}}",
+          "waitFor": 2000,
+          "onFailure": "abort"
+        },
+        {
+          "id": "wait-for-results",
+          "name": "Wait for product cards to load",
+          "action": "wait",
+          "waitFor": {
+            "primary": "article.product-card",
+            "fallbacks": [".product-card"],
+            "visualDescription": "Product cards in search results",
+            "confidence": 0.9
+          },
+          "onFailure": "retry"
+        }
+      ],
+      "successIndicators": [
+        {
+          "primary": "article.product-card",
+          "fallbacks": [".product-card"],
+          "visualDescription": "At least one product card visible in results",
+          "confidence": 0.9
+        }
+      ],
+      "failureIndicators": [
+        {
+          "primary": "text=No results found",
+          "fallbacks": ["text=no products match"],
+          "visualDescription": "Empty state message indicating no results",
+          "confidence": 0.8
+        }
+      ]
+    },
+
+    "addToCart": {
+      "name": "addToCart",
+      "description": "Add a product to the shopping cart",
+      "steps": [
+        {
+          "id": "navigate-product",
+          "name": "Navigate to product page",
+          "action": "navigate",
+          "value": "{{productUrl}}",
+          "waitFor": 2000,
+          "onFailure": "abort"
+        },
+        {
+          "id": "wait-for-buybox",
+          "name": "Wait for buybox to load",
+          "action": "wait",
+          "waitFor": {
+            "primary": "[data-ref='add-to-cart-button']",
+            "fallbacks": ["button:has-text('Buy')"],
+            "visualDescription": "Buy button in the product buybox",
+            "confidence": 0.9
+          },
+          "onFailure": "retry"
+        },
+        {
+          "id": "click-add-to-cart",
+          "name": "Click add to cart button",
+          "action": "click",
+          "target": {
+            "primary": "[data-ref='add-to-cart-button']",
+            "fallbacks": [
+              "button:has-text('Buy')",
+              "button:has-text('Add to Cart')"
+            ],
+            "visualDescription": "Green or blue Buy button",
+            "confidence": 0.9
+          },
+          "waitFor": 2000,
+          "onFailure": "abort"
+        }
+      ],
+      "successIndicators": [
+        {
+          "primary": "[data-ref='cart-count']",
+          "fallbacks": [".cart-count", ".badge"],
+          "visualDescription": "Cart badge showing item count increased",
+          "confidence": 0.8
+        }
+      ],
+      "failureIndicators": [
+        {
+          "primary": "text=Out of Stock",
+          "fallbacks": ["text=Sold Out"],
+          "visualDescription": "Out of stock message",
+          "confidence": 0.9
+        }
+      ]
+    },
+
+    "checkout": {
+      "name": "checkout",
+      "description": "Complete the checkout process",
+      "steps": [
+        {
+          "id": "navigate-cart",
+          "name": "Navigate to cart",
+          "action": "navigate",
+          "value": "https://www.takealot.com/cart",
+          "waitFor": 2000,
+          "onFailure": "abort"
+        },
+        {
+          "id": "click-checkout",
+          "name": "Click proceed to checkout",
+          "action": "click",
+          "target": {
+            "primary": "[data-ref='checkout-button']",
+            "fallbacks": [
+              "button:has-text('Proceed to Checkout')",
+              "a:has-text('Proceed to Checkout')"
+            ],
+            "visualDescription": "Proceed to Checkout button",
+            "confidence": 0.9
+          },
+          "waitFor": 3000,
+          "onFailure": "abort"
+        },
+        {
+          "id": "wait-for-checkout",
+          "name": "Wait for checkout page",
+          "action": "wait",
+          "waitFor": {
+            "primary": "[data-ref='place-order-button']",
+            "fallbacks": [
+              "button:has-text('Place Order')",
+              "button:has-text('Pay Now')"
+            ],
+            "visualDescription": "Place Order button on checkout page",
+            "confidence": 0.8
+          },
+          "onFailure": "retry"
+        },
+        {
+          "id": "click-place-order",
+          "name": "Click place order",
+          "action": "click",
+          "target": {
+            "primary": "[data-ref='place-order-button']",
+            "fallbacks": [
+              "button:has-text('Place Order')",
+              "button:has-text('Confirm Order')"
+            ],
+            "visualDescription": "Final place order button",
+            "confidence": 0.9
+          },
+          "waitFor": 5000,
+          "onFailure": "abort"
+        }
+      ],
+      "successIndicators": [
+        {
+          "primary": "[data-ref='order-confirmation']",
+          "fallbacks": [
+            "text=Thank you for your order",
+            "text=Order Confirmed"
+          ],
+          "visualDescription": "Order confirmation page with order number",
+          "confidence": 0.9
+        }
+      ],
+      "failureIndicators": [
+        {
+          "primary": ".error-message",
+          "fallbacks": [
+            "[class*='error']",
+            "text=Payment declined"
+          ],
+          "visualDescription": "Error message indicating payment or checkout failure",
+          "confidence": 0.8
+        }
+      ]
+    }
+  },
+
+  "popups": [
+    {
+      "name": "Chrome Password Manager",
+      "detection": {
+        "primary": "[role='dialog']",
+        "fallbacks": [],
+        "visualDescription": "Chrome's password save dialog",
+        "confidence": 0.5
+      },
+      "dismissAction": {
+        "type": "key",
+        "key": "Escape"
+      },
+      "priority": 1
+    },
+    {
+      "name": "Cookie Consent",
+      "detection": {
+        "primary": "[class*='cookie']",
+        "fallbacks": ["text=Accept Cookies", "[id*='cookie']"],
+        "visualDescription": "Cookie consent banner at bottom of page",
+        "confidence": 0.6
+      },
+      "dismissAction": {
+        "type": "click",
+        "target": {
+          "primary": "button:has-text('Accept')",
+          "fallbacks": ["button:has-text('OK')"],
+          "visualDescription": "Accept cookies button",
+          "confidence": 0.7
+        }
+      },
+      "priority": 2
+    },
+    {
+      "name": "Newsletter Popup",
+      "detection": {
+        "primary": "[class*='newsletter-popup']",
+        "fallbacks": ["[class*='modal'][class*='subscribe']"],
+        "visualDescription": "Newsletter subscription popup modal",
+        "confidence": 0.5
+      },
+      "dismissAction": {
+        "type": "click",
+        "target": {
+          "primary": "button[class*='close']",
+          "fallbacks": ["[aria-label='Close']", "button:has-text('No thanks')"],
+          "visualDescription": "Close button on popup",
+          "confidence": 0.6
+        }
+      },
+      "priority": 3
+    }
+  ]
+}

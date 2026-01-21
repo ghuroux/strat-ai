@@ -4,7 +4,19 @@
  * Multi-retailer browser automation server for StratAI
  */
 
+import dotenv from 'dotenv';
+import { resolve } from 'path';
+
+// Load .env.local first (user credentials), then fall back to .env
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+dotenv.config(); // Also load .env as fallback
+
+// Verify critical env vars on startup
+const hasAnthropicKey = !!process.env.ANTHROPIC_API_KEY;
+console.log(`[MCP Commerce] ANTHROPIC_API_KEY: ${hasAnthropicKey ? 'SET (' + process.env.ANTHROPIC_API_KEY?.substring(0, 15) + '...)' : 'NOT SET'}`);
+
 import express, { type Request, type Response, type NextFunction } from 'express';
+import cors from 'cors';
 import { getSessionManager } from './session-manager.js';
 import { createAdapter } from './adapters/index.js';
 import { runSmokeTests } from './smoke/runner.js';
@@ -22,8 +34,21 @@ import type {
   CheckoutPreview,
   CheckoutConfirmRequest,
   OrderConfirmation,
-  SiteId
+  SiteId,
+  BuyRequest,
+  BuyResponse,
+  AgenticBuyRequest,
+  AgenticBuyConfirmRequest,
+  AgenticProgressEvent,
+  AgenticResultEvent
 } from './types.js';
+import {
+  agenticPurchase,
+  completePurchase,
+  saveCheckoutState,
+  getCheckoutState,
+  clearCheckoutState
+} from './agentic-purchase.js';
 
 const PORT = Number(process.env.MCP_PORT) || 9223;
 const VERSION = '1.0.0';
@@ -32,6 +57,14 @@ const SEARCH_TIMEOUT = 30000; // 30 seconds per site
 
 const app = express();
 app.use(express.json());
+
+// CORS - Allow StratAI frontend to make requests
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 // Request logging middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -378,7 +411,7 @@ app.post('/tools/checkout', asyncHandler(async (req: Request, res: Response) => 
 }));
 
 // ============================================================================
-// Checkout Confirm Endpoint (Phase 7 - placeholder)
+// Checkout Confirm Endpoint (Phase 7 - placeholder for legacy flow)
 // ============================================================================
 
 app.post('/tools/checkout/confirm', asyncHandler(async (req: Request, res: Response) => {
@@ -411,6 +444,398 @@ app.post('/tools/checkout/confirm', asyncHandler(async (req: Request, res: Respo
 }));
 
 // ============================================================================
+// Buy Endpoint - Direct purchase flow with auto-login
+// ============================================================================
+
+const PURCHASE_TIMEOUT = 300000; // 5 minutes for full purchase flow
+
+app.post('/buy', asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as BuyRequest;
+
+  // Validate request
+  if (!body.merchant || !body.productUrl) {
+    res.status(400).json({
+      success: false,
+      error: 'Missing required fields: merchant, productUrl',
+      status: 'failed'
+    } as BuyResponse);
+    return;
+  }
+
+  if (body.merchant !== 'takealot' && body.merchant !== 'amazon') {
+    res.status(400).json({
+      success: false,
+      error: 'Invalid merchant. Valid options: takealot, amazon',
+      status: 'failed'
+    } as BuyResponse);
+    return;
+  }
+
+  const sessionManager = getSessionManager();
+
+  try {
+    console.log(`[Buy] Starting purchase flow for ${body.merchant}: ${body.productUrl}`);
+
+    // Get or create session
+    const session = await sessionManager.getSession(body.merchant);
+    const adapter = createAdapter(body.merchant, { page: session.page, sessionId: session.id });
+
+    // Step 1: Check if authenticated, auto-login if not
+    let isAuth = await adapter.isAuthenticated();
+
+    if (!isAuth) {
+      console.log(`[Buy] Not authenticated on ${body.merchant}, attempting auto-login...`);
+
+      try {
+        isAuth = await adapter.login();
+        if (isAuth) {
+          sessionManager.setAuthenticated(session.id, true);
+          console.log(`[Buy] Auto-login successful for ${body.merchant}`);
+        }
+      } catch (loginError) {
+        console.error(`[Buy] Auto-login failed for ${body.merchant}:`, loginError);
+        res.status(401).json({
+          success: false,
+          error: loginError instanceof Error ? loginError.message : 'Login failed',
+          errorCode: 'LOGIN_FAILED',
+          status: 'failed'
+        } as BuyResponse);
+        return;
+      }
+
+      if (!isAuth) {
+        res.status(401).json({
+          success: false,
+          error: `Failed to authenticate on ${body.merchant}. Check credentials in .env.local`,
+          errorCode: 'NOT_AUTHENTICATED',
+          status: 'failed'
+        } as BuyResponse);
+        return;
+      }
+    }
+
+    // Step 2: Execute purchase
+    console.log(`[Buy] Executing purchase for ${body.productUrl}`);
+
+    const result = await withTimeout(
+      adapter.purchase(body.productUrl, body.expectedPrice),
+      PURCHASE_TIMEOUT,
+      'purchase'
+    );
+
+    // Return result
+    const response: BuyResponse = {
+      success: result.success,
+      orderId: result.orderId,
+      orderUrl: result.orderUrl,
+      estimatedDelivery: result.estimatedDelivery,
+      total: result.total,
+      error: result.error,
+      errorCode: result.errorCode,
+      newPrice: result.newPrice,
+      status: result.status
+    };
+
+    if (result.success) {
+      console.log(`[Buy] Purchase successful! Order ID: ${result.orderId}`);
+      res.json({
+        success: true,
+        data: response
+      } as ApiResponse<BuyResponse>);
+    } else {
+      console.error(`[Buy] Purchase failed: ${result.error}`);
+      res.status(400).json({
+        success: false,
+        data: response,
+        error: result.error
+      } as ApiResponse<BuyResponse>);
+    }
+
+  } catch (error) {
+    console.error('[Buy] Error during purchase:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      errorCode: 'UNKNOWN',
+      status: 'failed'
+    } as BuyResponse);
+  }
+}));
+
+// ============================================================================
+// Agentic Buy Endpoint - SSE Streaming with AI Visual Navigation
+// ============================================================================
+
+const AGENTIC_PURCHASE_TIMEOUT = 300000; // 5 minutes for full agentic purchase
+
+app.post('/buy/stream', async (req: Request, res: Response) => {
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  res.flushHeaders();
+
+  // Helper to send SSE events
+  const sendEvent = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+
+  const body = req.body as AgenticBuyRequest;
+
+  // Validate request
+  if (!body.merchant || !body.productUrl || !body.productName) {
+    sendEvent('error', { message: 'Missing required fields: merchant, productUrl, productName' });
+    res.end();
+    return;
+  }
+
+  if (body.merchant !== 'takealot' && body.merchant !== 'amazon') {
+    sendEvent('error', { message: 'Invalid merchant. Valid options: takealot, amazon' });
+    res.end();
+    return;
+  }
+
+  const sessionManager = getSessionManager();
+
+  try {
+    console.log(`[Buy/Stream] Starting agentic purchase for ${body.merchant}: ${body.productUrl}`);
+
+    // Get or create session
+    sendEvent('progress', { status: 'authenticating', step: 'Getting browser session' } as AgenticProgressEvent);
+    const session = await sessionManager.getSession(body.merchant);
+    const adapter = createAdapter(body.merchant, { page: session.page, sessionId: session.id });
+
+    // Check authentication and login if needed (Playwright - scripted, NOT AI)
+    let isAuth = await adapter.isAuthenticated();
+
+    if (!isAuth) {
+      sendEvent('progress', { status: 'authenticating', step: 'Logging in to ' + body.merchant } as AgenticProgressEvent);
+      console.log(`[Buy/Stream] Not authenticated on ${body.merchant}, logging in...`);
+
+      try {
+        isAuth = await adapter.login();
+        if (isAuth) {
+          sessionManager.setAuthenticated(session.id, true);
+          console.log(`[Buy/Stream] Login successful for ${body.merchant}`);
+        }
+      } catch (loginError) {
+        console.error(`[Buy/Stream] Login failed for ${body.merchant}:`, loginError);
+        sendEvent('error', {
+          message: loginError instanceof Error ? loginError.message : 'Login failed',
+          errorCode: 'LOGIN_FAILED'
+        });
+        res.end();
+        return;
+      }
+
+      if (!isAuth) {
+        sendEvent('error', {
+          message: `Failed to authenticate on ${body.merchant}. Check credentials in .env.local`,
+          errorCode: 'NOT_AUTHENTICATED'
+        });
+        res.end();
+        return;
+      }
+    }
+
+    sendEvent('progress', { status: 'authenticating', step: 'Authenticated' } as AgenticProgressEvent);
+
+    // Execute agentic purchase with streaming progress
+    const result = await agenticPurchase(
+      session.page,
+      {
+        productUrl: body.productUrl,
+        productName: body.productName,
+        expectedPrice: body.expectedPrice,
+        currency: body.currency || 'ZAR',
+        stopBeforePayment: true // Always stop for human confirmation
+      },
+      (progress) => {
+        // Stream progress events to client
+        sendEvent('progress', progress);
+      }
+    );
+
+    // If awaiting payment, save checkout state for confirmation
+    if (result.status === 'awaiting_payment') {
+      saveCheckoutState(session.id, {
+        total: result.total,
+        screenshotBase64: await sessionManager.takeScreenshot(session.id) || undefined,
+        ready: true
+      });
+
+      const resultEvent: AgenticResultEvent = {
+        success: true,
+        status: 'awaiting_payment',
+        total: result.total,
+        sessionId: session.id,
+        screenshotBase64: await sessionManager.takeScreenshot(session.id) || undefined
+      };
+      sendEvent('result', resultEvent);
+    } else if (result.success) {
+      const resultEvent: AgenticResultEvent = {
+        success: true,
+        status: result.status,
+        orderId: result.orderId,
+        orderUrl: result.orderUrl,
+        total: result.total
+      };
+      sendEvent('result', resultEvent);
+    } else {
+      const resultEvent: AgenticResultEvent = {
+        success: false,
+        status: 'failed',
+        error: result.error,
+        errorCode: result.errorCode,
+        newPrice: result.newPrice
+      };
+      sendEvent('result', resultEvent);
+    }
+
+    res.end();
+
+  } catch (error) {
+    console.error('[Buy/Stream] Error:', error);
+    sendEvent('error', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      errorCode: 'UNKNOWN'
+    });
+    res.end();
+  }
+});
+
+// ============================================================================
+// Agentic Buy Confirm Endpoint - Complete purchase after human confirmation
+// ============================================================================
+
+app.post('/buy/confirm', asyncHandler(async (req: Request, res: Response) => {
+  const body = req.body as AgenticBuyConfirmRequest;
+
+  // Validate request
+  if (!body.sessionId || !body.merchant) {
+    res.status(400).json({
+      success: false,
+      error: 'Missing required fields: sessionId, merchant'
+    });
+    return;
+  }
+
+  const sessionManager = getSessionManager();
+
+  // Get saved checkout state
+  const checkoutState = getCheckoutState(body.sessionId);
+  if (!checkoutState || !checkoutState.ready) {
+    res.status(404).json({
+      success: false,
+      error: 'No pending checkout found for this session. Start a new purchase.'
+    });
+    return;
+  }
+
+  // Find session by looking through all sessions
+  const sessions = sessionManager.listSessions();
+  const matchingSession = sessions.find(s => s.id === body.sessionId || s.id.includes(body.sessionId));
+
+  if (!matchingSession) {
+    res.status(404).json({
+      success: false,
+      error: 'Browser session not found. It may have expired.'
+    });
+    return;
+  }
+
+  try {
+    console.log(`[Buy/Confirm] Completing purchase for session ${body.sessionId}`);
+
+    // Get the actual session to access the page
+    const session = await sessionManager.getSession(body.merchant, body.sessionId);
+
+    // Complete the purchase
+    const result = await completePurchase(session.page);
+
+    // Clear the pending checkout state
+    clearCheckoutState(body.sessionId);
+
+    if (result.success) {
+      res.json({
+        success: true,
+        data: {
+          orderId: result.orderId,
+          orderUrl: result.orderUrl,
+          total: result.total,
+          status: result.status
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.error,
+        errorCode: result.errorCode
+      });
+    }
+
+  } catch (error) {
+    console.error('[Buy/Confirm] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}));
+
+// ============================================================================
+// Test Agent Endpoint - For testing AI browser control
+// ============================================================================
+
+app.post('/test-agent', asyncHandler(async (req: Request, res: Response) => {
+  const { url, goal, merchant } = req.body as { url?: string; goal: string; merchant?: SiteId };
+
+  if (!goal) {
+    res.status(400).json({
+      success: false,
+      error: 'Missing required field: goal'
+    });
+    return;
+  }
+
+  const site = merchant || 'takealot';
+  const sessionManager = getSessionManager();
+
+  try {
+    const session = await sessionManager.getSession(site);
+
+    // Navigate to URL if provided
+    if (url) {
+      await session.page.goto(url, { waitUntil: 'domcontentloaded' });
+      await session.page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    }
+
+    // Import BrowserAgent dynamically to avoid circular deps
+    const { BrowserAgent } = await import('./browser-agent.js');
+    const agent = new BrowserAgent(session.page, { maxIterations: 10 });
+
+    const result = await agent.execute(goal);
+
+    res.json({
+      success: result.success,
+      data: result.data,
+      error: result.error,
+      iterations: result.iterations,
+      actionHistory: result.actionHistory,
+      screenshotBase64: result.screenshotBase64
+    });
+
+  } catch (error) {
+    console.error('[TestAgent] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+}));
+
+// ============================================================================
 // Smoke Test Endpoint (Phase 4 - placeholder)
 // ============================================================================
 
@@ -426,6 +851,152 @@ app.post('/smoke-test', asyncHandler(async (req: Request, res: Response) => {
   res.json({
     success: report.passed,
     data: report
+  });
+}));
+
+// ============================================================================
+// Playbook Endpoints
+// ============================================================================
+
+import {
+  loadCurrentPlaybook,
+  loadPlaybookVersion,
+  listPlaybookVersions,
+  initializeStore
+} from './playbooks/store.js';
+import { DiscoveryAgent } from './discovery/agent.js';
+
+// Initialize playbook store on startup
+initializeStore().catch(console.error);
+
+// List playbook versions for a site
+app.get('/playbooks/:siteId', asyncHandler(async (req: Request, res: Response) => {
+  const siteId = req.params.siteId as SiteId;
+  const versions = await listPlaybookVersions(siteId);
+
+  res.json({
+    success: true,
+    data: { siteId, versions }
+  });
+}));
+
+// Get current playbook for a site
+app.get('/playbooks/:siteId/current', asyncHandler(async (req: Request, res: Response) => {
+  const siteId = req.params.siteId as SiteId;
+  const playbook = await loadCurrentPlaybook(siteId);
+
+  if (playbook) {
+    res.json({ success: true, data: playbook });
+  } else {
+    res.status(404).json({
+      success: false,
+      error: `No playbook found for ${siteId}`
+    });
+  }
+}));
+
+// Get specific playbook version
+app.get('/playbooks/:siteId/:version', asyncHandler(async (req: Request, res: Response) => {
+  const siteId = req.params.siteId as SiteId;
+  const version = req.params.version as string;
+  const playbook = await loadPlaybookVersion(siteId, version);
+
+  if (playbook) {
+    res.json({ success: true, data: playbook });
+  } else {
+    res.status(404).json({
+      success: false,
+      error: `Playbook ${siteId} v${version} not found`
+    });
+  }
+}));
+
+// ============================================================================
+// Discovery Endpoints
+// ============================================================================
+
+// Active discovery sessions
+const discoverySessions = new Map<string, DiscoveryAgent>();
+
+// Start a new discovery session
+app.post('/discovery/start', asyncHandler(async (req: Request, res: Response) => {
+  const { siteId, baseUrl } = req.body as { siteId: SiteId; baseUrl?: string };
+
+  if (!siteId) {
+    res.status(400).json({ success: false, error: 'siteId is required' });
+    return;
+  }
+
+  const sessionManager = getSessionManager();
+  const session = await sessionManager.getSession(siteId);
+
+  const discoveryBaseUrl = baseUrl || (siteId === 'takealot' ? 'https://www.takealot.com' : 'https://www.amazon.co.za');
+
+  const agent = new DiscoveryAgent(session.page, siteId, discoveryBaseUrl, {
+    onProgress: (progress) => {
+      console.log(`[Discovery] ${progress.phase}: ${progress.message}`);
+    }
+  });
+
+  const discoverySession = agent.getSession();
+  discoverySessions.set(discoverySession.id, agent);
+
+  res.json({
+    success: true,
+    data: {
+      sessionId: discoverySession.id,
+      status: discoverySession.status,
+      message: 'Discovery session started. Use POST /discovery/:id/run to begin.'
+    }
+  });
+}));
+
+// Run discovery (async - returns immediately)
+app.post('/discovery/:id/run', asyncHandler(async (req: Request, res: Response) => {
+  const sessionId = req.params.id as string;
+  const agent = discoverySessions.get(sessionId);
+
+  if (!agent) {
+    res.status(404).json({
+      success: false,
+      error: `Discovery session ${sessionId} not found`
+    });
+    return;
+  }
+
+  // Start discovery in background
+  agent.discoverSite().then((result) => {
+    console.log(`[Discovery] Session ${sessionId} completed:`, result.success);
+  }).catch((error) => {
+    console.error(`[Discovery] Session ${sessionId} failed:`, error);
+  });
+
+  res.json({
+    success: true,
+    data: {
+      sessionId,
+      status: 'running',
+      message: 'Discovery started. Use GET /discovery/:id to check status.'
+    }
+  });
+}));
+
+// Get discovery session status
+app.get('/discovery/:id', asyncHandler(async (req: Request, res: Response) => {
+  const sessionId = req.params.id as string;
+  const agent = discoverySessions.get(sessionId);
+
+  if (!agent) {
+    res.status(404).json({
+      success: false,
+      error: `Discovery session ${sessionId} not found`
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: agent.getSession()
   });
 }));
 
