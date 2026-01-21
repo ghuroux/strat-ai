@@ -610,6 +610,179 @@ For POC validation, execute in this order:
 
 ---
 
+## Testing Strategy
+
+### Approach
+
+**Automated** (Playwright): Everything up to 3D Secure approval
+**Manual**: Bank app approval (3D Secure) - validated once per merchant during POC
+
+This gives us repeatable validation of all code we control, while acknowledging the external bank approval step requires manual intervention.
+
+### Test File Structure
+
+```
+mcp-commerce/
+├── src/
+│   └── ...
+├── tests/
+│   ├── takealot/
+│   │   ├── login.spec.ts         # B1: Authentication
+│   │   ├── add-to-cart.spec.ts   # B2: Add to cart
+│   │   ├── checkout.spec.ts      # B3-B4: Checkout navigation
+│   │   └── purchase.spec.ts      # B5: Full purchase (stops at 3D Secure)
+│   ├── amazon/
+│   │   ├── login.spec.ts         # B7: Authentication
+│   │   └── purchase.spec.ts      # B8: Full purchase (stops at 3D Secure)
+│   ├── errors/
+│   │   ├── out-of-stock.spec.ts  # B6: Out of stock handling
+│   │   ├── price-changed.spec.ts # B11: Price change detection
+│   │   ├── session.spec.ts       # B12: Session expiry
+│   │   └── timeout.spec.ts       # B10: 3D Secure timeout
+│   └── status/
+│       └── updates.spec.ts       # B13: Status streaming
+│
+└── playwright.config.ts
+
+stratai-main/
+├── tests/
+│   └── commerce/
+│       ├── price-tiers.spec.ts       # F1: Price tier badges
+│       ├── buy-modal.spec.ts         # F2-F6: Modal states
+│       ├── chat-confirmation.spec.ts # F7: AI message injection
+│       └── error-flows.spec.ts       # F8-F10: Error handling
+│
+└── playwright.config.ts (existing)
+```
+
+### Playwright Configuration (MCP Commerce)
+
+```typescript
+// mcp-commerce/playwright.config.ts
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './tests',
+  timeout: 60000, // Longer timeout for purchase flows
+  retries: 0,     // No retries - we want to see failures
+  use: {
+    headless: false,  // Watch the browser during POC
+    slowMo: 500,      // Slow down for debugging
+    screenshot: 'on', // Capture screenshots at each step
+    video: 'on',      // Record video for debugging
+  },
+  projects: [
+    {
+      name: 'takealot',
+      testMatch: /takealot\/.*.spec.ts/,
+    },
+    {
+      name: 'amazon',
+      testMatch: /amazon\/.*.spec.ts/,
+    },
+    {
+      name: 'errors',
+      testMatch: /errors\/.*.spec.ts/,
+    },
+  ],
+});
+```
+
+### Running Tests
+
+```bash
+# Run all tests (headless: false so you can watch)
+cd mcp-commerce
+npx playwright test
+
+# Run only Takealot tests
+npx playwright test --project=takealot
+
+# Run a specific test file
+npx playwright test tests/takealot/checkout.spec.ts
+
+# Run with UI mode (interactive debugging)
+npx playwright test --ui
+```
+
+### Test Helpers
+
+Common utilities for purchase flow tests:
+
+```typescript
+// tests/helpers/merchant.ts
+
+export async function loginToTakealot(page: Page) {
+  // Reusable login flow
+}
+
+export async function waitFor3DSecure(page: Page): Promise<boolean> {
+  // Detect 3D Secure prompt, return true if detected
+  // This is where automated tests STOP
+}
+
+export async function captureCheckoutState(page: Page) {
+  // Screenshot + extract order details for verification
+}
+```
+
+### 3D Secure Handling
+
+Since 3D Secure requires manual bank approval:
+
+```typescript
+// In purchase tests
+test('complete purchase up to 3D Secure', async ({ page }) => {
+  // ... navigate to checkout, fill details ...
+
+  // Click "Place Order"
+  await page.click('[data-testid="place-order"]');
+
+  // Wait for 3D Secure to appear
+  const has3DSecure = await waitFor3DSecure(page);
+
+  if (has3DSecure) {
+    // STOP HERE - test passes if we reached 3D Secure
+    console.log('✅ Reached 3D Secure - manual approval required');
+    await page.screenshot({ path: 'screenshots/3d-secure-prompt.png' });
+
+    // For actual purchase, uncomment and approve in bank app:
+    // await page.waitForURL(/order-confirmation/, { timeout: 180000 });
+  }
+
+  expect(has3DSecure).toBe(true);
+});
+```
+
+### Manual Validation Checklist
+
+After automated tests pass, manually verify once per merchant:
+
+- [ ] **Takealot 3D Secure**: Approve in bank app → Order confirmation page loads → Order appears in Takealot account
+- [ ] **Amazon 3D Secure**: Approve in bank app → Order confirmation page loads → Order appears in Amazon account
+- [ ] **AI Chat Confirmation**: After modal closes, AI message appears in chat with order details
+
+### Test Artifacts
+
+Tests should generate:
+
+```
+mcp-commerce/
+└── test-results/
+    ├── screenshots/
+    │   ├── takealot-login.png
+    │   ├── takealot-cart.png
+    │   ├── takealot-checkout.png
+    │   ├── takealot-3d-secure.png
+    │   └── ...
+    ├── videos/
+    │   └── takealot-purchase.webm
+    └── reports/
+        └── test-report.html
+```
+
+---
+
 ## Security Considerations
 
 ### POC Phase
