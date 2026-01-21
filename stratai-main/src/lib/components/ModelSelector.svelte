@@ -112,7 +112,7 @@
 					id: model.id,
 					displayName,
 					mode: model.mode,
-					contextWindow: (model as any).max_input_tokens || (model as any).max_tokens
+					contextWindow: model.max_input_tokens || model.max_tokens
 				});
 			}
 

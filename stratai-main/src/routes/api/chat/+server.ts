@@ -630,6 +630,99 @@ const readDocumentToolOpenAI = {
 	}
 };
 
+// Commerce tools - OpenAI format (type: 'function', function.parameters)
+// Mirrors the Anthropic-format tools in commerce/tools.ts
+const commerceToolsOpenAI = [
+	{
+		type: 'function' as const,
+		function: {
+			name: 'commerce_search',
+			description: 'Search for products across South African e-commerce sites (Takealot and Amazon.co.za). Returns product listings with prices, ratings, and images. Use this when the user wants to find or compare products.',
+			parameters: {
+				type: 'object',
+				properties: {
+					query: {
+						type: 'string',
+						description: 'The search query (e.g., "wireless earbuds", "laptop bag")'
+					},
+					sites: {
+						type: 'string',
+						description: 'Comma-separated list of sites to search. Options: takealot, amazon. Default: both'
+					},
+					max_price: {
+						type: 'number',
+						description: 'Maximum price in South African Rands as a number. Examples: 500 for R500, 5000 for R5000, 10000 for R10000. Pass the exact number the user mentions.'
+					}
+				},
+				required: ['query']
+			}
+		}
+	},
+	{
+		type: 'function' as const,
+		function: {
+			name: 'commerce_get_product',
+			description: 'Get detailed information about a specific product. Use this when the user wants more details about a product from search results.',
+			parameters: {
+				type: 'object',
+				properties: {
+					product_url: {
+						type: 'string',
+						description: 'The full URL of the product page'
+					},
+					site: {
+						type: 'string',
+						description: 'The site the product is from (takealot or amazon)'
+					}
+				},
+				required: ['product_url', 'site']
+			}
+		}
+	},
+	{
+		type: 'function' as const,
+		function: {
+			name: 'commerce_add_to_cart',
+			description: 'Add a product to the shopping cart. Requires user to be logged in to the site. Use this when the user explicitly wants to add something to their cart.',
+			parameters: {
+				type: 'object',
+				properties: {
+					product_url: {
+						type: 'string',
+						description: 'The full URL of the product to add'
+					},
+					site: {
+						type: 'string',
+						description: 'The site the product is from (takealot or amazon)'
+					},
+					quantity: {
+						type: 'string',
+						description: 'Quantity to add (default: 1)'
+					}
+				},
+				required: ['product_url', 'site']
+			}
+		}
+	},
+	{
+		type: 'function' as const,
+		function: {
+			name: 'commerce_checkout',
+			description: 'Preview the checkout with current cart contents. Shows items, subtotal, shipping, and total. Does NOT complete the purchase. Use this before confirming a purchase.',
+			parameters: {
+				type: 'object',
+				properties: {
+					site: {
+						type: 'string',
+						description: 'The site to checkout from (takealot or amazon)'
+					}
+				},
+				required: ['site']
+			}
+		}
+	}
+];
+
 // Document info for tool context
 interface DocumentInfo {
 	filename: string;
@@ -666,8 +759,8 @@ function getToolsForModel(model: string, options: { includeDocumentTool?: boolea
 		tools.push(readDocumentToolOpenAI);
 	}
 	if (includeCommerceTools) {
-		// Commerce tools are already in Anthropic format which works with most models
-		tools.push(...commerceTools);
+		// Use OpenAI-formatted commerce tools for non-Claude models
+		tools.push(...commerceToolsOpenAI);
 	}
 	// Cast to unknown first, then to ToolDefinition[] to satisfy type checker
 	return tools as unknown as ToolDefinition[];

@@ -144,21 +144,60 @@ export function supportsExtendedThinking(model: string): boolean {
 }
 
 /**
- * Fetch available models from LiteLLM
+ * Fetch available models from LiteLLM with extended model info
+ * Combines /v1/models (basic list) with /model/info (detailed capabilities)
  */
 export async function fetchModels(): Promise<LiteLLMModelsResponse> {
-	const response = await fetch(`${getBaseUrl()}/v1/models`, {
-		headers: {
-			Authorization: `Bearer ${getApiKey()}`
-		}
-	});
+	const baseUrl = getBaseUrl();
+	const headers = { Authorization: `Bearer ${getApiKey()}` };
 
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`Failed to fetch models: ${response.status} ${errorText}`);
+	// Fetch basic models list
+	const modelsResponse = await fetch(`${baseUrl}/v1/models`, { headers });
+	if (!modelsResponse.ok) {
+		const errorText = await modelsResponse.text();
+		throw new Error(`Failed to fetch models: ${modelsResponse.status} ${errorText}`);
+	}
+	const modelsData: LiteLLMModelsResponse = await modelsResponse.json();
+
+	// Try to fetch extended model info (may not be available on all LiteLLM versions)
+	try {
+		const infoResponse = await fetch(`${baseUrl}/model/info`, { headers });
+		if (infoResponse.ok) {
+			const infoData = await infoResponse.json();
+
+			// Build a map of model_name -> model_info for quick lookup
+			const infoMap = new Map<string, Record<string, unknown>>();
+			for (const item of infoData.data || []) {
+				if (item.model_name && item.model_info) {
+					infoMap.set(item.model_name, item.model_info);
+				}
+			}
+
+			// Enrich models with extended info
+			modelsData.data = modelsData.data.map(model => {
+				const info = infoMap.get(model.id);
+				if (info) {
+					return {
+						...model,
+						mode: info.mode as string | undefined,
+						max_tokens: info.max_tokens as number | undefined,
+						max_input_tokens: info.max_input_tokens as number | undefined,
+						max_output_tokens: info.max_output_tokens as number | undefined,
+						litellm_provider: info.litellm_provider as string | undefined,
+						supports_vision: info.supports_vision as boolean | undefined,
+						supports_function_calling: info.supports_function_calling as boolean | undefined,
+						supports_reasoning: info.supports_reasoning as boolean | undefined
+					};
+				}
+				return model;
+			});
+		}
+	} catch (e) {
+		// Model info enrichment is optional - continue with basic info
+		console.warn('[LiteLLM] Could not fetch extended model info:', e);
 	}
 
-	return response.json();
+	return modelsData;
 }
 
 /**

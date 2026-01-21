@@ -319,6 +319,18 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		}
 	},
 
+	'gpt-5.2-codex': {
+		displayName: 'GPT-5.2 Codex',
+		provider: 'openai',
+		contextWindow: 400000,
+		maxOutputTokens: 128000,
+		supportsThinking: true,
+		supportsVision: true,
+		supportsTools: true,
+		reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'],
+		description: 'Latest agentic coding model optimized for complex software engineering (uses Responses API)'
+	},
+
 	'gpt-5.1-codex-max': {
 		displayName: 'GPT-5.1 Codex Max',
 		provider: 'openai',

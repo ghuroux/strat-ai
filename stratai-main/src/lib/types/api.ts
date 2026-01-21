@@ -3,6 +3,15 @@ export interface LiteLLMModel {
 	object: string;
 	created: number;
 	owned_by: string;
+	// Optional fields available from LiteLLM's /model/info endpoint
+	mode?: string;
+	max_tokens?: number;
+	max_input_tokens?: number;
+	max_output_tokens?: number;
+	litellm_provider?: string;
+	supports_vision?: boolean;
+	supports_function_calling?: boolean;
+	supports_reasoning?: boolean;
 }
 
 export interface LiteLLMModelsResponse {
