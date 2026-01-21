@@ -107,9 +107,9 @@
 				<button
 					type="button"
 					onclick={() => onAddToCart?.(product)}
-					class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+					class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded transition-colors"
 				>
-					Add to Cart
+					Buy
 				</button>
 			{/if}
 		</div>

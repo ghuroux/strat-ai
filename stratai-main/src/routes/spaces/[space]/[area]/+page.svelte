@@ -1295,6 +1295,14 @@
 		await triggerAssistantResponse();
 	}
 
+	/**
+	 * Buy Product - Add product to cart via agent
+	 */
+	async function handleBuyProduct(product: import('$lib/types/commerce').CommerceProductWithBadges) {
+		const buyMessage = `Please add this product to my cart: "${product.name}" from ${product.site} (${product.productUrl})`;
+		await handleSend(buyMessage);
+	}
+
 	// ============================================
 	// Conversation Management handlers
 	// ============================================
@@ -1732,6 +1740,7 @@
 								onRegenerate={handleRegenerate}
 								onSecondOpinion={handleSecondOpinionTrigger}
 								onCreatePage={handleCreatePageFromMessage}
+								onBuyProduct={handleBuyProduct}
 							/>
 							<!-- Task suggestion card (appears after assistant message with suggestion) -->
 							{#if currentSuggestionInfo && currentSuggestionInfo.messageIndex === i}

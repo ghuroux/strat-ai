@@ -1110,6 +1110,15 @@
 	}
 
 	/**
+	 * Buy Product - Add product to cart via agent
+	 */
+	async function handleBuyProduct(product: import('$lib/types/commerce').CommerceProductWithBadges) {
+		// Send a message that triggers the agent to add the product to cart
+		const buyMessage = `Please add this product to my cart: "${product.name}" from ${product.site} (${product.productUrl})`;
+		await handleSend(buyMessage);
+	}
+
+	/**
 	 * Second Opinion - Trigger model selector for a specific message
 	 */
 	function handleSecondOpinionTrigger(messageIndex: number, event?: MouseEvent) {
@@ -1387,6 +1396,7 @@
 							onResend={handleResend}
 							onRegenerate={handleRegenerate}
 							onSecondOpinion={(idx, e) => handleSecondOpinionTrigger(idx, e)}
+							onBuyProduct={handleBuyProduct}
 						/>
 					{/each}
 					<!-- Summary section - shows at bottom when summary exists or is generating -->

@@ -10,6 +10,7 @@
 	import CodeBlockDownloader from './chat/CodeBlockDownloader.svelte';
 	import { extractCodeBlocks } from '$lib/utils/codeBlocks';
 	import { ProductComparison, CheckoutPreview, OrderConfirmation } from './commerce';
+	import type { CommerceProductWithBadges } from '$lib/types/commerce';
 
 	// Svelte 5: Use $props instead of export let
 	let {
@@ -21,7 +22,8 @@
 		onResend,
 		onRegenerate,
 		onSecondOpinion,
-		onCreatePage
+		onCreatePage,
+		onBuyProduct
 	}: {
 		message: Message;
 		messageIndex?: number;
@@ -32,6 +34,7 @@
 		onRegenerate?: (messageId: string) => void;
 		onSecondOpinion?: (messageIndex: number, event?: MouseEvent) => void;
 		onCreatePage?: (messageId: string) => void;
+		onBuyProduct?: (product: CommerceProductWithBadges) => void;
 	} = $props();
 
 	// Svelte 5: Use $derived for computed values
@@ -339,6 +342,7 @@
 								<ProductComparison
 									query={message.commerce.searchResults.query}
 									products={message.commerce.searchResults.products}
+									onAddToCart={onBuyProduct}
 								/>
 							{:else if message.commerce.type === 'checkout_preview' && message.commerce.checkoutPreview}
 								<CheckoutPreview preview={message.commerce.checkoutPreview} />
