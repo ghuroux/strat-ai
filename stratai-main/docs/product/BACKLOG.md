@@ -1944,6 +1944,52 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 - Research tasks can take minutes to complete
 - Rate limit: 1 RPM (Tier 1)
 
+### Model Pricing Maintenance
+**Status**: Foundation Complete
+
+**Problem**: Model prices change frequently. Incorrect pricing affects user budgets and cost estimates.
+
+**Current State** (2026-01-22):
+- [x] Sync script created: `scripts/sync-model-pricing.ts`
+- [x] 17 prices verified against LiteLLM database
+- [x] 12 prices verified against provider official sources (OpenAI, Google, Anthropic)
+- [x] 7 Bedrock models flagged for AWS Console verification
+- [x] Tiered verification system (LiteLLM → Provider → Bedrock)
+
+**Phase 1: Manual Sync Process**
+- [x] Run `npx tsx scripts/sync-model-pricing.ts` to check prices
+- [x] Script outputs differences and verification status
+- [ ] Document quarterly price review process
+
+**Phase 2: Admin UI Integration**
+- [ ] "Sync Pricing" button in Admin → Models page
+- [ ] Visual diff showing current vs source prices
+- [ ] One-click apply for verified changes
+- [ ] Audit log of price changes (who, when, what)
+
+**Phase 3: Runtime Price Overrides**
+- [ ] `model_pricing_overrides` table in database
+- [ ] DB overrides take precedence over code defaults
+- [ ] Enable price fixes without deployment
+- [ ] Revert capability (restore to code defaults)
+
+**Phase 4: Automated Monitoring**
+- [ ] Weekly automated sync check (cron/scheduled task)
+- [ ] Alert when >10% price change detected
+- [ ] Slack/email notification to admins
+- [ ] Dashboard showing "last sync" status
+
+**Sources by Priority**:
+1. Provider official pricing pages (most authoritative)
+2. LiteLLM pricing database (comprehensive, community-maintained)
+3. AWS Bedrock Console (for Bedrock models)
+
+**Files**:
+- `scripts/sync-model-pricing.ts` - Sync script with tiered verification
+- `src/lib/config/model-capabilities.ts` - Pricing definitions
+
+---
+
 ### Prompt Caching Optimization
 **Status**: Phase 1 Complete
 
