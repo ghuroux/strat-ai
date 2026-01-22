@@ -132,7 +132,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Most capable Claude model for complex reasoning',
-		pricing: { input: 5, output: 25 },
+		pricing: { input: 5, output: 25 },  // Anthropic official - cheaper than Opus 4/4.1!
 		taskPlanning: {
 			tier: 'recommended',
 			structuredOutput: 'reliable',
@@ -208,7 +208,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Fast and cost-effective with thinking support',
-		pricing: { input: 1, output: 5 }
+		pricing: { input: 1, output: 5 }  // Note: Different from claude-3-5-haiku ($0.80/$4)
 	},
 
 	'claude-3-5-haiku': {
@@ -237,7 +237,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'],
 		description: 'Latest flagship with reasoning',
-		pricing: { input: 1.75, output: 14 },
+		pricing: { input: 1.75, output: 14 },  // OpenAI Standard tier - verified Jan 2026
 		taskPlanning: {
 			tier: 'recommended',
 			structuredOutput: 'reliable',
@@ -257,6 +257,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsTools: true,
 		reasoningEffortLevels: ['medium', 'high', 'xhigh'],
 		description: 'Premium reasoning for maximum accuracy',
+		pricing: { input: 21, output: 168 },  // OpenAI Standard tier - verified Jan 2026
 		taskPlanning: {
 			tier: 'recommended',
 			structuredOutput: 'reliable',
@@ -275,6 +276,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Speed-optimized for routine queries',
+		pricing: { input: 1.75, output: 14 },  // OpenAI Standard tier - verified Jan 2026
 		// OpenAI requires temperature=1 for instant models
 		parameterConstraints: {
 			temperature: { fixed: 1 }
@@ -295,6 +297,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
 		description: 'Flagship for coding & agentic tasks with adaptive reasoning',
+		pricing: { input: 1.25, output: 10 },  // OpenAI Standard tier - verified Jan 2026
 		taskPlanning: {
 			tier: 'recommended',
 			structuredOutput: 'reliable',
@@ -313,6 +316,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Instant version with smaller context',
+		pricing: { input: 1.25, output: 10 },  // OpenAI Standard tier - verified Jan 2026
 		// OpenAI requires temperature=1 for instant models
 		parameterConstraints: {
 			temperature: { fixed: 1 }
@@ -328,7 +332,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high', 'xhigh'],
-		description: 'Latest agentic coding model optimized for complex software engineering (uses Responses API)'
+		description: 'Latest agentic coding model optimized for complex software engineering (uses Responses API)',
+		pricing: { input: 1.75, output: 14 }  // OpenAI Standard tier - verified Jan 2026
 	},
 
 	'gpt-5.1-codex-max': {
@@ -340,7 +345,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
-		description: 'Optimized for agentic coding and multi-context workflows'
+		description: 'Optimized for agentic coding and multi-context workflows',
+		pricing: { input: 1.25, output: 10 }  // OpenAI Standard tier - verified Jan 2026
 	},
 
 	'gpt-5.1-codex-mini': {
@@ -352,7 +358,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
-		description: 'Cost-effective Codex with 4x efficiency'
+		description: 'Cost-effective Codex with 4x efficiency',
+		pricing: { input: 0.25, output: 2 }  // OpenAI Standard tier - verified Jan 2026
 	},
 
 	// ============================================
@@ -367,7 +374,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Multimodal model for text and images'
+		description: 'Multimodal model for text and images',
+		pricing: { input: 2.5, output: 10 }
 	},
 
 	'gpt-4o-mini': {
@@ -378,7 +386,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Cost-efficient multimodal model'
+		description: 'Cost-efficient multimodal model',
+		pricing: { input: 0.15, output: 0.6 }
 	},
 
 	'gpt-4.1': {
@@ -389,7 +398,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true,
 		supportsTools: true,
-		description: '1M context window, great for coding'
+		description: '1M context window, great for coding',
+		pricing: { input: 2, output: 8 }
 	},
 
 	'gpt-4.1-mini': {
@@ -400,7 +410,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Cost-efficient 1M context model'
+		description: 'Cost-efficient 1M context model',
+		pricing: { input: 0.4, output: 1.6 }
 	},
 
 	// ============================================
@@ -416,7 +427,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
-		description: 'Flagship reasoning model with vision'
+		description: 'Flagship reasoning model with vision',
+		pricing: { input: 2, output: 8 }  // OpenAI Standard tier - verified Jan 2026
 	},
 
 	'o3-mini': {
@@ -428,7 +440,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: false, // No vision support
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
-		description: 'Cost-efficient reasoning without vision'
+		description: 'Cost-efficient reasoning without vision',
+		pricing: { input: 1.10, output: 4.40 }  // OpenAI Standard tier - verified Jan 2026
 	},
 
 	'o4-mini': {
@@ -440,7 +453,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		reasoningEffortLevels: ['low', 'medium', 'high'],
-		description: 'Latest small reasoning model with vision'
+		description: 'Latest small reasoning model with vision',
+		pricing: { input: 1.1, output: 4.4 }
 	},
 
 	// ============================================
@@ -455,7 +469,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: false,
 		supportsTools: true,
-		description: 'Best open-source general purpose model'
+		description: 'Best open-source general purpose model',
+		pricing: { input: 0.72, output: 0.72 }
 	},
 
 	'llama-3-1-8b': {
@@ -466,7 +481,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: false,
 		supportsTools: true,
-		description: 'Fast and cost-effective open-source model'
+		description: 'Fast and cost-effective open-source model',
+		pricing: { input: 0.22, output: 0.22 }
 	},
 
 	'llama-4-scout': {
@@ -477,7 +493,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: false,
 		supportsTools: false, // Bedrock doesn't support tool use in streaming mode
-		description: 'Massive 3.5M context window for document processing'
+		description: 'Massive 3.5M context window for document processing',
+		pricing: { input: 0.24, output: 0.97 }  // AWS Bedrock pricing - verify at aws.amazon.com/bedrock/pricing
 	},
 
 	// ============================================
@@ -492,7 +509,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true,
 		supportsTools: true,
-		description: 'AWS-native multimodal model for complex tasks'
+		description: 'AWS-native multimodal model for complex tasks',
+		pricing: { input: 0.8, output: 3.2 }
 	},
 
 	// ============================================
@@ -507,7 +525,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true, // Has reasoning_content blocks similar to Claude thinking
 		supportsVision: false,
 		supportsTools: true,
-		description: 'Strong reasoning model with visible thinking process'
+		description: 'Strong reasoning model with visible thinking process',
+		pricing: { input: 1.35, output: 5.40 }  // AWS Bedrock pricing - verify at aws.amazon.com/bedrock/pricing
 	},
 
 	'deepseek-v3': {
@@ -518,7 +537,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true, // Has thinking/non-thinking modes
 		supportsVision: false,
 		supportsTools: false, // Tool calling not yet supported in Bedrock Converse API
-		description: 'Latest DeepSeek model with thinking mode'
+		description: 'Latest DeepSeek model with thinking mode',
+		pricing: { input: 0.28, output: 1.10 }  // AWS Bedrock pricing - verify at aws.amazon.com/bedrock/pricing
 	},
 
 	// ============================================
@@ -533,7 +553,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true,
 		supportsTools: false, // Tool use not supported in streaming mode
-		description: 'Powerful 675B MoE model with vision'
+		description: 'Powerful 675B MoE model with vision',
+		pricing: { input: 2, output: 6 }
 	},
 
 	// ============================================
@@ -548,7 +569,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true,
 		supportsTools: false, // No streaming support at all on Bedrock
-		description: '1M context multimodal model (no streaming)'
+		description: '1M context multimodal model (no streaming)',
+		pricing: { input: 0.24, output: 0.97 }  // AWS Bedrock pricing - verify at aws.amazon.com/bedrock/pricing
 	},
 
 	// ============================================
@@ -563,7 +585,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true, // Adaptive thinking, reasoning-first
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Latest flagship reasoning model for complex tasks'
+		description: 'Latest flagship reasoning model for complex tasks',
+		pricing: { input: 2, output: 12 }  // Google Paid Standard tier - verified Jan 2026
 	},
 
 	'gemini-3-flash': {
@@ -575,7 +598,7 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsVision: true,
 		supportsTools: true,
 		description: 'Fast frontier-class performance at low cost',
-		pricing: { input: 0.5, output: 3 }
+		pricing: { input: 0.5, output: 3 }  // Google Paid Standard tier - verified Jan 2026
 	},
 
 	'gemini-2.5-pro': {
@@ -586,7 +609,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true, // Built-in reasoning
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Best for complex reasoning in code, math, STEM'
+		description: 'Best for complex reasoning in code, math, STEM',
+		pricing: { input: 1.25, output: 10 }  // Google Paid Standard tier - verified Jan 2026
 	},
 
 	'gemini-2.5-flash': {
@@ -597,7 +621,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true, // Built-in thinking with adjustable budget
 		supportsVision: true,
 		supportsTools: true,
-		description: 'Best price-performance with thinking support'
+		description: 'Best price-performance with thinking support',
+		pricing: { input: 0.30, output: 2.50 }  // Google Paid Standard tier - verified Jan 2026
 	},
 
 	// ============================================
@@ -612,7 +637,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true, // Hybrid-attention reasoning model
 		supportsVision: false,
 		supportsTools: true,
-		description: '456B hybrid MoE model with strong reasoning'
+		description: '456B hybrid MoE model with strong reasoning',
+		pricing: { input: 1.5, output: 5.5 }
 	},
 
 	// ============================================
@@ -627,7 +653,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: false,
 		supportsVision: true, // Multimodal: text + image input
 		supportsTools: true,
-		description: 'Google open-weight multimodal model'
+		description: 'Google open-weight multimodal model',
+		pricing: { input: 0.22, output: 0.88 }
 	},
 
 	// ============================================
@@ -642,7 +669,8 @@ export const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 		supportsThinking: true, // Strong reasoning with thinking tokens
 		supportsVision: false,
 		supportsTools: true, // Excellent agentic capabilities
-		description: '1T MoE (32B active) with deep reasoning'
+		description: '1T MoE (32B active) with deep reasoning',
+		pricing: { input: 0.6, output: 2.4 }
 	}
 	// Note: deep-research-pro-preview requires the Interactions API (async polling)
 	// and cannot be used through standard chat completions. Consider implementing
