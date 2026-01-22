@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { createChatCompletion, createChatCompletionWithTools, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
 import { searchWeb, formatSearchResultsForLLM, isBraveSearchConfigured } from '$lib/server/brave-search';
 import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig, ChatMessage, MessageContentBlock } from '$lib/types/api';
-import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, getFullSystemPromptForPlanModeWithContext, getFullSystemPromptWithFocusArea, getFullSystemPromptWithSpace, getFocusAreaPrompt, getSystemPromptLayers, supportsLayeredCaching, type FocusedTaskInfo, type PlanModePhase, type TaskContextInfo, type FocusAreaInfo, type SpaceInfo, type PlanModeTaskContext, type PromptLayer } from '$lib/config/system-prompts';
+import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, getFullSystemPromptForPlanModeWithContext, getFullSystemPromptWithFocusArea, getFullSystemPromptWithSpace, getFocusAreaPrompt, getSystemPromptLayers, supportsLayeredCaching, getCommerceSearchPrompt, type FocusedTaskInfo, type PlanModePhase, type TaskContextInfo, type FocusAreaInfo, type SpaceInfo, type PlanModeTaskContext, type PromptLayer } from '$lib/config/system-prompts';
 import { routeQuery, isAutoMode, getDefaultContext, type RoutingContext, type RoutingDecision } from '$lib/services/model-router';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
@@ -394,7 +394,8 @@ function injectPlatformPrompt(
 	planModeContext?: PlanModeContext | null,
 	focusArea?: FocusAreaInfo | null,
 	spaceInfo?: SpaceInfo | null,
-	timezone?: string
+	timezone?: string,
+	searchEnabled?: boolean
 ): ChatMessage[] {
 	// Plan Mode takes precedence - use specialized Plan Mode prompts
 	if (planModeContext) {
@@ -486,6 +487,15 @@ function injectPlatformPrompt(
 					: undefined;
 		}
 
+		// Add commerce search instructions only when search tools are enabled
+		// This prevents the AI from mentioning commerce_search when it's not available
+		if (searchEnabled) {
+			const commercePrompt = getCommerceSearchPrompt(true);
+			existingContent = existingContent
+				? `${existingContent}\n${commercePrompt}`
+				: commercePrompt;
+		}
+
 		// Create layered system message
 		const layeredSystemMessage = createLayeredSystemMessage(layers, existingContent);
 
@@ -554,6 +564,15 @@ function injectPlatformPrompt(
 		fullPrompt = fullPrompt
 			? `${fullPrompt}\n${taskPrompt}`
 			: taskPrompt;
+	}
+
+	// Add commerce search instructions only when search tools are enabled
+	// This prevents the AI from mentioning commerce_search when it's not available
+	if (searchEnabled) {
+		const commercePrompt = getCommerceSearchPrompt(true);
+		fullPrompt = fullPrompt
+			? `${fullPrompt}\n${commercePrompt}`
+			: commercePrompt;
 	}
 
 	return injectSystemPrompt(messages, fullPrompt);
@@ -1324,11 +1343,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const needsToolHandling = searchEnabled || hasReferenceDocuments;
 
 		if (needsToolHandling) {
-			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision, userTimezone);
+			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision, userTimezone, searchEnabled);
 		}
 
 		// Inject platform system prompt with space + focus area + custom space context (before cache breakpoints so it gets cached)
-		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, userTimezone);
+		// Note: searchEnabled=false here since we're in the non-tool path (needsToolHandling was false)
+		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, userTimezone, false);
 
 		// Apply cache breakpoints for Claude models (conversation history caching)
 		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
@@ -1447,7 +1467,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string, routingDecision?: RoutingDecision | null, timezone?: string): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string, routingDecision?: RoutingDecision | null, timezone?: string, searchEnabled?: boolean): Promise<Response> {
 	const encoder = new TextEncoder();
 
 	// Build usage context for tracking (if we have the required data)
@@ -1491,7 +1511,8 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	const hasDocuments = availableDocuments.size > 0;
 
 	// Inject platform prompt with space + focus area + custom space context (and assist if active), then cache breakpoints, then search context
-	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext, focusArea, spaceInfo, timezone);
+	// Pass searchEnabled to conditionally include commerce search instructions
+	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext, focusArea, spaceInfo, timezone, searchEnabled);
 	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
 	

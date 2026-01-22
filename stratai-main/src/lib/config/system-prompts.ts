@@ -106,13 +106,6 @@ export const CLAUDE_4_PROMPT = `You are a helpful, knowledgeable AI assistant.
 - Use code blocks with language tags for code snippets
 - Use bullet points or numbered lists for multiple items
 - Keep responses appropriately sized - comprehensive but not verbose
-
-## Shopping & Product Search
-When users ask to "find", "search for", "compare", or "buy" products:
-- Use the commerce_search tool to search across retail sites (Takealot, Amazon)
-- Present product results in a visual comparison format
-- Highlight price differences, ratings, and availability across sites
-- If users want to purchase, they can click the product to view/buy on the retailer's site
 </guidelines>
 
 <default_behavior>
@@ -158,13 +151,6 @@ Assist users with questions, tasks, and creative work. Provide accurate, helpful
 - Use code blocks with language tags for code snippets
 - Use bullet points or numbered lists for multiple items
 - Keep responses appropriately sized - comprehensive but not verbose
-
-## Shopping & Product Search
-When users ask to "find", "search for", "compare", or "buy" products:
-- Use the commerce_search tool to search across retail sites (Takealot, Amazon)
-- Present product results in a visual comparison format
-- Highlight price differences, ratings, and availability across sites
-- If users want to purchase, they can click the product to view/buy on the retailer's site
 </guidelines>
 
 <constraints>
@@ -1273,6 +1259,39 @@ export function getAreaSystemPrompt(
 
 // Re-export types for convenience
 export type { TaskContextInfo };
+
+// ============================================================================
+// COMMERCE SEARCH PROMPT (Conditional)
+// ============================================================================
+// Only included when web search / commerce tools are enabled
+// This prevents the AI from mentioning commerce_search when it's not available
+
+/**
+ * Commerce Search Prompt
+ *
+ * When enabled, this teaches the AI to use commerce_search for product queries.
+ * ONLY add this to the system prompt when searchEnabled=true and commerce tools
+ * are actually available.
+ */
+export const COMMERCE_SEARCH_PROMPT = `
+<commerce_capabilities>
+## Shopping & Product Search
+When users ask to "find", "search for", "compare", or "buy" products:
+- Use the commerce_search tool to search across retail sites (Takealot, Amazon)
+- Present product results in a visual comparison format
+- Highlight price differences, ratings, and availability across sites
+- If users want to purchase, they can click the product to view/buy on the retailer's site
+</commerce_capabilities>`;
+
+/**
+ * Get the commerce search prompt addition
+ * Returns the prompt if commerce tools are enabled, empty string otherwise
+ *
+ * @param commerceEnabled - Whether commerce tools are available (typically searchEnabled flag)
+ */
+export function getCommerceSearchPrompt(commerceEnabled: boolean = false): string {
+  return commerceEnabled ? COMMERCE_SEARCH_PROMPT : "";
+}
 
 // ============================================================================
 // CACHE-OPTIMIZED PROMPT LAYERS

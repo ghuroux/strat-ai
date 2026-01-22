@@ -7,9 +7,11 @@
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import ConversationItem from './ConversationItem.svelte';
 	import ClearConversationsModal from './ClearConversationsModal.svelte';
+	import DeleteConversationModal from '$lib/components/chat/DeleteConversationModal.svelte';
 	import { SkeletonList } from '$lib/components/skeletons';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { MessageSquare } from 'lucide-svelte';
+	import type { Conversation } from '$lib/types/chat';
 
 	interface Props {
 		onNewChat: () => void;
@@ -25,6 +27,10 @@
 	let openMenuId = $state<string | null>(null);
 	let otherContextsExpanded = $state(false);
 	let showClearModal = $state(false);
+
+	// Delete conversation modal state
+	let showDeleteModal = $state(false);
+	let deletingConversation = $state<Conversation | null>(null);
 
 	function handleMenuToggle(id: string, isOpen: boolean) {
 		openMenuId = isOpen ? id : null;
@@ -103,7 +109,23 @@
 	}
 
 	function handleDeleteConversation(id: string) {
-		chatStore.deleteConversation(id);
+		const conversation = chatStore.conversations.get(id);
+		if (conversation) {
+			deletingConversation = conversation;
+			showDeleteModal = true;
+		}
+	}
+
+	function handleConfirmDeleteConversation() {
+		if (!deletingConversation) return;
+		chatStore.deleteConversation(deletingConversation.id);
+		showDeleteModal = false;
+		deletingConversation = null;
+	}
+
+	function handleCloseDeleteModal() {
+		showDeleteModal = false;
+		deletingConversation = null;
 	}
 
 	function handlePinConversation(id: string) {
@@ -481,4 +503,12 @@
 		chatStore.clearMainConversations();
 		showClearModal = false;
 	}}
+/>
+
+<!-- Delete Conversation Modal -->
+<DeleteConversationModal
+	open={showDeleteModal}
+	conversation={deletingConversation}
+	onClose={handleCloseDeleteModal}
+	onConfirm={handleConfirmDeleteConversation}
 />

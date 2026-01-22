@@ -13,10 +13,11 @@
 	 *
 	 * Collapsible to slim sidebar when user is focused on chat.
 	 */
-	import { slide, fly } from 'svelte/transition';
+	import { slide, fly, fade } from 'svelte/transition';
 	import type { Task, SubtaskContext } from '$lib/types/tasks';
 	import type { Conversation } from '$lib/types/chat';
 	import { getQuickStarts, type QuickStartIcon } from '$lib/utils/quick-starts';
+	import { MoreVertical, Edit3, Star, Download, Trash2 } from 'lucide-svelte';
 
 	// SVG icon paths for quick start icons
 	const ICON_PATHS: Record<QuickStartIcon, string> = {
@@ -58,6 +59,11 @@
 		onNewChat: () => void;
 		onToggleCollapse: () => void;
 		onQuickAction: (action: string) => void;
+		// Conversation action callbacks (optional - for context menu)
+		onDeleteConversation?: (id: string) => void;
+		onRenameConversation?: (id: string, newTitle: string) => void;
+		onPinConversation?: (id: string) => void;
+		onExportConversation?: (id: string) => void;
 	}
 
 	let {
@@ -75,8 +81,94 @@
 		onSelectConversation,
 		onNewChat,
 		onToggleCollapse,
-		onQuickAction
+		onQuickAction,
+		onDeleteConversation,
+		onRenameConversation,
+		onPinConversation,
+		onExportConversation
 	}: Props = $props();
+
+	// Check if conversation actions are enabled
+	let hasConversationActions = $derived(
+		!!onDeleteConversation || !!onRenameConversation || !!onPinConversation || !!onExportConversation
+	);
+
+	// Context menu state
+	let openMenuId = $state<string | null>(null);
+	let menuPosition = $state({ top: 0, left: 0 });
+
+	// Rename state
+	let renamingConversationId = $state<string | null>(null);
+	let renameValue = $state('');
+	let renameInputRef: HTMLInputElement | undefined = $state();
+
+	function toggleMenu(e: MouseEvent, conversationId: string) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		if (openMenuId === conversationId) {
+			openMenuId = null;
+			return;
+		}
+
+		// Calculate position
+		const button = e.currentTarget as HTMLButtonElement;
+		const rect = button.getBoundingClientRect();
+		const menuHeight = 180;
+		const menuWidth = 140;
+
+		// Position below the button, aligned to right edge
+		menuPosition = {
+			top: rect.bottom + 4,
+			left: Math.max(8, rect.right - menuWidth)
+		};
+
+		openMenuId = conversationId;
+	}
+
+	function closeMenu() {
+		openMenuId = null;
+	}
+
+	function handleMenuAction(action: () => void) {
+		action();
+		closeMenu();
+	}
+
+	function startRename(conv: Conversation) {
+		renamingConversationId = conv.id;
+		renameValue = conv.title || '';
+		closeMenu();
+		// Focus input after DOM update
+		setTimeout(() => renameInputRef?.focus(), 0);
+	}
+
+	function submitRename() {
+		if (renamingConversationId && renameValue.trim() && onRenameConversation) {
+			onRenameConversation(renamingConversationId, renameValue.trim());
+		}
+		cancelRename();
+	}
+
+	function cancelRename() {
+		renamingConversationId = null;
+		renameValue = '';
+	}
+
+	function handleRenameKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			submitRename();
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			cancelRename();
+		}
+	}
+
+	// Check if a conversation is pinned
+	function isPinned(conv: Conversation): boolean {
+		return conv.pinned ?? false;
+	}
 
 	// Derive the actual task to work with
 	let displayTask = $derived(isWorkUnit ? task : subtask);
@@ -389,33 +481,114 @@
 				{#if conversations.length > 0}
 					<ul class="conversation-list">
 						{#each conversations as conv (conv.id)}
-							<li>
-								<button
-									type="button"
-									class="conversation-card"
-									class:active={conv.id === activeConversationId}
-									onclick={() => onSelectConversation(conv.id)}
-								>
-									<div class="card-icon">
-										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"
-											/>
-										</svg>
+							<li class="conversation-item">
+								{#if renamingConversationId === conv.id}
+									<!-- Rename mode -->
+									<div class="rename-container">
+										<input
+											bind:this={renameInputRef}
+											type="text"
+											bind:value={renameValue}
+											onkeydown={handleRenameKeydown}
+											onblur={submitRename}
+											class="rename-input"
+											placeholder="Conversation title..."
+										/>
 									</div>
-									<div class="card-content">
-										<span class="card-title">{getConversationPreview(conv)}</span>
-										<span class="card-time">{formatRelativeTime(conv.updatedAt)}</span>
-									</div>
-									{#if conv.id === activeConversationId}
-										<div class="active-indicator"></div>
+								{:else}
+									<!-- Normal card with optional menu -->
+									<button
+										type="button"
+										class="conversation-card"
+										class:active={conv.id === activeConversationId}
+										onclick={() => onSelectConversation(conv.id)}
+									>
+										<div class="card-icon">
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"
+												/>
+											</svg>
+										</div>
+										<div class="card-content">
+											<span class="card-title">{getConversationPreview(conv)}</span>
+											<span class="card-time">{formatRelativeTime(conv.updatedAt)}</span>
+										</div>
+										{#if isPinned(conv)}
+											<div class="pin-badge" title="Pinned">
+												<Star size={10} fill="currentColor" />
+											</div>
+										{/if}
+										{#if conv.id === activeConversationId}
+											<div class="active-indicator"></div>
+										{/if}
+									</button>
+
+									<!-- Menu trigger (only if actions available) -->
+									{#if hasConversationActions}
+										<button
+											type="button"
+											class="menu-trigger"
+											class:menu-open={openMenuId === conv.id}
+											onclick={(e) => toggleMenu(e, conv.id)}
+											aria-label="More options"
+										>
+											<MoreVertical size={14} />
+										</button>
 									{/if}
-								</button>
+								{/if}
 							</li>
 						{/each}
 					</ul>
+
+					<!-- Dropdown menu (rendered once, positioned via state) -->
+					{#if openMenuId}
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<!-- svelte-ignore a11y_click_events_have_key_events -->
+						<div
+							class="menu-backdrop"
+							onclick={closeMenu}
+						></div>
+						<div
+							class="dropdown-menu"
+							style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
+							transition:fade={{ duration: 100 }}
+						>
+							{#if onRenameConversation}
+								{@const conv = conversations.find(c => c.id === openMenuId)}
+								{#if conv}
+									<button type="button" class="dropdown-item" onclick={() => startRename(conv)}>
+										<Edit3 size={14} />
+										Rename
+									</button>
+								{/if}
+							{/if}
+							{#if onPinConversation}
+								{@const conv = conversations.find(c => c.id === openMenuId)}
+								{#if conv}
+									<button type="button" class="dropdown-item" onclick={() => handleMenuAction(() => onPinConversation!(openMenuId!))}>
+										<Star size={14} fill={isPinned(conv) ? 'currentColor' : 'none'} />
+										{isPinned(conv) ? 'Unpin' : 'Pin'}
+									</button>
+								{/if}
+							{/if}
+							{#if onExportConversation}
+								<button type="button" class="dropdown-item" onclick={() => handleMenuAction(() => onExportConversation!(openMenuId!))}>
+									<Download size={14} />
+									Export
+								</button>
+							{/if}
+							{#if onDeleteConversation}
+								<div class="dropdown-divider"></div>
+								<button type="button" class="dropdown-item dropdown-item-danger" onclick={() => handleMenuAction(() => onDeleteConversation!(openMenuId!))}>
+									<Trash2 size={14} />
+									Delete
+								</button>
+							{/if}
+						</div>
+					{/if}
 				{:else}
 					<p class="empty-state">No conversations yet</p>
 				{/if}
@@ -1023,5 +1196,131 @@
 		height: 1px;
 		background: rgba(255, 255, 255, 0.06);
 		margin: 0.25rem 0;
+	}
+
+	/* Conversation item with menu */
+	.conversation-item {
+		position: relative;
+	}
+
+	.conversation-item:hover .menu-trigger {
+		opacity: 1;
+	}
+
+	.menu-trigger {
+		position: absolute;
+		right: 0.25rem;
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.25rem;
+		color: rgba(255, 255, 255, 0.4);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		opacity: 0;
+		transition: all 0.15s ease;
+		z-index: 2;
+	}
+
+	.menu-trigger:hover,
+	.menu-trigger.menu-open {
+		opacity: 1;
+		color: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+	}
+
+	.dropdown-menu {
+		position: fixed;
+		width: 140px;
+		padding: 0.25rem 0;
+		background: #18181b;
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 0.5rem;
+		box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+		z-index: 51;
+	}
+
+	.dropdown-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		font-size: 0.75rem;
+		color: rgba(255, 255, 255, 0.8);
+		background: none;
+		border: none;
+		cursor: pointer;
+		transition: background-color 0.1s ease;
+		text-align: left;
+	}
+
+	.dropdown-item:hover {
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.dropdown-item-danger {
+		color: #f87171;
+	}
+
+	.dropdown-item-danger:hover {
+		background: rgba(248, 113, 113, 0.1);
+	}
+
+	.dropdown-divider {
+		height: 1px;
+		margin: 0.25rem 0;
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	/* Pin badge */
+	.pin-badge {
+		position: absolute;
+		right: 1.75rem;
+		top: 50%;
+		transform: translateY(-50%);
+		color: #fbbf24;
+		z-index: 1;
+	}
+
+	.conversation-item:hover .pin-badge {
+		opacity: 0;
+	}
+
+	/* Rename input */
+	.rename-container {
+		padding: 0.375rem;
+	}
+
+	.rename-input {
+		width: 100%;
+		padding: 0.5rem 0.625rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(59, 130, 246, 0.5);
+		border-radius: 0.375rem;
+		color: rgba(255, 255, 255, 0.9);
+		outline: none;
+	}
+
+	.rename-input:focus {
+		border-color: #3b82f6;
+		box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+	}
+
+	.rename-input::placeholder {
+		color: rgba(255, 255, 255, 0.4);
 	}
 </style>

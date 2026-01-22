@@ -34,6 +34,7 @@
 	import SubtaskDashboard from '$lib/components/tasks/SubtaskDashboard.svelte';
 	import SubtaskWelcome from '$lib/components/tasks/SubtaskWelcome.svelte';
 	import TaskContextPanel from '$lib/components/tasks/TaskContextPanel.svelte';
+	import DeleteConversationModal from '$lib/components/chat/DeleteConversationModal.svelte';
 	import TaskApproachModal from '$lib/components/tasks/TaskApproachModal.svelte';
 	import TaskWorkWelcome from '$lib/components/tasks/TaskWorkWelcome.svelte';
 	import CompleteTaskModal from '$lib/components/tasks/CompleteTaskModal.svelte';
@@ -119,6 +120,10 @@
 	let createPageModalOpen = $state(false);
 	let createPageFromMessageId = $state<string | null>(null);
 	let pageSuggestionPageType = $state<PageType | null>(null);
+
+	// Delete conversation modal state
+	let showDeleteConversationModal = $state(false);
+	let deletingConversation = $state<typeof chatStore.conversationList[0] | null>(null);
 
 	// Multi-conversation support for subtasks
 	let taskConversations = $derived(
@@ -1211,6 +1216,50 @@
 		chatStore.setActiveConversation(newConvId);
 	}
 
+	// Conversation action handlers for TaskContextPanel
+	function handleDeleteConversation(id: string) {
+		const conversation = chatStore.conversations.get(id);
+		if (conversation) {
+			deletingConversation = conversation;
+			showDeleteConversationModal = true;
+		}
+	}
+
+	function handleConfirmDeleteConversation() {
+		if (!deletingConversation) return;
+		chatStore.deleteConversation(deletingConversation.id);
+		showDeleteConversationModal = false;
+		deletingConversation = null;
+	}
+
+	function handleCloseDeleteConversationModal() {
+		showDeleteConversationModal = false;
+		deletingConversation = null;
+	}
+
+	function handleRenameConversation(id: string, newTitle: string) {
+		chatStore.updateConversationTitle(id, newTitle);
+		toastStore.success('Conversation renamed');
+	}
+
+	function handlePinConversation(id: string) {
+		chatStore.togglePin(id);
+	}
+
+	function handleExportConversation(id: string) {
+		const json = chatStore.exportConversation(id);
+		if (json) {
+			const blob = new Blob([json], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `conversation-${id}.json`;
+			a.click();
+			URL.revokeObjectURL(url);
+			toastStore.success('Conversation exported');
+		}
+	}
+
 	// Handle page created from CreatePageModal (US-001: basic close, US-002 adds toast + navigation)
 	function handlePageCreated(pageId: string) {
 		createPageModalOpen = false;
@@ -1560,6 +1609,10 @@
 							onNewChat={handleNewChat}
 							onToggleCollapse={handleTogglePanelCollapse}
 							onQuickAction={handleQuickAction}
+							onDeleteConversation={handleDeleteConversation}
+							onRenameConversation={handleRenameConversation}
+							onPinConversation={handlePinConversation}
+							onExportConversation={handleExportConversation}
 						/>
 					{:else if shouldShowWorkUnitPanel && task}
 						<!-- Context Panel for work units (parent tasks without subtasks) -->
@@ -1577,6 +1630,10 @@
 							onQuickAction={handleQuickAction}
 							onStartPlanMode={handlePlanButtonClick}
 							onCancelPlanMode={handleCancelPlanMode}
+							onDeleteConversation={handleDeleteConversation}
+							onRenameConversation={handleRenameConversation}
+							onPinConversation={handlePinConversation}
+							onExportConversation={handleExportConversation}
 						/>
 					{/if}
 
@@ -1845,6 +1902,14 @@
 				onCreated={handlePageCreated}
 			/>
 		{/if}
+
+		<!-- Delete Conversation Modal -->
+		<DeleteConversationModal
+			open={showDeleteConversationModal}
+			conversation={deletingConversation}
+			onClose={handleCloseDeleteConversationModal}
+			onConfirm={handleConfirmDeleteConversation}
+		/>
 	</div>
 {:else}
 	<div class="error-container">

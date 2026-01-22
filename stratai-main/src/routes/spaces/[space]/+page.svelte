@@ -17,6 +17,7 @@
 	import { AreaModal, AreaEditPanel, DeleteAreaModal } from '$lib/components/areas';
 	import SpaceConversationsDrawer from '$lib/components/spaces/SpaceConversationsDrawer.svelte';
 	import SelectAreaModal from '$lib/components/pages/SelectAreaModal.svelte';
+	import DeleteConversationModal from '$lib/components/chat/DeleteConversationModal.svelte';
 	import Header from '$lib/components/layout/Header.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -118,6 +119,10 @@
 	// Space conversations drawer state
 	let showConversationsDrawer = $state(false);
 	let showNewChatAreaModal = $state(false);
+
+	// Delete conversation modal state
+	let showDeleteConversationModal = $state(false);
+	let deletingConversation = $state<Conversation | null>(null);
 
 	// Computed counts for the area being deleted
 	let deletingAreaConversationCount = $derived.by(() => {
@@ -323,11 +328,26 @@
 		}
 	}
 
-	async function handleDeleteConversation(id: string) {
-		if (confirm('Delete this conversation? This cannot be undone.')) {
-			await chatStore.deleteConversation(id);
-			// Toast is shown by the store itself
+	function handleDeleteConversation(id: string) {
+		// Find the conversation and show confirmation modal
+		const conversation = chatStore.getConversation(id);
+		if (conversation) {
+			deletingConversation = conversation;
+			showDeleteConversationModal = true;
 		}
+	}
+
+	async function handleConfirmDeleteConversation() {
+		if (!deletingConversation) return;
+		await chatStore.deleteConversation(deletingConversation.id);
+		// Toast is shown by the store itself
+		showDeleteConversationModal = false;
+		deletingConversation = null;
+	}
+
+	function handleCloseDeleteConversationModal() {
+		showDeleteConversationModal = false;
+		deletingConversation = null;
 	}
 
 	// Sync drawer state with settings store
@@ -416,6 +436,13 @@
 		spaceColor={spaceFromStore?.color}
 		onClose={handleCloseDeleteAreaModal}
 		onConfirm={handleConfirmAreaDelete}
+	/>
+
+	<DeleteConversationModal
+		open={showDeleteConversationModal}
+		conversation={deletingConversation}
+		onClose={handleCloseDeleteConversationModal}
+		onConfirm={handleConfirmDeleteConversation}
 	/>
 
 	{#if spaceFromStore}
