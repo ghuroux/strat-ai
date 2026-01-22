@@ -44,10 +44,14 @@
 	const cellColors = ['gray', 'blue', 'green', 'amber', 'red', 'purple'] as const;
 
 	/**
-	 * Set background color on selected table cell
+	 * Set background color on selected table cell or header
 	 */
 	function setCellBackgroundColor(color: string | null) {
-		editor.chain().focus().updateAttributes('tableCell', { backgroundColor: color }).run();
+		// Update both tableCell and tableHeader - only the active one will be affected
+		editor.chain().focus()
+			.updateAttributes('tableCell', { backgroundColor: color })
+			.updateAttributes('tableHeader', { backgroundColor: color })
+			.run();
 		showColorPicker = false;
 	}
 

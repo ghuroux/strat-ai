@@ -24,7 +24,7 @@
 	import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 	import { Table } from '@tiptap/extension-table';
 	import { TableRow as BaseTableRow } from '@tiptap/extension-table-row';
-	import { TableHeader } from '@tiptap/extension-table-header';
+	import { TableHeader as BaseTableHeader } from '@tiptap/extension-table-header';
 	import { TableCell as BaseTableCell } from '@tiptap/extension-table-cell';
 	import { common, createLowlight } from 'lowlight';
 	import { recalculateTable, updateTableTotalsInEditor, extractTableData, type TableData } from '$lib/services/table-calculations';
@@ -52,6 +52,26 @@
 					renderHTML: (attributes) => {
 						if (!attributes.isTotal) return {};
 						return { 'data-is-total': 'true' };
+					}
+				}
+			};
+		}
+	});
+
+	// Custom TableHeader that supports backgroundColor attribute (like TableCell)
+	const TableHeader = BaseTableHeader.extend({
+		addAttributes() {
+			return {
+				...this.parent?.(),
+				backgroundColor: {
+					default: null,
+					parseHTML: (element) => element.getAttribute('data-bg-color'),
+					renderHTML: (attributes) => {
+						if (!attributes.backgroundColor) return {};
+						return {
+							'data-bg-color': attributes.backgroundColor,
+							style: `background-color: var(--table-color-${attributes.backgroundColor})`
+						};
 					}
 				}
 			};
