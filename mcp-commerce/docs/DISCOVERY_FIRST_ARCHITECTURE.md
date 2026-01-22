@@ -315,6 +315,29 @@ curl -X POST http://localhost:9223/discovery/start \
 
 ---
 
+## Future: Sector Patterns
+
+> **Parking lot idea** - not implemented yet, but architecturally planned for.
+
+The playbook system could extend to support different **sector patterns**:
+
+| Sector | Typical Flows | Key Elements |
+|--------|---------------|--------------|
+| **E-commerce** | Search → Product → Cart → Checkout | Add to cart, cart icon, checkout button |
+| **Flights** | Search → Results → Select → Passengers → Payment | Origin/dest, dates, passenger forms |
+| **Events** | Browse → Event → Seats → Checkout | Seat map, ticket types, venue info |
+| **Hotels** | Search → Results → Room → Guest → Payment | Check-in/out dates, room types, guest count |
+| **Restaurants** | Search → Venue → Time → Party size → Confirm | Date/time picker, party size, table selection |
+
+Each sector would have:
+- **Sector-specific discovery prompts** (what to look for)
+- **Expected flow templates** (what steps are typical)
+- **Validation rules** (what must exist for this sector)
+
+This enables: *"Add flysafair.co.za"* → Discovery knows it's flights → Uses flight pattern → Faster, more accurate discovery.
+
+---
+
 ## How to Add a New Site
 
 1. **Start Discovery Session**
