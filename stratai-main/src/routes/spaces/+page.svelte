@@ -235,7 +235,7 @@
 						</h2>
 
 						<!-- Description -->
-						<p class="text-sm text-surface-400 group-hover:text-surface-300 transition-colors">
+						<p class="text-sm text-surface-400 group-hover:text-surface-300 transition-colors line-clamp-2">
 							{space.description}
 						</p>
 

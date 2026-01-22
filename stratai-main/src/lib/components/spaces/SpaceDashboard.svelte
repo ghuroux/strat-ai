@@ -512,6 +512,11 @@
 		margin: 0;
 		max-width: 400px;
 		line-height: 1.5;
+		/* Truncate to 2 lines with ellipsis */
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 	}
 
 	/* Content */
