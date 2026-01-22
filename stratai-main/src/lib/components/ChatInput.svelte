@@ -185,6 +185,7 @@
 			handler: () => void;
 			response?: string | null;
 			getResponse?: () => string;
+			responseDelay?: number; // Delay in ms before showing response (for animations)
 		}> = [
 			// Visual effect easter eggs
 			{
@@ -233,7 +234,8 @@
 				patterns: ['flip a coin', 'flip coin', 'coin flip', 'heads or tails', 'heads or tails?'],
 				handler: triggerCoinFlip,
 				response: null, // Will be generated after handler runs
-				getResponse: getCoinFlipResponse
+				getResponse: getCoinFlipResponse,
+				responseDelay: 1600 // Wait for coin animation (1.5s) before showing result
 			}
 		];
 
@@ -242,10 +244,19 @@
 			if (egg.patterns.includes(lowerInput)) {
 				// Trigger the effect first (may set state for dynamic response)
 				egg.handler();
-				// Get response - use dynamic getResponse if available, otherwise use static response
-				const response = egg.getResponse ? egg.getResponse() : (egg.response || '');
-				// Add messages to conversation
-				addEasterEggConversation(originalInput, response);
+
+				// Helper to show the response
+				const showResponse = () => {
+					const response = egg.getResponse ? egg.getResponse() : (egg.response || '');
+					addEasterEggConversation(originalInput, response);
+				};
+
+				// If there's a delay (e.g., wait for animation), defer the response
+				if (egg.responseDelay) {
+					setTimeout(showResponse, egg.responseDelay);
+				} else {
+					showResponse();
+				}
 				return true;
 			}
 		}
