@@ -46,6 +46,9 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/MEETING_LIFECYCLE.md` - **Meeting lifecycle system** (end-to-end: AI-guided creation → Teams scheduling → transcript capture → context integration)
 - `stratai-main/docs/AI_RETRIEVAL_ARCHITECTURE.md` - **AI retrieval mechanics** (how AI accesses org knowledge via tools, graph traversal, semantic search)
 - `stratai-main/docs/MEMBER_BUDGETS.md` - **Member budget system** ($ caps, progressive tier restrictions, escalation workflows, scenarios)
+- `stratai-main/docs/features/INTEGRATIONS_ARCHITECTURE.md` - **Integrations foundation** (MCP-native, two tiers, credential management, permissions)
+- `stratai-main/docs/features/CALENDAR_INTEGRATION.md` - **Calendar integration** (Microsoft Graph, meeting capture, flywheel enabler - FIRST integration)
+- `stratai-main/docs/features/GITHUB_CONTEXT_INTEGRATION.md` - **GitHub integration** (PM ticket writing, code context tools - SECOND integration)
 
 ---
 
@@ -307,6 +310,16 @@ Don't revisit without good reason:
 | Theme support mandatory | All UI components MUST support both dark AND light modes using `dark:` prefix pattern. Light mode is base, dark mode overrides. Prevents "invisible in light mode" bugs. See `DESIGN-SYSTEM.md`. |
 | V2 migration system | Archive v1 (002-040) in `_v1-baseline/`, new format `YYYYMMDD_NNN_description.sql`. Date-prefixed for chronological sorting, supports parallel development. Fresh installs use consolidated `fresh-install/schema.sql`. |
 | game_scores org-scoped | Leaderboards scoped to org (not global) for enterprise privacy. CHECK constraint enforces known game types. Partial index for efficient weekly leaderboards. |
+| Integrations Architecture first | Build shared foundation (credentials, permissions, UI patterns) before GitHub; enables rapid addition of future integrations |
+| Integration scoping: Org → Space → Area | Matches existing hierarchy; org-level credentials, Space-level config, Area-level activation |
+| GitHub: PM persona first | Clearer use case (ticket writing), proves value without code generation complexity; dev persona later |
+| GitHub: read-only V1 | Simpler permissions, lower risk; write operations (PR creation) deferred |
+| GitHub: PAT then App | Personal Access Token for MVP speed; GitHub App for production org-level management |
+| GitHub: progressive disclosure | Don't dump code; explore → summarize → ask clarifying questions → draft ticket |
+| MCP-Native integrations | MCP is industry standard (OpenAI, Google, MS adopted 2025). StratAI is MCP Host wrapping servers with auth/permissions/audit |
+| Two integration tiers | Foundational (first-party UX: Calendar, Email) vs Contextual (add-on UX: GitHub, Jira). Different setup expectations |
+| Calendar first, not GitHub | Dogfood (StratGroup M365), universal value (everyone uses calendar), flywheel enabler (meeting capture = decisions) |
+| Meeting capture primary use case | Post-meeting decision capture feeds flywheel. Prep is valuable but secondary. Capture → Learn loop is the moat |
 
 ---
 
