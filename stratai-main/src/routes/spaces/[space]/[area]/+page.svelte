@@ -457,12 +457,12 @@
 	function startStreamingTimeouts() {
 		clearStreamingTimeouts();
 
-		// Warning after 15s
+		// Warning after 45s (increased from 15s for slower models/complex prompts)
 		slowWarningTimeout = setTimeout(() => {
 			showSlowWarning = true;
-		}, 15000);
+		}, 45000);
 
-		// Hard timeout after 60s
+		// Hard timeout after 90s (increased from 60s)
 		hardTimeout = setTimeout(() => {
 			if (chatStore.isStreaming) {
 				chatStore.stopStreaming();
@@ -470,7 +470,7 @@
 				showSlowWarning = false;
 				toastStore.error('Response timed out. Please try again.');
 			}
-		}, 60000);
+		}, 90000);
 	}
 
 	function clearStreamingTimeouts() {
