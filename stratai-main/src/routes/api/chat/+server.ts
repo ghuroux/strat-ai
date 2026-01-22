@@ -2109,6 +2109,9 @@ async function streamToController(
 					cacheReadTokens: cacheRead
 				});
 
+				// Send usage to client for Arena metrics display
+				sendSSE(controller, encoder, { type: 'usage', usage: usageData });
+
 				// Update routing decision outcome if we have a record ID
 				const recordId = (routingDecision as RoutingDecision & { recordId?: string })?.recordId;
 				if (recordId) {
@@ -2348,6 +2351,9 @@ function streamResponse(
 								cacheCreationTokens: cacheCreation,
 								cacheReadTokens: cacheRead
 							});
+
+							// Send usage to client for Arena metrics display
+							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'usage', usage: usageData })}\n\n`));
 
 							// Update routing decision outcome if we have a record ID
 							const recordId = (routingDecision as RoutingDecision & { recordId?: string })?.recordId;

@@ -198,13 +198,6 @@
 				</span>
 			{/if}
 
-			<!-- Duration -->
-			{#if response.durationMs}
-				<span class="text-xs text-surface-500">
-					{formatDuration(response.durationMs)}
-				</span>
-			{/if}
-
 			<!-- Copy button (only when content available) -->
 			{#if response.content && !response.isStreaming}
 				<button
@@ -312,7 +305,25 @@
 		{@const totalTokens = (response.metrics?.inputTokens || 0) + (response.metrics?.outputTokens || 0)}
 		<div class="px-4 py-2.5 border-t border-surface-700/30 bg-surface-800/50">
 			<div class="flex items-center justify-between text-xs">
-				<div class="flex items-center gap-4">
+				<div class="flex items-center gap-3 flex-wrap">
+					<!-- Time metrics -->
+					{#if timeToFirstToken || response.durationMs}
+						<div class="flex items-center gap-2 text-surface-400">
+							<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+							</svg>
+							{#if timeToFirstToken}
+								<span title="Time to first token">{formatDuration(timeToFirstToken)} TTFT</span>
+							{/if}
+							{#if timeToFirstToken && response.durationMs}
+								<span class="text-surface-600">|</span>
+							{/if}
+							{#if response.durationMs}
+								<span title="Total response time">{formatDuration(response.durationMs)} total</span>
+							{/if}
+						</div>
+					{/if}
+
 					<!-- Tokens breakdown -->
 					{#if response.metrics?.inputTokens || response.metrics?.outputTokens}
 						<div class="flex items-center gap-2">
@@ -323,16 +334,6 @@
 								({formatTokens(response.metrics?.inputTokens)} in / {formatTokens(response.metrics?.outputTokens)} out)
 							</span>
 						</div>
-					{/if}
-
-					<!-- Time to first token -->
-					{#if timeToFirstToken}
-						<span class="flex items-center gap-1 text-surface-400" title="Time to first token">
-							<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-							</svg>
-							{formatDuration(timeToFirstToken)} TTFT
-						</span>
 					{/if}
 				</div>
 
