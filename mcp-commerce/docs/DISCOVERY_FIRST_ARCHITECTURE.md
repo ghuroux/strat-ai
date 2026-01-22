@@ -315,6 +315,141 @@ curl -X POST http://localhost:9223/discovery/start \
 
 ---
 
+## Future: Self-Service Site Onboarding
+
+> **Vision** - Platform console where team members can add new retail sites without code.
+
+### The Pipeline
+
+```
+┌─────────┐    ┌───────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
+│  ADD    │───▶│ DISCOVER  │───▶│ VALIDATE │───▶│ APPROVE  │───▶│ ACTIVE  │
+│  SITE   │    │           │    │          │    │          │    │         │
+└─────────┘    └───────────┘    └──────────┘    └──────────┘    └─────────┘
+     │              │                │               │               │
+  Team adds     AI explores      Auto-tests      Human review    Available
+  site + meta   generates        run against     (optional)      in search
+                playbook         playbook                        results
+```
+
+### Site Registry Data Model
+
+```typescript
+interface SiteRegistryEntry {
+  id: string;
+  url: string;                    // incredibleconnection.co.za
+  name: string;                   // Incredible Connection
+
+  // Classification
+  sector: 'ecommerce' | 'flights' | 'events' | 'hotels';
+  subsector?: string;             // 'technology', 'fashion', 'groceries'
+  categories: string[];           // ['computers', 'components', 'peripherals']
+
+  // Status
+  status: 'draft' | 'discovering' | 'testing' | 'review' | 'active' | 'failed' | 'disabled';
+
+  // Playbook reference
+  playbookVersion?: string;
+  lastDiscoveredAt?: string;
+
+  // Health tracking
+  healthScore?: number;           // 0-100, based on recent test runs
+  lastHealthCheck?: string;
+  failureCount?: number;          // Consecutive failures triggers auto-disable
+
+  // Business relationship (see Monetization section)
+  partnerTier?: 'organic' | 'basic' | 'featured' | 'exclusive';
+  contractId?: string;
+
+  // Audit
+  addedBy: string;
+  addedAt: string;
+  activatedAt?: string;
+}
+```
+
+### Pipeline Stages
+
+| Stage | What Happens | Automated? |
+|-------|--------------|------------|
+| **Add** | Team member enters URL, sector, categories | Manual |
+| **Discover** | DiscoveryAgent explores, generates playbook | ✅ Auto |
+| **Validate** | Smoke tests: search works, products extract, cart functions | ✅ Auto |
+| **Review** | Team reviews playbook, screenshots, test results | Manual (optional) |
+| **Activate** | Site added to registry, available in user searches | ✅ Auto on pass |
+| **Monitor** | Periodic health checks, auto-disable on repeated failures | ✅ Auto |
+
+### User Experience
+
+When sites are onboarded, users automatically get more results:
+
+```
+Search: "gaming laptop"
+
+Sources: [✓ Takealot] [✓ Amazon] [✓ Incredible Connection] [✓ Evetech]
+
+12 results from 4 retailers
+- ASUS ROG R24,999 (Takealot)
+- Lenovo Legion R19,999 (Amazon)
+- MSI Katana R29,999 (Evetech)
+- HP Omen R22,500 (Incredible Connection)
+```
+
+### Key Benefits
+
+- **No code required** - Team adds sites through UI
+- **Self-healing** - Re-discovery when sites change
+- **Quality gates** - Only validated sites go live
+- **Automatic scaling** - More sites = more value for users
+
+---
+
+## Future: Monetization (Open Topic)
+
+> **Unresolved** - Business model considerations for retailer partnerships.
+
+The site registry and categorization system opens potential revenue streams:
+
+### Possible Models
+
+| Model | Description | Considerations |
+|-------|-------------|----------------|
+| **Affiliate/Commission** | Earn % on purchases made through platform | Requires retailer agreement, tracking |
+| **Featured Placement** | Retailers pay for priority in search results | Must balance UX vs revenue |
+| **Subscription Tiers** | Retailers pay monthly for inclusion | Guaranteed revenue, simpler |
+| **Data Insights** | Sell anonymized market data to retailers | Privacy considerations |
+| **White-label** | Retailers embed our search on their site | Different product entirely |
+
+### Partner Tiers (Concept)
+
+```
+ORGANIC     - Free, community-added, standard placement
+BASIC       - Verified partner, standard placement, basic analytics
+FEATURED    - Highlighted in results, category sponsorship
+EXCLUSIVE   - Category exclusivity in certain contexts
+```
+
+### Open Questions
+
+- How does monetization affect user trust? (Are results biased?)
+- Should paid placements be clearly marked?
+- How to handle competing retailers in same category?
+- What's the sales motion? (Self-serve vs enterprise sales)
+- Legal/compliance for affiliate tracking across regions?
+
+### Architectural Implications
+
+If monetization is pursued, the system needs:
+- Partner portal (separate from platform console)
+- Contract/billing management
+- Placement algorithm that respects tiers
+- Analytics dashboard for partners
+- Clear disclosure in UI for sponsored results
+
+> **Note:** This section intentionally left open-ended. Business model decisions should drive technical requirements, not the other way around.
+
+---
+
 ## Future: Sector Patterns
 
 > **Parking lot idea** - not implemented yet, but architecturally planned for.
