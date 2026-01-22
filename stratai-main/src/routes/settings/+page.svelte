@@ -6,6 +6,7 @@
 	import SettingsPassword from '$lib/components/settings/SettingsPassword.svelte';
 	import SettingsAIPreferences from '$lib/components/settings/SettingsAIPreferences.svelte';
 	import SettingsShortcuts from '$lib/components/settings/SettingsShortcuts.svelte';
+	import SettingsUsage from '$lib/components/settings/SettingsUsage.svelte';
 	import SettingsPrivacy from '$lib/components/settings/SettingsPrivacy.svelte';
 	import type { PageData } from './$types';
 
@@ -36,6 +37,8 @@
 		<SettingsAIPreferences />
 	{:else if activeSection === 'shortcuts'}
 		<SettingsShortcuts />
+	{:else if activeSection === 'usage'}
+		<SettingsUsage />
 	{:else if activeSection === 'privacy'}
 		<SettingsPrivacy />
 	{/if}

@@ -112,6 +112,20 @@ export interface UsageStats {
 }
 
 /**
+ * Recent usage record for drill-down view
+ */
+export interface RecentUsageRecord {
+	id: string;
+	requestType: 'chat' | 'arena' | 'second-opinion' | 'summarization';
+	promptTokens: number;
+	completionTokens: number;
+	totalTokens: number;
+	cacheReadTokens: number;
+	estimatedCostMillicents: number;
+	createdAt: Date;
+}
+
+/**
  * Convert database row to entity
  */
 function rowToUsage(row: UsageRow): LLMUsageRecord {
@@ -148,9 +162,11 @@ export interface UsageRepository {
 	}): Promise<LLMUsageRecord>;
 
 	getStats(organizationId: string, daysBack?: number): Promise<UsageStats>;
+	getUserStats(organizationId: string, userId: string, daysBack?: number): Promise<UsageStats>;
 	getAggregateByModel(organizationId: string, daysBack?: number): Promise<ModelUsageAggregate[]>;
 	getAggregateByUser(organizationId: string, daysBack?: number): Promise<UserUsageAggregate[]>;
 	getModelBreakdownByUser(organizationId: string, userId: string, daysBack?: number): Promise<UserModelBreakdown[]>;
+	getRecentRequestsByModel(organizationId: string, userId: string, model: string, limit?: number): Promise<RecentUsageRecord[]>;
 	getDailyTotals(organizationId: string, daysBack?: number): Promise<DailyUsage[]>;
 }
 
@@ -206,6 +222,45 @@ export const postgresUsageRepository: UsageRepository = {
 				COALESCE(SUM(estimated_cost_millicents), 0)::text AS "estimatedCostMillicents"
 			FROM llm_usage
 			WHERE organization_id = ${organizationId}
+			  AND created_at >= NOW() - INTERVAL '1 day' * ${daysBack}
+		`;
+
+		const row = rows[0];
+		return {
+			totalRequests: parseInt(row.totalRequests, 10),
+			totalTokens: parseInt(row.totalTokens, 10),
+			promptTokens: parseInt(row.promptTokens, 10),
+			completionTokens: parseInt(row.completionTokens, 10),
+			cacheCreationTokens: parseInt(row.cacheCreationTokens, 10),
+			cacheReadTokens: parseInt(row.cacheReadTokens, 10),
+			estimatedCostMillicents: parseInt(row.estimatedCostMillicents, 10)
+		};
+	},
+
+	/**
+	 * Get usage statistics for a specific user within an organization
+	 */
+	async getUserStats(organizationId: string, userId: string, daysBack: number = 30): Promise<UsageStats> {
+		const rows = await sql<Array<{
+			totalRequests: string;
+			totalTokens: string;
+			promptTokens: string;
+			completionTokens: string;
+			cacheCreationTokens: string;
+			cacheReadTokens: string;
+			estimatedCostMillicents: string;
+		}>>`
+			SELECT
+				COUNT(*)::text AS "totalRequests",
+				COALESCE(SUM(total_tokens), 0)::text AS "totalTokens",
+				COALESCE(SUM(prompt_tokens), 0)::text AS "promptTokens",
+				COALESCE(SUM(completion_tokens), 0)::text AS "completionTokens",
+				COALESCE(SUM(cache_creation_tokens), 0)::text AS "cacheCreationTokens",
+				COALESCE(SUM(cache_read_tokens), 0)::text AS "cacheReadTokens",
+				COALESCE(SUM(estimated_cost_millicents), 0)::text AS "estimatedCostMillicents"
+			FROM llm_usage
+			WHERE organization_id = ${organizationId}
+			  AND user_id = ${userId}
 			  AND created_at >= NOW() - INTERVAL '1 day' * ${daysBack}
 		`;
 
@@ -343,6 +398,55 @@ export const postgresUsageRepository: UsageRepository = {
 			completionTokens: parseInt(row.completionTokens, 10),
 			cacheReadTokens: parseInt(row.cacheReadTokens, 10),
 			estimatedCostMillicents: parseInt(row.estimatedCostMillicents, 10)
+		}));
+	},
+
+	/**
+	 * Get recent individual requests for a specific model and user
+	 * Used for drill-down view to show per-request cost breakdown
+	 */
+	async getRecentRequestsByModel(
+		organizationId: string,
+		userId: string,
+		model: string,
+		limit: number = 10
+	): Promise<RecentUsageRecord[]> {
+		const rows = await sql<Array<{
+			id: string;
+			requestType: string;
+			promptTokens: number;
+			completionTokens: number;
+			totalTokens: number;
+			cacheReadTokens: number | null;
+			estimatedCostMillicents: number | null;
+			createdAt: Date;
+		}>>`
+			SELECT
+				id,
+				request_type AS "requestType",
+				prompt_tokens AS "promptTokens",
+				completion_tokens AS "completionTokens",
+				total_tokens AS "totalTokens",
+				cache_read_tokens AS "cacheReadTokens",
+				estimated_cost_millicents AS "estimatedCostMillicents",
+				created_at AS "createdAt"
+			FROM llm_usage
+			WHERE organization_id = ${organizationId}
+			  AND user_id = ${userId}
+			  AND model = ${model}
+			ORDER BY created_at DESC
+			LIMIT ${limit}
+		`;
+
+		return rows.map(row => ({
+			id: row.id,
+			requestType: row.requestType as RecentUsageRecord['requestType'],
+			promptTokens: row.promptTokens,
+			completionTokens: row.completionTokens,
+			totalTokens: row.totalTokens,
+			cacheReadTokens: row.cacheReadTokens || 0,
+			estimatedCostMillicents: row.estimatedCostMillicents || 0,
+			createdAt: row.createdAt
 		}));
 	},
 
