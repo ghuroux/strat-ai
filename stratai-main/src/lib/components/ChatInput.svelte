@@ -179,10 +179,12 @@
 	 */
 	function handleEasterEggCommand(lowerInput: string, originalInput: string): boolean {
 		// Define easter egg patterns and their handlers
+		// Some eggs use static responses, others use dynamic getResponse() after handler runs
 		const easterEggs: Array<{
 			patterns: string[];
 			handler: () => void;
-			response: string;
+			response?: string | null;
+			getResponse?: () => string;
 		}> = [
 			// Visual effect easter eggs
 			{
@@ -225,16 +227,25 @@
 				patterns: ["there's no place like 127.0.0.1", 'theres no place like 127.0.0.1', 'no place like 127.0.0.1', '127.0.0.1'],
 				handler: () => {},
 				response: getLocalhostResponse()
+			},
+			// Fun utility easter eggs (response generated dynamically)
+			{
+				patterns: ['flip a coin', 'flip coin', 'coin flip', 'heads or tails', 'heads or tails?'],
+				handler: triggerCoinFlip,
+				response: null, // Will be generated after handler runs
+				getResponse: getCoinFlipResponse
 			}
 		];
 
 		// Find matching easter egg
 		for (const egg of easterEggs) {
 			if (egg.patterns.includes(lowerInput)) {
-				// Add messages to conversation
-				addEasterEggConversation(originalInput, egg.response);
-				// Trigger the effect
+				// Trigger the effect first (may set state for dynamic response)
 				egg.handler();
+				// Get response - use dynamic getResponse if available, otherwise use static response
+				const response = egg.getResponse ? egg.getResponse() : (egg.response || '');
+				// Add messages to conversation
+				addEasterEggConversation(originalInput, response);
 				return true;
 			}
 		}
@@ -721,6 +732,52 @@ Where every request is a round-trip to yourself. Very zen. 🧘`,
 *There's no place like 127.0.0.1* — The Wizard of Oz, developer edition.`
 		];
 		return responses[Math.floor(Math.random() * responses.length)];
+	}
+
+	// Coin flip state for dynamic response
+	let lastCoinFlipResult = $state<'heads' | 'tails' | null>(null);
+
+	/**
+	 * Easter egg: Flip a coin - actually useful AND fun!
+	 */
+	function triggerCoinFlip() {
+		const isFirstTime = easterEggsStore.discover('coin-flip');
+		lastCoinFlipResult = Math.random() < 0.5 ? 'heads' : 'tails';
+
+		// Create floating coin animation
+		const coin = document.createElement('div');
+		coin.className = 'coin-flip-animation';
+		coin.innerHTML = lastCoinFlipResult === 'heads' ? '🪙' : '🪙';
+		document.body.appendChild(coin);
+
+		// Remove after animation
+		setTimeout(() => {
+			coin.remove();
+		}, 1500);
+
+		if (isFirstTime) {
+			toastStore.discovery('You found the coin flip! A handy decision maker.', 3000);
+		}
+	}
+
+	function getCoinFlipResponse(): string {
+		const result = lastCoinFlipResult || (Math.random() < 0.5 ? 'heads' : 'tails');
+		const isHeads = result === 'heads';
+
+		const headsPhrases = [
+			'**HEADS!** 🪙\n\n*The coin spins through the air and lands face-up.*',
+			'**HEADS!** 🪙\n\n*A decisive flip reveals the head side.*',
+			'**HEADS!** 🪙\n\n*The universe has spoken. Heads it is!*'
+		];
+
+		const tailsPhrases = [
+			'**TAILS!** 🪙\n\n*The coin flips gracefully and settles on tails.*',
+			'**TAILS!** 🪙\n\n*A crisp flip reveals the tail side.*',
+			'**TAILS!** 🪙\n\n*Fortune favors tails today!*'
+		];
+
+		const phrases = isHeads ? headsPhrases : tailsPhrases;
+		return phrases[Math.floor(Math.random() * phrases.length)];
 	}
 
 	/**

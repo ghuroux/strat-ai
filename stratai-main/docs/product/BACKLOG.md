@@ -1518,15 +1518,15 @@ CREATE INDEX idx_page_assets_checksum ON page_assets(checksum);
 
 | Priority | Issues | Effort |
 |----------|--------|--------|
-| P0 (Critical) | Toolbar reactivity | Low |
+| ~~P0 (Critical)~~ | ~~Toolbar reactivity~~ | ~~Low~~ ✅ |
 | P1 (High) | Undo/redo, paragraph option, link modal | Low |
-| P2 (Medium) | Char count, title input, clear formatting, visibility confirm | Low |
+| P2 (Medium) | ~~Char count~~, title input, clear formatting, visibility confirm | Low |
 | P3 (Low) | Alignment, shortcuts ref, PDF export, auto-save indicator | Medium |
 | P4 (Future) | Drag handles, link click-edit, page type edit, version history | Medium-High |
 
 ---
 
-#### P0: Critical - Toolbar State Not Reactive
+#### P0: Critical - Toolbar State Not Reactive ✅
 
 **Problem**: Toolbar buttons use `editor.isActive('bold')` but don't update when cursor moves to differently-formatted text. Heading buttons don't reflect current heading level.
 
@@ -1558,13 +1558,13 @@ let isBoldActive = $derived(editorTick && editor?.isActive('bold'));
 ```
 
 **Checklist**:
-- [ ] Add `onTransaction` callback to editor initialization
-- [ ] Create reactive `editorTick` counter
-- [ ] Pass to `EditorToolbar` as prop
-- [ ] Update all `isActive()` checks to be reactive
-- [ ] Test: Click in bold text → Bold button highlighted
-- [ ] Test: Click in H2 → H2 button highlighted
-- [ ] Test: Click in list → List button highlighted
+- [x] Add `onTransaction` callback to editor initialization
+- [x] Create reactive `editorTick` counter
+- [x] Pass to `EditorToolbar` as prop
+- [x] Update all `isActive()` checks to be reactive
+- [x] Test: Click in bold text → Bold button highlighted
+- [x] Test: Click in H2 → H2 button highlighted
+- [x] Test: Click in list → List button highlighted
 
 ---
 
@@ -1690,7 +1690,7 @@ let isBoldActive = $derived(editorTick && editor?.isActive('bold'));
 
 #### P2: Medium Priority
 
-##### Character Count
+##### Character Count ✅
 
 **Problem**: Only word count shown. Character count needed for constrained content.
 
@@ -1707,8 +1707,8 @@ let charCountNoSpaces = $derived(extractTextFromContent(content).replace(/\s/g, 
 ```
 
 **Checklist**:
-- [ ] Add character count derived state
-- [ ] Display in footer alongside word count
+- [x] Add character count derived state
+- [x] Display in footer alongside word count
 - [ ] Consider toggle or hover for "with/without spaces"
 
 ##### Title Input Behavior
@@ -1902,13 +1902,13 @@ Version API exists but no UI to browse/restore.
 #### Implementation Order (Recommended Sprint)
 
 **Day 1: Critical + Quick Wins**
-- [ ] P0: Toolbar reactivity fix
+- [x] P0: Toolbar reactivity fix ✅
 - [ ] P1: Undo/redo buttons
 - [ ] P1: Paragraph option
 - [ ] P1: Link modal auto-focus
 
 **Day 2: Polish**
-- [ ] P2: Character count
+- [x] P2: Character count ✅
 - [ ] P2: Title input auto-select
 - [ ] P2: Clear formatting button
 - [ ] P2: Visibility confirmation
