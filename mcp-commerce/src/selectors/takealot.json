@@ -8,7 +8,7 @@
   "productLink": "a[class*='product-card-module_link-underlay'], a[href*='PLID']",
   "productRating": "[class*='card-reviews'], .star-rating, .rating",
   "productReviewCount": "[class*='review-count'], .reviews",
-  "addToCart": "[data-ref='add-to-cart-button'], button[class*='add-to-cart'], #add-to-cart",
+  "addToCart": "[data-ref='add-to-cart-button'], button:has-text('Add to Cart'), button[class*='add-to-cart'], .add-to-cart-button, #add-to-cart",
   "cartIcon": "[data-ref='cart-icon'], .cart-icon, #cart",
   "cartCount": "[data-ref='cart-count'], .cart-count, .badge",
   "checkoutButton": "[data-ref='checkout-button'], .checkout-button, #checkout",

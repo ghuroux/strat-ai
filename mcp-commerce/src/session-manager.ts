@@ -84,17 +84,36 @@ export class SessionManager {
       await this.initialize();
     }
 
-    // Try to find existing session
+    // Try to find existing session by sessionId (check both exact and site-prefixed IDs)
     if (sessionId) {
+      // Try exact match first
       const existing = this.sessions.get(sessionId);
       if (existing && existing.site === site) {
         existing.lastAccessedAt = new Date();
         return existing;
       }
+      // Try with site suffix
+      const siteSpecificId = `${sessionId}-${site}`;
+      const existingWithSite = this.sessions.get(siteSpecificId);
+      if (existingWithSite && existingWithSite.site === site) {
+        existingWithSite.lastAccessedAt = new Date();
+        return existingWithSite;
+      }
+    }
+
+    // IMPORTANT: Check if there's already a session for this site (by profile directory)
+    // Persistent contexts lock the profile, so we must reuse existing sessions
+    for (const [existingId, session] of this.sessions) {
+      if (session.site === site) {
+        console.log(`[SessionManager] Reusing existing session ${existingId} for ${site}`);
+        session.lastAccessedAt = new Date();
+        return session;
+      }
     }
 
     // Create new session with persistent context
-    const id = sessionId || `${site}-${randomUUID().slice(0, 8)}`;
+    // IMPORTANT: Always include site in the ID to prevent collisions when same sessionId is used for multiple sites
+    const id = sessionId ? `${sessionId}-${site}` : `${site}-${randomUUID().slice(0, 8)}`;
     const profilePath = join(this.profilesDir, site);
 
     // Ensure site profile directory exists
@@ -108,7 +127,16 @@ export class SessionManager {
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       args: [
         '--disable-blink-features=AutomationControlled',
-        '--no-sandbox'
+        '--no-sandbox',
+        // Disable password manager completely to prevent breach warning dialogs
+        '--disable-features=PasswordLeakDetection,PasswordManager,PasswordManagerUI,PasswordManagerOnboarding',
+        '--disable-save-password-bubble',
+        '--disable-password-generation',
+        '--password-store=basic',
+        // Disable other annoying dialogs
+        '--disable-notifications',
+        '--disable-default-apps',
+        '--no-first-run'
       ]
     });
 

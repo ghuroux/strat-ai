@@ -61,10 +61,46 @@ export interface CommerceOrderConfirmation {
 }
 
 // Badge types for product comparison
-export type ProductBadge = 'best_value' | 'cheapest' | 'highest_rated' | 'most_reviews';
+export type ProductBadge = 'best_value' | 'cheapest' | 'highest_rated' | 'most_reviews' | 'budget' | 'sweet_spot' | 'premium';
+
+// Price tier for categorizing products by price
+export type PriceTier = 'budget' | 'sweet_spot' | 'premium';
 
 export interface CommerceProductWithBadges extends CommerceProduct {
   badges: ProductBadge[];
+  priceTier?: PriceTier;
+}
+
+// Purchase flow types (mirrors backend)
+export type PurchaseStatus =
+  | 'authenticating'
+  | 'adding_to_cart'
+  | 'checkout'
+  | 'awaiting_payment'
+  | 'complete'
+  | 'failed';
+
+export type PurchaseErrorCode =
+  | 'OUT_OF_STOCK'
+  | 'PRICE_CHANGED'
+  | 'PAYMENT_DECLINED'
+  | 'SESSION_EXPIRED'
+  | 'NOT_AUTHENTICATED'
+  | 'LOGIN_FAILED'
+  | 'TIMEOUT'
+  | 'CHECKOUT_FAILED'
+  | 'UNKNOWN';
+
+export interface BuyResponse {
+  success: boolean;
+  orderId?: string;
+  orderUrl?: string;
+  estimatedDelivery?: string;
+  total?: number;
+  error?: string;
+  errorCode?: PurchaseErrorCode;
+  newPrice?: number;
+  status: PurchaseStatus;
 }
 
 // Message commerce content for chat display

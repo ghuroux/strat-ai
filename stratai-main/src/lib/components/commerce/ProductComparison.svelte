@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { CommerceProductWithBadges } from '$lib/types/commerce';
+	import type { CommerceProductWithBadges, PriceTier, ProductBadge } from '$lib/types/commerce';
 	import ProductCard from './ProductCard.svelte';
 
 	interface Props {
@@ -11,6 +11,49 @@
 
 	let { query, products, onViewDetails, onAddToCart }: Props = $props();
 
+	/**
+	 * Assign price tiers to products based on their position in the price range.
+	 * Bottom third = budget, middle third = sweet_spot, top third = premium
+	 */
+	function assignPriceTiers(prods: CommerceProductWithBadges[]): CommerceProductWithBadges[] {
+		if (prods.length === 0) return prods;
+
+		// Sort by price to determine tiers
+		const sorted = [...prods].sort((a, b) => a.price - b.price);
+		const third = Math.ceil(sorted.length / 3);
+
+		// Create a map of product id+site to tier
+		const tierMap = new Map<string, PriceTier>();
+		sorted.forEach((p, i) => {
+			const key = `${p.id}-${p.site}`;
+			if (i < third) {
+				tierMap.set(key, 'budget');
+			} else if (i < third * 2) {
+				tierMap.set(key, 'sweet_spot');
+			} else {
+				tierMap.set(key, 'premium');
+			}
+		});
+
+		// Apply tiers to products (maintaining original order)
+		return prods.map(p => {
+			const key = `${p.id}-${p.site}`;
+			const tier = tierMap.get(key);
+
+			// Add price tier badge if not already present
+			const badges = [...p.badges];
+			if (tier && !badges.includes(tier as ProductBadge)) {
+				badges.push(tier as ProductBadge);
+			}
+
+			return {
+				...p,
+				priceTier: tier,
+				badges
+			};
+		});
+	}
+
 	// Dedupe products by id + site to prevent duplicate key errors
 	const uniqueProducts = $derived(() => {
 		const seen = new Set<string>();
@@ -21,6 +64,9 @@
 			return true;
 		});
 	});
+
+	// Products with price tiers assigned
+	const productsWithTiers = $derived(() => assignPriceTiers(uniqueProducts()));
 
 	// Count products by site
 	const siteCounts = $derived(() => {
@@ -51,9 +97,9 @@
 	</div>
 
 	<!-- Product Grid -->
-	{#if uniqueProducts().length > 0}
+	{#if productsWithTiers().length > 0}
 		<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-			{#each uniqueProducts() as product (product.id + '-' + product.site)}
+			{#each productsWithTiers() as product (product.id + '-' + product.site)}
 				<ProductCard
 					{product}
 					{onViewDetails}

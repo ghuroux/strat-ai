@@ -177,3 +177,100 @@ export interface HealthResponse {
   uptime: number;
   activeSessions: number;
 }
+
+// ============================================================================
+// Purchase Types - For /buy endpoint and purchase flow
+// ============================================================================
+
+export type PurchaseErrorCode =
+  | 'OUT_OF_STOCK'
+  | 'PRICE_CHANGED'
+  | 'PAYMENT_DECLINED'
+  | 'SESSION_EXPIRED'
+  | 'NOT_AUTHENTICATED'
+  | 'LOGIN_FAILED'
+  | 'TIMEOUT'
+  | 'CHECKOUT_FAILED'
+  | 'UNKNOWN';
+
+export type PurchaseStatus =
+  | 'authenticating'
+  | 'adding_to_cart'
+  | 'checkout'
+  | 'awaiting_payment'
+  | 'complete'
+  | 'failed';
+
+export interface PurchaseResult {
+  success: boolean;
+  orderId?: string;
+  orderUrl?: string;
+  estimatedDelivery?: string;
+  total: number;
+  currency: string;
+  error?: string;
+  errorCode?: PurchaseErrorCode;
+  newPrice?: number;
+  status: PurchaseStatus;
+}
+
+export interface BuyRequest {
+  merchant: SiteId;
+  productUrl: string;
+  expectedPrice?: number; // For price change detection
+}
+
+export interface BuyResponse {
+  success: boolean;
+  orderId?: string;
+  orderUrl?: string;
+  estimatedDelivery?: string;
+  total?: number;
+  error?: string;
+  errorCode?: PurchaseErrorCode;
+  newPrice?: number;
+  status: PurchaseStatus;
+}
+
+export interface ThreeDSecureInfo {
+  detected: boolean;
+  type?: 'iframe' | 'redirect' | 'unknown';
+}
+
+// ============================================================================
+// Agentic Commerce Types - For streaming purchase flow
+// ============================================================================
+
+export interface AgenticBuyRequest {
+  merchant: SiteId;
+  productUrl: string;
+  productName: string;
+  expectedPrice?: number;
+  currency?: string;
+}
+
+export interface AgenticBuyConfirmRequest {
+  sessionId: string;
+  merchant: SiteId;
+}
+
+export interface AgenticProgressEvent {
+  status: PurchaseStatus;
+  step: string;
+  screenshotBase64?: string;
+  iteration?: number;
+  checkoutTotal?: number;
+}
+
+export interface AgenticResultEvent {
+  success: boolean;
+  status: PurchaseStatus;
+  orderId?: string;
+  orderUrl?: string;
+  total?: number;
+  error?: string;
+  errorCode?: PurchaseErrorCode;
+  newPrice?: number;
+  screenshotBase64?: string;
+  sessionId?: string;
+}

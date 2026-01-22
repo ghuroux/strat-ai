@@ -3,8 +3,10 @@
  */
 
 import { SiteAdapter, type SearchOptions } from './base.js';
-import type { Product, SiteId, SiteSelectors } from '../types.js';
+import type { Product, SiteId, SiteSelectors, PurchaseResult, ThreeDSecureInfo } from '../types.js';
 import amazonSelectors from '../selectors/amazon.json' with { type: 'json' };
+
+const ORDER_CONFIRMATION_TIMEOUT = 180000; // 3 minutes for 3D Secure
 
 export class AmazonAdapter extends SiteAdapter {
   readonly siteId: SiteId = 'amazon';
@@ -234,5 +236,354 @@ export class AmazonAdapter extends SiteAdapter {
                         accountText.toLowerCase().includes('hello, sign in');
 
     return !notLoggedIn;
+  }
+
+  async login(): Promise<boolean> {
+    const creds = this.getCredentials();
+    if (!creds) {
+      console.error('[AmazonAdapter] No credentials configured');
+      throw new Error('Amazon credentials not configured. Set AMAZON_EMAIL and AMAZON_PASSWORD in .env.local');
+    }
+
+    console.log('[AmazonAdapter] Logging in...');
+
+    // Navigate to sign in page
+    await this.page.goto('https://www.amazon.co.za/ap/signin', { waitUntil: 'domcontentloaded' });
+    await this.page.waitForTimeout(2000);
+
+    // Fill email
+    const emailInput = await this.page.$('#ap_email');
+    if (!emailInput) {
+      console.error('[AmazonAdapter] Could not find email input');
+      return false;
+    }
+
+    await emailInput.fill(creds.email);
+    await this.page.waitForTimeout(500);
+
+    // Click continue button
+    const continueBtn = await this.page.$('#continue');
+    if (continueBtn) {
+      await continueBtn.click();
+      await this.page.waitForTimeout(2000);
+    }
+
+    // Fill password
+    const passwordInput = await this.page.$('#ap_password');
+    if (!passwordInput) {
+      console.error('[AmazonAdapter] Could not find password input');
+      return false;
+    }
+
+    await passwordInput.fill(creds.password);
+    await this.page.waitForTimeout(500);
+
+    // Click sign in button
+    const signInBtn = await this.page.$('#signInSubmit');
+    if (!signInBtn) {
+      console.error('[AmazonAdapter] Could not find sign in button');
+      return false;
+    }
+
+    await signInBtn.click();
+
+    // Wait for navigation
+    await this.page.waitForTimeout(3000);
+
+    // Verify login was successful
+    const isLoggedIn = await this.isAuthenticated();
+    console.log(`[AmazonAdapter] Login ${isLoggedIn ? 'successful' : 'failed'}`);
+
+    return isLoggedIn;
+  }
+
+  async purchase(productUrl: string, expectedPrice?: number): Promise<PurchaseResult> {
+    console.log(`[AmazonAdapter] Starting purchase for: ${productUrl}`);
+
+    try {
+      // Step 1: Navigate to product and verify availability
+      await this.page.goto(productUrl, { waitUntil: 'domcontentloaded' });
+      await this.waitForPageReady();
+
+      // Check stock status
+      const availability = await this.safeGetText('#availability span');
+      if (availability.toLowerCase().includes('unavailable') ||
+          availability.toLowerCase().includes('out of stock')) {
+        return {
+          success: false,
+          total: 0,
+          currency: 'ZAR',
+          error: 'Product is out of stock',
+          errorCode: 'OUT_OF_STOCK',
+          status: 'failed'
+        };
+      }
+
+      // Check price if expected price provided
+      if (expectedPrice !== undefined) {
+        let priceText = await this.safeGetText('.a-price .a-offscreen');
+        if (!priceText) {
+          priceText = await this.safeGetText('#priceblock_ourprice, #priceblock_dealprice, .a-price-whole');
+        }
+        const currentPrice = this.parsePrice(priceText);
+
+        // Allow 1% tolerance for price changes
+        const priceDiff = Math.abs(currentPrice - expectedPrice) / expectedPrice;
+        if (priceDiff > 0.01) {
+          return {
+            success: false,
+            total: currentPrice,
+            currency: 'ZAR',
+            error: `Price changed from R${expectedPrice.toFixed(2)} to R${currentPrice.toFixed(2)}`,
+            errorCode: 'PRICE_CHANGED',
+            newPrice: currentPrice,
+            status: 'failed'
+          };
+        }
+      }
+
+      // Step 2: Add to cart (try Buy Now first for faster checkout)
+      console.log('[AmazonAdapter] Adding to cart...');
+      const buyNowBtn = await this.page.$('#buy-now-button');
+      const addToCartBtn = await this.page.$(this.selectors.addToCart);
+
+      if (buyNowBtn) {
+        // Use Buy Now for immediate checkout
+        await buyNowBtn.click();
+        await this.page.waitForTimeout(3000);
+      } else if (addToCartBtn) {
+        await addToCartBtn.click();
+        await this.page.waitForTimeout(2000);
+
+        // Navigate to checkout
+        console.log('[AmazonAdapter] Proceeding to checkout...');
+        await this.page.goto(`${this.baseUrl}/gp/cart/view.html`, { waitUntil: 'domcontentloaded' });
+        await this.waitForPageReady();
+
+        // Click proceed to checkout
+        const checkoutBtn = await this.page.$('#sc-buy-box-ptc-button, input[name="proceedToRetailCheckout"]');
+        if (!checkoutBtn) {
+          console.error('[AmazonAdapter] Could not find checkout button');
+          return {
+            success: false,
+            total: 0,
+            currency: 'ZAR',
+            error: 'Could not find checkout button',
+            errorCode: 'CHECKOUT_FAILED',
+            status: 'failed'
+          };
+        }
+        await checkoutBtn.click();
+        await this.page.waitForTimeout(3000);
+      } else {
+        console.error('[AmazonAdapter] Could not find add to cart or buy now button');
+        return {
+          success: false,
+          total: 0,
+          currency: 'ZAR',
+          error: 'Could not add product to cart',
+          errorCode: 'CHECKOUT_FAILED',
+          status: 'failed'
+        };
+      }
+
+      await this.waitForPageReady();
+
+      // Step 3: Look for "Place your order" button
+      const placeOrderSelectors = [
+        '#submitOrderButtonId',
+        'input[name="placeYourOrder1"]',
+        '#bottomSubmitOrderButtonId',
+        'span:has-text("Place your order")'
+      ];
+
+      let placeOrderBtn = null;
+      for (const selector of placeOrderSelectors) {
+        placeOrderBtn = await this.page.$(selector);
+        if (placeOrderBtn) break;
+      }
+
+      if (!placeOrderBtn) {
+        // May need to select shipping/payment first
+        await this.page.waitForTimeout(2000);
+        for (const selector of placeOrderSelectors) {
+          placeOrderBtn = await this.page.$(selector);
+          if (placeOrderBtn) break;
+        }
+      }
+
+      if (!placeOrderBtn) {
+        console.error('[AmazonAdapter] Could not find place order button');
+        return {
+          success: false,
+          total: 0,
+          currency: 'ZAR',
+          error: 'Could not find place order button. Check that delivery and payment details are configured.',
+          errorCode: 'CHECKOUT_FAILED',
+          status: 'failed'
+        };
+      }
+
+      // Step 4: Click place order
+      console.log('[AmazonAdapter] Placing order...');
+      await placeOrderBtn.click();
+
+      // Step 5: Wait for order confirmation (handles 3D Secure)
+      const confirmation = await this.waitForOrderConfirmation(ORDER_CONFIRMATION_TIMEOUT);
+
+      if (!confirmation.success) {
+        return {
+          success: false,
+          total: 0,
+          currency: 'ZAR',
+          error: 'Order was not confirmed. Payment may have been declined or 3D Secure timed out.',
+          errorCode: 'PAYMENT_DECLINED',
+          status: 'failed'
+        };
+      }
+
+      // Extract total from confirmation page
+      const totalText = await this.safeGetText('.grand-total-price, .order-total, #orderTotal');
+      const total = this.parsePrice(totalText);
+
+      // Extract estimated delivery
+      const deliveryText = await this.safeGetText('.delivery-date, #delivery-date, .promised-delivery');
+
+      console.log(`[AmazonAdapter] Order placed successfully! Order ID: ${confirmation.orderId}`);
+
+      return {
+        success: true,
+        orderId: confirmation.orderId,
+        orderUrl: this.page.url(),
+        estimatedDelivery: deliveryText || undefined,
+        total,
+        currency: 'ZAR',
+        status: 'complete'
+      };
+
+    } catch (error) {
+      console.error('[AmazonAdapter] Purchase error:', error);
+      return {
+        success: false,
+        total: 0,
+        currency: 'ZAR',
+        error: error instanceof Error ? error.message : 'Unknown error during purchase',
+        errorCode: 'UNKNOWN',
+        status: 'failed'
+      };
+    }
+  }
+
+  async detect3DSecure(): Promise<ThreeDSecureInfo> {
+    // Check for 3D Secure iframe
+    const iframes = await this.page.$$('iframe');
+
+    for (const iframe of iframes) {
+      const src = await iframe.getAttribute('src');
+      const name = await iframe.getAttribute('name');
+
+      // Look for common 3DS indicators
+      if (src?.includes('3ds') ||
+          src?.includes('acs') ||
+          src?.includes('secure') ||
+          name?.includes('3ds') ||
+          name?.includes('secure')) {
+        return { detected: true, type: 'iframe' };
+      }
+    }
+
+    // Check URL for 3DS redirect
+    const currentUrl = this.page.url();
+    if (currentUrl.includes('3ds') ||
+        currentUrl.includes('/secure/') ||
+        currentUrl.includes('authenticate') ||
+        currentUrl.includes('/challenge')) {
+      return { detected: true, type: 'redirect' };
+    }
+
+    // Check for common 3DS modal content
+    const threeDsContent = await this.page.$('[class*="3ds"], [class*="secure-payment"], [id*="3ds"]');
+    if (threeDsContent) {
+      return { detected: true, type: 'unknown' };
+    }
+
+    return { detected: false };
+  }
+
+  async waitForOrderConfirmation(timeout = ORDER_CONFIRMATION_TIMEOUT): Promise<{ orderId?: string; success: boolean }> {
+    const startTime = Date.now();
+    const checkInterval = 2000; // Check every 2 seconds
+
+    console.log('[AmazonAdapter] Waiting for order confirmation (may require 3D Secure)...');
+
+    while (Date.now() - startTime < timeout) {
+      // Check for 3D Secure
+      const threeDs = await this.detect3DSecure();
+      if (threeDs.detected) {
+        console.log('[AmazonAdapter] 3D Secure detected. Waiting for user to complete verification...');
+        await this.page.waitForTimeout(checkInterval);
+        continue;
+      }
+
+      // Check if we're on order confirmation page
+      const currentUrl = this.page.url();
+
+      if (currentUrl.includes('/order') ||
+          currentUrl.includes('/thankyou') ||
+          currentUrl.includes('/confirmation') ||
+          currentUrl.includes('/gp/buy/thankyou')) {
+
+        // Try to extract order ID from page
+        const orderIdSelectors = [
+          '.order-id',
+          '#order-id',
+          'span[data-test-id="order-id"]',
+          'bdi:has-text("Order")'
+        ];
+
+        for (const selector of orderIdSelectors) {
+          const el = await this.page.$(selector);
+          if (el) {
+            const text = await el.textContent();
+            // Extract order ID from text (e.g., "Order #123-4567890-1234567")
+            const match = text?.match(/(\d{3}-\d{7}-\d{7})|(\d{17,})/);
+            if (match) {
+              return { orderId: match[0], success: true };
+            }
+          }
+        }
+
+        // Try to get from URL
+        const urlMatch = currentUrl.match(/orderID=([^&]+)|order[\/=](\d+[-\d]*)/i);
+        if (urlMatch) {
+          return { orderId: urlMatch[1] || urlMatch[2], success: true };
+        }
+
+        // Check for "thank you" or "order placed" text
+        const thankYouText = await this.safeGetText('h1, .a-box-inner');
+        if (thankYouText.toLowerCase().includes('thank you') ||
+            thankYouText.toLowerCase().includes('order placed')) {
+          return { success: true };
+        }
+      }
+
+      // Check for error messages
+      const errorEl = await this.page.$('.a-alert-error, .error-message, #error');
+      if (errorEl) {
+        const errorText = await errorEl.textContent();
+        if (errorText?.toLowerCase().includes('payment') ||
+            errorText?.toLowerCase().includes('declined') ||
+            errorText?.toLowerCase().includes('failed') ||
+            errorText?.toLowerCase().includes('problem')) {
+          console.error('[AmazonAdapter] Payment error detected:', errorText);
+          return { success: false };
+        }
+      }
+
+      await this.page.waitForTimeout(checkInterval);
+    }
+
+    console.error('[AmazonAdapter] Order confirmation timeout');
+    return { success: false };
   }
 }

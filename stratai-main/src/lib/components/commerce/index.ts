@@ -10,3 +10,4 @@ export { default as ProductComparison } from './ProductComparison.svelte';
 export { default as CheckoutPreview } from './CheckoutPreview.svelte';
 export { default as OrderConfirmation } from './OrderConfirmation.svelte';
 export { default as CheckoutModal } from './CheckoutModal.svelte';
+export { default as BuyModal } from './BuyModal.svelte';

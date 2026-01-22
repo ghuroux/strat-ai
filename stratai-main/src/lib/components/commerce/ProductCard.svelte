@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { CommerceProductWithBadges } from '$lib/types/commerce';
+	import { openBuyModal } from '$lib/stores/buy.svelte';
 	import ProductBadge from './ProductBadge.svelte';
 	import ProductRating from './ProductRating.svelte';
 	import ProductPrice from './ProductPrice.svelte';
@@ -11,6 +12,11 @@
 	}
 
 	let { product, onViewDetails, onAddToCart }: Props = $props();
+
+	function handleBuy() {
+		// Open the buy modal directly - no chat message
+		openBuyModal(product);
+	}
 
 	const siteConfig: Record<string, { name: string; color: string }> = {
 		takealot: { name: 'Takealot', color: 'bg-blue-500' },
@@ -103,10 +109,10 @@
 					View
 				</button>
 			{/if}
-			{#if onAddToCart && product.inStock}
+			{#if product.inStock}
 				<button
 					type="button"
-					onclick={() => onAddToCart?.(product)}
+					onclick={handleBuy}
 					class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded transition-colors"
 				>
 					Buy

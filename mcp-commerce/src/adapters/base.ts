@@ -3,7 +3,7 @@
  */
 
 import type { Page } from 'playwright';
-import type { Product, SiteId, SiteSelectors } from '../types.js';
+import type { Product, SiteId, SiteSelectors, PurchaseResult, ThreeDSecureInfo } from '../types.js';
 
 export interface SearchOptions {
   maxPrice?: number;
@@ -66,6 +66,46 @@ export abstract class SiteAdapter {
    * Check if the user is authenticated
    */
   abstract isAuthenticated(): Promise<boolean>;
+
+  /**
+   * Login to the site using stored credentials
+   * Returns true if login was successful
+   */
+  abstract login(): Promise<boolean>;
+
+  /**
+   * Execute a purchase for a product
+   * Handles the full flow: add to cart → checkout → place order → wait for confirmation
+   */
+  abstract purchase(productUrl: string, expectedPrice?: number): Promise<PurchaseResult>;
+
+  /**
+   * Detect if 3D Secure verification is present
+   * This may appear as an iframe or redirect to bank's page
+   */
+  abstract detect3DSecure(): Promise<ThreeDSecureInfo>;
+
+  /**
+   * Wait for order confirmation after placing order
+   * Handles 3D Secure flow if detected
+   */
+  abstract waitForOrderConfirmation(timeout?: number): Promise<{ orderId?: string; success: boolean }>;
+
+  /**
+   * Get credentials from environment variables
+   * Returns null if credentials are not configured
+   */
+  protected getCredentials(): { email: string; password: string } | null {
+    const siteKey = this.siteId.toUpperCase();
+    const email = process.env[`${siteKey}_EMAIL`];
+    const password = process.env[`${siteKey}_PASSWORD`];
+
+    if (!email || !password) {
+      return null;
+    }
+
+    return { email, password };
+  }
 
   /**
    * Take a screenshot of the current page

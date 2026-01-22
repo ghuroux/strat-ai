@@ -11,6 +11,10 @@
     "smoke-test": "tsx src/smoke/runner.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
+    "@types/cors": "^2.8.19",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "playwright": "^1.49.1"
   },

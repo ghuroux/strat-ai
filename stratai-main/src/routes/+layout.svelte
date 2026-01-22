@@ -7,6 +7,7 @@
 	import MatrixRain from '$lib/components/effects/MatrixRain.svelte';
 	import Confetti from '$lib/components/effects/Confetti.svelte';
 	import { SnakeGame, WordleGame } from '$lib/components/games';
+	import { BuyModal } from '$lib/components/commerce';
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import { commandPaletteStore } from '$lib/stores/commandPalette.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -287,3 +288,6 @@
 		onComplete={() => easterEggsStore.onConfettiComplete()}
 	/>
 {/if}
+
+<!-- Commerce Buy Modal (global for product card clicks) -->
+<BuyModal />
