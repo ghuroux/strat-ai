@@ -15,12 +15,17 @@ import { readFile, writeFile, mkdir, readdir, symlink, unlink, lstat, stat } fro
 import { join, dirname } from 'path';
 import { existsSync } from 'fs';
 import { randomUUID } from 'crypto';
-import type { SitePlaybook, PlaybookValidation } from './types';
-import type { SiteId } from '../types';
+import { fileURLToPath } from 'url';
+import type { SitePlaybook, PlaybookValidation } from './types.js';
+import type { SiteId } from '../types.js';
 
 // ============================================================================
 // Configuration
 // ============================================================================
+
+/** Get directory name in ES modules */
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /** Base directory for playbook storage */
 const PLAYBOOKS_DIR = join(dirname(dirname(__dirname)), 'playbooks');
