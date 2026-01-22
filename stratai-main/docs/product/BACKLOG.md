@@ -1990,6 +1990,32 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 
 ---
 
+### Centralize LLM Timeout Configuration
+**Status**: Planned
+
+**Problem**: Streaming timeout values (warning + hard timeout) are duplicated across multiple chat pages. Easy to update one and forget others.
+
+**Current State**:
+- `src/routes/+page.svelte` - 45s warning, 90s hard timeout
+- `src/routes/spaces/[space]/[area]/+page.svelte` - 45s warning, 90s hard timeout
+- Values hardcoded in each `startStreamingTimeouts()` function
+
+**Solution**:
+- [ ] Create `src/lib/config/timeouts.ts` with constants:
+  ```typescript
+  export const STREAMING_TIMEOUTS = {
+    WARNING_MS: 45000,   // Show "taking longer than expected" warning
+    HARD_MS: 90000       // Stop streaming and show error
+  };
+  ```
+- [ ] Update both chat pages to import from config
+- [ ] Consider environment-driven overrides for different deployments
+- [ ] Document timeout rationale in config file comments
+
+**Benefit**: Single source of truth for timeout values, easier to tune based on real-world usage patterns.
+
+---
+
 ### Prompt Caching Optimization
 **Status**: Phase 1 Complete
 
