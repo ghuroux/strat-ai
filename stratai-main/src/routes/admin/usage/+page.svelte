@@ -9,6 +9,18 @@
 
 	let { data }: { data: PageData } = $props();
 
+	interface RecentRequest {
+		id: string;
+		requestType: string;
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+		cacheReadTokens: number;
+		estimatedCostMillicents: number;
+		formattedCost: string;
+		createdAt: string;
+	}
+
 	// State
 	let expandedUserId = $state<string | null>(null);
 	let userModelData = $state<Record<string, Array<{
@@ -22,6 +34,11 @@
 		formattedCost: string;
 	}>>>({});
 	let loadingUserId = $state<string | null>(null);
+
+	// Model drill-down state (user+model → requests)
+	let expandedModelKey = $state<string | null>(null); // Format: "userId:model"
+	let modelRecentRequests = $state<Record<string, RecentRequest[]>>({});
+	let loadingModelKey = $state<string | null>(null);
 
 	// Format large numbers
 	function formatNumber(num: number): string {
@@ -59,10 +76,12 @@
 	async function toggleUserExpand(userId: string) {
 		if (expandedUserId === userId) {
 			expandedUserId = null;
+			expandedModelKey = null; // Collapse any expanded model
 			return;
 		}
 
 		expandedUserId = userId;
+		expandedModelKey = null; // Reset model expansion when switching users
 
 		// Fetch model breakdown if not already loaded
 		if (!userModelData[userId]) {
@@ -79,6 +98,58 @@
 				loadingUserId = null;
 			}
 		}
+	}
+
+	// Toggle model expansion and fetch recent requests
+	async function toggleModelExpand(userId: string, model: string) {
+		const key = `${userId}:${model}`;
+
+		if (expandedModelKey === key) {
+			expandedModelKey = null;
+			return;
+		}
+
+		expandedModelKey = key;
+
+		// Fetch recent requests if not already loaded
+		if (!modelRecentRequests[key]) {
+			loadingModelKey = key;
+			try {
+				const response = await fetch(
+					`/api/admin/usage/user/${userId}/requests?model=${encodeURIComponent(model)}&limit=10`
+				);
+				if (response.ok) {
+					const result = await response.json();
+					modelRecentRequests = { ...modelRecentRequests, [key]: result.requests };
+				}
+			} catch (err) {
+				console.error('Failed to load recent requests:', err);
+			} finally {
+				loadingModelKey = null;
+			}
+		}
+	}
+
+	// Format date/time for display
+	function formatDateTime(isoString: string): string {
+		const date = new Date(isoString);
+		return date.toLocaleString(undefined, {
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
+	}
+
+	// Get request type label
+	function getRequestTypeLabel(type: string): string {
+		const labels: Record<string, string> = {
+			chat: 'Chat',
+			arena: 'Arena',
+			'second-opinion': '2nd Opinion',
+			summarization: 'Summary'
+		};
+		return labels[type] || type;
 	}
 </script>
 
@@ -179,18 +250,92 @@
 												<th class="text-right">Output</th>
 												<th class="text-right">Cached</th>
 												<th class="text-right">Cost</th>
+												<th class="expand-col"></th>
 											</tr>
 										</thead>
 										<tbody>
 											{#each models as model}
-												<tr>
+												{@const modelKey = `${user.userId}:${model.model}`}
+												{@const isModelExpanded = expandedModelKey === modelKey}
+												{@const isModelLoading = loadingModelKey === modelKey}
+												{@const requests = modelRecentRequests[modelKey] || []}
+
+												<!-- Model row -->
+												<tr
+													class="model-row"
+													class:model-expanded={isModelExpanded}
+													onclick={() => toggleModelExpand(user.userId, model.model)}
+												>
 													<td class="model-name">{getModelDisplayName(model.model)}</td>
 													<td class="text-right">{formatNumber(model.totalRequests)}</td>
 													<td class="text-right">{formatNumber(model.promptTokens)}</td>
 													<td class="text-right">{formatNumber(model.completionTokens)}</td>
 													<td class="text-right cache-value">{formatNumber(model.cacheReadTokens)}</td>
 													<td class="text-right">{model.formattedCost}</td>
+													<td class="expand-col">
+														<svg
+															class="model-expand-icon"
+															class:rotated={isModelExpanded}
+															width="14"
+															height="14"
+															viewBox="0 0 24 24"
+															fill="none"
+															stroke="currentColor"
+															stroke-width="2"
+														>
+															<polyline points="6 9 12 15 18 9"></polyline>
+														</svg>
+													</td>
 												</tr>
+
+												<!-- Expanded requests row -->
+												{#if isModelExpanded}
+													<tr class="requests-row">
+														<td colspan="7">
+															<div class="requests-content">
+																<div class="requests-header">Last 10 Requests</div>
+
+																{#if isModelLoading}
+																	<div class="requests-loading">
+																		<svg class="spinner" viewBox="0 0 24 24">
+																			<circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60" stroke-linecap="round" />
+																		</svg>
+																		Loading...
+																	</div>
+																{:else if requests.length === 0}
+																	<div class="requests-empty">No recent requests</div>
+																{:else}
+																	<div class="requests-list">
+																		{#each requests as request}
+																			<div class="request-item">
+																				<div class="request-left">
+																					<span class="request-type">{getRequestTypeLabel(request.requestType)}</span>
+																					<span class="request-time">{formatDateTime(request.createdAt)}</span>
+																				</div>
+																				<div class="request-right">
+																					<span class="request-tokens">
+																						<span class="token-in">{formatNumber(request.promptTokens)}</span>
+																						<span class="token-arrow">→</span>
+																						<span class="token-out">{formatNumber(request.completionTokens)}</span>
+																					</span>
+																					{#if request.cacheReadTokens > 0}
+																						<span class="request-cache">
+																							<svg class="cache-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+																								<path d="M13 10V3L4 14h7v7l9-11h-7z" />
+																							</svg>
+																							{formatNumber(request.cacheReadTokens)} cached
+																						</span>
+																					{/if}
+																					<span class="request-cost">{request.formattedCost}</span>
+																				</div>
+																			</div>
+																		{/each}
+																	</div>
+																{/if}
+															</div>
+														</td>
+													</tr>
+												{/if}
 											{/each}
 										</tbody>
 									</table>
@@ -669,5 +814,173 @@
 		text-align: center;
 		color: var(--color-surface-500);
 		font-size: 0.8125rem;
+	}
+
+	/* Expandable model rows */
+	.expand-col {
+		width: 2rem;
+		padding-right: 0.5rem !important;
+	}
+
+	.model-row {
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+
+	.model-row:hover {
+		background: var(--color-surface-700);
+	}
+
+	.model-row.model-expanded {
+		background: color-mix(in srgb, var(--color-primary-500) 10%, transparent);
+	}
+
+	.model-row.model-expanded td {
+		border-bottom-color: transparent;
+	}
+
+	.model-expand-icon {
+		color: var(--color-surface-500);
+		transition: transform 0.2s ease;
+	}
+
+	.model-expand-icon.rotated {
+		transform: rotate(180deg);
+	}
+
+	/* Requests row */
+	.requests-row td {
+		padding: 0 !important;
+		background: var(--color-surface-900);
+	}
+
+	.requests-content {
+		padding: 1rem;
+		border-top: 1px solid var(--color-surface-700);
+	}
+
+	.requests-header {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-surface-500);
+		margin-bottom: 0.75rem;
+	}
+
+	.requests-loading {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		color: var(--color-surface-400);
+		font-size: 0.8125rem;
+	}
+
+	.requests-empty {
+		text-align: center;
+		padding: 1rem;
+		color: var(--color-surface-500);
+		font-size: 0.8125rem;
+	}
+
+	.requests-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.request-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.625rem 0.75rem;
+		background: var(--color-surface-800);
+		border: 1px solid var(--color-surface-700);
+		border-radius: 0.375rem;
+		font-size: 0.8125rem;
+	}
+
+	.request-left {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.request-type {
+		padding: 0.125rem 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.025em;
+		background: var(--color-surface-700);
+		color: var(--color-surface-300);
+		border-radius: 0.25rem;
+	}
+
+	.request-time {
+		color: var(--color-surface-400);
+		font-size: 0.75rem;
+	}
+
+	.request-right {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.request-tokens {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+		font-size: 0.75rem;
+	}
+
+	.token-in {
+		color: var(--color-primary-400);
+	}
+
+	.token-arrow {
+		color: var(--color-surface-500);
+	}
+
+	.token-out {
+		color: var(--color-success-400);
+	}
+
+	.request-cache {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.75rem;
+		color: var(--color-warning-400);
+	}
+
+	.cache-icon {
+		width: 0.75rem;
+		height: 0.75rem;
+	}
+
+	.request-cost {
+		font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
+		font-weight: 500;
+		color: var(--color-success-400);
+		min-width: 4rem;
+		text-align: right;
+	}
+
+	/* Responsive adjustments */
+	@media (max-width: 640px) {
+		.request-item {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.5rem;
+		}
+
+		.request-right {
+			width: 100%;
+			justify-content: space-between;
+		}
 	}
 </style>
