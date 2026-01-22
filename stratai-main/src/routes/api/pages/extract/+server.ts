@@ -58,6 +58,31 @@ Available node types:
 - blockquote
 - codeBlock (attrs: { language: string })
 - horizontalRule
+- table (contains tableRow nodes)
+- tableRow (contains tableHeader or tableCell nodes)
+- tableHeader (for header row cells - contains paragraph)
+- tableCell (for data cells - contains paragraph)
+
+TABLE FORMAT EXAMPLE:
+{
+  "type": "table",
+  "content": [
+    {
+      "type": "tableRow",
+      "content": [
+        { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Header 1" }] }] },
+        { "type": "tableHeader", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Header 2" }] }] }
+      ]
+    },
+    {
+      "type": "tableRow",
+      "content": [
+        { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Data 1" }] }] },
+        { "type": "tableCell", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Data 2" }] }] }
+      ]
+    }
+  ]
+}
 
 Text can have marks: bold, italic, underline, strike, code, link (with attrs: { href: string })
 
@@ -66,9 +91,10 @@ GUIDELINES:
 2. Use proper heading hierarchy (H1 for title, H2 for sections, H3 for subsections)
 3. Use bullet lists for related items
 4. Use task lists for action items
-5. Include relevant quotes or code if present
-6. Be concise but comprehensive
-7. Output ONLY the JSON object, no other text`;
+5. IMPORTANT: Preserve tables as table nodes - do NOT convert tables to lists or paragraphs
+6. Include relevant quotes or code if present
+7. Be concise but comprehensive
+8. Output ONLY the JSON object, no other text`;
 }
 
 /**
@@ -347,8 +373,9 @@ Rules:
 3. Fix syntax errors (missing quotes, trailing commas, unclosed brackets)
 4. Ensure structure follows TipTap format: { "type": "doc", "content": [...] }
 5. If content is truncated, close the structure cleanly
+6. Preserve tables - do NOT convert them to lists
 
-Valid node types: heading, paragraph, bulletList, orderedList, listItem, taskList, taskItem, blockquote, codeBlock, horizontalRule
+Valid node types: heading, paragraph, bulletList, orderedList, listItem, taskList, taskItem, blockquote, codeBlock, horizontalRule, table, tableRow, tableHeader, tableCell
 
 Output the fixed JSON directly.`;
 }
