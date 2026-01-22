@@ -315,6 +315,202 @@ curl -X POST http://localhost:9223/discovery/start \
 
 ---
 
+## Loyalty Integration: Points-to-Voucher Redemption
+
+> **Phase 1 Use Case** - Practical application of commerce discovery for loyalty programs.
+
+### The Value Proposition
+
+Loyalty members can search for **anything** across all onboarded retailers and redeem points for vouchers. No static catalog. Infinite choice.
+
+### User Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MEMBER JOURNEY: "I want a laptop bag under R2000"                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  1. SEARCH                                                                   │
+│     ┌─────────────────────────────────────────────────────────────────────┐ │
+│     │  🔍 "Laptop bag under R2000"                          [Search]      │ │
+│     │                                                                     │ │
+│     │  Your balance: ●●● 5,000 points (R500 value)                       │ │
+│     └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  2. RESULTS (from all onboarded retailers)                                  │
+│     ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐    │
+│     │ Targus Bag   │ │ Dell Premier │ │ Samsonite    │ │ Case Logic   │    │
+│     │ R899         │ │ R1,499       │ │ R1,899       │ │ R649         │    │
+│     │ ●●● 8,990 pts│ │ ●●● 14,990   │ │ ●●● 18,990   │ │ ●●● 6,490 pts│    │
+│     │ Takealot     │ │ Amazon       │ │ Incredible   │ │ Takealot     │    │
+│     │ [Get Voucher]│ │ [Get Voucher]│ │ [Get Voucher]│ │ [Get Voucher]│    │
+│     └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘    │
+│                                                                              │
+│  3. REDEMPTION (two paths)                                                  │
+│                                                                              │
+│     PATH A: Enough Points                PATH B: Top-Up Required            │
+│     ────────────────────                 ──────────────────────             │
+│     Case Logic Bag: R649                 Targus Bag: R899                   │
+│     You have: 5,000 pts (R500)           You have: 5,000 pts (R500)         │
+│                                                                              │
+│     Points to redeem: 6,490              Points to redeem: 5,000 (all)      │
+│     ✓ Sufficient balance                 Card top-up: R399                  │
+│                                                 ↓                            │
+│     [Confirm Redemption]                 [Pay R399 & Redeem]                │
+│                                          (StratFin processes)               │
+│                                                                              │
+│  4. VOUCHER ISSUED                                                          │
+│     ┌─────────────────────────────────────────────────────────────────────┐ │
+│     │  ✅ Takealot Voucher: R899                                          │ │
+│     │                                                                     │ │
+│     │  Code: XXXX-XXXX-XXXX-XXXX                                         │ │
+│     │  Valid until: 30 Jan 2026                                          │ │
+│     │                                                                     │ │
+│     │  [Copy Code]  [Shop on Takealot →]                                 │ │
+│     └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│  5. MEMBER COMPLETES PURCHASE                                               │
+│     Member goes to Takealot, adds bag to cart, applies voucher, done.      │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why Vouchers (Not Direct Fulfillment)
+
+| Direct Fulfillment | Voucher Model (Phase 1) |
+|--------------------|-------------------------|
+| Complex logistics | Simple digital delivery |
+| Inventory risk | No inventory |
+| Shipping coordination | Member handles shipping |
+| Returns/refunds complexity | Standard retailer process |
+| Higher integration effort | Voucher API only |
+
+**Phase 1 keeps it simple:** We search, we show, we issue vouchers. Member completes purchase themselves.
+
+### Technical Components
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SYSTEM ARCHITECTURE                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   LOYALTY APP (Frontend)                                                     │
+│   └── Search UI, results display, redemption flow                           │
+│              │                                                               │
+│              ▼                                                               │
+│   MCP-COMMERCE (This System)                                                │
+│   ├── /tools/search - Multi-retailer product search                        │
+│   ├── /playbooks/* - Site configurations                                    │
+│   └── Returns: products with prices, images, availability                   │
+│              │                                                               │
+│              ▼                                                               │
+│   STRATECH LOYALTY ENGINE                                                   │
+│   ├── Points balance check                                                  │
+│   ├── Points deduction                                                      │
+│   ├── Voucher issuance (per retailer)                                       │
+│   └── Transaction logging                                                   │
+│              │                                                               │
+│              ▼ (if top-up needed)                                           │
+│   STRATFIN PAYMENTS                                                         │
+│   ├── Card payment processing                                               │
+│   ├── 3D Secure handling                                                    │
+│   └── Settlement to voucher pool                                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Required Integrations
+
+| System | Integration | Purpose |
+|--------|-------------|---------|
+| **MCP-Commerce** | REST API | Product search across retailers |
+| **StraTech Loyalty** | Points ledger | Balance, deduction, history |
+| **StraTech Loyalty** | Voucher service | Issue retailer-specific vouchers |
+| **StratFin** | Payment API | Process card top-ups |
+| **Retailers** | Voucher pools | Pre-purchased voucher inventory |
+
+### Voucher Pool Model
+
+```
+RETAILER VOUCHER POOLS (pre-funded)
+────────────────────────────────────
+
+Takealot Pool:     R100,000 available
+Amazon Pool:       R50,000 available
+Incredible Pool:   R25,000 available
+
+When member redeems:
+1. Check pool has sufficient balance
+2. Generate unique voucher code
+3. Deduct from pool
+4. Log transaction
+5. Replenish pool when low (manual or auto)
+```
+
+### Points-to-Rand Conversion
+
+```
+Example: 10 points = R1
+
+Product: R899 laptop bag
+Points required: 8,990 points
+
+Member has: 5,000 points (R500)
+Shortfall: 3,990 points (R399)
+
+Option A: "You need 3,990 more points"
+Option B: "Pay R399 to top up" ← StratFin processes
+```
+
+### Discovery-First Advantage
+
+Because we use playbooks, adding new retailers to the loyalty search is streamlined:
+
+```
+NEW RETAILER ONBOARDING
+───────────────────────
+
+1. Run discovery on new site (e.g., Evetech)
+2. Review generated playbook
+3. Negotiate voucher pool arrangement
+4. Add to loyalty search sources
+5. Members instantly see Evetech products
+
+No code changes. Just playbook + voucher pool.
+```
+
+### UX Considerations
+
+| Aspect | Approach |
+|--------|----------|
+| **Search speed** | Parallel search across retailers, stream results as they arrive |
+| **Price display** | Show both Rand and points equivalent |
+| **Availability** | Real-time stock check, hide out-of-stock |
+| **Retailer trust** | Show retailer logos, ratings, delivery estimates |
+| **Voucher clarity** | Clear that voucher is issued, not direct purchase |
+| **Top-up friction** | Seamless card payment, save card for future |
+
+### Success Metrics
+
+| Metric | Target |
+|--------|--------|
+| Search → View product | 40% click-through |
+| View → Redemption | 15% conversion |
+| Top-up rate | 30% of redemptions |
+| Average top-up value | R200 |
+| Voucher utilization | 95% used within 30 days |
+| Member satisfaction | NPS > 50 |
+
+### Future Extensions (Post Phase 1)
+
+- **Price alerts:** "Notify me when this drops below 5,000 points"
+- **Wishlist:** Save items for later redemption
+- **Direct fulfillment:** AI purchases on member's behalf (Phase 2)
+- **Partner earn:** Earn points on partner purchases
+- **Gift vouchers:** Redeem points as gift for others
+
+---
+
 ## Future: Self-Service Site Onboarding
 
 > **Vision** - Platform console where team members can add new retail sites without code.
