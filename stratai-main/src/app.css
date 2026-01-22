@@ -5038,11 +5038,111 @@ body.konami-activated {
 	border-radius: 8px;
 	overflow-x: auto;
 	margin: 1rem 0;
+	position: relative;
+}
+
+/* Language badge for code blocks (when language is set) */
+.editor-body pre[data-language]:not([data-language=""])::before {
+	content: attr(data-language);
+	position: absolute;
+	top: 0.5rem;
+	right: 0.5rem;
+	padding: 0.125rem 0.5rem;
+	background: rgba(255, 255, 255, 0.1);
+	border-radius: 4px;
+	font-size: 0.6875rem;
+	font-weight: 500;
+	color: #9ca3af;
+	text-transform: uppercase;
+	letter-spacing: 0.025em;
+	pointer-events: none;
 }
 
 .editor-body pre code {
 	background: transparent;
 	padding: 0;
+}
+
+/* Highlight.js syntax highlighting theme - VS Code Dark+ inspired */
+.editor-body pre code .hljs-keyword,
+.editor-body pre code .hljs-selector-tag,
+.editor-body pre code .hljs-built_in,
+.editor-body pre code .hljs-name {
+	color: #c586c0; /* Purple - keywords */
+}
+
+.editor-body pre code .hljs-function,
+.editor-body pre code .hljs-title.function_ {
+	color: #dcdcaa; /* Yellow - functions */
+}
+
+.editor-body pre code .hljs-string,
+.editor-body pre code .hljs-attr {
+	color: #ce9178; /* Orange - strings */
+}
+
+.editor-body pre code .hljs-number,
+.editor-body pre code .hljs-literal {
+	color: #b5cea8; /* Light green - numbers */
+}
+
+.editor-body pre code .hljs-comment,
+.editor-body pre code .hljs-quote {
+	color: #6a9955; /* Green - comments */
+	font-style: italic;
+}
+
+.editor-body pre code .hljs-variable,
+.editor-body pre code .hljs-template-variable {
+	color: #9cdcfe; /* Light blue - variables */
+}
+
+.editor-body pre code .hljs-type,
+.editor-body pre code .hljs-class,
+.editor-body pre code .hljs-title.class_ {
+	color: #4ec9b0; /* Teal - types/classes */
+}
+
+.editor-body pre code .hljs-params {
+	color: #9cdcfe; /* Light blue - parameters */
+}
+
+.editor-body pre code .hljs-meta {
+	color: #569cd6; /* Blue - meta/decorators */
+}
+
+.editor-body pre code .hljs-tag {
+	color: #569cd6; /* Blue - HTML tags */
+}
+
+.editor-body pre code .hljs-attribute {
+	color: #9cdcfe; /* Light blue - HTML attributes */
+}
+
+.editor-body pre code .hljs-selector-class,
+.editor-body pre code .hljs-selector-id {
+	color: #d7ba7d; /* Gold - CSS selectors */
+}
+
+.editor-body pre code .hljs-property {
+	color: #9cdcfe; /* Light blue - properties */
+}
+
+.editor-body pre code .hljs-operator,
+.editor-body pre code .hljs-punctuation {
+	color: #d4d4d4; /* Light gray - operators */
+}
+
+.editor-body pre code .hljs-regexp {
+	color: #d16969; /* Red - regex */
+}
+
+.editor-body pre code .hljs-symbol {
+	color: #b5cea8; /* Light green - symbols */
+}
+
+.editor-body pre code .hljs-doctag {
+	color: #608b4e; /* Darker green - doc tags */
 }
 
 .editor-body blockquote {

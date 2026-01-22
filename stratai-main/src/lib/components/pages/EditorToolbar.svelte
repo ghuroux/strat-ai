@@ -43,6 +43,34 @@
 	let showColorPicker = $state(false);
 	const cellColors = ['gray', 'blue', 'green', 'amber', 'red', 'purple'] as const;
 
+	// Code block language picker state
+	let showLanguagePicker = $state(false);
+	const codeLanguages = [
+		{ value: '', label: 'Plain text' },
+		{ value: 'javascript', label: 'JavaScript' },
+		{ value: 'typescript', label: 'TypeScript' },
+		{ value: 'python', label: 'Python' },
+		{ value: 'java', label: 'Java' },
+		{ value: 'csharp', label: 'C#' },
+		{ value: 'cpp', label: 'C++' },
+		{ value: 'go', label: 'Go' },
+		{ value: 'rust', label: 'Rust' },
+		{ value: 'ruby', label: 'Ruby' },
+		{ value: 'php', label: 'PHP' },
+		{ value: 'swift', label: 'Swift' },
+		{ value: 'kotlin', label: 'Kotlin' },
+		{ value: 'sql', label: 'SQL' },
+		{ value: 'html', label: 'HTML' },
+		{ value: 'css', label: 'CSS' },
+		{ value: 'json', label: 'JSON' },
+		{ value: 'yaml', label: 'YAML' },
+		{ value: 'xml', label: 'XML' },
+		{ value: 'markdown', label: 'Markdown' },
+		{ value: 'bash', label: 'Bash' },
+		{ value: 'dockerfile', label: 'Dockerfile' },
+		{ value: 'graphql', label: 'GraphQL' },
+	] as const;
+
 	/**
 	 * Set background color on selected table cell or header
 	 */
@@ -53,6 +81,23 @@
 			.updateAttributes('tableHeader', { backgroundColor: color })
 			.run();
 		showColorPicker = false;
+	}
+
+	/**
+	 * Get current code block language
+	 */
+	function getCurrentCodeBlockLanguage(): string {
+		if (!editor.isActive('codeBlock')) return '';
+		const attrs = editor.getAttributes('codeBlock');
+		return attrs.language || '';
+	}
+
+	/**
+	 * Set language on current code block
+	 */
+	function setCodeBlockLanguage(language: string) {
+		editor.chain().focus().updateAttributes('codeBlock', { language }).run();
+		showLanguagePicker = false;
 	}
 
 	// Reactive format states - depend on editorTick to re-evaluate on cursor changes
@@ -78,6 +123,12 @@
 	let isCodeBlockActive = $derived(editorTick >= 0 && editor.isActive('codeBlock'));
 	let isLinkActive = $derived(editorTick >= 0 && editor.isActive('link'));
 	let isTableActive = $derived(editorTick >= 0 && editor.isActive('table'));
+
+	// Current code block language (reactive)
+	let currentCodeLanguage = $derived(editorTick >= 0 && isCodeBlockActive ? getCurrentCodeBlockLanguage() : '');
+	let currentCodeLanguageLabel = $derived(
+		codeLanguages.find(l => l.value === currentCodeLanguage)?.label || 'Plain text'
+	);
 
 	// Check if OS is Mac for shortcut display
 	const isMac = typeof navigator !== 'undefined' && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -427,6 +478,42 @@
 				<polyline points="8 6 2 12 8 18" />
 			</svg>
 		</button>
+
+		<!-- Language selector (only show when in code block) -->
+		{#if isCodeBlockActive}
+			<div class="relative">
+				<button
+					type="button"
+					class="toolbar-btn language-selector-btn"
+					onclick={() => showLanguagePicker = !showLanguagePicker}
+					title="Select language"
+				>
+					<span class="language-label">{currentCodeLanguageLabel}</span>
+					<svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<polyline points="6 9 12 15 18 9" />
+					</svg>
+				</button>
+
+				{#if showLanguagePicker}
+					<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+					<div
+						class="language-picker-dropdown"
+						onclick={(e) => e.stopPropagation()}
+					>
+						{#each codeLanguages as lang}
+							<button
+								type="button"
+								class="language-option"
+								class:active={currentCodeLanguage === lang.value}
+								onclick={() => setCodeBlockLanguage(lang.value)}
+							>
+								{lang.label}
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	<div class="toolbar-divider"></div>
@@ -971,5 +1058,70 @@
 
 	.formula-btn:disabled {
 		opacity: 0.5;
+	}
+
+	/* Language Picker for Code Blocks */
+	.language-selector-btn {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 0 8px !important;
+		min-width: auto !important;
+		width: auto !important;
+	}
+
+	.language-label {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--editor-text-secondary);
+		max-width: 80px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.icon-small {
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
+	}
+
+	.language-picker-dropdown {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		margin-top: 4px;
+		padding: 4px;
+		background: var(--editor-bg);
+		border: 1px solid var(--editor-border);
+		border-radius: 8px;
+		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+		z-index: 50;
+		max-height: 300px;
+		overflow-y: auto;
+		min-width: 140px;
+	}
+
+	.language-option {
+		display: block;
+		width: 100%;
+		padding: 6px 12px;
+		border: none;
+		background: transparent;
+		color: var(--editor-text);
+		font-size: 0.8125rem;
+		text-align: left;
+		border-radius: 4px;
+		cursor: pointer;
+		transition: background-color 100ms ease;
+	}
+
+	.language-option:hover {
+		background: var(--toolbar-button-hover);
+	}
+
+	.language-option.active {
+		background: var(--editor-border-focus);
+		color: white;
 	}
 </style>

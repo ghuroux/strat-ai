@@ -40,6 +40,18 @@
 	import SharePageModal from './SharePageModal.svelte';
 	import PageAuditLog from './PageAuditLog.svelte';
 	import { userStore } from '$lib/stores/user.svelte';
+	import { SlashCommands, DiagramNode, getDefaultCommands, createSuggestionConfig } from './extensions';
+	import { ExcalidrawEditor, LibraryPicker, type DiagramLibrary } from '$lib/components/diagrams';
+
+	// Diagram editing state
+	interface DiagramEditState {
+		isOpen: boolean;
+		id: string | null;
+		elements: string;
+		appState: string;
+		files: string;
+		pos: number | null;
+	}
 
 	// Custom TableRow that supports isTotal attribute for total rows
 	const TableRow = BaseTableRow.extend({
@@ -75,6 +87,21 @@
 					}
 				}
 			};
+		}
+	});
+
+	// Custom CodeBlockLowlight that renders language as data attribute for CSS styling
+	const CustomCodeBlockLowlight = CodeBlockLowlight.extend({
+		renderHTML({ node, HTMLAttributes }) {
+			const language = node.attrs.language || '';
+			return [
+				'pre',
+				{
+					...HTMLAttributes,
+					'data-language': language
+				},
+				['code', { class: language ? `language-${language}` : '' }, 0]
+			];
 		}
 	});
 
@@ -190,6 +217,7 @@
 
 	// State
 	let editorElement: HTMLDivElement | null = $state(null);
+	let editorWrapper: HTMLDivElement | null = $state(null);
 	let editor: Editor | null = $state(null);
 	let title = $state('');
 	let content = $state<TipTapContent>(EMPTY_TIPTAP_CONTENT);
@@ -202,6 +230,26 @@
 	let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 	let chatPanelOpen = $state(false);
 	let editorTick = $state(0); // Increments on each transaction to force toolbar reactivity
+
+	// Diagram editor modal state
+	let diagramEdit = $state<DiagramEditState>({
+		isOpen: false,
+		id: null,
+		elements: '[]',
+		appState: '{}',
+		files: '{}',
+		pos: null
+	});
+
+	// Library loading state
+	let loadedLibraries = $state<string[]>([]);
+	let loadingLibrary = $state<string | null>(null);
+	let libraryPanelCollapsed = $state(false);
+	let excalidrawEditorRef: {
+		loadLibrary: (lib: DiagramLibrary) => Promise<boolean>;
+		toggleLibrary: (lib: DiagramLibrary, allLibraries: DiagramLibrary[]) => Promise<boolean>;
+		openLibraryPanel: () => void;
+	} | null = $state(null);
 
 	// Sharing state
 	let showShareModal = $state(false);
@@ -302,6 +350,28 @@
 		lastSavedAt = page?.updatedAt ?? null;
 	});
 
+	// Listen for diagram:edit custom events from DiagramNode
+	$effect(() => {
+		if (!editorWrapper) return;
+
+		const handleDiagramEdit = (event: Event) => {
+			const customEvent = event as CustomEvent<{
+				id: string;
+				elements: string;
+				appState: string;
+				files: string;
+				pos: number | null;
+			}>;
+			handleDiagramEditEvent(customEvent);
+		};
+
+		editorWrapper.addEventListener('diagram:edit', handleDiagramEdit);
+
+		return () => {
+			editorWrapper?.removeEventListener('diagram:edit', handleDiagramEdit);
+		};
+	});
+
 	// Create lowlight instance with common languages
 	const lowlight = createLowlight(common);
 
@@ -318,11 +388,20 @@
 	onMount(() => {
 		if (!editorElement) return;
 
+		// Guard against HMR double-mount (destroy existing editor if any)
+		if (editor) {
+			editor.destroy();
+			editor = null;
+		}
+
 		editor = new Editor({
 			element: editorElement,
 			extensions: [
 				StarterKit.configure({
-					codeBlock: false // Use CodeBlockLowlight instead
+					codeBlock: false, // Use CodeBlockLowlight instead
+					// Disable extensions we configure separately (StarterKit v3.15+ includes these)
+					link: false,
+					underline: false
 				}),
 				Placeholder.configure({
 					placeholder: isReadOnly ? '' : 'Start typing your content...'
@@ -347,9 +426,19 @@
 				TableRow,
 				TableHeader,
 				TableCell,
-				CodeBlockLowlight.configure({
+				CustomCodeBlockLowlight.configure({
 					lowlight
-				})
+				}),
+				// Diagram embedding
+				DiagramNode,
+				// Slash commands (only for non-read-only editors)
+				...(isReadOnly ? [] : [
+					SlashCommands.configure({
+						suggestion: createSuggestionConfig({
+							items: getDefaultCommands(openDiagramEditor)
+						})
+					})
+				])
 			],
 			content: content,
 			editable: !isReadOnly, // Disable editing for viewers
@@ -563,6 +652,158 @@
 	// Handle chat panel open state change
 	function handleChatPanelOpenChange(isOpen: boolean) {
 		chatPanelOpen = isOpen;
+	}
+
+	// Diagram editor functions
+
+	/**
+	 * Open diagram editor for a new diagram
+	 */
+	function openDiagramEditor() {
+		diagramEdit = {
+			isOpen: true,
+			id: null, // New diagram
+			elements: '[]',
+			appState: '{}',
+			files: '{}',
+			pos: null
+		};
+	}
+
+	/**
+	 * Handle diagram:edit custom event from DiagramNode
+	 */
+	function handleDiagramEditEvent(event: CustomEvent<{
+		id: string;
+		elements: string;
+		appState: string;
+		files: string;
+		pos: number | null;
+	}>) {
+		const { id, elements, appState, files, pos } = event.detail;
+		diagramEdit = {
+			isOpen: true,
+			id,
+			elements,
+			appState,
+			files,
+			pos
+		};
+	}
+
+	/**
+	 * Save diagram from editor
+	 */
+	function saveDiagram(data: { elements: unknown[]; appState: unknown; files: unknown; svg?: string }) {
+		if (!editor) return;
+
+		const elementsJson = JSON.stringify(data.elements);
+		// Clean appState - collaborators is a Map that doesn't serialize well
+		const appState = data.appState as Record<string, unknown>;
+		const cleanAppState = {
+			...appState,
+			collaborators: [] // Replace Map with empty array for serialization
+		};
+		const appStateJson = JSON.stringify(cleanAppState);
+		const filesJson = JSON.stringify(data.files);
+		const svgContent = data.svg || '';
+
+		if (diagramEdit.id && diagramEdit.pos !== null) {
+			// Update existing diagram
+			const { state } = editor;
+			const node = state.doc.nodeAt(diagramEdit.pos);
+
+			if (node?.type.name === 'diagram') {
+				const tr = state.tr;
+				tr.setNodeMarkup(diagramEdit.pos, undefined, {
+					...node.attrs,
+					elements: elementsJson,
+					appState: appStateJson,
+					files: filesJson,
+					svg: svgContent
+				});
+				editor.view.dispatch(tr);
+			}
+		} else {
+			// Insert new diagram
+			editor.chain().focus().insertDiagram({
+				elements: elementsJson,
+				svg: svgContent,
+				appState: appStateJson,
+				files: filesJson
+			}).run();
+		}
+
+		// Mark as dirty and close modal
+		isDirty = true;
+		scheduleAutoSave();
+		closeDiagramEditor();
+	}
+
+	/**
+	 * Close diagram editor without saving
+	 */
+	function closeDiagramEditor() {
+		diagramEdit = {
+			isOpen: false,
+			id: null,
+			elements: '[]',
+			appState: '{}',
+			files: '{}',
+			pos: null
+		};
+	}
+
+	/**
+	 * Handle library toggle request from LibraryPicker (load or unload)
+	 */
+	async function handleToggleLibrary(library: DiagramLibrary) {
+		if (!excalidrawEditorRef || loadingLibrary) return;
+
+		const isLoaded = loadedLibraries.includes(library.id);
+		loadingLibrary = library.id;
+
+		try {
+			// Import DIAGRAM_LIBRARIES for toggle function
+			const { DIAGRAM_LIBRARIES } = await import('$lib/components/diagrams/diagram-libraries');
+			const success = await excalidrawEditorRef.toggleLibrary(library, DIAGRAM_LIBRARIES);
+
+			if (isLoaded) {
+				// Was loaded, now unloaded
+				loadedLibraries = loadedLibraries.filter(id => id !== library.id);
+			} else if (success) {
+				// Was not loaded, now loaded
+				loadedLibraries = [...loadedLibraries, library.id];
+			}
+		} finally {
+			loadingLibrary = null;
+		}
+	}
+
+	/**
+	 * Handle library load completion callback (from ExcalidrawEditor)
+	 */
+	function handleLibraryLoadComplete(libraryId: string, success: boolean) {
+		if (success && !loadedLibraries.includes(libraryId)) {
+			loadedLibraries = [...loadedLibraries, libraryId];
+		} else if (!success && loadedLibraries.includes(libraryId)) {
+			// Library was unloaded
+			loadedLibraries = loadedLibraries.filter(id => id !== libraryId);
+		}
+	}
+
+	/**
+	 * Open Excalidraw's library panel (right side)
+	 */
+	function openExcalidrawLibraryPanel() {
+		excalidrawEditorRef?.openLibraryPanel();
+	}
+
+	/**
+	 * Toggle the library picker panel collapse state
+	 */
+	function toggleLibraryPanelCollapse() {
+		libraryPanelCollapsed = !libraryPanelCollapsed;
 	}
 
 	// Phase 2.5: Formula mode functions
@@ -1330,7 +1571,9 @@
 			<!-- Editor body -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
+				bind:this={editorWrapper}
 				class="editor-body-wrapper"
 				class:read-only={isReadOnly}
 				class:formula-mode={formulaMode?.active}
@@ -1438,6 +1681,55 @@
 		visibility = newVisibility;
 	}}
 />
+
+<!-- Diagram Editor Modal -->
+{#if diagramEdit.isOpen}
+	<div class="diagram-modal-overlay">
+		<div class="diagram-modal">
+			<div class="diagram-modal-header">
+				<h2 class="diagram-modal-title">
+					{diagramEdit.id ? 'Edit Diagram' : 'Create Diagram'}
+				</h2>
+				<div class="diagram-modal-actions">
+					<button
+						type="button"
+						class="diagram-modal-cancel"
+						onclick={closeDiagramEditor}
+					>
+						Cancel
+					</button>
+				</div>
+			</div>
+			<div class="diagram-modal-content">
+				<!-- Library Picker Sidebar -->
+				<div class="diagram-library-sidebar" class:collapsed={libraryPanelCollapsed}>
+					<LibraryPicker
+						{loadedLibraries}
+						{loadingLibrary}
+						onToggleLibrary={handleToggleLibrary}
+						onOpenLibraryPanel={openExcalidrawLibraryPanel}
+						isCollapsed={libraryPanelCollapsed}
+						onToggleCollapse={toggleLibraryPanelCollapse}
+					/>
+				</div>
+
+				<!-- Excalidraw Editor -->
+				<div class="diagram-modal-body">
+					<ExcalidrawEditor
+						bind:this={excalidrawEditorRef}
+						initialData={{
+							elements: JSON.parse(diagramEdit.elements),
+							appState: JSON.parse(diagramEdit.appState),
+							files: JSON.parse(diagramEdit.files)
+						}}
+						onSave={saveDiagram}
+						onLibraryLoad={handleLibraryLoadComplete}
+					/>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.page-editor {
@@ -1666,5 +1958,186 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+	}
+
+	/* Diagram Modal */
+	.diagram-modal-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		background: rgba(0, 0, 0, 0.6);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+	}
+
+	.diagram-modal {
+		width: 95vw;
+		max-width: 1400px;
+		height: 85vh;
+		background: var(--editor-bg);
+		border-radius: 1rem;
+		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.diagram-modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 1rem 1.5rem;
+		border-bottom: 1px solid var(--editor-border);
+	}
+
+	.diagram-modal-title {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: var(--editor-text);
+		margin: 0;
+	}
+
+	.diagram-modal-actions {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.diagram-modal-cancel {
+		padding: 0.5rem 1rem;
+		background: transparent;
+		border: 1px solid var(--editor-border);
+		border-radius: 0.5rem;
+		color: var(--editor-text-secondary);
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: all 150ms ease;
+	}
+
+	.diagram-modal-cancel:hover {
+		background: var(--editor-bg-secondary);
+		color: var(--editor-text);
+	}
+
+	.diagram-modal-content {
+		flex: 1;
+		display: flex;
+		overflow: hidden;
+	}
+
+	.diagram-library-sidebar {
+		width: 280px;
+		flex-shrink: 0;
+		border-right: 1px solid var(--editor-border);
+		background: var(--editor-bg-secondary);
+		overflow: hidden;
+		transition: width 200ms ease;
+	}
+
+	.diagram-library-sidebar.collapsed {
+		width: 48px;
+	}
+
+	.diagram-modal-body {
+		flex: 1;
+		overflow: hidden;
+	}
+
+	/* Diagram Node styles (rendered in editor) */
+	.editor-container :global(.diagram-node) {
+		margin: 1.5rem 0;
+		border-radius: 0.75rem;
+		border: 2px dashed var(--editor-border);
+		background: var(--editor-bg-secondary);
+		cursor: pointer;
+		transition: all 150ms ease;
+	}
+
+	.editor-container :global(.diagram-node:hover) {
+		border-color: var(--editor-border-focus);
+		background: var(--toolbar-button-hover);
+	}
+
+	.editor-container :global(.diagram-preview) {
+		min-height: 200px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 2rem;
+	}
+
+	.editor-container :global(.diagram-empty),
+	.editor-container :global(.diagram-content) {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--editor-text-secondary);
+	}
+
+	.editor-container :global(.diagram-empty-icon),
+	.editor-container :global(.diagram-content-icon) {
+		font-size: 2.5rem;
+		opacity: 0.6;
+	}
+
+	.editor-container :global(.diagram-empty-text),
+	.editor-container :global(.diagram-content-text) {
+		font-size: 0.875rem;
+	}
+
+	.editor-container :global(.diagram-edit-hint) {
+		font-size: 0.75rem;
+		opacity: 0.6;
+	}
+
+	.editor-container :global(.diagram-caption) {
+		padding: 0.5rem 1rem 1rem;
+		text-align: center;
+		font-size: 0.875rem;
+		color: var(--editor-text-secondary);
+		font-style: italic;
+	}
+
+	.editor-container :global(.diagram-error) {
+		color: #ef4444;
+		font-size: 0.875rem;
+	}
+
+	/* SVG diagram preview */
+	.editor-container :global(.diagram-svg-container) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		background: var(--editor-bg);
+		border-radius: 0.5rem;
+	}
+
+	.editor-container :global(.diagram-svg-container svg) {
+		max-width: 100%;
+		height: auto;
+		max-height: 500px;
+	}
+
+	.editor-container :global(.diagram-edit-overlay) {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		padding: 0.5rem;
+		background: linear-gradient(transparent, rgba(0, 0, 0, 0.3));
+		text-align: center;
+		opacity: 0;
+		transition: opacity 150ms ease;
+	}
+
+	.editor-container :global(.diagram-node:hover .diagram-edit-overlay) {
+		opacity: 1;
+	}
+
+	.editor-container :global(.diagram-preview) {
+		position: relative;
 	}
 </style>
