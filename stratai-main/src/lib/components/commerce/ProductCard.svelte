@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { CommerceProductWithBadges } from '$lib/types/commerce';
-	import { openBuyModal } from '$lib/stores/buy.svelte';
 	import ProductBadge from './ProductBadge.svelte';
 	import ProductRating from './ProductRating.svelte';
 	import ProductPrice from './ProductPrice.svelte';
+	import { ExternalLink } from 'lucide-svelte';
 
 	interface Props {
 		product: CommerceProductWithBadges;
@@ -14,8 +14,8 @@
 	let { product, onViewDetails, onAddToCart }: Props = $props();
 
 	function handleBuy() {
-		// Open the buy modal directly - no chat message
-		openBuyModal(product);
+		// Open product page in new tab for user to complete purchase
+		window.open(product.productUrl, '_blank', 'noopener,noreferrer');
 	}
 
 	const siteConfig: Record<string, { name: string; color: string }> = {
@@ -113,9 +113,10 @@
 				<button
 					type="button"
 					onclick={handleBuy}
-					class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded transition-colors"
+					class="flex-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded transition-colors flex items-center justify-center gap-1"
 				>
 					Buy
+					<ExternalLink size={14} />
 				</button>
 			{/if}
 		</div>

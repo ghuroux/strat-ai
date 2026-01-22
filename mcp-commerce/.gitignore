@@ -4,3 +4,6 @@ dist/
 .env
 .env.local
 .DS_Store
+
+# Session storage (contains auth tokens - sensitive)
+sessions/

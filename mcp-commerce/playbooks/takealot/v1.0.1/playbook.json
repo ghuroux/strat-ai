@@ -1,0 +1,281 @@
+{
+  "id": "a7d9dcf4-4144-4afe-99d6-8b8cb81843ee",
+  "siteId": "takealot",
+  "version": "1.0.1",
+  "createdAt": "2026-01-22T08:49:21.065Z",
+  "updatedAt": "2026-01-22T08:49:21.066Z",
+  "discoverySessionId": "1dd53c17-4ea4-46ba-a0fb-aae73770a079",
+  "baseUrl": "https://www.takealot.com",
+  "defaultTimeout": 15000,
+  "auth": {
+    "loginUrl": "https://www.takealot.com/login",
+    "loggedInIndicators": [],
+    "loggedOutIndicators": [],
+    "loginForm": {
+      "emailInput": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "passwordInput": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "submitButton": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      }
+    },
+    "screenshots": {
+      "loggedIn": "logged-in.jpg",
+      "loggedOut": "logged-out.jpg",
+      "loginPage": "login-page.jpg"
+    }
+  },
+  "search": {
+    "searchInput": {
+      "primary": "input[placeholder='Search for products, brands...']",
+      "fallbacks": [
+        ".search-field",
+        "input[name='search']",
+        ".search-module input"
+      ],
+      "visualDescription": "Main search input field in the top navigation bar with placeholder text 'Search for products, brands...'",
+      "confidence": 0.9
+    },
+    "searchButton": {
+      "primary": "[data-ref='search-submit-button']",
+      "fallbacks": [
+        "button[type='submit'].search-btn",
+        ".search-icon",
+        ".search-module button"
+      ],
+      "visualDescription": "Blue search icon button located right of search input field",
+      "confidence": 0.95
+    },
+    "resultsContainer": {
+      "primary": "",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "productCard": {
+      "primary": "",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "productData": {
+      "name": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "price": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "link": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "image": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "rating": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "reviewCount": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      }
+    }
+  },
+  "productPage": {
+    "name": {
+      "primary": "h1",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "price": {
+      "primary": ".price",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "image": {
+      "primary": "img",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "outOfStockIndicators": [],
+    "addToCart": {
+      "primary": "button",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    }
+  },
+  "cart": {
+    "cartIcon": {
+      "primary": "",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "cartCount": {
+      "primary": "",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "cartUrl": "/cart",
+    "cartItem": {
+      "primary": "",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    },
+    "cartItemData": {
+      "name": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "price": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "quantity": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      }
+    },
+    "removeButton": {
+      "primary": ".remove-item, .cart-item .remove",
+      "fallbacks": [
+        "[data-ref='remove']",
+        ".delete-item",
+        "button[aria-label*='remove']"
+      ],
+      "visualDescription": "Remove button or link to delete item from cart",
+      "confidence": 0.6
+    },
+    "subtotal": {
+      "primary": ".cart-summary .total, .cart-summary .subtotal",
+      "fallbacks": [
+        "[data-ref='total']",
+        ".order-total",
+        ".summary-total"
+      ],
+      "visualDescription": "Total amount with R currency, shown prominently in green",
+      "confidence": 0.8
+    },
+    "checkoutButton": {
+      "primary": "",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    }
+  },
+  "checkout": {
+    "checkoutUrl": {
+      "primary": null,
+      "fallbacks": [],
+      "visualDescription": "Checkout URL pattern not accessible without authentication",
+      "confidence": 0
+    },
+    "orderSummary": {
+      "subtotal": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "shipping": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "tax": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      },
+      "total": {
+        "primary": "",
+        "fallbacks": [],
+        "visualDescription": "",
+        "confidence": 0
+      }
+    },
+    "placeOrderButton": {
+      "primary": "",
+      "fallbacks": [
+        "button:contains('Place Order')",
+        "[data-ref='place-order']",
+        ".submit-order"
+      ],
+      "visualDescription": "Final purchase button not accessible without login",
+      "confidence": 0.5
+    },
+    "confirmationIndicators": [],
+    "orderIdSelector": {
+      "primary": "",
+      "fallbacks": [],
+      "visualDescription": "",
+      "confidence": 0
+    }
+  },
+  "flows": {
+    "search": {
+      "name": "search",
+      "description": "Search for products",
+      "steps": [],
+      "successIndicators": [],
+      "failureIndicators": []
+    },
+    "addToCart": {
+      "name": "addToCart",
+      "description": "Add product to cart",
+      "steps": [],
+      "successIndicators": [],
+      "failureIndicators": []
+    },
+    "checkout": {
+      "name": "checkout",
+      "description": "Complete checkout",
+      "steps": [],
+      "successIndicators": [],
+      "failureIndicators": []
+    }
+  },
+  "popups": []
+}
