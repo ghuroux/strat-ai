@@ -2109,6 +2109,53 @@ Google's Deep Research Pro (`deep-research-pro-preview`) is an autonomous resear
 
 ---
 
-*Aligned with PRODUCT_VISION.md - Last Updated: January 13, 2026*
+## Diagram Libraries System
+
+**Status**: Core implementation complete. UX enhancements planned.
+
+> **Note**: Libraries load from `libraries.excalidraw.com` via proxy endpoint. All 14 curated libraries working.
+
+### Completed
+- [x] Library picker panel with categories (Cloud, Development, Design, General)
+- [x] Server-side proxy to avoid CORS (`/api/diagrams/library/[...source]`)
+- [x] Support for v1 and v2 library formats
+- [x] Library loading into Excalidraw editor
+- [x] Loading states and success indicators
+
+### Self-Hosting Libraries
+**Priority**: LOW | **Effort**: Low | **Impact**: Medium
+
+**Rationale**: External dependency on `libraries.excalidraw.com`. Self-hosting provides:
+- Guaranteed availability
+- Faster loading (local)
+- Version control
+- Works offline
+
+**Implementation**:
+- [ ] Download core libraries to `static/libraries/`
+- [ ] Update library definitions to load local-first, remote-fallback
+- [ ] Document library update process
+
+**Core libraries to self-host**:
+- AWS Architecture Icons
+- AWS Serverless Icons
+- Google Cloud Icons
+- Kubernetes Icons
+- Software Architecture
+- Flow Chart Symbols
+
+### UX Enhancements
+**Priority**: MEDIUM | **Effort**: Medium
+
+- [ ] Collapse/expand Icon Libraries panel (left side)
+- [ ] Show library icons directly in picker (eliminate Excalidraw panel dependency)
+- [ ] Toggle to unload/remove loaded libraries
+- [ ] Re-open library panel button after closing
+- [ ] Search within library picker
+- [ ] "Recently used" icons section
+
+---
+
+*Aligned with PRODUCT_VISION.md - Last Updated: January 22, 2026*
 *Completed: Phase 0.1, Phase 0.2, Phase 0.3a, Phase 0.3b, Phase 0.3c, Phase 0.3c+, Phase 0.3d++, Phase 0.3e (Task Dashboard)*
 *Immediate Priority: Competitive Response (Mobile, Search, Comments) | Strategic: Context Intelligence (Moat)*
