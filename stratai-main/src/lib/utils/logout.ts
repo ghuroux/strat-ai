@@ -113,6 +113,41 @@ export function clearClientState(): void {
 }
 
 /**
+ * Handle session expiry - redirect to login with a message
+ * Call this when a 401 Unauthorized response is received
+ */
+export function handleSessionExpiry(): void {
+	if (typeof window === 'undefined') return;
+
+	console.log('[AUTH] Session expired - redirecting to login');
+
+	// Clear client state to ensure clean re-authentication
+	clearClientState();
+
+	// Redirect to login with session_expired flag
+	// The login page will show a friendly message
+	window.location.href = '/login?session_expired=true';
+}
+
+/**
+ * Check if a response indicates session expiry and handle it
+ * Returns true if session expired (and redirect was triggered), false otherwise
+ *
+ * Usage:
+ *   if (!response.ok) {
+ *     if (handleUnauthorizedResponse(response)) return; // Session expired, redirecting
+ *     // Handle other errors...
+ *   }
+ */
+export function handleUnauthorizedResponse(response: Response): boolean {
+	if (response.status === 401) {
+		handleSessionExpiry();
+		return true;
+	}
+	return false;
+}
+
+/**
  * Perform full logout: clear client state and navigate to server logout
  */
 export function performLogout(): void {

@@ -44,6 +44,7 @@
 	import type { SpaceType, Message, FileAttachment } from '$lib/types/chat';
 	import type { TaskContextInfo } from '$lib/utils/context-builder';
 	import { contentContainsProposal, extractProposedSubtasks } from '$lib/utils/subtask-extraction';
+	import { handleUnauthorizedResponse } from '$lib/utils/logout';
 
 	// Route params
 	let spaceParam = $derived($page.params.space);
@@ -470,6 +471,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Request failed');
 			}
@@ -660,6 +662,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Request failed');
 			}

@@ -35,11 +35,13 @@ export function _validateReturnUrl(url: string | null): url is string {
 
 export const load: PageLoad = ({ url }) => {
 	const returnUrl = url.searchParams.get('returnUrl');
+	const sessionExpired = url.searchParams.get('session_expired') === 'true';
 
 	// Only return the URL if it passes validation
 	const validReturnUrl = _validateReturnUrl(returnUrl) ? returnUrl : null;
 
 	return {
-		returnUrl: validReturnUrl
+		returnUrl: validReturnUrl,
+		sessionExpired
 	};
 };

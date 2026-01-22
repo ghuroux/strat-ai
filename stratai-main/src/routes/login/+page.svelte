@@ -35,6 +35,13 @@
 				};
 			}}
 		>
+			{#if data.sessionExpired}
+				<div class="mb-4 p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-amber-200 text-sm">
+					<p class="font-medium">Session expired</p>
+					<p class="text-amber-300/80 mt-1">Your session has expired. Please sign in again to continue.</p>
+				</div>
+			{/if}
+
 			{#if form?.error}
 				<div class="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">
 					{form.error}

@@ -55,6 +55,7 @@
 	import { GuidedCreationBanner } from '$lib/components/pages';
 	import { guidedCreationStore } from '$lib/stores/guidedCreation.svelte';
 	import { detectPageIntent, buildGuidedSystemPrompt, isReadyToGenerate } from '$lib/utils/page-intent';
+	import { handleUnauthorizedResponse } from '$lib/utils/logout';
 
 	// Route params
 	let spaceParam = $derived($page.params.space);
@@ -707,6 +708,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Request failed');
 			}
@@ -869,6 +871,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Failed to generate summary');
 			}
@@ -932,6 +935,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Failed to get second opinion');
 			}
@@ -1152,6 +1156,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Request failed');
 			}
@@ -1515,6 +1520,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error || 'Failed to generate page');
 			}

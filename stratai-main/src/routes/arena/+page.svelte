@@ -23,6 +23,7 @@
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { goto } from '$app/navigation';
 	import type { TemplateCategory, BattleTemplate } from '$lib/config/battle-templates';
+	import { handleUnauthorizedResponse } from '$lib/utils/logout';
 
 	let settingsOpen = $state(false);
 	let showContinueModal = $state(false);
@@ -242,6 +243,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Request failed');
 			}
@@ -397,6 +399,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				throw new Error('Failed to get AI judgment');
 			}
 

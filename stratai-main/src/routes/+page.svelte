@@ -22,6 +22,7 @@
 	import { modelSupportsVision } from '$lib/config/model-capabilities';
 	import type { ChatCompletionChunk } from '$lib/types/api';
 	import type { FileAttachment, Conversation } from '$lib/types/chat';
+	import { handleUnauthorizedResponse } from '$lib/utils/logout';
 
 	// Svelte 5: Use $state for local reactive state
 	let messagesContainer: HTMLElement | undefined = $state();
@@ -453,6 +454,9 @@
 			});
 
 			if (!response.ok) {
+				// Check for session expiry first - redirect to login
+				if (handleUnauthorizedResponse(response)) return;
+
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Request failed');
 			}
@@ -688,6 +692,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Failed to generate summary');
 			}
@@ -733,6 +738,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Failed to compact conversation');
 			}
@@ -779,6 +785,7 @@
 				});
 
 				if (!chatResponse.ok) {
+					if (handleUnauthorizedResponse(chatResponse)) return;
 					const error = await chatResponse.json();
 					throw new Error(error.error?.message || 'Failed to get acknowledgment');
 				}
@@ -939,6 +946,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Request failed');
 			}
@@ -1181,6 +1189,7 @@
 			});
 
 			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
 				const error = await response.json();
 				throw new Error(error.error?.message || 'Failed to get second opinion');
 			}
