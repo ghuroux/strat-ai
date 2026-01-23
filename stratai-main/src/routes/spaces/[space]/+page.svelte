@@ -19,6 +19,10 @@
 	import SelectAreaModal from '$lib/components/pages/SelectAreaModal.svelte';
 	import DeleteConversationModal from '$lib/components/chat/DeleteConversationModal.svelte';
 	import Header from '$lib/components/layout/Header.svelte';
+	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
+	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
+	import UserMenu from '$lib/components/layout/UserMenu.svelte';
+	import { Settings, MessageSquare } from 'lucide-svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -32,6 +36,9 @@
 
 	// Get space from route param (slug from URL)
 	let spaceParam = $derived($page.params.space);
+
+	// User data for mobile header
+	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
 
 	// Get space from store - ALWAYS use this for the proper ID
 	let spaceFromStore = $derived.by(() => {
@@ -375,8 +382,38 @@
 </svelte:head>
 
 <div class="page-container">
-	<!-- Global Header for navigation -->
-	<Header onSettingsClick={() => showSettingsPanel = true} />
+	<!-- Mobile Header (visible < 768px) -->
+	<MobileHeader
+		title={space?.name || 'Space'}
+		onBack={() => goto('/spaces')}
+	>
+		<!-- Conversations toggle -->
+		<button
+			class="mobile-header-action"
+			onclick={handleToggleConversations}
+			aria-label="Toggle conversations"
+		>
+			<MessageSquare size={18} />
+		</button>
+
+		<!-- Space settings -->
+		<MobileActionsMenu>
+			<button class="mobile-action-item" onclick={() => showSettingsPanel = true}>
+				<Settings size={16} />
+				Space Settings
+			</button>
+		</MobileActionsMenu>
+
+		<!-- User Menu (icon only for mobile) -->
+		{#if userData}
+			<UserMenu displayName={userData.displayName} role={userData.role} iconOnly />
+		{/if}
+	</MobileHeader>
+
+	<!-- Desktop Header (hidden on mobile) -->
+	<div class="hidden md:block">
+		<Header onSettingsClick={() => showSettingsPanel = true} />
+	</div>
 
 	{#if space}
 		<SpaceDashboard

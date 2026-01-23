@@ -4,6 +4,8 @@
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import { easterEggsStore } from '$lib/stores/easter-eggs.svelte';
+	import { MoreVertical } from 'lucide-svelte';
+	import { fly, fade } from 'svelte/transition';
 	import SearchToggle from './chat/SearchToggle.svelte';
 	import ThinkingToggle from './chat/ThinkingToggle.svelte';
 	import SummarizeButton from './chat/SummarizeButton.svelte';
@@ -11,7 +13,18 @@
 	import FileUploadButton from './chat/FileUploadButton.svelte';
 	import FilePreview from './chat/FilePreview.svelte';
 	import ContextIndicator from './chat/ContextIndicator.svelte';
+	import { ContextBar } from './chat/context-transparency';
 	import type { FileAttachment } from '$lib/types/chat';
+
+	// Context source type for ContextBar
+	interface ContextSource {
+		type: 'area' | 'task' | 'subtask';
+		id: string;
+		spaceId: string;
+		spaceSlug?: string;
+		areaId?: string;
+		areaSlug?: string;
+	}
 	import {
 		calculateConversationTokens,
 		getContextUsagePercent,
@@ -27,7 +40,13 @@
 		onsummarize,
 		oncompact,
 		isGeneratingSummary = false,
-		isCompacting = false
+		isCompacting = false,
+		// Context transparency props
+		contextSource,
+		onActivateDocument,
+		onDeactivateDocument,
+		onOpenContextPanel,
+		onOpenTasksPanel
 	}: {
 		disabled?: boolean;
 		placeholder?: string;
@@ -37,6 +56,12 @@
 		oncompact?: () => void;
 		isGeneratingSummary?: boolean;
 		isCompacting?: boolean;
+		// Context transparency props
+		contextSource?: ContextSource;
+		onActivateDocument?: (docId: string) => Promise<void>;
+		onDeactivateDocument?: (docId: string) => Promise<void>;
+		onOpenContextPanel?: () => void;
+		onOpenTasksPanel?: () => void;
 	} = $props();
 
 	// Pending file attachments
@@ -77,6 +102,31 @@
 	let textarea: HTMLTextAreaElement | undefined = $state();
 	let isFocused = $state(false);
 	let isSending = $state(false);
+
+	// Mobile options menu state
+	let mobileOptionsOpen = $state(false);
+	let mobileOptionsButtonRef: HTMLButtonElement | undefined = $state();
+	let mobileOptionsMenuRef: HTMLDivElement | undefined = $state();
+
+	// Close mobile menu when clicking outside
+	function handleClickOutsideMenu(e: MouseEvent) {
+		if (
+			mobileOptionsOpen &&
+			mobileOptionsButtonRef &&
+			mobileOptionsMenuRef &&
+			!mobileOptionsButtonRef.contains(e.target as Node) &&
+			!mobileOptionsMenuRef.contains(e.target as Node)
+		) {
+			mobileOptionsOpen = false;
+		}
+	}
+
+	// Close on escape key
+	function handleMenuKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && mobileOptionsOpen) {
+			mobileOptionsOpen = false;
+		}
+	}
 
 	// Listen for prepopulate-input events (from quick start buttons, etc.)
 	$effect(() => {
@@ -1148,39 +1198,119 @@ Where every request is a round-trip to yourself. Very zen. 🧘`,
 
 				<!-- Actions -->
 				<div class="flex items-center gap-2">
-					<!-- Summarize Button (only shown when 6+ messages) -->
-					{#if showSummarizeButton}
+					<!-- Desktop: Show individual toggles -->
+					<div class="desktop-toggles">
+						<!-- Summarize Button (only shown when 6+ messages) -->
+						{#if showSummarizeButton}
+							<div class="relative group">
+								<SummarizeButton
+									disabled={disabled || chatStore.isStreaming}
+									isGenerating={isGeneratingSummary}
+									{hasSummary}
+									onclick={() => onsummarize?.()}
+								/>
+							</div>
+						{/if}
+
+						<!-- Prompt Optimize Button -->
 						<div class="relative group">
-							<SummarizeButton
+							<PromptOptimizeButton
+								inputText={input}
 								disabled={disabled || chatStore.isStreaming}
-								isGenerating={isGeneratingSummary}
-								{hasSummary}
-								onclick={() => onsummarize?.()}
+								onoptimize={handleOptimizedPrompt}
+								onundo={handleUndoOptimization}
 							/>
 						</div>
-					{/if}
 
-					<!-- Prompt Optimize Button -->
-					<div class="relative group">
-						<PromptOptimizeButton
-							inputText={input}
-							disabled={disabled || chatStore.isStreaming}
-							onoptimize={handleOptimizedPrompt}
-							onundo={handleUndoOptimization}
-						/>
-					</div>
-
-					<!-- Extended Thinking Toggle (for Claude models) -->
-					<div class="relative group">
-						<ThinkingToggle disabled={disabled || chatStore.isStreaming} />
-					</div>
-
-					<!-- Web Search Toggle (only shown when feature is enabled AND model supports tools) -->
-					{#if webSearchFeatureEnabled && modelSupportsTools}
+						<!-- Extended Thinking Toggle (for Claude models) -->
 						<div class="relative group">
-							<SearchToggle disabled={disabled || chatStore.isStreaming} />
+							<ThinkingToggle disabled={disabled || chatStore.isStreaming} />
 						</div>
-					{/if}
+
+						<!-- Web Search Toggle (only shown when feature is enabled AND model supports tools) -->
+						{#if webSearchFeatureEnabled && modelSupportsTools}
+							<div class="relative group">
+								<SearchToggle disabled={disabled || chatStore.isStreaming} />
+							</div>
+						{/if}
+					</div>
+
+					<!-- Mobile: 3-dot menu for toggles -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div class="mobile-options-menu" onkeydown={handleMenuKeydown}>
+						<button
+							bind:this={mobileOptionsButtonRef}
+							type="button"
+							onclick={() => mobileOptionsOpen = !mobileOptionsOpen}
+							class="mobile-options-trigger"
+							title="More options"
+							aria-label="More options"
+							aria-expanded={mobileOptionsOpen}
+						>
+							<MoreVertical size={20} />
+						</button>
+
+						{#if mobileOptionsOpen}
+							<!-- Backdrop -->
+							<!-- svelte-ignore a11y_click_events_have_key_events -->
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div
+								class="fixed inset-0 z-40"
+								onclick={() => mobileOptionsOpen = false}
+							></div>
+
+							<!-- Menu -->
+							<div
+								bind:this={mobileOptionsMenuRef}
+								class="mobile-options-dropdown"
+								transition:fly={{ y: 10, duration: 150 }}
+							>
+								<!-- Summarize Button -->
+								{#if showSummarizeButton}
+									<div class="mobile-option-item">
+										<SummarizeButton
+											disabled={disabled || chatStore.isStreaming}
+											isGenerating={isGeneratingSummary}
+											{hasSummary}
+											onclick={() => {
+												onsummarize?.();
+												mobileOptionsOpen = false;
+											}}
+										/>
+										<span class="mobile-option-label">Summarize</span>
+									</div>
+								{/if}
+
+								<!-- Prompt Optimize -->
+								<div class="mobile-option-item">
+									<PromptOptimizeButton
+										inputText={input}
+										disabled={disabled || chatStore.isStreaming}
+										onoptimize={(text) => {
+											handleOptimizedPrompt(text);
+											mobileOptionsOpen = false;
+										}}
+										onundo={handleUndoOptimization}
+									/>
+									<span class="mobile-option-label">Enhance prompt</span>
+								</div>
+
+								<!-- Extended Thinking -->
+								<div class="mobile-option-item">
+									<ThinkingToggle disabled={disabled || chatStore.isStreaming} />
+									<span class="mobile-option-label">Extended thinking</span>
+								</div>
+
+								<!-- Web Search -->
+								{#if webSearchFeatureEnabled && modelSupportsTools}
+									<div class="mobile-option-item">
+										<SearchToggle disabled={disabled || chatStore.isStreaming} />
+										<span class="mobile-option-label">Web search</span>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
 
 					{#if chatStore.isStreaming}
 						<button
@@ -1227,6 +1357,19 @@ Where every request is a round-trip to yourself. Very zen. 🧘`,
 				</div>
 			</div>
 		</div>
+
+		<!-- Context Bar (above footer) -->
+		{#if contextSource}
+			<div class="mt-2 px-1">
+				<ContextBar
+					{contextSource}
+					onActivateDocument={onActivateDocument ?? (() => Promise.resolve())}
+					onDeactivateDocument={onDeactivateDocument ?? (() => Promise.resolve())}
+					onOpenContextPanel={onOpenContextPanel ?? (() => {})}
+					onOpenTasksPanel={onOpenTasksPanel}
+				/>
+			</div>
+		{/if}
 
 		<!-- Footer hints -->
 		<div class="flex items-center justify-between mt-2 px-1">
@@ -1410,5 +1553,82 @@ Where every request is a round-trip to yourself. Very zen. 🧘`,
 			transform: translateY(-3px);
 			opacity: 1;
 		}
+	}
+
+	/* Desktop toggles - hidden on mobile, visible on desktop */
+	.desktop-toggles {
+		display: none;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	@media (min-width: 640px) {
+		.desktop-toggles {
+			display: flex;
+		}
+	}
+
+	/* Mobile options menu - visible on mobile, hidden on desktop */
+	.mobile-options-menu {
+		position: relative;
+		display: block;
+	}
+
+	@media (min-width: 640px) {
+		.mobile-options-menu {
+			display: none;
+		}
+	}
+
+	.mobile-options-trigger {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border: none;
+		background: transparent;
+		color: rgb(161, 161, 170);
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.mobile-options-trigger:hover,
+	.mobile-options-trigger:active {
+		background: rgba(255, 255, 255, 0.1);
+		color: rgb(244, 244, 245);
+	}
+
+	.mobile-options-dropdown {
+		position: absolute;
+		bottom: calc(100% + 0.5rem);
+		right: 0;
+		z-index: 50;
+		min-width: 200px;
+		background: rgb(39, 39, 42);
+		border: 1px solid rgb(63, 63, 70);
+		border-radius: 0.75rem;
+		padding: 0.5rem;
+		box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+	}
+
+	.mobile-option-item {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.5rem;
+		border-radius: 0.5rem;
+		transition: background 0.15s ease;
+	}
+
+	.mobile-option-item:hover {
+		background: rgba(255, 255, 255, 0.05);
+	}
+
+	.mobile-option-label {
+		font-size: 0.875rem;
+		color: rgb(212, 212, 216);
+		white-space: nowrap;
 	}
 </style>

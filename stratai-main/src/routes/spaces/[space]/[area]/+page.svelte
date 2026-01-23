@@ -12,7 +12,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { fly, fade } from 'svelte/transition';
-	import { Clock, AlertCircle, RotateCcw, X, Paperclip } from 'lucide-svelte';
+	import { Clock, AlertCircle, RotateCcw, X, Paperclip, MessageSquare, ListTodo, FileText, FolderOpen, Share2, Plus, Settings, LayoutDashboard } from 'lucide-svelte';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
@@ -26,6 +26,9 @@
 	import SecondOpinionPanel from '$lib/components/chat/SecondOpinionPanel.svelte';
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
+	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
+	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
+	import UserMenu from '$lib/components/layout/UserMenu.svelte';
 	import { TasksPanel, ContextPanel, TaskSuggestionCard } from '$lib/components/areas';
 	import { CreatePageModal } from '$lib/components/pages';
 	import PageSuggestion from '$lib/components/chat/PageSuggestion.svelte';
@@ -119,6 +122,9 @@
 	// Derive colors
 	let spaceColor = $derived(space?.color || '#3b82f6');
 	let areaColor = $derived(area?.color || spaceColor);
+
+	// User data for mobile header
+	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
 
 	// Permission check for sharing
 	// Show Share button if user is the area owner or creator
@@ -566,6 +572,9 @@
 		// Clear any previous failed message state
 		failedMessage = null;
 
+		// Capture context at send time for transparency
+		const usedContext = captureUsedContext();
+
 		// Store message content and attachments for retry
 		lastMessageContent = content;
 		lastMessageAttachments = attachments;
@@ -615,10 +624,15 @@
 
 		chatStore.addMessage(conversationId, { role: 'user', content, attachments });
 
+		// Create assistant message with loading_context state
+		// This shows "Loading context" indicator before the API call completes
+		const hasContextToLoad = usedContext.documents.length > 0 || usedContext.notes.included || usedContext.tasks.length > 0;
 		const assistantMessageId = chatStore.addMessage(conversationId, {
 			role: 'assistant',
 			content: '',
-			isStreaming: true
+			isStreaming: true,
+			contextStatus: hasContextToLoad ? 'loading' : undefined,
+			usedContext: hasContextToLoad ? usedContext : undefined
 		});
 
 		const controller = new AbortController();
@@ -720,6 +734,15 @@
 
 			let buffer = '';
 			let collectedSources: Array<{ title: string; url: string; snippet: string }> = [];
+			let contextStatusCleared = false;
+
+			// Helper to clear contextStatus on first streaming event
+			function clearContextStatusOnce() {
+				if (!contextStatusCleared) {
+					contextStatusCleared = true;
+					chatStore.updateMessage(conversationId!, assistantMessageId, { contextStatus: undefined });
+				}
+			}
 
 			while (true) {
 				const { done, value } = await reader.read();
@@ -739,45 +762,53 @@
 							const parsed = JSON.parse(data);
 
 							if (parsed.type === 'status') {
+								// Clear contextStatus when we receive any status event from the server
+								// (context loading is complete, now we're processing/searching/etc.)
 								if (parsed.status === 'searching') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: 'searching', searchQuery: parsed.query
+										contextStatus: undefined, searchStatus: 'searching', searchQuery: parsed.query
 									});
 								} else if (parsed.status === 'browsing') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: 'browsing', searchQuery: parsed.query
+										contextStatus: undefined, searchStatus: 'browsing', searchQuery: parsed.query
 									});
 								} else if (parsed.status === 'reading_document') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: 'reading_document', searchQuery: parsed.query
+										contextStatus: undefined, searchStatus: 'reading_document', searchQuery: parsed.query
 									});
 								} else if (parsed.status === 'processing') {
+									// Processing just means server is working - not necessarily searching
+									// Only clear contextStatus, don't set searchStatus
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: 'searching', searchQuery: undefined
+										contextStatus: undefined
 									});
 								} else if (parsed.status === 'thinking') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: undefined, searchQuery: undefined
+										contextStatus: undefined, searchStatus: undefined, searchQuery: undefined
 									});
 								}
 							} else if (parsed.type === 'sources_preview') {
 								collectedSources = parsed.sources;
 								chatStore.updateMessage(conversationId!, assistantMessageId, { sources: parsed.sources });
 							} else if (parsed.type === 'thinking_start') {
+								clearContextStatusOnce(); // Clear loading_context state
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: true });
 							} else if (parsed.type === 'thinking') {
 								chatStore.appendToThinking(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'thinking_end') {
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: false });
 							} else if (parsed.type === 'commerce') {
+								clearContextStatusOnce(); // Clear loading_context state
 								chatStore.updateMessage(conversationId!, assistantMessageId, { commerce: parsed.data });
 							} else if (parsed.type === 'content') {
+								clearContextStatusOnce(); // Clear loading_context state
 								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'sources') {
 								collectedSources = parsed.sources;
 							} else if (parsed.type === 'error') {
 								throw new Error(parsed.error);
 							} else if (parsed.choices?.[0]?.delta?.content) {
+								clearContextStatusOnce(); // Clear loading_context state
 								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.choices[0].delta.content);
 							}
 						} catch (e) {
@@ -793,7 +824,8 @@
 				isStreaming: false,
 				isThinking: false,
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
-				sources: collectedSources.length > 0 ? collectedSources : undefined
+				sources: collectedSources.length > 0 ? collectedSources : undefined,
+				usedContext // Attach context transparency data
 			});
 
 			// Clear timeouts on successful completion
@@ -1024,6 +1056,56 @@
 	async function handleAreaUpdate(areaId: string, updates: { context?: string; contextDocumentIds?: string[] }) {
 		await areaStore.updateArea(areaId, updates);
 	}
+
+	// Capture current context for transparency (called at message send time)
+	function captureUsedContext(): { documents: Array<{ filename: string; tokenEstimate: number }>; notes: { included: boolean; tokenEstimate: number }; tasks: Array<{ title: string; tokenEstimate: number }> } {
+		const activeIds = new Set(area?.contextDocumentIds ?? []);
+		const allDocs = documentStore.getDocuments(properSpaceId);
+		const activeDocs = allDocs.filter(d => activeIds.has(d.id));
+
+		return {
+			documents: activeDocs.map(d => ({
+				filename: d.filename,
+				tokenEstimate: Math.round((d.charCount || 0) / 4) // ~4 chars per token
+			})),
+			notes: {
+				included: !!area?.context,
+				tokenEstimate: area?.context ? Math.round(area.context.length / 4) : 0
+			},
+			tasks: areaTasks.map(t => ({
+				title: t.title,
+				tokenEstimate: Math.round((t.title.length + (t.description?.length || 0)) / 4)
+			}))
+		};
+	}
+
+	// Context Transparency: Document activation handlers
+	async function handleActivateDocument(docId: string) {
+		if (!area) return;
+		const currentIds = area.contextDocumentIds ?? [];
+		if (currentIds.includes(docId)) return; // Already active
+		const newIds = [...currentIds, docId];
+		await areaStore.updateArea(area.id, { contextDocumentIds: newIds });
+	}
+
+	async function handleDeactivateDocument(docId: string) {
+		if (!area) return;
+		const currentIds = area.contextDocumentIds ?? [];
+		const newIds = currentIds.filter(id => id !== docId);
+		await areaStore.updateArea(area.id, { contextDocumentIds: newIds });
+	}
+
+	// Context source for ContextBar (used in ChatInput)
+	let contextSource = $derived.by(() => {
+		if (!area || !properSpaceId) return undefined;
+		return {
+			type: 'area' as const,
+			id: area.id,
+			spaceId: properSpaceId,
+			spaceSlug: spaceParam,
+			areaSlug: areaParam
+		};
+	});
 
 	// Task creation handler (from TasksPanel)
 	async function handleCreateTask(input: CreateTaskInput): Promise<Task | null> {
@@ -1554,8 +1636,82 @@
 	</div>
 {:else if space && area}
 	<div class="area-page" style="--area-color: {areaColor}">
-		<!-- Header -->
-		<header class="area-header">
+		<!-- Mobile Header (visible < 768px) -->
+		<MobileHeader
+			title={area.name}
+			breadcrumb={space.name}
+			onBack={goToSpaceDashboard}
+			accentColor={areaColor}
+		>
+			<!-- Model selector - uses bottom sheet on mobile -->
+			<ModelSelector
+				selectedModel={effectiveModel}
+				onchange={handleModelChange}
+			/>
+
+			<!-- Actions menu -->
+			<MobileActionsMenu>
+				<!-- Area Dashboard - clears active conversation to show welcome screen -->
+				{#if chatStore.activeConversation}
+					<button class="mobile-action-item" onclick={() => chatStore.setActiveConversation(null)}>
+						<LayoutDashboard size={16} />
+						Area Dashboard
+					</button>
+					<div class="mobile-action-divider"></div>
+				{/if}
+				<button class="mobile-action-item" onclick={() => drawerOpen = true}>
+					<MessageSquare size={16} />
+					Conversations
+					{#if areaConversations.length > 0}
+						<span class="ml-auto text-xs opacity-60">{areaConversations.length}</span>
+					{/if}
+				</button>
+				<button class="mobile-action-item" onclick={() => tasksPanelOpen = true}>
+					<ListTodo size={16} />
+					Tasks
+					{#if areaTaskCount > 0}
+						<span class="ml-auto text-xs opacity-60">{areaTaskCount}</span>
+					{/if}
+				</button>
+				<button class="mobile-action-item" onclick={goToPages}>
+					<FileText size={16} />
+					Pages
+					{#if areaPageCount > 0}
+						<span class="ml-auto text-xs opacity-60">{areaPageCount}</span>
+					{/if}
+				</button>
+				<button class="mobile-action-item" onclick={() => contextPanelOpen = true}>
+					<FolderOpen size={16} />
+					Context
+					{#if spaceDocCount > 0}
+						<span class="ml-auto text-xs opacity-60">{spaceDocCount}</span>
+					{/if}
+				</button>
+				<div class="mobile-action-divider"></div>
+				{#if canShare}
+					<button class="mobile-action-item" onclick={() => (showShareModal = true)}>
+						<Share2 size={16} />
+						Share Area
+					</button>
+				{/if}
+				<button class="mobile-action-item" onclick={handleNewChat}>
+					<Plus size={16} />
+					New Chat
+				</button>
+				<button class="mobile-action-item" onclick={() => settingsOpen = true}>
+					<Settings size={16} />
+					Chat Settings
+				</button>
+			</MobileActionsMenu>
+
+			<!-- User Menu (icon only for mobile) -->
+			{#if userData}
+				<UserMenu displayName={userData.displayName} role={userData.role} iconOnly />
+			{/if}
+		</MobileHeader>
+
+		<!-- Desktop Header (hidden on mobile) -->
+		<header class="area-header hidden md:flex">
 			<div class="header-left">
 				<button type="button" class="back-button" onclick={goToSpaceDashboard} title="Back to {space.name}">
 					<svg viewBox="0 0 20 20" fill="currentColor">
@@ -1878,6 +2034,11 @@
 				onsend={handleSend}
 				onstop={handleStop}
 				disabled={!selectedModel}
+				{contextSource}
+				onActivateDocument={handleActivateDocument}
+				onDeactivateDocument={handleDeactivateDocument}
+				onOpenContextPanel={() => contextPanelOpen = true}
+				onOpenTasksPanel={() => tasksPanelOpen = true}
 			/>
 		</main>
 
@@ -2013,12 +2174,19 @@
 
 	/* Header */
 	.area-header {
-		display: flex;
+		/* Hidden on mobile, flex on desktop */
+		display: none;
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1rem;
 		background: rgba(255, 255, 255, 0.02);
 		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	}
+
+	@media (min-width: 768px) {
+		.area-header {
+			display: flex;
+		}
 	}
 
 	.header-left {

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { tick, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Clock, AlertCircle, RotateCcw, X, Paperclip } from 'lucide-svelte';
+	import { page } from '$app/stores';
+	import { Clock, AlertCircle, RotateCcw, X, Paperclip, Zap, FolderOpen, Settings, PanelLeft } from 'lucide-svelte';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
@@ -10,6 +11,11 @@
 	import SessionSeparator from '$lib/components/chat/SessionSeparator.svelte';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import Header from '$lib/components/layout/Header.svelte';
+	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
+	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
+	import UserMenu from '$lib/components/layout/UserMenu.svelte';
+	import ModelSelector from '$lib/components/ModelSelector.svelte';
+	import ModelBadge from '$lib/components/ModelBadge.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
 	import SecondOpinionPanel from '$lib/components/chat/SecondOpinionPanel.svelte';
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
@@ -40,6 +46,9 @@
 	let isAutoMode = $derived(effectiveModel.toLowerCase() === 'auto');
 	let routedModel = $derived(chatStore.routedModel);
 	let autoProvider = $derived(chatStore.autoProvider);
+
+	// User data for mobile header
+	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
 
 	let settingsOpen = $state(false);
 	let isGeneratingSummary = $state(false);
@@ -1337,7 +1346,53 @@
 </svelte:head>
 
 <div class="h-screen flex flex-col overflow-hidden">
-	<!-- Header -->
+	<!-- Mobile Header (visible < 768px) -->
+	<MobileHeader
+		title="StratAI"
+		hideBack={true}
+	>
+		<!-- Sidebar toggle for conversation history -->
+		<button
+			class="mobile-header-action"
+			onclick={() => settingsStore.toggleSidebar()}
+			aria-label="Toggle conversations"
+		>
+			<PanelLeft size={18} />
+		</button>
+
+		<!-- Model selector - uses bottom sheet on mobile -->
+		<ModelSelector
+			selectedModel={selectedModel}
+			routedModel={routedModel}
+			disabled={chatStore.isStreaming}
+			onchange={handleModelChange}
+			onproviderchange={(provider) => chatStore.setAutoProvider(provider)}
+		/>
+
+		<!-- Navigation & Chat Settings -->
+		<MobileActionsMenu>
+			<a href="/arena" class="mobile-action-item">
+				<Zap size={16} />
+				Model Arena
+			</a>
+			<a href="/spaces" class="mobile-action-item">
+				<FolderOpen size={16} />
+				Spaces
+			</a>
+			<div class="mobile-action-divider"></div>
+			<button class="mobile-action-item" onclick={() => settingsOpen = true}>
+				<Settings size={16} />
+				Chat Settings
+			</button>
+		</MobileActionsMenu>
+
+		<!-- User Menu (icon only for mobile) -->
+		{#if userData}
+			<UserMenu displayName={userData.displayName} role={userData.role} iconOnly />
+		{/if}
+	</MobileHeader>
+
+	<!-- Desktop Header (hidden on mobile) -->
 	<Header
 		onModelChange={handleModelChange}
 		onProviderChange={(provider) => chatStore.setAutoProvider(provider)}

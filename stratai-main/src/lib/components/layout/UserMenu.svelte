@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
+	import { User } from 'lucide-svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { performLogout } from '$lib/utils/logout';
 
@@ -8,9 +9,11 @@
 	interface Props {
 		displayName: string | null;
 		role: 'owner' | 'admin' | 'member';
+		/** Show only avatar icon (for mobile headers) */
+		iconOnly?: boolean;
 	}
 
-	let { displayName, role }: Props = $props();
+	let { displayName, role, iconOnly = false }: Props = $props();
 
 	let isOpen = $state(false);
 	let buttonRef: HTMLButtonElement | undefined = $state();
@@ -73,26 +76,33 @@
 		bind:this={buttonRef}
 		onclick={() => (isOpen = !isOpen)}
 		class="user-trigger"
+		class:icon-only={iconOnly}
+		class:active={isOpen}
 		aria-expanded={isOpen}
 		aria-haspopup="true"
+		aria-label={iconOnly ? `User menu for ${displayText}` : undefined}
 	>
-		<span class="user-name">{displayText}</span>
-		<svg
-			class="chevron"
-			class:rotate={isOpen}
-			width="12"
-			height="12"
-			viewBox="0 0 12 12"
-			fill="none"
-		>
-			<path
-				d="M2.5 4.5L6 8L9.5 4.5"
-				stroke="currentColor"
-				stroke-width="1.5"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-			/>
-		</svg>
+		{#if iconOnly}
+			<User size={18} />
+		{:else}
+			<span class="user-name">{displayText}</span>
+			<svg
+				class="chevron"
+				class:rotate={isOpen}
+				width="12"
+				height="12"
+				viewBox="0 0 12 12"
+				fill="none"
+			>
+				<path
+					d="M2.5 4.5L6 8L9.5 4.5"
+					stroke="currentColor"
+					stroke-width="1.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+			</svg>
+		{/if}
 	</button>
 
 	{#if isOpen}
@@ -229,6 +239,17 @@
 		border-color: rgba(255, 255, 255, 0.1);
 	}
 
+	.user-trigger.active {
+		background: rgba(255, 255, 255, 0.1);
+		border-color: rgba(255, 255, 255, 0.15);
+	}
+
+	/* Icon-only variant for mobile */
+	.user-trigger.icon-only {
+		padding: 0.5rem;
+		border-radius: 0.5rem;
+	}
+
 	.user-name {
 		max-width: 150px;
 		overflow: hidden;
@@ -359,6 +380,11 @@
 	:global(html.light) .user-trigger:hover {
 		background: rgba(0, 0, 0, 0.05);
 		border-color: rgba(0, 0, 0, 0.1);
+	}
+
+	:global(html.light) .user-trigger.active {
+		background: rgba(0, 0, 0, 0.08);
+		border-color: rgba(0, 0, 0, 0.12);
 	}
 
 	:global(html.light) .user-dropdown {

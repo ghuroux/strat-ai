@@ -8,6 +8,10 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { MessageSquare, Plus, Settings } from 'lucide-svelte';
+	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
+	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
+	import UserMenu from '$lib/components/layout/UserMenu.svelte';
 	import { PageList, NewPageModal, DeletePageModal, SharePageModal } from '$lib/components/pages';
 	import { pageStore } from '$lib/stores/pages.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
@@ -101,6 +105,9 @@
 	// Derive colors
 	let spaceColor = $derived(space?.color || '#3b82f6');
 	let areaColor = $derived(area?.color || spaceColor);
+
+	// User data for mobile header
+	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
 
 	// Pages for this area
 	let pages = $derived.by(() => {
@@ -296,7 +303,37 @@
 	</div>
 {:else if space && area}
 	<div class="pages-page" style="--area-color: {areaColor}">
-		<!-- Header -->
+		<!-- Mobile Header -->
+		<MobileHeader
+			title="Pages"
+			breadcrumb={area.name}
+			onBack={goToArea}
+			accentColor={areaColor}
+		>
+			<!-- New Page button -->
+			<button
+				class="mobile-header-action primary"
+				onclick={handleNewPage}
+				title="New Page"
+			>
+				<Plus size={18} />
+			</button>
+
+			<!-- Actions menu -->
+			<MobileActionsMenu>
+				<button class="mobile-action-item" onclick={goToArea}>
+					<MessageSquare size={16} />
+					Back to Chat
+				</button>
+			</MobileActionsMenu>
+
+			<!-- User Menu -->
+			{#if userData}
+				<UserMenu displayName={userData.displayName} role={userData.role} iconOnly />
+			{/if}
+		</MobileHeader>
+
+		<!-- Desktop Header (hidden on mobile) -->
 		<header class="pages-header">
 			<div class="header-left">
 				<button type="button" class="back-button" onclick={goToArea} title="Back to {area.name}">
@@ -386,12 +423,19 @@
 	}
 
 	.pages-header {
-		display: flex;
+		/* Hidden on mobile, flex on desktop */
+		display: none;
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1.5rem;
 		background: var(--editor-bg);
 		border-bottom: 1px solid var(--editor-border);
+	}
+
+	@media (min-width: 768px) {
+		.pages-header {
+			display: flex;
+		}
 	}
 
 	.header-left {

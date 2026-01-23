@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Swords, StopCircle, Plus, MessageSquare, RefreshCw, Sliders } from 'lucide-svelte';
+	import { page } from '$app/stores';
+	import { Swords, StopCircle, Plus, MessageSquare, RefreshCw, Sliders, Home, FolderOpen, Settings } from 'lucide-svelte';
 	import Header from '$lib/components/layout/Header.svelte';
+	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
+	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
+	import UserMenu from '$lib/components/layout/UserMenu.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
 	import ArenaTabs from '$lib/components/arena/ArenaTabs.svelte';
 	import ArenaQuickStart from '$lib/components/arena/ArenaQuickStart.svelte';
@@ -27,6 +31,9 @@
 
 	let settingsOpen = $state(false);
 	let showContinueModal = $state(false);
+
+	// User data for mobile header
+	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
 	let votingSkipped = $state(false);
 	let battleTransitionDelay = $state(false); // Delay UI transition for animation
 	let focusedModelId = $state<string | null>(null); // Focus mode for a single response
@@ -538,8 +545,35 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="h-screen flex flex-col overflow-hidden">
-	<!-- Header -->
-	<Header onSettingsClick={() => (settingsOpen = true)} />
+	<!-- Mobile Header -->
+	<MobileHeader title="Model Arena" hideBack={true}>
+		<!-- Navigation menu -->
+		<MobileActionsMenu>
+			<a href="/" class="mobile-action-item">
+				<Home size={16} />
+				Quick Chat
+			</a>
+			<a href="/spaces" class="mobile-action-item">
+				<FolderOpen size={16} />
+				Spaces
+			</a>
+			<div class="mobile-action-divider"></div>
+			<button class="mobile-action-item" onclick={() => (settingsOpen = true)}>
+				<Settings size={16} />
+				Settings
+			</button>
+		</MobileActionsMenu>
+
+		<!-- User Menu -->
+		{#if userData}
+			<UserMenu displayName={userData.displayName} role={userData.role} iconOnly />
+		{/if}
+	</MobileHeader>
+
+	<!-- Desktop Header (hidden on mobile) -->
+	<div class="hidden md:block">
+		<Header onSettingsClick={() => (settingsOpen = true)} />
+	</div>
 
 	<!-- Main Content (full width, no sidebar) -->
 	<main class="flex-1 flex flex-col overflow-hidden bg-surface-950">

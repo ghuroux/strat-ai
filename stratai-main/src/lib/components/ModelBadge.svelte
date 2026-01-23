@@ -23,7 +23,8 @@
 
 {#if model}
 	<div
-		class="model-badge flex items-center gap-2 px-3 py-1.5 bg-surface-800 border border-surface-700 rounded-lg"
+		class="model-badge flex items-center gap-1.5 px-2 py-1 bg-surface-800 border border-surface-700 rounded-lg"
+		class:compact
 		title="Model locked for this conversation"
 	>
 		<!-- Provider badge -->
@@ -31,12 +32,12 @@
 			{provider}
 		</span>
 
-		<!-- Model name -->
-		<span class="text-sm text-surface-200 truncate max-w-[150px]">
+		<!-- Model name (more truncation in compact mode) -->
+		<span class="text-sm text-surface-200 truncate" class:max-w-[150px]={!compact} class:max-w-[80px]={compact}>
 			{displayName}
 		</span>
 
-		<!-- Capability icons (unless compact mode) -->
+		<!-- Capability icons (hidden in compact mode) -->
 		{#if !compact}
 			<div class="flex items-center gap-1">
 				{#if hasThinking}
@@ -55,11 +56,11 @@
 					</span>
 				{/if}
 			</div>
-		{/if}
 
-		<!-- Lock icon to indicate model is fixed -->
-		<svg class="w-3.5 h-3.5 text-surface-500 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-		</svg>
+			<!-- Lock icon (hidden in compact mode) -->
+			<svg class="w-3.5 h-3.5 text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+			</svg>
+		{/if}
 	</div>
 {/if}

@@ -29,7 +29,9 @@
 	import { common, createLowlight } from 'lowlight';
 	import { recalculateTable, updateTableTotalsInEditor, extractTableData, type TableData } from '$lib/services/table-calculations';
 	import { buildCellRef } from '$lib/services/cell-references';
-	import { Lock } from 'lucide-svelte';
+	import { Lock, Save, Share2, History, MoreVertical } from 'lucide-svelte';
+	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
+	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
 	import type { Page, TipTapContent, PageType, PageVisibility } from '$lib/types/page';
 	import type { PagePermission } from '$lib/types/page-sharing';
 	import { EMPTY_TIPTAP_CONTENT, countWords, extractTextFromContent } from '$lib/types/page';
@@ -1529,7 +1531,48 @@
 </script>
 
 <div class="page-editor" class:chat-open={chatPanelOpen}>
-	<!-- Header -->
+	<!-- Mobile Header -->
+	<MobileHeader
+		title={title || 'Untitled'}
+		onBack={handleClose}
+	>
+		<!-- Save button (primary action) -->
+		{#if !isReadOnly}
+			<button
+				class="mobile-header-action"
+				class:primary={isDirty}
+				onclick={handleSave}
+				disabled={saveStatus === 'saving' || (!isDirty && saveStatus !== 'error')}
+				title={isDirty ? 'Save changes' : 'Saved'}
+			>
+				{#if saveStatus === 'saving'}
+					<svg class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="8" />
+					</svg>
+				{:else}
+					<Save size={18} />
+				{/if}
+			</button>
+		{/if}
+
+		<!-- Actions menu -->
+		<MobileActionsMenu>
+			{#if canManageSharing}
+				<button class="mobile-action-item" onclick={() => showShareModal = true}>
+					<Share2 size={16} />
+					Share
+				</button>
+			{/if}
+			{#if isAdmin}
+				<button class="mobile-action-item" onclick={() => activityPanelOpen = !activityPanelOpen}>
+					<History size={16} />
+					Activity
+				</button>
+			{/if}
+		</MobileActionsMenu>
+	</MobileHeader>
+
+	<!-- Desktop Header (hidden on mobile) -->
 	<PageHeader
 		pageId={page?.id}
 		{title}
@@ -1739,6 +1782,17 @@
 		height: 100%;
 		background: var(--editor-bg);
 		color: var(--editor-text);
+	}
+
+	/* Hide desktop header on mobile, show on desktop */
+	.page-editor :global(.page-header) {
+		display: none;
+	}
+
+	@media (min-width: 768px) {
+		.page-editor :global(.page-header) {
+			display: flex;
+		}
 	}
 
 	.editor-content {

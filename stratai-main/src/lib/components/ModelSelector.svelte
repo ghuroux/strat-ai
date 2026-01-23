@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fade } from 'svelte/transition';
+	import { fade, fly } from 'svelte/transition';
+	import { X } from 'lucide-svelte';
 	import type { LiteLLMModel } from '$lib/types/api';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
@@ -8,6 +9,9 @@
 
 	// AUTO mode identifier
 	const AUTO_MODEL_ID = 'auto';
+
+	// Mobile detection for bottom sheet vs dropdown
+	let isMobile = $state(false);
 
 	// Svelte 5: Use $props - selectedModel can be passed as prop or managed internally
 	let {
@@ -51,10 +55,13 @@
 	let dropdownRef: HTMLDivElement | undefined = $state();
 	let isCollapsed = $state(false);
 
-	// Responsive state: collapse at <1024px
+	// Responsive state: collapse at <768px (mobile breakpoint)
+	// This shows abbreviated model names on mobile for better fit
+	// Also track if we're on mobile for bottom sheet rendering
 	$effect(() => {
 		const handleResize = () => {
-			isCollapsed = window.innerWidth < 1024;
+			isCollapsed = window.innerWidth < 768;
+			isMobile = window.innerWidth < 768;
 		};
 		handleResize();
 		window.addEventListener('resize', handleResize);
@@ -394,6 +401,20 @@
 			isOpen = !isOpen;
 		}
 	}
+
+	function closeModal() {
+		isOpen = false;
+	}
+
+	// Prevent body scroll when mobile modal is open
+	$effect(() => {
+		if (isMobile && isOpen) {
+			document.body.style.overflow = 'hidden';
+			return () => {
+				document.body.style.overflow = '';
+			};
+		}
+	});
 </script>
 
 <div class="relative" bind:this={dropdownRef}>
@@ -422,8 +443,8 @@
 			type="button"
 			onclick={toggleDropdown}
 			{disabled}
-			class="w-full px-4 py-2.5 border rounded-xl
-				   text-left flex items-center justify-between gap-2
+			class="w-full px-2.5 py-2 md:px-4 md:py-2.5 border rounded-lg md:rounded-xl
+				   text-left flex items-center justify-between gap-1.5 md:gap-2
 				   focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500
 				   transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed
 				   {isAutoMode
@@ -495,8 +516,9 @@
 			</svg>
 		</button>
 
-		<!-- Dropdown menu -->
-		{#if isOpen}
+		<!-- Dropdown menu (desktop) / Bottom sheet (mobile) -->
+		{#if isOpen && !isMobile}
+			<!-- Desktop: Traditional dropdown -->
 			<div
 				class="absolute z-50 min-w-full w-max mt-2 py-2 bg-surface-800 border border-surface-700 rounded-xl shadow-xl"
 				transition:fade={{ duration: 150 }}
@@ -693,6 +715,232 @@
 						{/if}
 					</div>
 				{/if}
+			</div>
+		{/if}
+
+		<!-- Mobile: Full-screen bottom sheet modal -->
+		{#if isOpen && isMobile}
+			<!-- Backdrop -->
+			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+			<div
+				class="fixed inset-0 bg-black/60 z-50"
+				onclick={closeModal}
+				transition:fade={{ duration: 150 }}
+			></div>
+
+			<!-- Bottom sheet -->
+			<div
+				class="fixed inset-x-0 bottom-0 z-50 bg-surface-900 rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col"
+				transition:fly={{ y: 300, duration: 250 }}
+			>
+				<!-- Handle bar -->
+				<div class="flex justify-center pt-3 pb-1">
+					<div class="w-10 h-1 bg-surface-600 rounded-full"></div>
+				</div>
+
+				<!-- Header -->
+				<div class="flex items-center justify-between px-4 py-3 border-b border-surface-700">
+					<h2 class="text-lg font-semibold text-white">Select Model</h2>
+					<button
+						type="button"
+						onclick={closeModal}
+						class="p-2 rounded-lg text-surface-400 hover:text-white hover:bg-surface-700 transition-colors"
+					>
+						<X size={20} />
+					</button>
+				</div>
+
+				<!-- Content (scrollable) -->
+				<div class="flex-1 overflow-y-auto">
+					{#if models.length === 0}
+						<div class="px-4 py-8 text-center text-surface-500">No models available</div>
+					{:else}
+						<!-- AUTO Mode Option -->
+						<div class="px-4 py-3 text-xs font-semibold text-purple-300 uppercase tracking-wider bg-gradient-to-r from-purple-900/40 to-indigo-900/40 flex items-center gap-2">
+							<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+							</svg>
+							Smart Routing
+						</div>
+						<button
+							type="button"
+							onclick={selectAuto}
+							class="w-full px-4 py-4 text-left flex items-center gap-3
+								   transition-colors active:bg-surface-700
+								   {isAutoMode
+									? 'bg-purple-900/30 border-l-4 border-purple-500'
+									: ''}"
+						>
+							<span class="px-2.5 py-1.5 rounded-lg text-sm font-bold bg-gradient-to-r from-purple-500/30 to-indigo-500/30 text-purple-200 border border-purple-500/40 flex items-center gap-2">
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+								</svg>
+								AUTO
+							</span>
+							<div class="flex flex-col flex-1">
+								<span class="text-white font-medium">Automatic Model Selection</span>
+								<span class="text-sm text-surface-400">Optimal model for each query</span>
+							</div>
+							{#if isAutoMode}
+								<svg class="w-5 h-5 text-purple-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+								</svg>
+							{/if}
+						</button>
+
+						<!-- Provider preference (shown when AUTO is selected) -->
+						{#if isAutoMode}
+							<div class="px-4 py-3 border-t border-b border-surface-700 bg-surface-850/50">
+								<div class="text-sm text-surface-400 mb-2">Prefer provider:</div>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										onclick={() => selectProvider('anthropic')}
+										class="flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all
+											   {autoProvider === 'anthropic'
+												? 'bg-orange-500/20 text-orange-300 border-orange-500/40'
+												: 'bg-surface-700 text-surface-400 border-surface-600 active:bg-surface-600'}"
+									>
+										Claude
+									</button>
+									<button
+										type="button"
+										onclick={() => selectProvider('openai')}
+										class="flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all
+											   {autoProvider === 'openai'
+												? 'bg-green-500/20 text-green-300 border-green-500/40'
+												: 'bg-surface-700 text-surface-400 border-surface-600 active:bg-surface-600'}"
+									>
+										GPT
+									</button>
+									<button
+										type="button"
+										onclick={() => selectProvider('google')}
+										class="flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-all
+											   {autoProvider === 'google'
+												? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+												: 'bg-surface-700 text-surface-400 border-surface-600 active:bg-surface-600'}"
+									>
+										Gemini
+									</button>
+								</div>
+							</div>
+						{/if}
+
+						<!-- Proprietary Models Section -->
+						{#if proprietaryGroups.length > 0}
+							<div class="px-4 py-3 text-xs font-semibold text-surface-400 uppercase tracking-wider bg-surface-900/50 sticky top-0 z-10 flex items-center gap-2 border-t border-surface-700">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+								</svg>
+								Proprietary
+							</div>
+							{#each proprietaryGroups as group}
+								<!-- Family header -->
+								<div class="px-4 py-2 text-xs font-medium text-surface-500 bg-surface-850">
+									{group.family}
+								</div>
+								{#each group.models as model}
+									<button
+										type="button"
+										onclick={() => selectModel(model.id)}
+										class="w-full px-4 py-3 text-left flex items-center gap-3
+											   transition-colors active:bg-surface-700
+											   {model.id === selectedModel ? 'bg-surface-700/50 border-l-4 border-primary-500' : ''}"
+									>
+										<span class="px-2 py-1 rounded-lg text-xs font-medium shrink-0 {getProviderColor(getProvider(model.id))}">
+											{getProvider(model.id)}
+										</span>
+										<span class="text-white flex-1 truncate">{getDisplayName(model.id)}</span>
+
+										<!-- Capability badges -->
+										<div class="flex items-center gap-2 shrink-0">
+											{#if modelHasThinking(model.id)}
+												<span class="text-amber-400" title="Supports extended thinking">
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+													</svg>
+												</span>
+											{/if}
+											{#if modelHasVision(model.id)}
+												<span class="text-blue-400" title="Supports image analysis">
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+													</svg>
+												</span>
+											{/if}
+										</div>
+
+										{#if model.id === selectedModel}
+											<svg class="w-5 h-5 text-primary-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+											</svg>
+										{/if}
+									</button>
+								{/each}
+							{/each}
+						{/if}
+
+						<!-- Open Source Models Section -->
+						{#if opensourceGroups.length > 0}
+							<div class="px-4 py-3 text-xs font-semibold text-surface-400 uppercase tracking-wider bg-surface-900/50 sticky top-0 z-10 flex items-center gap-2 border-t border-surface-700">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+								</svg>
+								Open Source
+							</div>
+							{#each opensourceGroups as group}
+								<!-- Family header -->
+								<div class="px-4 py-2 text-xs font-medium text-surface-500 bg-surface-850">
+									{group.family}
+								</div>
+								{#each group.models as model}
+									<button
+										type="button"
+										onclick={() => selectModel(model.id)}
+										class="w-full px-4 py-3 text-left flex items-center gap-3
+											   transition-colors active:bg-surface-700
+											   {model.id === selectedModel ? 'bg-surface-700/50 border-l-4 border-primary-500' : ''}"
+									>
+										<span class="px-2 py-1 rounded-lg text-xs font-medium shrink-0 {getProviderColor(getProvider(model.id))}">
+											{getProvider(model.id)}
+										</span>
+										<span class="text-white flex-1 truncate">{getDisplayName(model.id)}</span>
+
+										<!-- Capability badges -->
+										<div class="flex items-center gap-2 shrink-0">
+											{#if modelHasThinking(model.id)}
+												<span class="text-amber-400" title="Supports extended thinking">
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+													</svg>
+												</span>
+											{/if}
+											{#if modelHasVision(model.id)}
+												<span class="text-blue-400" title="Supports image analysis">
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+													</svg>
+												</span>
+											{/if}
+										</div>
+
+										{#if model.id === selectedModel}
+											<svg class="w-5 h-5 text-primary-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+											</svg>
+										{/if}
+									</button>
+								{/each}
+							{/each}
+						{/if}
+
+						<!-- Bottom padding for safe area -->
+						<div class="h-8"></div>
+					{/if}
+				</div>
 			</div>
 		{/if}
 	{/if}
