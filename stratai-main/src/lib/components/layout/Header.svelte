@@ -159,7 +159,7 @@
 	}
 </script>
 
-<header class="h-16 px-4 flex items-center border-b border-surface-800 bg-surface-900/80 backdrop-blur-xl overflow-visible relative z-40">
+<header class="h-16 px-4 hidden md:flex items-center border-b border-surface-800 bg-surface-900/80 backdrop-blur-xl overflow-visible relative z-40">
 	<!-- Left: Sidebar Toggle & Logo -->
 	<div class="flex items-center gap-3 min-w-0">
 		<!-- Sidebar Toggle (All screen sizes) -->
@@ -295,7 +295,7 @@
 		<div class="flex-1"></div>
 	{:else if !chatStore.messages || chatStore.messages.length === 0}
 		<div class="flex-1 flex justify-center">
-			<div class="w-full max-w-[240px] sm:max-w-[280px] lg:max-w-xs">
+			<div class="w-full max-w-[160px] sm:max-w-[240px] md:max-w-[280px] lg:max-w-xs">
 				<ModelSelector
 					{selectedModel}
 					{routedModel}
