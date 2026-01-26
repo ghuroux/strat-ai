@@ -11,6 +11,7 @@
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import type { Document, DocumentContextRole } from '$lib/types/documents';
 	import type { Task, TaskRelationshipType } from '$lib/types/tasks';
+	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
 
 	interface Props {
 		open: boolean;
@@ -97,7 +98,6 @@
 		}
 	});
 
-	const ACCEPTED_TYPES = '.pdf,.docx,.txt,.md,.csv,.json';
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
@@ -351,7 +351,7 @@
 								type="file"
 								bind:this={fileInput}
 								onchange={handleFileSelect}
-								accept={ACCEPTED_TYPES}
+								accept={ACCEPT_DOCUMENTS}
 								class="hidden"
 							/>
 

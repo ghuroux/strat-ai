@@ -15,6 +15,7 @@
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Document } from '$lib/types/documents';
+	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
 
 	interface Props {
 		isOpen: boolean;
@@ -175,7 +176,7 @@
 							browse
 							<input
 								type="file"
-								accept=".pdf,.docx,.txt,.md,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+								accept={ACCEPT_DOCUMENTS}
 								multiple
 								onchange={handleFileSelect}
 							/>

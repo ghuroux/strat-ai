@@ -17,6 +17,7 @@
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
+	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
 
 	interface InitialValues {
 		title?: string;
@@ -500,7 +501,7 @@
 										browse
 										<input
 											type="file"
-											accept=".pdf,.txt,.md,text/plain,text/markdown,application/pdf"
+											accept={ACCEPT_DOCUMENTS}
 											multiple
 											onchange={handleFileSelect}
 											disabled={isSubmitting}

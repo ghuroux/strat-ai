@@ -11,6 +11,7 @@
 	import type { FocusArea, CreateFocusAreaInput, UpdateFocusAreaInput } from '$lib/types/focus-areas';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import type { Document } from '$lib/types/documents';
+	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
 
 	interface Props {
 		open: boolean;
@@ -357,7 +358,7 @@
 									type="file"
 									id="document-upload"
 									class="hidden"
-									accept=".pdf,.doc,.docx,.txt,.md,.json,.csv"
+									accept={ACCEPT_DOCUMENTS}
 									onchange={handleFileSelect}
 									disabled={isSubmitting || isUploading}
 								/>

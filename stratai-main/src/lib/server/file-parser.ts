@@ -7,6 +7,13 @@
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
 import type { AttachmentContent } from '$lib/types/chat';
+import {
+	DOCUMENT_EXTENSIONS,
+	IMAGE_EXTENSIONS,
+	ALL_TYPES_DISPLAY,
+	isDocumentExtension,
+	isImageExtension
+} from '$lib/config/file-types';
 
 // Content types for parsed files
 export type ParsedTextContent = {
@@ -100,32 +107,13 @@ function getExtension(filename: string): string {
  * Check if MIME type is allowed
  */
 function isAllowedType(mimeType: string, filename: string): boolean {
-	const extension = getExtension(filename);
-
 	// Check if MIME type is in allowed list
 	if (ALLOWED_TYPES[mimeType]) {
 		return true;
 	}
 
-	// Fallback: check by extension for common text types
-	const textExtensions = ['.txt', '.md', '.csv', '.json'];
-	if (textExtensions.includes(extension)) {
-		return true;
-	}
-
-	// Check PDF by extension
-	if (extension === '.pdf') {
-		return true;
-	}
-
-	// Check DOCX by extension
-	if (extension === '.docx') {
-		return true;
-	}
-
-	// Check images by extension
-	const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-	if (imageExtensions.includes(extension)) {
+	// Use centralized extension checks
+	if (isDocumentExtension(filename) || isImageExtension(filename)) {
 		return true;
 	}
 
@@ -136,16 +124,13 @@ function isAllowedType(mimeType: string, filename: string): boolean {
  * Check if file is an image type
  */
 export function isImageFile(mimeType: string, filename: string): boolean {
-	const extension = getExtension(filename);
-
 	// Check by MIME type
 	if (IMAGE_TYPES[mimeType]) {
 		return true;
 	}
 
-	// Check by extension
-	const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-	return imageExtensions.includes(extension);
+	// Check by extension using centralized config
+	return isImageExtension(filename);
 }
 
 /**
@@ -184,7 +169,7 @@ export function validateFile(
 	if (!isAllowedType(mimeType, filename)) {
 		return {
 			valid: false,
-			error: 'Unsupported file type. Allowed: PDF, DOCX, TXT, MD, CSV, JSON, JPG, PNG, GIF, WebP'
+			error: `Unsupported file type. Allowed: ${ALL_TYPES_DISPLAY}`
 		};
 	}
 

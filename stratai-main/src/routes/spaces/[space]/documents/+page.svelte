@@ -17,6 +17,7 @@
 	import DocumentList from '$lib/components/documents/DocumentList.svelte';
 	import ShareDocumentModal from '$lib/components/documents/ShareDocumentModal.svelte';
 	import type { Document } from '$lib/types/documents';
+	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -237,7 +238,7 @@
 					<span>Upload</span>
 					<input
 						type="file"
-						accept=".pdf,.docx,.txt,.md,text/plain,text/markdown,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+						accept={ACCEPT_DOCUMENTS}
 						multiple
 						onchange={handleFileSelect}
 					/>

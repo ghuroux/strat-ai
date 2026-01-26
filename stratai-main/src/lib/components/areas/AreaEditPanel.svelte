@@ -16,6 +16,7 @@
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Area, UpdateAreaInput } from '$lib/types/areas';
 	import type { Document } from '$lib/types/documents';
+	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
 
 	interface Props {
 		isOpen: boolean;
@@ -284,7 +285,7 @@
 						type="file"
 						id="document-upload"
 						class="hidden"
-						accept=".pdf,.doc,.docx,.txt,.md,.json,.csv"
+						accept={ACCEPT_DOCUMENTS}
 						onchange={handleFileSelect}
 						disabled={isSubmitting || isUploading}
 					/>

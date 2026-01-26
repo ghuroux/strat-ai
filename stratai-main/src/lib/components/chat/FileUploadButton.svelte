@@ -3,6 +3,13 @@
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import type { FileAttachment } from '$lib/types/chat';
+	import {
+		ACCEPT_DOCUMENTS,
+		ACCEPT_ALL,
+		DOCUMENT_TYPES_DISPLAY,
+		ALL_TYPES_DISPLAY,
+		isImageExtension
+	} from '$lib/config/file-types';
 
 	interface Props {
 		disabled?: boolean;
@@ -19,30 +26,20 @@
 	let modelName = $derived(modelCapabilitiesStore.currentDisplayName);
 
 	// Dynamic accepted types based on vision support
-	const DOCUMENT_TYPES = '.pdf,.docx,.txt,.md,.csv,.json';
-	const IMAGE_TYPES = '.jpg,.jpeg,.png,.gif,.webp,image/jpeg,image/png,image/gif,image/webp';
-
-	let acceptedTypes = $derived(
-		supportsVision
-			? `${DOCUMENT_TYPES},${IMAGE_TYPES}`
-			: DOCUMENT_TYPES
-	);
+	let acceptedTypes = $derived(supportsVision ? ACCEPT_ALL : ACCEPT_DOCUMENTS);
 
 	// Tooltip text based on capabilities
 	let tooltipText = $derived.by(() => {
 		if (isUploading) return 'Uploading...';
 		if (supportsVision) {
-			return 'Attach file (Images, PDF, DOCX, TXT, MD, CSV, JSON)';
+			return `Attach file (${ALL_TYPES_DISPLAY})`;
 		}
-		return `Attach file (PDF, DOCX, TXT, MD, CSV, JSON) - Images not supported by ${modelName}`;
+		return `Attach file (${DOCUMENT_TYPES_DISPLAY}) - Images not supported by ${modelName}`;
 	});
 
 	// Check if a file is an image
 	function isImageFile(file: File): boolean {
-		return file.type.startsWith('image/') ||
-			['.jpg', '.jpeg', '.png', '.gif', '.webp'].some(ext =>
-				file.name.toLowerCase().endsWith(ext)
-			);
+		return file.type.startsWith('image/') || isImageExtension(file.name);
 	}
 
 	async function handleFileSelect(e: Event) {
