@@ -45,6 +45,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/SPACE_MEMBERSHIPS.md` - **Space memberships & Org Spaces** (collaboration model, Guest role, "Shared with Me")
 - `stratai-main/docs/CONFLUENCE_COMPETITIVE_ANALYSIS.md` - **Competitive intelligence** (Confluence pain points, feature gaps, opportunities)
 - `stratai-main/docs/MEETING_LIFECYCLE.md` - **Meeting lifecycle system** (end-to-end: AI-guided creation → Teams scheduling → transcript capture → context integration)
+- `stratai-main/docs/features/TASK_ASSIGNMENT.md` - **Task assignment** (assign tasks to Space members, email notifications, delegation)
 - `stratai-main/docs/AI_RETRIEVAL_ARCHITECTURE.md` - **AI retrieval mechanics** (how AI accesses org knowledge via tools, graph traversal, semantic search)
 - `stratai-main/docs/MEMBER_BUDGETS.md` - **Member budget system** ($ caps, progressive tier restrictions, escalation workflows, scenarios)
 - `stratai-main/docs/features/INTEGRATIONS_ARCHITECTURE.md` - **Integrations foundation** (MCP-native, two tiers, credential management, permissions)
