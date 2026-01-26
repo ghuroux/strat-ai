@@ -552,8 +552,11 @@
 		</div>
 
 		<!-- Context transparency badge (assistant messages only) -->
-		{#if hasUsedContext && message.usedContext}
-			<ResponseContextBadge usedContext={message.usedContext} />
+		{#if (hasUsedContext && message.usedContext) || message.routedModel}
+			<ResponseContextBadge
+				usedContext={message.usedContext || { documents: [], notes: { included: false, tokenEstimate: 0 }, tasks: [] }}
+				routedModel={message.routedModel}
+			/>
 		{/if}
 
 		<!-- Timestamp -->

@@ -38,6 +38,8 @@
 	import AreaAvatarStack from '$lib/components/areas/AreaAvatarStack.svelte';
 	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
+	import { createStreamingScrollController } from '$lib/utils/streaming-scroll.svelte';
+	import NewContentIndicator from '$lib/components/chat/NewContentIndicator.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { pageStore } from '$lib/stores/pages.svelte';
@@ -153,6 +155,11 @@
 
 	// Chat state
 	let messagesContainer: HTMLElement | undefined = $state();
+
+	// Streaming scroll controller for premium scroll UX
+	const scrollController = createStreamingScrollController();
+	let lastStreamingMessageId: string | null = $state(null);
+
 	let selectedModel = $derived(settingsStore.selectedModel || '');
 	let effectiveModel = $derived(
 		chatStore.activeConversation?.model || settingsStore.selectedModel || ''
@@ -447,13 +454,46 @@
 		isLoading = false;
 	});
 
-	// Auto-scroll to bottom when messages change
+	// Streaming scroll effects for premium scroll UX
+	// Attach/detach scroll controller to container
 	$effect(() => {
-		if (messages.length > 0) {
-			tick().then(scrollToBottom);
+		if (messagesContainer) {
+			scrollController.attach(messagesContainer);
+			return () => scrollController.detach();
 		}
 	});
 
+	// Anchor when new streaming message starts
+	$effect(() => {
+		const streamingMsg = messages.find((m) => m.isStreaming);
+		if (streamingMsg && streamingMsg.id !== lastStreamingMessageId) {
+			lastStreamingMessageId = streamingMsg.id;
+			// Find the message element and anchor to it
+			const msgIndex = messages.findIndex((m) => m.id === streamingMsg.id);
+			tick().then(() => {
+				const el = document.getElementById(`message-${msgIndex}`);
+				if (el) scrollController.anchorToMessage(el);
+			});
+		}
+		if (!streamingMsg) lastStreamingMessageId = null;
+	});
+
+	// Follow during streaming (react to content appends via _version)
+	$effect(() => {
+		const _ = chatStore._version; // React to content appends
+		if (chatStore.isStreaming) {
+			scrollController.onContentAppend();
+		}
+	});
+
+	// Reset on stream end
+	$effect(() => {
+		if (!chatStore.isStreaming) {
+			scrollController.reset();
+		}
+	});
+
+	// Legacy scroll function for non-streaming cases
 	function scrollToBottom() {
 		if (messagesContainer) {
 			messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -463,12 +503,17 @@
 	function startStreamingTimeouts() {
 		clearStreamingTimeouts();
 
-		// Warning after 45s (increased from 15s for slower models/complex prompts)
+		// Use longer timeouts for extended thinking (reasoning models take longer)
+		const isThinkingEnabled = settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking;
+		const warningMs = isThinkingEnabled ? 120000 : 45000; // 2min vs 45s
+		const hardTimeoutMs = isThinkingEnabled ? 300000 : 90000; // 5min vs 90s
+
+		// Warning after delay (longer for thinking models)
 		slowWarningTimeout = setTimeout(() => {
 			showSlowWarning = true;
-		}, 45000);
+		}, warningMs);
 
-		// Hard timeout after 90s (increased from 60s)
+		// Hard timeout (longer for thinking models)
 		hardTimeout = setTimeout(() => {
 			if (chatStore.isStreaming) {
 				chatStore.stopStreaming();
@@ -476,7 +521,7 @@
 				showSlowWarning = false;
 				toastStore.error('Response timed out. Please try again.');
 			}
-		}, 90000);
+		}, hardTimeoutMs);
 	}
 
 	function clearStreamingTimeouts() {
@@ -761,7 +806,16 @@
 						try {
 							const parsed = JSON.parse(data);
 
-							if (parsed.type === 'status') {
+							// Handle AUTO mode routing decision
+							if (parsed.type === 'routing') {
+								chatStore.setRoutedModel(parsed.selectedModel);
+								chatStore.setRoutingDecision({
+									tier: parsed.tier,
+									score: parsed.score,
+									confidence: parsed.confidence,
+									overrides: parsed.overrides || []
+								});
+							} else if (parsed.type === 'status') {
 								// Clear contextStatus when we receive any status event from the server
 								// (context loading is complete, now we're processing/searching/etc.)
 								if (parsed.status === 'searching') {
@@ -825,7 +879,8 @@
 				isThinking: false,
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
 				sources: collectedSources.length > 0 ? collectedSources : undefined,
-				usedContext // Attach context transparency data
+				usedContext, // Attach context transparency data
+				routedModel: chatStore.routedModel || undefined
 			});
 
 			// Clear timeouts on successful completion
@@ -1195,6 +1250,9 @@
 		const conversationId = chatStore.activeConversation?.id;
 		if (!conversationId) return;
 
+		// Reset timeout state from any previous request
+		streamingTimedOut = false;
+
 		const assistantMessageId = chatStore.addMessage(conversationId, {
 			role: 'assistant',
 			content: '',
@@ -1267,7 +1325,16 @@
 						try {
 							const parsed = JSON.parse(data);
 
-							if (parsed.type === 'status') {
+							// Handle AUTO mode routing decision
+							if (parsed.type === 'routing') {
+								chatStore.setRoutedModel(parsed.selectedModel);
+								chatStore.setRoutingDecision({
+									tier: parsed.tier,
+									score: parsed.score,
+									confidence: parsed.confidence,
+									overrides: parsed.overrides || []
+								});
+							} else if (parsed.type === 'status') {
 								if (parsed.status === 'browsing') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: 'browsing', searchQuery: parsed.query
@@ -1302,7 +1369,8 @@
 			chatStore.updateMessage(conversationId!, assistantMessageId, {
 				isStreaming: false,
 				isThinking: false,
-				sources: collectedSources.length > 0 ? collectedSources : undefined
+				sources: collectedSources.length > 0 ? collectedSources : undefined,
+				routedModel: chatStore.routedModel || undefined
 			});
 
 			// Clear timeouts on successful completion
@@ -1941,6 +2009,12 @@
 					{/if}
 				{/if}
 			</ChatMessageList>
+
+			<!-- New content indicator for streaming scroll UX -->
+			<NewContentIndicator
+				visible={scrollController.hasNewContentBelow && chatStore.isStreaming}
+				onclick={() => scrollController.scrollToNewContent()}
+			/>
 
 			<!-- Failed message and streaming timeout warnings/errors -->
 			<div class="px-4 pb-2">

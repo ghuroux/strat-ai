@@ -22,6 +22,8 @@
 	import BringToContextModal from '$lib/components/chat/BringToContextModal.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
+	import { createStreamingScrollController } from '$lib/utils/streaming-scroll.svelte';
+	import NewContentIndicator from '$lib/components/chat/NewContentIndicator.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -32,6 +34,10 @@
 
 	// Svelte 5: Use $state for local reactive state
 	let messagesContainer: HTMLElement | undefined = $state();
+
+	// Streaming scroll controller for premium scroll UX
+	const scrollController = createStreamingScrollController();
+	let lastStreamingMessageId: string | null = $state(null);
 
 	// Selected model from settings (used for new conversations and model selector)
 	let selectedModel = $derived(settingsStore.selectedModel || '');
@@ -134,13 +140,46 @@
 		(parentConversation?.messages || []).filter((m) => m && m.id)
 	);
 
-	// Svelte 5: Use $effect for side effects
+	// Streaming scroll effects for premium scroll UX
+	// Attach/detach scroll controller to container
 	$effect(() => {
-		if (messages.length) {
-			scrollToBottom();
+		if (messagesContainer) {
+			scrollController.attach(messagesContainer);
+			return () => scrollController.detach();
 		}
 	});
 
+	// Anchor when new streaming message starts
+	$effect(() => {
+		const streamingMsg = messages.find((m) => m.isStreaming);
+		if (streamingMsg && streamingMsg.id !== lastStreamingMessageId) {
+			lastStreamingMessageId = streamingMsg.id;
+			// Find the message element and anchor to it
+			const msgIndex = messages.findIndex((m) => m.id === streamingMsg.id);
+			tick().then(() => {
+				const el = document.getElementById(`message-${msgIndex}`);
+				if (el) scrollController.anchorToMessage(el);
+			});
+		}
+		if (!streamingMsg) lastStreamingMessageId = null;
+	});
+
+	// Follow during streaming (react to content appends via _version)
+	$effect(() => {
+		const _ = chatStore._version; // React to content appends
+		if (chatStore.isStreaming) {
+			scrollController.onContentAppend();
+		}
+	});
+
+	// Reset on stream end
+	$effect(() => {
+		if (!chatStore.isStreaming) {
+			scrollController.reset();
+		}
+	});
+
+	// Legacy scroll function for non-streaming cases (e.g., summary scroll)
 	async function scrollToBottom() {
 		await tick();
 		if (messagesContainer) {
@@ -154,12 +193,17 @@
 	function startStreamingTimeouts() {
 		clearStreamingTimeouts();
 
-		// Warning after 45s (increased from 15s for slower models/complex prompts)
+		// Use longer timeouts for extended thinking (reasoning models take longer)
+		const isThinkingEnabled = settingsStore.extendedThinkingEnabled && settingsStore.canUseExtendedThinking;
+		const warningMs = isThinkingEnabled ? 120000 : 45000; // 2min vs 45s
+		const hardTimeoutMs = isThinkingEnabled ? 300000 : 90000; // 5min vs 90s
+
+		// Warning after delay (longer for thinking models)
 		slowWarningTimeout = setTimeout(() => {
 			showSlowWarning = true;
-		}, 45000);
+		}, warningMs);
 
-		// Hard timeout after 90s (increased from 60s)
+		// Hard timeout (longer for thinking models)
 		hardTimeout = setTimeout(() => {
 			if (chatStore.isStreaming) {
 				chatStore.stopStreaming();
@@ -167,7 +211,7 @@
 				showSlowWarning = false;
 				toastStore.error('Response timed out. Please try again.');
 			}
-		}, 90000);
+		}, hardTimeoutMs);
 	}
 
 	function clearStreamingTimeouts() {
@@ -574,12 +618,13 @@
 				}
 			}
 
-			// Mark message as complete with sources
+			// Mark message as complete with sources and routed model (if AUTO mode)
 			chatStore.updateMessage(conversationId!, assistantMessageId, {
 				isStreaming: false,
 				isThinking: false,
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
-				sources: collectedSources.length > 0 ? collectedSources : undefined
+				sources: collectedSources.length > 0 ? collectedSources : undefined,
+				routedModel: chatStore.routedModel || undefined
 			});
 
 			// Clear timeouts on successful completion
@@ -870,6 +915,9 @@
 	 * Extracted for reuse in edit/resend/regenerate flows
 	 */
 	async function triggerAssistantResponse(conversationId: string) {
+		// Reset timeout state from any previous request
+		streamingTimedOut = false;
+
 		// Add placeholder assistant message
 		const assistantMessageId = chatStore.addMessage(conversationId, {
 			role: 'assistant',
@@ -1048,7 +1096,8 @@
 				isStreaming: false,
 				isThinking: false,
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
-				sources: collectedSources.length > 0 ? collectedSources : undefined
+				sources: collectedSources.length > 0 ? collectedSources : undefined,
+				routedModel: chatStore.routedModel || undefined
 			});
 
 			// Clear timeouts on successful completion
@@ -1475,6 +1524,12 @@
 					{/if}
 				{/if}
 			</ChatMessageList>
+
+			<!-- New content indicator for streaming scroll UX -->
+			<NewContentIndicator
+				visible={scrollController.hasNewContentBelow && chatStore.isStreaming}
+				onclick={() => scrollController.scrollToNewContent()}
+			/>
 
 			<!-- Failed message and streaming timeout warnings/errors -->
 			<div class="px-4 pb-2">

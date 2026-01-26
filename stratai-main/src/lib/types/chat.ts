@@ -57,6 +57,8 @@ export interface Message {
 		notes: { included: boolean; tokenEstimate: number };
 		tasks: Array<{ title: string; tokenEstimate: number }>;
 	};
+	// AUTO mode: the model that was actually used (from smart routing)
+	routedModel?: string;
 }
 
 export interface SummaryPoint {

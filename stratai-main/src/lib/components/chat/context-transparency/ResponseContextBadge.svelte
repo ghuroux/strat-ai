@@ -6,7 +6,8 @@
 -->
 <script lang="ts">
 	import { slide } from 'svelte/transition';
-	import { Eye, ChevronDown, FileText, StickyNote, ListTodo } from 'lucide-svelte';
+	import { Eye, ChevronDown, FileText, StickyNote, ListTodo, Sparkles } from 'lucide-svelte';
+	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 
 	interface UsedContext {
 		documents: Array<{ filename: string; tokenEstimate: number }>;
@@ -16,9 +17,16 @@
 
 	interface Props {
 		usedContext: UsedContext;
+		/** The model used when AUTO mode selected it (optional) */
+		routedModel?: string;
 	}
 
-	let { usedContext }: Props = $props();
+	let { usedContext, routedModel }: Props = $props();
+
+	// Get display name for routed model
+	let routedModelName = $derived(
+		routedModel ? modelCapabilitiesStore.getDisplayName(routedModel) : null
+	);
 
 	let expanded = $state(false);
 
@@ -35,8 +43,8 @@
 		usedContext.tasks.reduce((sum, t) => sum + t.tokenEstimate, 0)
 	);
 
-	// Don't render if no context used
-	let hasContext = $derived(sourceCount > 0);
+	// Render if we have context OR a routed model
+	let hasContext = $derived(sourceCount > 0 || !!routedModel);
 
 	function toggle() {
 		expanded = !expanded;
@@ -70,6 +78,17 @@
 				transition:slide={{ duration: 150 }}
 			>
 				<div class="space-y-1.5">
+					<!-- Routed Model (when AUTO mode was used) -->
+					{#if routedModelName}
+						<div class="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
+							<Sparkles size={12} class="text-primary-500 dark:text-primary-400 flex-shrink-0" />
+							<span class="flex-1">Model used</span>
+							<span class="text-[10px] font-medium text-primary-600 dark:text-primary-400">
+								{routedModelName}
+							</span>
+						</div>
+					{/if}
+
 					<!-- Documents -->
 					{#each usedContext.documents as doc}
 						<div class="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">

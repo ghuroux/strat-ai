@@ -17,6 +17,8 @@
 	import { fly, fade } from 'svelte/transition';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
+	import { createStreamingScrollController } from '$lib/utils/streaming-scroll.svelte';
+	import NewContentIndicator from '$lib/components/chat/NewContentIndicator.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
@@ -114,6 +116,11 @@
 	let showSubtaskPanel = $state(true);
 	let subtaskPanelInitialized = $state(false);
 	let chatContainer = $state<HTMLElement | undefined>(undefined);
+
+	// Streaming scroll controller for premium scroll UX
+	const scrollController = createStreamingScrollController();
+	let lastStreamingMessageId: string | null = $state(null);
+
 	let showCompleteModal = $state(false);
 	let showSubtaskWelcome = $state(true);
 	let showPlanningModelModal = $state(false);
@@ -324,15 +331,42 @@
 		}
 	});
 
-	// Scroll to bottom when messages change
+	// Streaming scroll effects for premium scroll UX
+	// Attach/detach scroll controller to container
 	$effect(() => {
-		if (messages.length && chatContainer) {
-			const container = chatContainer;
+		if (chatContainer) {
+			scrollController.attach(chatContainer);
+			return () => scrollController.detach();
+		}
+	});
+
+	// Anchor when new streaming message starts
+	$effect(() => {
+		const streamingMsg = visibleMessages.find((m) => m.isStreaming);
+		if (streamingMsg && streamingMsg.id !== lastStreamingMessageId) {
+			lastStreamingMessageId = streamingMsg.id;
+			// Find the message element and anchor to it
+			const msgIndex = visibleMessages.findIndex((m) => m.id === streamingMsg.id);
 			requestAnimationFrame(() => {
-				if (container) {
-					container.scrollTop = container.scrollHeight;
-				}
+				const el = document.getElementById(`message-${msgIndex}`);
+				if (el) scrollController.anchorToMessage(el);
 			});
+		}
+		if (!streamingMsg) lastStreamingMessageId = null;
+	});
+
+	// Follow during streaming (react to content appends via _version)
+	$effect(() => {
+		const _ = chatStore._version; // React to content appends
+		if (chatStore.isStreaming) {
+			scrollController.onContentAppend();
+		}
+	});
+
+	// Reset on stream end
+	$effect(() => {
+		if (!chatStore.isStreaming) {
+			scrollController.reset();
 		}
 	});
 
@@ -524,7 +558,16 @@
 						try {
 							const parsed = JSON.parse(data);
 
-							if (parsed.type === 'status') {
+							// Handle AUTO mode routing decision
+							if (parsed.type === 'routing') {
+								chatStore.setRoutedModel(parsed.selectedModel);
+								chatStore.setRoutingDecision({
+									tier: parsed.tier,
+									score: parsed.score,
+									confidence: parsed.confidence,
+									overrides: parsed.overrides || []
+								});
+							} else if (parsed.type === 'status') {
 								if (parsed.status === 'searching') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										contextStatus: undefined, searchStatus: 'searching', searchQuery: parsed.query
@@ -569,7 +612,8 @@
 				isThinking: false,
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
 				sources: collectedSources.length > 0 ? collectedSources : undefined,
-				usedContext // Attach context transparency data
+				usedContext, // Attach context transparency data
+				routedModel: chatStore.routedModel || undefined
 			});
 
 			// Check for subtask proposals in AI response
@@ -717,7 +761,16 @@
 
 						try {
 							const parsed = JSON.parse(data);
-							if (parsed.type === 'thinking_start') {
+							// Handle AUTO mode routing decision
+							if (parsed.type === 'routing') {
+								chatStore.setRoutedModel(parsed.selectedModel);
+								chatStore.setRoutingDecision({
+									tier: parsed.tier,
+									score: parsed.score,
+									confidence: parsed.confidence,
+									overrides: parsed.overrides || []
+								});
+							} else if (parsed.type === 'thinking_start') {
 								chatStore.updateMessage(conversationId, assistantMessageId, { isThinking: true });
 							} else if (parsed.type === 'thinking') {
 								chatStore.appendToThinking(conversationId, assistantMessageId, parsed.content);
@@ -744,7 +797,8 @@
 			chatStore.updateMessage(conversationId, assistantMessageId, {
 				isStreaming: false,
 				isThinking: false,
-				sources: collectedSources.length > 0 ? collectedSources : undefined
+				sources: collectedSources.length > 0 ? collectedSources : undefined,
+				routedModel: chatStore.routedModel || undefined
 			});
 
 		} catch (err) {
@@ -1882,6 +1936,12 @@
 						{/each}
 					{/if}
 				</ChatMessageList>
+
+				<!-- New content indicator for streaming scroll UX -->
+				<NewContentIndicator
+					visible={scrollController.hasNewContentBelow && chatStore.isStreaming}
+					onclick={() => scrollController.scrollToNewContent()}
+				/>
 
 					<!-- Chat Input -->
 					<div class="chat-input-container" class:plan-mode={isPlanModeActive} class:completed={isTaskCompleted}>
