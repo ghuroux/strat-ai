@@ -16,7 +16,7 @@ export interface LLMUsageRecord {
 	userId: string;
 	conversationId: string | null;
 	model: string;
-	requestType: 'chat' | 'arena' | 'second-opinion' | 'summarization';
+	requestType: 'chat' | 'arena' | 'second-opinion' | 'summarization' | 'image_description';
 	promptTokens: number;
 	completionTokens: number;
 	totalTokens: number;
@@ -116,7 +116,7 @@ export interface UsageStats {
  */
 export interface RecentUsageRecord {
 	id: string;
-	requestType: 'chat' | 'arena' | 'second-opinion' | 'summarization';
+	requestType: 'chat' | 'arena' | 'second-opinion' | 'summarization' | 'image_description';
 	promptTokens: number;
 	completionTokens: number;
 	totalTokens: number;
@@ -135,7 +135,7 @@ function rowToUsage(row: UsageRow): LLMUsageRecord {
 		userId: row.userId,
 		conversationId: row.conversationId,
 		model: row.model,
-		requestType: row.requestType as 'chat' | 'arena' | 'second-opinion' | 'summarization',
+		requestType: row.requestType as 'chat' | 'arena' | 'second-opinion' | 'summarization' | 'image_description',
 		promptTokens: row.promptTokens,
 		completionTokens: row.completionTokens,
 		totalTokens: row.totalTokens,
@@ -152,7 +152,7 @@ export interface UsageRepository {
 		userId: string;
 		conversationId?: string | null;
 		model: string;
-		requestType?: 'chat' | 'arena' | 'second-opinion' | 'summarization';
+		requestType?: 'chat' | 'arena' | 'second-opinion' | 'summarization' | 'image_description';
 		promptTokens: number;
 		completionTokens: number;
 		totalTokens: number;

@@ -96,7 +96,9 @@
 							{@const heightPercent = (day.totalRequests / maxRequests) * 100}
 							<div class="bar-column">
 								<div class="bar-value">{day.totalRequests}</div>
-								<div class="bar" style="height: {Math.max(heightPercent, 2)}%"></div>
+								<div class="bar-wrapper">
+									<div class="bar" style="height: {Math.max(heightPercent, 2)}%"></div>
+								</div>
 								<div class="bar-label">{formatDate(day.date)}</div>
 							</div>
 						{/each}
@@ -300,7 +302,7 @@
 	.chart-bars {
 		flex: 1;
 		display: flex;
-		align-items: flex-end;
+		align-items: stretch;
 		gap: 0.5rem;
 	}
 
@@ -317,6 +319,15 @@
 		font-size: 0.6875rem;
 		color: var(--color-surface-400);
 		font-weight: 500;
+		flex-shrink: 0;
+	}
+
+	.bar-wrapper {
+		flex: 1;
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		width: 100%;
 	}
 
 	.bar {
@@ -330,6 +341,7 @@
 	.bar-label {
 		font-size: 0.6875rem;
 		color: var(--color-surface-500);
+		flex-shrink: 0;
 	}
 
 	.actions-list {
