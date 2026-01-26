@@ -259,6 +259,100 @@ interface ResponseContextBadgeProps {
 
 ## Phase 2: Proactive Disclosure
 
+### 2.0 Enhanced Area Creation Modal
+
+**Location:** Create Area modal (triggered from Space dashboard)
+
+**Purpose:** The moment of area creation is the first opportunity to establish context and visibility. Currently, the modal captures Name, Context notes, Documents, and Color - but **visibility/access control is not surfaced**. This prevents users from understanding the "incubation" workflow: create a private area, develop context, then share when ready.
+
+#### Current State
+
+The existing Create Area modal includes:
+- Name (required)
+- Context notes (optional) - background for AI
+- Reference Documents (optional) - document activation
+- Color (auto-selected)
+
+**Missing:** Visibility control ("Who can see this area?")
+
+#### Proposed Enhancement
+
+Add a **Visibility** section as the first decision point, before context configuration:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Create Area                                                       ✕    │
+│  ─────────────────────────────────────────────────────────────────────  │
+│                                                                          │
+│  Name                                                                    │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ e.g., DevOps, Marketing, Research                                │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  👁 Visibility                                                           │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ ○ Open to space members                                          │   │
+│  │   Everyone in this space can see and access this area            │   │
+│  │                                                                   │   │
+│  │ ● Private (just me)                                   Recommended │   │
+│  │   Only you can see this area. Share when ready.                  │   │
+│  │   Perfect for drafting ideas before team collaboration.          │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  Context (optional)                                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ Add background information that helps the AI understand...       │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│  This context will be included in AI conversations when this area       │
+│  is active.                                                             │
+│                                                                          │
+│  Reference Documents (optional)                                          │
+│  [+ Add Document]                                                        │
+│  Documents activated here are private to this area until you share it.  │
+│                                                                          │
+│  Color  [AUTO]                                                           │
+│  [● ○ ○ ○ ○ ○ ○ ○]                                                      │
+│                                                                          │
+│                                           [Cancel]  [Create Area]        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Key UX Principles
+
+1. **Visibility first** — The "who can see this" decision shapes everything else
+2. **Private by default** (for org spaces) — Encourages thoughtful setup before sharing
+3. **Clear implications** — Users understand documents stay private too
+4. **Easy promotion path** — "Share when ready" language sets expectation
+
+#### Connection to ContextSnapshotModal (2.1)
+
+The Area Creation Modal and ContextSnapshotModal form a **context setup journey**:
+
+```
+Area Creation Modal          First Chat Message           Ongoing Chat
+────────────────────         ─────────────────            ────────────
+"Who sees this?"             "Here's what AI knows"       Ambient indicators
+"What context to add?"       "Adjust before chatting"     (Phase 1 ContextBar)
+"Which docs to activate?"    "Missing any documents?"
+```
+
+When a user creates a **private area**, the ContextSnapshotModal (2.1) reinforces this:
+- Shows context is scoped to this area
+- Documents listed are not visible to others
+- "When ready, open this area to your team in Area Settings"
+
+#### Acceptance Criteria
+
+- [ ] **AC2.0.1:** Visibility selector appears in Create Area modal
+- [ ] **AC2.0.2:** Two options: "Open to space members" and "Private (just me)"
+- [ ] **AC2.0.3:** Private option includes helper text about sharing later
+- [ ] **AC2.0.4:** Document section clarifies privacy scope when Private is selected
+- [ ] **AC2.0.5:** Default selection based on context (personal space = open, org space = private)
+- [ ] **AC2.0.6:** Works for both system spaces and custom spaces
+- [ ] **AC2.0.7:** Components support both dark and light themes
+
+---
+
 ### 2.1 Context Snapshot Modal
 
 **Trigger:** First message in a NEW conversation (not on returns to existing conversations).
@@ -576,11 +670,20 @@ export const activeContextStore = new ActiveContextStore();
 - [ ] Create ResponseContextBadge
 - [ ] Test across Area/Task/Subtask
 
-### Phase 2: Proactive Disclosure (Target: 1 week)
+### Phase 2: Proactive Disclosure (Target: 2 weeks)
+
+**2.0 Enhanced Area Creation Modal:**
+- [ ] Add Visibility selector to Create Area modal
+- [ ] Implement "Private (just me)" and "Open to space members" options
+- [ ] Add contextual helper text for document privacy
+- [ ] Update default selection logic based on space type
+
+**2.1 Context Snapshot Modal:**
 - [ ] Create ContextSnapshotModal
 - [ ] Implement trigger logic (new conversation detection)
 - [ ] Add "Don't show again" persistence
 - [ ] Test activation flow from modal
+- [ ] Add private area messaging when applicable
 
 ### Phase 3: Intelligent Detection (Target: 1-2 weeks)
 - [ ] Implement document mention detection
