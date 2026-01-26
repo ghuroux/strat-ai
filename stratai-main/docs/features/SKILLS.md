@@ -574,6 +574,118 @@ Show active skills in Area Context Panel.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### 6.5 Platform Skills Library
+
+Curated skills provided by StratAI, inspired by [Anthropic's Skills Library](https://github.com/anthropics/skills).
+
+**Location:** `src/routes/spaces/[space]/skills/+page.svelte` (tab or section)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Nedbank SVS  >  Skills                          [+ New Skill]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  [Your Skills]  [Platform Library]                              │
+│                                                                  │
+│  ─────────────────────────────────────────────────────────────  │
+│                                                                  │
+│  📚 Platform Skills Library                                      │
+│  Curated skills maintained by StratAI                           │
+│                                                                  │
+│  BUSINESS & COMMUNICATION                                        │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  📋 Internal Communications                    [+ Add]   │   │
+│  │  Craft 3P updates, newsletters, status reports...       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  🎨 Brand Guidelines                           [+ Add]   │   │
+│  │  Apply brand voice, tone, and visual standards...       │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  DOCUMENTS & DATA                                                │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  📄 PDF Processing                             [+ Add]   │   │
+│  │  Extract text, merge, split, create PDFs...             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  📊 Excel Analysis                             [+ Add]   │   │
+│  │  Parse spreadsheets, pivot tables, formulas...          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ANALYSIS & STRATEGY                                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  💰 Financial Analysis                         [+ Add]   │   │
+│  │  DCF, comparables, sensitivity analysis...              │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  📝 PRD Writing                                [+ Add]   │   │
+│  │  Structure product requirements documents...            │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  DEVELOPMENT                                                     │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  🔍 Code Review                                [+ Add]   │   │
+│  │  Security, performance, best practices...               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  🧪 Test Writing                               [+ Add]   │   │
+│  │  Unit tests, integration tests, coverage...             │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Platform Skills Categories:**
+
+| Category | Skills | Description |
+|----------|--------|-------------|
+| **Business & Communication** | Internal Comms, Brand Guidelines, Meeting Notes | Professional communication formats |
+| **Documents & Data** | PDF, Excel, PowerPoint, Word | Document processing and creation |
+| **Analysis & Strategy** | Financial Analysis, Market Research, PRD Writing | Structured analytical frameworks |
+| **Development** | Code Review, Test Writing, API Design | Software development best practices |
+| **Creative** | Content Writing, Design Critique, Copywriting | Creative and marketing workflows |
+
+**Implementation:**
+
+```typescript
+// Platform skills stored in code (not database)
+// Located at: src/lib/config/platform-skills/
+
+// Structure:
+// platform-skills/
+// ├── index.ts           # Registry of all platform skills
+// ├── internal-comms.ts  # Internal Communications skill
+// ├── financial-analysis.ts
+// ├── code-review.ts
+// └── ...
+
+export interface PlatformSkill {
+  id: string;           // e.g., 'platform:internal-comms'
+  name: string;
+  description: string;
+  category: 'business' | 'documents' | 'analysis' | 'development' | 'creative';
+  content: string;      // Full markdown content
+  summary: string;      // Pre-generated summary for prompt injection
+  version: string;      // Semantic version for updates
+}
+
+// When user adds platform skill to Space:
+// 1. Copy platform skill content to skills table
+// 2. Mark as `source: 'platform'` and `platform_skill_id: 'platform:internal-comms'`
+// 3. User can customize (creates fork)
+// 4. Updates available when platform version > local version
+```
+
+**Database Addition:**
+
+```sql
+-- Add to skills table
+ALTER TABLE skills ADD COLUMN source TEXT DEFAULT 'custom'
+  CHECK (source IN ('custom', 'platform'));
+ALTER TABLE skills ADD COLUMN platform_skill_id TEXT;  -- e.g., 'platform:internal-comms'
+ALTER TABLE skills ADD COLUMN platform_version TEXT;   -- Track version for update notifications
+```
+
 ---
 
 ## 7. System Prompt Integration
@@ -766,6 +878,21 @@ interface Props {
 - [ ] Backfill existing skills if any
 - [ ] Test: verify summaries generated and used
 
+### Phase 7: Platform Skills Library (Session 4)
+
+- [ ] Create `src/lib/config/platform-skills/` directory structure
+- [ ] Define `PlatformSkill` interface and registry
+- [ ] Create initial platform skills (4-6 curated skills):
+  - [ ] Internal Communications
+  - [ ] Financial Analysis
+  - [ ] Code Review
+  - [ ] PRD Writing
+- [ ] Add `source` and `platform_skill_id` columns to skills table
+- [ ] Create "Add from Library" UI in Space skills page
+- [ ] Implement platform skill copying to Space
+- [ ] Add version tracking for update notifications
+- [ ] Test: add platform skill to Space, customize, verify updates available
+
 ---
 
 ## 9. Edge Cases
@@ -790,14 +917,26 @@ interface Props {
 | Enhancement | Description |
 |-------------|-------------|
 | **Organization Skills** | Skills shared across all Spaces in an org |
-| **Skill Templates Library** | Curated library of proven skills (Analysis, Development, Writing) |
+| **Anthropic Skills Sync** | Auto-import/update from [anthropics/skills](https://github.com/anthropics/skills) repo |
 | **Skill Analytics** | Track which skills are most used/effective |
 | **Skill Versioning** | Track changes over time, rollback capability |
 | **Skill Inheritance** | Area skills can extend/override Space skills |
 | **Dynamic Trigger Detection** | AI suggests activating skills based on conversation |
 | **Skill Sharing** | Share skills between Spaces |
-| **Skill Marketplace** | Community-contributed skill templates |
+| **Community Marketplace** | User-contributed skill templates (moderated) |
 | **Skill Parameters** | Skills with configurable options (e.g., "formality level") |
+| **Skill Composition** | Combine multiple skills into meta-skills |
+
+**Platform Skills Expansion (V1.x):**
+
+The Platform Skills Library (Section 6.5) launches with a curated set. Expansion roadmap:
+
+| Phase | Skills | Source |
+|-------|--------|--------|
+| **V1.0** | Internal Comms, Financial Analysis, Code Review, PRD Writing | StratAI curated |
+| **V1.1** | PDF, Excel, PowerPoint processing | Adapted from Anthropic skills |
+| **V1.2** | Brand Guidelines, Meeting Notes, Test Writing | StratAI curated |
+| **V2.0** | Auto-sync with Anthropic skills repo | Automated pipeline |
 
 ---
 
@@ -807,6 +946,8 @@ interface Props {
 |------|---------|
 | `src/lib/server/persistence/skills-postgres.ts` | **NEW** - Skills repository |
 | `src/lib/types/skills.ts` | **NEW** - Skill types |
+| `src/lib/config/platform-skills/` | **NEW** - Platform skills library (curated) |
+| `src/lib/config/platform-skills/index.ts` | **NEW** - Platform skills registry |
 | `src/routes/api/skills/+server.ts` | **NEW** - Skills API |
 | `src/routes/api/areas/[areaId]/skills/+server.ts` | **NEW** - Area activation API |
 | `src/routes/spaces/[space]/skills/+page.svelte` | **NEW** - Space skills page |
