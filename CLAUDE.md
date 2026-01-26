@@ -322,6 +322,10 @@ Don't revisit without good reason:
 | Two integration tiers | Foundational (first-party UX: Calendar, Email) vs Contextual (add-on UX: GitHub, Jira). Different setup expectations |
 | Calendar first, not GitHub | Dogfood (StratGroup M365), universal value (everyone uses calendar), flywheel enabler (meeting capture = decisions) |
 | Meeting capture primary use case | Post-meeting decision capture feeds flywheel. Prep is valuable but secondary. Capture → Learn loop is the moat |
+| Image documents: base64 in TEXT field | No separate blob storage needed; existing `content` column works fine. `content_type` discriminator column distinguishes text vs image |
+| Image descriptions via vision AI | Generate ~250 token AI description at upload time using Haiku 4.5 vision. Stored as `summary` field - same pattern as text document summaries |
+| Vision context injection | Images injected as vision content blocks in user message (not system prompt text). `modelSupportsVision()` helper gates injection |
+| Vision tokens ≠ base64 tokens | Vision APIs bill by pixel dimensions (~1-3K tokens), NOT base64 string length (~1.3M "tokens"). Prompt Inspector uses `estimateVisionTokens()` for accuracy |
 
 ---
 
@@ -358,7 +362,37 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-14 (Database Standardization Project & Membership Bug Fixes)
+### Latest: 2026-01-26 (Image Document Support)
+
+**Completed:**
+
+*Image Upload Feature (Committed: 1920376):*
+- Full image upload support (JPG, PNG, GIF, WebP) for documents
+- Database migration: `content_type` column discriminates text vs image
+- AI-generated descriptions using Haiku 4.5 vision at upload time
+- Vision context injection for vision-capable models (Claude 3/4, GPT-4V, Gemini)
+- Updated system prompts to show image descriptions
+- UI updates: DocumentCard thumbnails, ContextPanel accepts images, Space documents page
+
+*Prompt Inspector Fix:*
+- Fixed misleading 1.3M token count for images (was counting base64 as text)
+- Added `estimateVisionTokens()` for accurate Vision API token estimation (~1-3K)
+- Image documents now show purple "Image" badge and correct icon
+
+*Bug Fix:*
+- Fixed resend/regenerate not capturing context metadata
+- `triggerAssistantResponse()` now calls `captureUsedContext()` like `handleSend()`
+
+**Key Learnings:**
+- Vision APIs bill by pixel dimensions, NOT base64 string length
+- Pattern: Use Haiku 4.5 (vision-capable, cheap) for image description generation
+- Pattern: Store image descriptions as `summary` field (same as text doc summaries)
+
+**Files Changed:** 15 files, 711 insertions, 122 deletions
+
+---
+
+### Previous: 2026-01-14 (Database Standardization Project & Membership Bug Fixes)
 
 **Completed:**
 
