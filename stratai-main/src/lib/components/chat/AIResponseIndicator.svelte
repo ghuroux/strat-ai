@@ -12,16 +12,29 @@
 	 * 1. Processing (brief) → 2. Reasoning/Searching → 3. Generating
 	 */
 
-	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'generating' | 'complete';
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'generating' | 'loading_context' | 'complete';
+
+	interface ContextInfo {
+		documents?: Array<{ filename: string }>;
+		notes?: { included: boolean };
+		tasks?: Array<{ title: string }>;
+	}
 
 	interface Props {
 		state: AIState;
 		searchQuery?: string;
 		sources?: Array<{ title: string; url: string }>;
 		thinkingPreview?: string;
+		contextInfo?: ContextInfo;
 	}
 
-	let { state, searchQuery, sources = [], thinkingPreview }: Props = $props();
+	let { state, searchQuery, sources = [], thinkingPreview, contextInfo }: Props = $props();
+
+	// Count context items for loading_context state
+	let contextDocCount = $derived(contextInfo?.documents?.length ?? 0);
+	let hasContextNotes = $derived(contextInfo?.notes?.included ?? false);
+	let contextTaskCount = $derived(contextInfo?.tasks?.length ?? 0);
+	let totalContextItems = $derived(contextDocCount + (hasContextNotes ? 1 : 0) + contextTaskCount);
 
 	// Derived state for visual properties
 	let isActive = $derived(state !== 'complete');
@@ -45,6 +58,7 @@
 			case 'reading_document': return 'Reading';
 			case 'browsing': return 'Browsing';
 			case 'generating': return 'Writing';
+			case 'loading_context': return 'Loading context';
 			default: return '';
 		}
 	});
@@ -57,6 +71,7 @@
 			case 'reading_document': return searchQuery ? `"${searchQuery}"` : 'reference documents';
 			case 'browsing': return searchQuery ? searchQuery : 'retailer sites';
 			case 'generating': return 'Crafting response';
+			case 'loading_context': return totalContextItems > 0 ? `${totalContextItems} source${totalContextItems !== 1 ? 's' : ''}` : 'Preparing';
 			default: return '';
 		}
 	});
@@ -71,6 +86,7 @@
 		class:state-reading-document={state === 'reading_document'}
 		class:state-browsing={state === 'browsing'}
 		class:state-generating={state === 'generating'}
+		class:state-loading-context={state === 'loading_context'}
 		in:scale={{ duration: 400, start: 0.9, opacity: 0, easing: backOut }}
 		out:fade={{ duration: 300, easing: cubicOut }}
 	>
@@ -110,6 +126,10 @@
 						{:else if state === 'generating'}
 							<svg class="orb-icon pen-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+							</svg>
+						{:else if state === 'loading_context'}
+							<svg class="orb-icon context-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
 							</svg>
 						{/if}
 					</div>
@@ -179,6 +199,36 @@
 						<span class="preview-text">{thinkingPreview}</span>
 					</div>
 				{/if}
+
+				<!-- Context chips (loading_context state) -->
+				{#if state === 'loading_context' && contextInfo}
+					<div class="context-chips" in:fly={{ y: 8, duration: 300, delay: 150 }}>
+						{#if contextDocCount > 0}
+							<div class="context-chip chip-docs">
+								<svg class="chip-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+								</svg>
+								<span>{contextDocCount} doc{contextDocCount !== 1 ? 's' : ''}</span>
+							</div>
+						{/if}
+						{#if hasContextNotes}
+							<div class="context-chip chip-notes">
+								<svg class="chip-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+								</svg>
+								<span>Notes</span>
+							</div>
+						{/if}
+						{#if contextTaskCount > 0}
+							<div class="context-chip chip-tasks">
+								<svg class="chip-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+								</svg>
+								<span>{contextTaskCount} task{contextTaskCount !== 1 ? 's' : ''}</span>
+							</div>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -231,6 +281,12 @@
 		--color-glow: rgba(34, 197, 94, 0.35);
 	}
 
+	.state-loading-context {
+		--color-primary: 14, 165, 233; /* sky-500 */
+		--color-secondary: 59, 130, 246; /* blue-500 */
+		--color-glow: rgba(14, 165, 233, 0.35);
+	}
+
 	/* Glass card container */
 	.indicator-card {
 		display: flex;
@@ -278,6 +334,15 @@
 			rgba(30, 41, 59, 0.5) 100%
 		);
 		border-color: rgba(249, 115, 22, 0.15);
+	}
+
+	.state-loading-context .indicator-card {
+		background: linear-gradient(
+			135deg,
+			rgba(14, 165, 233, 0.08) 0%,
+			rgba(30, 41, 59, 0.5) 100%
+		);
+		border-color: rgba(14, 165, 233, 0.15);
 	}
 
 	/* Orb Container */
@@ -415,6 +480,10 @@
 
 	.document-icon {
 		animation: documentScan 2s ease-in-out infinite;
+	}
+
+	.context-icon {
+		animation: contextPulse 1.8s ease-in-out infinite;
 	}
 
 	/* Orbiting particles */
@@ -570,6 +639,58 @@
 		overflow: hidden;
 	}
 
+	/* Context chips (loading_context state) */
+	.context-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: 8px;
+		padding-top: 10px;
+		border-top: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
+	.context-chip {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 4px 8px;
+		border-radius: 6px;
+		font-size: 11px;
+		font-weight: 500;
+		background: rgba(14, 165, 233, 0.1);
+		border: 1px solid rgba(14, 165, 233, 0.2);
+		color: rgb(56, 189, 248);
+		animation: chipFadeIn 0.3s ease-out forwards;
+		opacity: 0;
+	}
+
+	.context-chip:nth-child(1) { animation-delay: 0ms; }
+	.context-chip:nth-child(2) { animation-delay: 80ms; }
+	.context-chip:nth-child(3) { animation-delay: 160ms; }
+
+	.chip-docs {
+		background: rgba(249, 115, 22, 0.1);
+		border-color: rgba(249, 115, 22, 0.2);
+		color: rgb(251, 146, 60);
+	}
+
+	.chip-notes {
+		background: rgba(168, 85, 247, 0.1);
+		border-color: rgba(168, 85, 247, 0.2);
+		color: rgb(192, 132, 252);
+	}
+
+	.chip-tasks {
+		background: rgba(34, 197, 94, 0.1);
+		border-color: rgba(34, 197, 94, 0.2);
+		color: rgb(74, 222, 128);
+	}
+
+	.chip-icon {
+		width: 12px;
+		height: 12px;
+	}
+
 	/* Progress track */
 	.progress-track {
 		position: absolute;
@@ -691,6 +812,28 @@
 		}
 	}
 
+	@keyframes contextPulse {
+		0%, 100% {
+			transform: scale(1);
+			opacity: 0.9;
+		}
+		50% {
+			transform: scale(1.1);
+			opacity: 1;
+		}
+	}
+
+	@keyframes chipFadeIn {
+		0% {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
 	@keyframes orbitSpin {
 		from {
 			transform: rotate(0deg);
@@ -797,6 +940,15 @@
 		border-color: rgba(249, 115, 22, 0.2);
 	}
 
+	:global(html.light) .state-loading-context .indicator-card {
+		background: linear-gradient(
+			135deg,
+			rgba(14, 165, 233, 0.1) 0%,
+			rgba(255, 255, 255, 0.9) 100%
+		);
+		border-color: rgba(14, 165, 233, 0.2);
+	}
+
 	:global(html.light) .status-secondary {
 		color: rgb(82, 82, 91);
 	}
@@ -817,5 +969,27 @@
 
 	:global(html.light) .progress-track {
 		background: rgba(var(--color-primary), 0.08);
+	}
+
+	:global(html.light) .context-chips {
+		border-top-color: rgba(0, 0, 0, 0.06);
+	}
+
+	:global(html.light) .chip-docs {
+		background: rgba(249, 115, 22, 0.12);
+		border-color: rgba(249, 115, 22, 0.25);
+		color: rgb(194, 65, 12);
+	}
+
+	:global(html.light) .chip-notes {
+		background: rgba(168, 85, 247, 0.12);
+		border-color: rgba(168, 85, 247, 0.25);
+		color: rgb(126, 34, 206);
+	}
+
+	:global(html.light) .chip-tasks {
+		background: rgba(34, 197, 94, 0.12);
+		border-color: rgba(34, 197, 94, 0.25);
+		color: rgb(22, 163, 74);
 	}
 </style>

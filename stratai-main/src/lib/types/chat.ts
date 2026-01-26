@@ -39,6 +39,8 @@ export interface Message {
 	// Web search and document reading fields
 	searchStatus?: 'searching' | 'reading_document' | 'browsing' | 'complete';
 	searchQuery?: string;
+	// Context loading status (shows "Loading context" before API call)
+	contextStatus?: 'loading';
 	sources?: SearchSource[];
 	// File attachments
 	attachments?: FileAttachment[];
@@ -49,6 +51,12 @@ export interface Message {
 	hidden?: boolean;
 	// Commerce content (product search, checkout, etc.)
 	commerce?: import('$lib/types/commerce').CommerceMessageContent;
+	// Context transparency - captured at send time
+	usedContext?: {
+		documents: Array<{ filename: string; tokenEstimate: number }>;
+		notes: { included: boolean; tokenEstimate: number };
+		tasks: Array<{ title: string; tokenEstimate: number }>;
+	};
 }
 
 export interface SummaryPoint {

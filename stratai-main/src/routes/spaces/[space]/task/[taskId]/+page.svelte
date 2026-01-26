@@ -40,6 +40,9 @@
 	import CompleteTaskModal from '$lib/components/tasks/CompleteTaskModal.svelte';
 	import TaskPlanningModelModal from '$lib/components/tasks/TaskPlanningModelModal.svelte';
 	import CreatePageModal from '$lib/components/pages/CreatePageModal.svelte';
+	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
+	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
+	import { FileText, Download, LayoutList } from 'lucide-svelte';
 	import type { Task, ProposedSubtask, SubtaskType } from '$lib/types/tasks';
 	import type { PageType } from '$lib/types/page';
 	import type { SpaceType, Message, FileAttachment } from '$lib/types/chat';
@@ -357,6 +360,9 @@
 	async function handleSend(content: string, attachments?: FileAttachment[], options?: { hidden?: boolean }) {
 		if (!content.trim() && !attachments?.length) return;
 
+		// Capture context at send time for transparency
+		const usedContext = captureUsedContext();
+
 		const modelToUse = chatStore.activeConversation?.model || settingsStore.selectedModel;
 		if (!modelToUse) {
 			toastStore.error('Please select a model first');
@@ -378,11 +384,14 @@
 		// Add user message
 		chatStore.addMessage(conversationId, { role: 'user', content, attachments, hidden: options?.hidden });
 
-		// Add placeholder assistant message
+		// Create assistant message with loading_context state
+		const hasContextToLoad = usedContext.tasks.length > 0;
 		const assistantMessageId = chatStore.addMessage(conversationId, {
 			role: 'assistant',
 			content: '',
-			isStreaming: true
+			isStreaming: true,
+			contextStatus: hasContextToLoad ? 'loading' : undefined,
+			usedContext: hasContextToLoad ? usedContext : undefined
 		});
 
 		const controller = new AbortController();
@@ -488,6 +497,15 @@
 
 			let buffer = '';
 			let collectedSources: Array<{ title: string; url: string; snippet: string }> = [];
+			let contextStatusCleared = false;
+
+			// Helper to clear contextStatus on first streaming event
+			function clearContextStatusOnce() {
+				if (!contextStatusCleared) {
+					contextStatusCleared = true;
+					chatStore.updateMessage(conversationId!, assistantMessageId, { contextStatus: undefined });
+				}
+			}
 
 			while (true) {
 				const { done, value } = await reader.read();
@@ -509,29 +527,32 @@
 							if (parsed.type === 'status') {
 								if (parsed.status === 'searching') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: 'searching', searchQuery: parsed.query
+										contextStatus: undefined, searchStatus: 'searching', searchQuery: parsed.query
 									});
 								} else if (parsed.status === 'thinking') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: undefined, searchQuery: undefined
+										contextStatus: undefined, searchStatus: undefined, searchQuery: undefined
 									});
 								}
 							} else if (parsed.type === 'sources_preview') {
 								collectedSources = parsed.sources;
 								chatStore.updateMessage(conversationId!, assistantMessageId, { sources: parsed.sources });
 							} else if (parsed.type === 'thinking_start') {
+								clearContextStatusOnce(); // Clear loading_context state
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: true });
 							} else if (parsed.type === 'thinking') {
 								chatStore.appendToThinking(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'thinking_end') {
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: false });
 							} else if (parsed.type === 'content') {
+								clearContextStatusOnce(); // Clear loading_context state
 								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.content);
 							} else if (parsed.type === 'sources') {
 								collectedSources = parsed.sources;
 							} else if (parsed.type === 'error') {
 								throw new Error(parsed.error);
 							} else if (parsed.choices?.[0]?.delta?.content) {
+								clearContextStatusOnce(); // Clear loading_context state
 								chatStore.appendToMessage(conversationId!, assistantMessageId, parsed.choices[0].delta.content);
 							}
 						} catch (e) {
@@ -547,7 +568,8 @@
 				isStreaming: false,
 				isThinking: false,
 				searchStatus: collectedSources.length > 0 ? 'complete' : undefined,
-				sources: collectedSources.length > 0 ? collectedSources : undefined
+				sources: collectedSources.length > 0 ? collectedSources : undefined,
+				usedContext // Attach context transparency data
 			});
 
 			// Check for subtask proposals in AI response
@@ -790,6 +812,34 @@
 		await triggerAssistantResponse();
 	}
 
+	// Capture context used for transparency
+	function captureUsedContext(): { documents: Array<{ filename: string; tokenEstimate: number }>; notes: { included: boolean; tokenEstimate: number }; tasks: Array<{ title: string; tokenEstimate: number }> } {
+		// Task page context is simpler - just task/subtask info
+		const taskList: Array<{ title: string; tokenEstimate: number }> = [];
+
+		// Add current task
+		if (task) {
+			taskList.push({
+				title: task.title,
+				tokenEstimate: Math.round((task.title.length + (task.description?.length || 0)) / 4)
+			});
+		}
+
+		// Add subtasks
+		for (const st of subtasks) {
+			taskList.push({
+				title: st.title,
+				tokenEstimate: Math.round((st.title.length + (st.description?.length || 0)) / 4)
+			});
+		}
+
+		return {
+			documents: [],
+			notes: { included: false, tokenEstimate: 0 },
+			tasks: taskList
+		};
+	}
+
 	// Build system context for task
 	function buildTaskSystemContext(): string {
 		let context = '';
@@ -843,6 +893,40 @@
 	function handleStop() {
 		chatStore.stopStreaming();
 	}
+
+	// Context Transparency: Document activation handlers
+	async function handleActivateDocument(docId: string) {
+		const areaId = task?.areaId;
+		if (!areaId) return;
+		const area = areaStore.getAreaById(areaId);
+		if (!area) return;
+		const currentIds = area.contextDocumentIds ?? [];
+		if (currentIds.includes(docId)) return;
+		const newIds = [...currentIds, docId];
+		await areaStore.updateArea(areaId, { contextDocumentIds: newIds });
+	}
+
+	async function handleDeactivateDocument(docId: string) {
+		const areaId = task?.areaId;
+		if (!areaId) return;
+		const area = areaStore.getAreaById(areaId);
+		if (!area) return;
+		const currentIds = area.contextDocumentIds ?? [];
+		const newIds = currentIds.filter(id => id !== docId);
+		await areaStore.updateArea(areaId, { contextDocumentIds: newIds });
+	}
+
+	// Context source for ContextBar (used in ChatInput)
+	let contextSource = $derived.by(() => {
+		if (!task || !spaceParam) return undefined;
+		return {
+			type: 'task' as const,
+			id: task.id,
+			spaceId: task.spaceId ?? spaceParam,
+			spaceSlug: spaceParam,
+			areaId: task.areaId ?? undefined
+		};
+	});
 
 	// Navigate back to space
 	function handleBack() {
@@ -1329,8 +1413,54 @@
 		class="task-focus-page"
 		style="--space-accent: {spaceConfig?.accentColor || '#3b82f6'}; --task-color: {task.color};"
 	>
-		<!-- Task Header -->
-		<header class="task-header">
+		<!-- Mobile Header (visible < 768px) -->
+		<MobileHeader
+			title={task.title}
+			breadcrumb={isSubtask && parentTask ? parentTask.title : undefined}
+			onBack={handleBack}
+			accentColor={spaceConfig?.accentColor}
+		>
+			<!-- Mobile action buttons -->
+			{#if viewMode === 'chat'}
+				{#if task.status !== 'completed'}
+					<button
+						type="button"
+						class="mobile-header-action primary"
+						onclick={isSubtask && task.subtaskType === 'conversation' ? handleCompleteCurrentSubtask : handleOpenCompleteModal}
+						style="--accent-color: #22c55e;"
+						aria-label="Mark complete"
+					>
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+						</svg>
+					</button>
+				{/if}
+				{#if messages.length === 0}
+					<ModelSelector selectedModel={effectiveModel} onchange={handleModelChange} />
+				{:else}
+					<ModelBadge model={effectiveModel} />
+				{/if}
+
+				<!-- Overflow menu for secondary actions -->
+				<MobileActionsMenu>
+					{#if activeConversation && visibleMessages.length >= 2}
+						<button class="mobile-action-item" onclick={() => (createPageModalOpen = true)}>
+							<FileText size={16} />
+							Create Page
+						</button>
+					{/if}
+					{#if panelSubtasks.length > 0}
+						<button class="mobile-action-item" onclick={() => (showSubtaskPanel = !showSubtaskPanel)}>
+							<LayoutList size={16} />
+							{showSubtaskPanel ? 'Hide' : 'Show'} Subtasks
+						</button>
+					{/if}
+				</MobileActionsMenu>
+			{/if}
+		</MobileHeader>
+
+		<!-- Desktop Task Header (hidden on mobile) -->
+		<header class="task-header hidden md:flex">
 			<div class="header-left">
 				<button type="button" class="back-button" onclick={handleBack} title="Back to space">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1760,6 +1890,10 @@
 							onstop={handleStop}
 							disabled={!selectedModel || isGenerating || isTaskCompleted}
 							placeholder={isTaskCompleted ? 'Reopen to continue chatting...' : undefined}
+							{contextSource}
+							onActivateDocument={handleActivateDocument}
+							onDeactivateDocument={handleDeactivateDocument}
+							onOpenContextPanel={() => setContextPanelCollapsed(false)}
 						/>
 					</div>
 				</div>
@@ -1767,6 +1901,14 @@
 
 			<!-- Subtask Panel (when not in Plan Mode, only in chat view) -->
 			{#if showSubtaskPanel && !isPlanModeActive && viewMode === 'chat' && panelSubtasks.length > 0}
+				<!-- Mobile backdrop for tap-to-close -->
+				<button
+					type="button"
+					class="panel-backdrop"
+					onclick={() => (showSubtaskPanel = false)}
+					aria-label="Close panel"
+					transition:fade={{ duration: 150 }}
+				></button>
 				<aside class="subtask-panel" transition:fly={{ x: 300, duration: 200 }}>
 					<div class="panel-header">
 						<h3 class="panel-title">
@@ -1779,9 +1921,22 @@
 							</svg>
 							{isSubtask ? 'Related Subtasks' : 'Subtasks'}
 						</h3>
-						{#if panelSubtasks.length > 0}
-							<span class="panel-count">{panelCompletedCount}/{panelSubtasks.length}</span>
-						{/if}
+						<div class="panel-header-right">
+							{#if panelSubtasks.length > 0}
+								<span class="panel-count">{panelCompletedCount}/{panelSubtasks.length}</span>
+							{/if}
+							<!-- Close button (visible on mobile) -->
+							<button
+								type="button"
+								class="panel-close"
+								onclick={() => (showSubtaskPanel = false)}
+								aria-label="Close panel"
+							>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</button>
+						</div>
 					</div>
 
 					<div class="panel-content">
@@ -1989,9 +2144,9 @@
 		background: rgba(59, 130, 246, 0.2);
 	}
 
-	/* Task Header */
+	/* Task Header - Desktop only (mobile uses MobileHeader component) */
 	.task-header {
-		display: flex;
+		/* display controlled by Tailwind: hidden md:flex */
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1rem;
@@ -2003,6 +2158,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		min-width: 0; /* Allow flex children to shrink */
+		flex: 1;
 	}
 
 	.back-button {
@@ -2638,6 +2795,76 @@
 
 	.panel-content::-webkit-scrollbar-thumb:hover {
 		background: rgba(255, 255, 255, 0.2);
+	}
+
+	/* Panel header right section */
+	.panel-header-right {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	/* Panel close button - hidden by default, shown on mobile */
+	.panel-close {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		color: rgba(255, 255, 255, 0.5);
+		background: transparent;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.panel-close:hover {
+		color: rgba(255, 255, 255, 0.8);
+		background: rgba(255, 255, 255, 0.1);
+	}
+
+	.panel-close svg {
+		width: 1.25rem;
+		height: 1.25rem;
+	}
+
+	/* Panel backdrop - hidden by default, shown on mobile */
+	.panel-backdrop {
+		display: none;
+	}
+
+	/* Mobile responsive styles for subtask panel */
+	@media (max-width: 767px) {
+		/* Backdrop becomes visible on mobile */
+		.panel-backdrop {
+			display: block;
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.5);
+			backdrop-filter: blur(2px);
+			z-index: 40;
+			border: none;
+			cursor: pointer;
+		}
+
+		/* Panel becomes fixed overlay on mobile */
+		.subtask-panel {
+			position: fixed;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			width: 85%;
+			max-width: 320px;
+			z-index: 50;
+			background: rgb(24, 24, 27);
+			box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+		}
+
+		/* Show close button on mobile */
+		.panel-close {
+			display: flex;
+		}
 	}
 
 	/* Full-page Confirming View */

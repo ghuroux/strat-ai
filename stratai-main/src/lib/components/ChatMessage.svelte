@@ -8,6 +8,7 @@
 	import DownloadButton from './chat/DownloadButton.svelte';
 	import ThinkingDisplay from './chat/ThinkingDisplay.svelte';
 	import CodeBlockDownloader from './chat/CodeBlockDownloader.svelte';
+	import { ResponseContextBadge } from './chat/context-transparency';
 	import { extractCodeBlocks } from '$lib/utils/codeBlocks';
 	import { ProductComparison, CheckoutPreview, OrderConfirmation } from './commerce';
 	import type { CommerceProductWithBadges } from '$lib/types/commerce';
@@ -45,6 +46,7 @@
 	let isSearching = $derived(message.searchStatus === 'searching');
 	let isReadingDocument = $derived(message.searchStatus === 'reading_document');
 	let isBrowsing = $derived(message.searchStatus === 'browsing');
+	let isLoadingContext = $derived(message.contextStatus === 'loading');
 	let hasSources = $derived(message.sources && message.sources.length > 0);
 	let hasAttachments = $derived(message.attachments && message.attachments.length > 0);
 	let displayContent = $derived(message.content);
@@ -55,15 +57,26 @@
 	// Commerce content
 	let hasCommerce = $derived(!!message.commerce);
 
+	// Context transparency - show badge for completed assistant messages with context
+	let hasUsedContext = $derived(
+		!isUser &&
+		!message.isStreaming &&
+		message.usedContext &&
+		(message.usedContext.documents.length > 0 ||
+		 message.usedContext.notes.included ||
+		 message.usedContext.tasks.length > 0)
+	);
+
 	// Code blocks detection for download feature
 	let hasCodeBlocks = $derived(
 		displayContent ? extractCodeBlocks(displayContent).length > 0 : false
 	);
 
 	// Unified AI state for the indicator
-	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'generating' | 'complete';
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'generating' | 'loading_context' | 'complete';
 	let aiState = $derived<AIState>(
-		!message.isStreaming && !isThinking ? 'complete' :
+		!message.isStreaming && !isThinking && !isLoadingContext ? 'complete' :
+		isLoadingContext ? 'loading_context' :
 		isSearching ? 'searching' :
 		isReadingDocument ? 'reading_document' :
 		isBrowsing ? 'browsing' :
@@ -73,9 +86,16 @@
 		'complete'
 	);
 
+	// Context info for the loading_context state
+	let contextInfo = $derived(message.usedContext ? {
+		documents: message.usedContext.documents.map(d => ({ filename: d.filename })),
+		notes: { included: message.usedContext.notes.included },
+		tasks: message.usedContext.tasks.map(t => ({ title: t.title }))
+	} : undefined);
+
 	// Show the unified indicator (not during extended thinking - that has its own display)
 	let showUnifiedIndicator = $derived(
-		(aiState === 'processing' || aiState === 'searching' || aiState === 'reading_document' || aiState === 'browsing') && !isThinking && !hasThinking
+		(aiState === 'processing' || aiState === 'searching' || aiState === 'reading_document' || aiState === 'browsing' || aiState === 'loading_context') && !isThinking && !hasThinking
 	);
 
 	// Track if this is the first content after thinking (for animation)
@@ -294,12 +314,13 @@
 						</div>
 					{/if}
 				{:else}
-					<!-- Unified AI Response Indicator (processing/searching states) -->
+					<!-- Unified AI Response Indicator (processing/searching/loading_context states) -->
 					{#if showUnifiedIndicator}
 						<AIResponseIndicator
 							state={aiState}
 							searchQuery={message.searchQuery}
 							sources={message.sources || []}
+							{contextInfo}
 						/>
 					{/if}
 
@@ -529,6 +550,11 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- Context transparency badge (assistant messages only) -->
+		{#if hasUsedContext && message.usedContext}
+			<ResponseContextBadge usedContext={message.usedContext} />
+		{/if}
 
 		<!-- Timestamp -->
 		{#if showTimestamp && !isStreamingEmpty}

@@ -62,6 +62,69 @@ Active and planned features, aligned with the product vision.
 
 ---
 
+## Context Transparency: Phase 1 (Foundation) ✅
+
+**Completed:** January 2026
+
+> See `docs/features/CONTEXT_TRANSPARENCY.md` for full specification
+
+Phase 1 builds ambient awareness of what context the AI has access to.
+
+### Completed ✅
+- [x] ContextBar with chips (📎 docs, 📝 notes, ✓ tasks)
+- [x] Expandable DocumentsPanel with activate/deactivate
+- [x] NotesPanel with preview and edit link
+- [x] TasksPanel with status badges
+- [x] "Loading context" indicator before API call (replaces incorrect "Searching the web")
+- [x] Context chips during loading state (shows what's being loaded)
+- [x] ResponseContextBadge on assistant messages ("Context: N sources used")
+- [x] Context capture at message send time (usedContext on Message type)
+- [x] Integration with Area and Task chat pages
+
+---
+
+## Context Transparency: Phase 2 (Proactive Disclosure)
+
+**Goal**: First-message context modal with ability to adjust before chatting
+
+> See `docs/features/CONTEXT_TRANSPARENCY.md` Phase 2 for full specification
+
+### Features
+- [ ] ContextSnapshotModal - appears on first message in NEW conversation
+- [ ] Shows: Area notes, active documents, available documents, team context, related tasks
+- [ ] Quick activate/deactivate documents directly from modal
+- [ ] "Start Chatting" and "Skip for now" actions
+- [ ] "Don't show again" preference (per-Area/Task)
+- [ ] Mobile responsive (bottom sheet pattern)
+- [ ] Light/dark theme support
+
+### Acceptance Criteria (Key)
+- [ ] Modal ONLY appears for new conversations (no messages yet)
+- [ ] "Available but not activated" section highlights unactivated Space documents
+- [ ] Preference persisted in localStorage: `stratai-context-modal-dismissed-{type}-{id}`
+
+---
+
+## Context Transparency: Phase 3 (Intelligent Detection)
+
+**Goal**: Detect when users reference documents not in their context
+
+> See `docs/features/CONTEXT_TRANSPARENCY.md` Phase 3 for full specification
+
+### Features
+- [ ] Document mention detection (fuzzy matching against available docs)
+- [ ] Inline suggestion banner above input: "You mentioned X but it's not in context"
+- [ ] Quick [+ Activate] and [Dismiss] actions
+- [ ] Debounced detection (500ms) on input change
+- [ ] No false positives for common words
+
+### Detection Strategy
+- Option A: Exact filename match (MVP) - simple, low false positives
+- Option B: Fuzzy match + confirmation (Recommended) - 80% confidence threshold
+- Option C: AI-assisted (Future) - most accurate but adds latency
+
+---
+
 ## Phase 0.3f-h: Templates & Onboarding
 
 **0.3f - Form Templates**:
