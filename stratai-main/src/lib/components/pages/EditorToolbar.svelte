@@ -13,6 +13,8 @@
 	 */
 
 	import type { Editor } from '@tiptap/core';
+	import { MoreHorizontal } from 'lucide-svelte';
+	import { fly, fade } from 'svelte/transition';
 
 	// Phase 2.5: Formula mode type
 	interface FormulaMode {
@@ -38,6 +40,16 @@
 	let showLinkModal = $state(false);
 	let linkUrl = $state('');
 	let selectedText = $state('');
+
+	// Mobile "More" menu state
+	let showMobileMenu = $state(false);
+
+	// Close mobile menu on Escape
+	function handleMobileMenuKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && showMobileMenu) {
+			showMobileMenu = false;
+		}
+	}
 
 	// Phase 2.5: Color picker state
 	let showColorPicker = $state(false);
@@ -243,8 +255,11 @@
 	}
 </script>
 
+<!-- Global keyboard handler for mobile menu -->
+<svelte:window onkeydown={handleMobileMenuKeydown} />
+
 <div class="editor-toolbar">
-	<!-- Group 0: History (Undo/Redo) -->
+	<!-- Group 0: History (Undo/Redo) - Always visible -->
 	<div class="toolbar-group">
 		<button
 			type="button"
@@ -275,7 +290,7 @@
 
 	<div class="toolbar-divider"></div>
 
-	<!-- Group 1: Text Formatting -->
+	<!-- Group 1: Essential Text Formatting (Bold, Italic) - Always visible -->
 	<div class="toolbar-group">
 		<button
 			type="button"
@@ -304,55 +319,58 @@
 			</svg>
 		</button>
 
-		<button
-			type="button"
-			class="toolbar-btn"
-			class:active={isUnderlineActive}
-			onclick={() => editor.chain().focus().toggleUnderline().run()}
-			title="Underline ({modKey}+U)"
-		>
-			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
-				<line x1="4" y1="21" x2="20" y2="21" />
-			</svg>
-		</button>
+		<!-- Desktop only: Underline, Strike, Clear -->
+		<div class="desktop-only-group">
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:active={isUnderlineActive}
+				onclick={() => editor.chain().focus().toggleUnderline().run()}
+				title="Underline ({modKey}+U)"
+			>
+				<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
+					<line x1="4" y1="21" x2="20" y2="21" />
+				</svg>
+			</button>
 
-		<button
-			type="button"
-			class="toolbar-btn"
-			class:active={isStrikeActive}
-			onclick={() => editor.chain().focus().toggleStrike().run()}
-			title="Strikethrough"
-		>
-			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M16 4H9a3 3 0 0 0-2.83 4" />
-				<path d="M14 12a4 4 0 0 1 0 8H6" />
-				<line x1="4" y1="12" x2="20" y2="12" />
-			</svg>
-		</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:active={isStrikeActive}
+				onclick={() => editor.chain().focus().toggleStrike().run()}
+				title="Strikethrough"
+			>
+				<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M16 4H9a3 3 0 0 0-2.83 4" />
+					<path d="M14 12a4 4 0 0 1 0 8H6" />
+					<line x1="4" y1="12" x2="20" y2="12" />
+				</svg>
+			</button>
 
-		<button
-			type="button"
-			class="toolbar-btn"
-			onclick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
-			title="Clear formatting"
-		>
-			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-				<path d="M4 7h16" />
-				<path d="M10 11l-6 6" />
-				<path d="M14 4l-9 9" />
-				<path d="M14 4l3 3" />
-				<path d="M14 11h6" />
-				<path d="M14 15h6" />
-				<path d="M14 19h6" />
-			</svg>
-		</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				onclick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
+				title="Clear formatting"
+			>
+				<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path d="M4 7h16" />
+					<path d="M10 11l-6 6" />
+					<path d="M14 4l-9 9" />
+					<path d="M14 4l3 3" />
+					<path d="M14 11h6" />
+					<path d="M14 15h6" />
+					<path d="M14 19h6" />
+				</svg>
+			</button>
+		</div>
 	</div>
 
-	<div class="toolbar-divider"></div>
+	<div class="toolbar-divider desktop-only"></div>
 
-	<!-- Group 2: Headings -->
-	<div class="toolbar-group">
+	<!-- Group 2: Headings - Desktop only -->
+	<div class="toolbar-group desktop-only">
 		<button
 			type="button"
 			class="toolbar-btn"
@@ -396,7 +414,7 @@
 
 	<div class="toolbar-divider"></div>
 
-	<!-- Group 3: Lists -->
+	<!-- Group 3: Lists - Always visible -->
 	<div class="toolbar-group">
 		<button
 			type="button"
@@ -449,10 +467,10 @@
 		</button>
 	</div>
 
-	<div class="toolbar-divider"></div>
+	<div class="toolbar-divider desktop-only"></div>
 
-	<!-- Group 4: Blocks -->
-	<div class="toolbar-group">
+	<!-- Group 4: Blocks - Desktop only -->
+	<div class="toolbar-group desktop-only">
 		<button
 			type="button"
 			class="toolbar-btn"
@@ -516,10 +534,10 @@
 		{/if}
 	</div>
 
-	<div class="toolbar-divider"></div>
+	<div class="toolbar-divider desktop-only"></div>
 
-	<!-- Group 5: Insert -->
-	<div class="toolbar-group">
+	<!-- Group 5: Insert - Desktop only -->
+	<div class="toolbar-group desktop-only">
 		<button
 			type="button"
 			class="toolbar-btn"
@@ -545,11 +563,198 @@
 		</button>
 	</div>
 
-	<!-- Table -->
+	<!-- Mobile "More" Menu Button -->
+	<div class="mobile-more-wrapper">
+		<button
+			type="button"
+			class="toolbar-btn mobile-more-btn"
+			class:active={showMobileMenu}
+			onclick={() => showMobileMenu = !showMobileMenu}
+			title="More formatting options"
+			aria-expanded={showMobileMenu}
+			aria-haspopup="true"
+		>
+			<MoreHorizontal size={18} />
+		</button>
+
+		{#if showMobileMenu}
+			<!-- Backdrop -->
+			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+			<div
+				class="mobile-menu-backdrop"
+				onclick={() => showMobileMenu = false}
+				transition:fade={{ duration: 150 }}
+			></div>
+
+			<!-- Menu -->
+			<div class="mobile-menu" transition:fly={{ y: -10, duration: 150 }}>
+				<!-- Text Formatting Section -->
+				<div class="mobile-menu-section">
+					<div class="mobile-menu-section-title">Text</div>
+					<div class="mobile-menu-row">
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isUnderlineActive}
+							onclick={() => { editor.chain().focus().toggleUnderline().run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3" />
+								<line x1="4" y1="21" x2="20" y2="21" />
+							</svg>
+							<span>Underline</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isStrikeActive}
+							onclick={() => { editor.chain().focus().toggleStrike().run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M16 4H9a3 3 0 0 0-2.83 4" />
+								<path d="M14 12a4 4 0 0 1 0 8H6" />
+								<line x1="4" y1="12" x2="20" y2="12" />
+							</svg>
+							<span>Strike</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							onclick={() => { editor.chain().focus().clearNodes().unsetAllMarks().run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M4 7h16" />
+								<path d="M10 11l-6 6" />
+								<path d="M14 4l-9 9" />
+								<path d="M14 4l3 3" />
+							</svg>
+							<span>Clear</span>
+						</button>
+					</div>
+				</div>
+
+				<!-- Headings Section -->
+				<div class="mobile-menu-section">
+					<div class="mobile-menu-section-title">Headings</div>
+					<div class="mobile-menu-row">
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isParagraphActive}
+							onclick={() => { editor.chain().focus().setParagraph().run(); showMobileMenu = false; }}
+						>
+							<span class="text-label-lg">P</span>
+							<span>Normal</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isH1Active}
+							onclick={() => { editor.chain().focus().toggleHeading({ level: 1 }).run(); showMobileMenu = false; }}
+						>
+							<span class="text-label-lg">H1</span>
+							<span>Heading 1</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isH2Active}
+							onclick={() => { editor.chain().focus().toggleHeading({ level: 2 }).run(); showMobileMenu = false; }}
+						>
+							<span class="text-label-lg">H2</span>
+							<span>Heading 2</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isH3Active}
+							onclick={() => { editor.chain().focus().toggleHeading({ level: 3 }).run(); showMobileMenu = false; }}
+						>
+							<span class="text-label-lg">H3</span>
+							<span>Heading 3</span>
+						</button>
+					</div>
+				</div>
+
+				<!-- Blocks Section -->
+				<div class="mobile-menu-section">
+					<div class="mobile-menu-section-title">Blocks</div>
+					<div class="mobile-menu-row">
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isBlockquoteActive}
+							onclick={() => { editor.chain().focus().toggleBlockquote().run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V21z" />
+								<path d="M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z" />
+							</svg>
+							<span>Quote</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isCodeBlockActive}
+							onclick={() => { editor.chain().focus().toggleCodeBlock().run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<polyline points="16 18 22 12 16 6" />
+								<polyline points="8 6 2 12 8 18" />
+							</svg>
+							<span>Code</span>
+						</button>
+					</div>
+				</div>
+
+				<!-- Insert Section -->
+				<div class="mobile-menu-section">
+					<div class="mobile-menu-section-title">Insert</div>
+					<div class="mobile-menu-row">
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isLinkActive}
+							onclick={() => { showMobileMenu = false; openLinkModal(); }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+								<path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+							</svg>
+							<span>Link</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							onclick={() => { editor.chain().focus().setHorizontalRule().run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="3" y1="12" x2="21" y2="12" />
+							</svg>
+							<span>Line</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							onclick={() => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); showMobileMenu = false; }}
+							disabled={!editor.can().insertTable()}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+							</svg>
+							<span>Table</span>
+						</button>
+					</div>
+				</div>
+			</div>
+		{/if}
+	</div>
+
+	<!-- Table section -->
 	{#if editor}
-		<div class="toolbar-divider"></div>
-		<div class="toolbar-group">
-			<!-- Insert Table -->
+		<!-- Insert Table button - desktop only (available in More menu on mobile) -->
+		<div class="toolbar-divider desktop-only"></div>
+		<div class="toolbar-group desktop-only">
 			<button
 				type="button"
 				class="toolbar-btn"
@@ -561,9 +766,12 @@
 					<path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
 				</svg>
 			</button>
+		</div>
 
-			<!-- Contextual table commands (only show when cursor is in a table) -->
-			{#if isTableActive}
+		<!-- Contextual table commands (show on both mobile & desktop when cursor is in a table) -->
+		{#if isTableActive}
+			<div class="toolbar-divider"></div>
+			<div class="toolbar-group table-context-group">
 				<!-- Column operations -->
 				<button
 					type="button"
@@ -703,8 +911,8 @@
 				>
 					<span class="fx-label">fx</span>
 				</button>
-			{/if}
-		</div>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -771,6 +979,173 @@
 		background: var(--toolbar-bg);
 		border-bottom: 1px solid var(--toolbar-border);
 		flex-wrap: wrap;
+	}
+
+	/* Responsive: Desktop-only elements hidden on mobile */
+	/* Use higher specificity to override .toolbar-group display:flex */
+	.editor-toolbar .desktop-only {
+		display: none !important;
+	}
+
+	.editor-toolbar .desktop-only-group {
+		display: none !important;
+	}
+
+	@media (min-width: 640px) {
+		.editor-toolbar .desktop-only {
+			display: flex !important;
+		}
+
+		.editor-toolbar .desktop-only-group {
+			display: contents !important;
+		}
+
+		/* Hide mobile menu on desktop */
+		.mobile-more-wrapper {
+			display: none !important;
+		}
+	}
+
+	/* Mobile "More" menu - visible on mobile, hidden on desktop */
+	.mobile-more-wrapper {
+		position: relative;
+		display: block;
+		margin-left: auto;
+	}
+
+	@media (min-width: 640px) {
+		.mobile-more-wrapper {
+			display: none;
+		}
+	}
+
+	.mobile-more-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--toolbar-button-hover);
+	}
+
+	.mobile-more-btn:hover,
+	.mobile-more-btn.active {
+		background: var(--toolbar-button-active);
+	}
+
+	.mobile-menu-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+	}
+
+	.mobile-menu {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		right: 0;
+		z-index: 50;
+		width: calc(100vw - 2rem);
+		max-width: 320px;
+		background: var(--editor-bg);
+		border: 1px solid var(--editor-border);
+		border-radius: 12px;
+		padding: 0.75rem;
+		box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+	}
+
+	/* Arrow pointing to the More button */
+	.mobile-menu::before {
+		content: '';
+		position: absolute;
+		top: -6px;
+		right: 12px;
+		width: 12px;
+		height: 12px;
+		background: var(--editor-bg);
+		border-left: 1px solid var(--editor-border);
+		border-top: 1px solid var(--editor-border);
+		transform: rotate(45deg);
+	}
+
+	.mobile-menu-section {
+		padding: 0.5rem 0;
+	}
+
+	.mobile-menu-section:not(:last-child) {
+		border-bottom: 1px solid var(--editor-border);
+	}
+
+	.mobile-menu-section-title {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--editor-text-muted);
+		padding: 0 0.5rem 0.375rem;
+	}
+
+	.mobile-menu-row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+	}
+
+	.mobile-menu-btn {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.25rem;
+		flex: 1;
+		min-width: 56px;
+		max-width: 72px;
+		padding: 0.5rem 0.375rem;
+		border: none;
+		background: transparent;
+		border-radius: 8px;
+		color: var(--editor-text-secondary);
+		cursor: pointer;
+		transition: background-color 100ms ease, color 100ms ease;
+		font-size: 0.625rem;
+	}
+
+	.mobile-menu-btn:hover {
+		background: var(--toolbar-button-hover);
+		color: var(--editor-text);
+	}
+
+	.mobile-menu-btn:active {
+		background: var(--toolbar-button-active);
+		transform: scale(0.95);
+	}
+
+	.mobile-menu-btn.active {
+		background: var(--toolbar-button-active);
+		color: var(--editor-text);
+	}
+
+	.mobile-menu-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.mobile-menu-btn:disabled:active {
+		transform: none;
+	}
+
+	.mobile-menu-btn .icon {
+		width: 18px;
+		height: 18px;
+	}
+
+	.mobile-menu-btn span {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 100%;
+	}
+
+	.text-label-lg {
+		font-size: 0.8125rem;
+		font-weight: 700;
 	}
 
 	.toolbar-group {
