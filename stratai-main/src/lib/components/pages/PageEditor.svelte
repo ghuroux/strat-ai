@@ -263,6 +263,7 @@
 	interface FormulaMode {
 		active: boolean;
 		cellPos: number;        // Position of the formula cell in the document
+		tablePos: number;       // Position of the parent table (for multi-table support)
 		rowIndex: number;       // Row index within table
 		colIndex: number;       // Column index within row
 		formula: string;        // Formula being built (e.g., "=[1]*[2]")
@@ -275,6 +276,7 @@
 	let selectedCellFormula = $state<string | null>(null);
 	let activeTableData = $state<TableData | null>(null);
 	let currentCellPosition = $state<{ col: number; row: number } | null>(null);
+	let currentTablePos = $state<number>(-1);  // ProseMirror position of current table (for multi-table support)
 	let activeTableRect = $state<{ top: number; left: number; width: number; bottom: number } | null>(null);
 	let isInTable = $state(false);
 
@@ -813,11 +815,12 @@
 	/**
 	 * Enter formula mode when "=" is typed in a table cell
 	 */
-	function enterFormulaMode(rowIndex: number, colIndex: number, previousValue: string) {
-		console.log('[FormulaMode] Entering formula mode', { rowIndex, colIndex, previousValue });
+	function enterFormulaMode(rowIndex: number, colIndex: number, tablePos: number, previousValue: string) {
+		console.log('[FormulaMode] Entering formula mode', { rowIndex, colIndex, tablePos, previousValue });
 		formulaMode = {
 			active: true,
 			cellPos: -1, // Not used anymore - we find cell dynamically
+			tablePos,    // Track which table this formula belongs to
 			rowIndex,
 			colIndex,
 			formula: '=',
@@ -865,15 +868,21 @@
 	}
 
 	/**
-	 * Find a table cell by row and column index in the document
+	 * Find a table cell by row and column index within a specific table
 	 * Returns the position of the cell node, or -1 if not found
+	 *
+	 * @param ed - TipTap editor instance
+	 * @param targetTablePos - Position of the table node (required for multi-table support)
+	 * @param targetRowIndex - Row index within the table
+	 * @param targetColIndex - Column index within the row
 	 */
-	function findCellPosition(ed: Editor, targetRowIndex: number, targetColIndex: number): number {
+	function findCellPosition(ed: Editor, targetTablePos: number, targetRowIndex: number, targetColIndex: number): number {
 		const { state } = ed;
 		let cellPos = -1;
 
 		state.doc.descendants((node, pos) => {
-			if (node.type.name === 'table') {
+			// Only search within the specific table
+			if (node.type.name === 'table' && pos === targetTablePos) {
 				let currentRowIndex = 0;
 				node.forEach((row, rowOffset) => {
 					if (row.type.name === 'tableRow') {
@@ -883,7 +892,7 @@
 								if (currentRowIndex === targetRowIndex && currentColIndex === targetColIndex) {
 									// pos + 1 (table opening) + rowOffset + 1 (row opening) + cellOffset
 									cellPos = pos + 1 + rowOffset + 1 + cellOffset;
-									console.log('[FormulaMode] Found cell at position', { cellPos, targetRowIndex, targetColIndex });
+									console.log('[FormulaMode] Found cell at position', { cellPos, tablePos: targetTablePos, targetRowIndex, targetColIndex });
 								}
 								currentColIndex++;
 							}
@@ -891,8 +900,9 @@
 						currentRowIndex++;
 					}
 				});
+				return false; // Stop searching - we found our table
 			}
-			return cellPos === -1; // Stop searching once found
+			return cellPos === -1; // Continue searching for the target table
 		});
 
 		return cellPos;
@@ -939,8 +949,8 @@
 
 			console.log('[FormulaMode] Saving formula:', formulaMode.formula);
 
-			// Find the cell position dynamically (not using stale cellPos)
-			const cellPos = findCellPosition(editor, formulaMode.rowIndex, formulaMode.colIndex);
+			// Find the cell position within the specific table (multi-table support)
+			const cellPos = findCellPosition(editor, formulaMode.tablePos, formulaMode.rowIndex, formulaMode.colIndex);
 
 			if (cellPos === -1) {
 				console.error('[FormulaMode] Could not find cell position');
@@ -1000,7 +1010,7 @@
 			// User cleared the formula - remove it from the cell
 			console.log('[FormulaMode] Clearing cell formula');
 
-			const cellPos = findCellPosition(editor, formulaMode.rowIndex, formulaMode.colIndex);
+			const cellPos = findCellPosition(editor, formulaMode.tablePos, formulaMode.rowIndex, formulaMode.colIndex);
 			if (cellPos !== -1) {
 				const { state } = editor;
 				const cell = state.doc.nodeAt(cellPos);
@@ -1176,18 +1186,19 @@
 
 	/**
 	 * Handle edit existing formula (when user clicks on formula display in bar)
-	 * Uses the already-computed currentCellPosition state for correct row indices
+	 * Uses the already-computed currentCellPosition and currentTablePos state
 	 */
 	function handleEditExistingFormula() {
-		if (!selectedCellFormula || !editor || !currentCellPosition) return;
+		if (!selectedCellFormula || !editor || !currentCellPosition || currentTablePos < 0) return;
 
-		console.log('[FormulaMode] Editing existing formula:', selectedCellFormula, currentCellPosition);
+		console.log('[FormulaMode] Editing existing formula:', selectedCellFormula, currentCellPosition, { tablePos: currentTablePos });
 
 		// Enter formula mode with the existing formula
 		// currentCellPosition is already correctly calculated (skips total rows)
 		formulaMode = {
 			active: true,
 			cellPos: -1,
+			tablePos: currentTablePos,  // Track which table for multi-table support
 			rowIndex: currentCellPosition.row,
 			colIndex: currentCellPosition.col,
 			formula: selectedCellFormula,
@@ -1290,16 +1301,18 @@
 			existingFormula
 		});
 
-		// Extract table data from ProseMirror for evaluation
+		// Extract table data and position from ProseMirror for evaluation
 		const { state } = editor;
 		const { selection } = state;
 		const selPos = selection.$from;
 
 		let tableData: TableData | null = null;
+		let tablePos = -1;
 		for (let depth = selPos.depth; depth > 0; depth--) {
 			const node = selPos.node(depth);
 			if (node.type.name === 'table') {
 				tableData = extractTableData(node.toJSON());
+				tablePos = selPos.before(depth);  // Get ProseMirror position of table
 				break;
 			}
 		}
@@ -1308,13 +1321,20 @@
 			activeTableData = tableData;
 		}
 
+		// Validate we found the table
+		if (tablePos < 0) {
+			console.error('[FormulaMode] Could not find table position');
+			return;
+		}
+
 		// Get existing cell value
 		const cellText = cell.textContent?.trim() || '';
 
-		// Enter formula mode
+		// Enter formula mode with table position for multi-table support
 		formulaMode = {
 			active: true,
 			cellPos: -1,
+			tablePos,  // Track which table for multi-table support
 			rowIndex: foundRowIndex,
 			colIndex,
 			formula: existingFormula || '=',
@@ -1322,6 +1342,7 @@
 		};
 
 		currentCellPosition = { col: colIndex, row: foundRowIndex };
+		currentTablePos = tablePos;  // Update tracked table position
 		selectedCellFormula = null;
 
 		// Prevent default double-click behavior (text selection)
@@ -1356,8 +1377,11 @@
 				foundTable = true;
 				isInTable = true;
 
-				// Get table DOM element and its rect for floating bar positioning
+				// Get table ProseMirror position (for multi-table support)
 				const tablePos = selPos.before(depth);
+				currentTablePos = tablePos;  // Store for formula mode entry
+
+				// Get table DOM element and its rect for floating bar positioning
 				const domNode = ed.view.nodeDOM(tablePos);
 				if (domNode && domNode instanceof HTMLElement) {
 					const rect = domNode.getBoundingClientRect();
@@ -1383,6 +1407,7 @@
 		if (!foundTable) {
 			activeTableData = null;
 			currentCellPosition = null;
+			currentTablePos = -1;
 			selectedCellFormula = null;
 			activeTableRect = null;
 			isInTable = false;
@@ -1509,15 +1534,16 @@
 				const existingFormula = node.attrs?.formula;
 				const startFormula = existingFormula?.startsWith('=') ? existingFormula : '=';
 
-				console.log('[FormulaMode] Cell location', { rowIndex, colIndex, existingFormula });
+				console.log('[FormulaMode] Cell location', { tablePos, rowIndex, colIndex, existingFormula });
 
 				// Extract full table data for cross-row evaluation
 				const tableJson = table.toJSON();
 				activeTableData = extractTableData(tableJson);
 				currentCellPosition = { col: colIndex, row: rowIndex };
+				currentTablePos = tablePos;  // Update tracked table position
 
-				// Enter formula mode
-				enterFormulaMode(rowIndex, colIndex, startFormula === '=' ? '' : node.textContent);
+				// Enter formula mode with table position for multi-table support
+				enterFormulaMode(rowIndex, colIndex, tablePos, startFormula === '=' ? '' : node.textContent);
 				if (startFormula !== '=') {
 					formulaMode!.formula = startFormula;
 				}
