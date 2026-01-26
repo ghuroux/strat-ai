@@ -10,7 +10,7 @@ import type { RequestHandler } from './$types';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { parseFile, validateFile } from '$lib/server/file-parser';
 import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
-import { generateSummaryBackground } from '$lib/server/summarization';
+import { generateSummaryBackground, generateImageDescriptionBackground } from '$lib/server/summarization';
 
 /**
  * GET /api/documents
@@ -76,6 +76,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			truncated: doc.truncated,
 			spaceId: doc.spaceId,
 			visibility: doc.visibility,
+			contentType: doc.contentType,
 			createdAt: doc.createdAt,
 			updatedAt: doc.updatedAt
 		}));
@@ -141,33 +142,41 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Check for duplicate by content hash (deduplication)
 		// Note: We create a simple hash check in the repository
 
-		// For text content, extract the text
-		if (parsed.content.type !== 'text') {
-			return json(
-				{ error: 'Only text-based documents can be persisted. Images are handled inline in chat.' },
-				{ status: 400 }
-			);
-		}
+		// Determine content type and prepare document data
+		const isImage = parsed.content.type === 'image';
 
-		// Create the document
+		// Create the document with appropriate content type
 		const document = await postgresDocumentRepository.create(
 			{
 				filename: parsed.filename,
 				mimeType: parsed.mimeType,
 				fileSize: parsed.size,
 				content: parsed.content.data,
-				charCount: parsed.charCount,
-				pageCount: parsed.pageCount,
-				truncated: parsed.truncated,
+				// For images, charCount is 0 (no text to count); for text it's the character count
+				charCount: isImage ? 0 : parsed.charCount,
+				pageCount: isImage ? undefined : parsed.pageCount,
+				truncated: isImage ? false : parsed.truncated,
 				spaceId: resolvedSpaceId,
-				title: title ?? undefined
+				title: title ?? undefined,
+				contentType: isImage ? 'image' : 'text'
 			},
 			userId
 		);
 
-		// Trigger background summarization for substantial documents
+		// Trigger background summarization/description
 		// Fire-and-forget: don't await, don't block the response
-		if (document.charCount > 500 && parsed.content.data) {
+		if (isImage && parsed.content.data) {
+			// For images: generate AI description using vision
+			generateImageDescriptionBackground(
+				document.id,
+				parsed.content.data, // base64 content
+				document.mimeType,
+				document.filename,
+				userId,
+				locals.session.organizationId
+			).catch((err) => console.error('[ImageDescription] Background generation failed:', err));
+		} else if (!isImage && document.charCount > 500 && parsed.content.data) {
+			// For text documents: generate summary
 			generateSummaryBackground(
 				document.id,
 				parsed.content.data,
@@ -190,6 +199,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					truncated: document.truncated,
 					spaceId: document.spaceId,
 					visibility: document.visibility,
+					contentType: document.contentType,
 					createdAt: document.createdAt,
 					updatedAt: document.updatedAt
 				}

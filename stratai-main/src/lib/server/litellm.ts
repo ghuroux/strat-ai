@@ -496,6 +496,87 @@ export async function generateDocumentSummary(
 	};
 }
 
+// ============================================================================
+// Image Description (Vision-based summarization)
+// ============================================================================
+
+const IMAGE_DESCRIPTION_MODEL = 'claude-haiku-4-5'; // Haiku 4.5 supports vision
+const IMAGE_DESCRIPTION_MAX_TOKENS = 350;
+
+const IMAGE_DESCRIPTION_SYSTEM_PROMPT = `You are an image analyzer. Create a concise description that captures:
+1. Image type (photo, diagram, chart, screenshot, document scan, infographic, etc.)
+2. Main subject or content
+3. Key visual elements, text, or data visible
+4. Context clues about purpose or source
+
+IMPORTANT: Keep the description under 250 tokens. Focus on factual, objective observations. If the image contains text, mention the key text content. Be specific about what you see.`;
+
+/**
+ * Generate a text description for an image using vision capabilities
+ * Used to provide context about images in system prompts
+ *
+ * @param base64Content - The image as base64 string (without data URL prefix)
+ * @param mimeType - The image MIME type (e.g., 'image/jpeg')
+ * @param filename - The image filename for context
+ * @returns Description text and token usage for cost tracking
+ */
+export async function generateImageDescription(
+	base64Content: string,
+	mimeType: string,
+	filename: string
+): Promise<{ description: string; inputTokens: number; outputTokens: number }> {
+	const response = await fetch(`${getBaseUrl()}/v1/chat/completions`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${getApiKey()}`
+		},
+		body: JSON.stringify({
+			model: IMAGE_DESCRIPTION_MODEL,
+			messages: [
+				{ role: 'system', content: IMAGE_DESCRIPTION_SYSTEM_PROMPT },
+				{
+					role: 'user',
+					content: [
+						{
+							type: 'text',
+							text: `Describe this image (${filename}):`
+						},
+						{
+							type: 'image_url',
+							image_url: {
+								url: `data:${mimeType};base64,${base64Content}`
+							}
+						}
+					]
+				}
+			],
+			max_tokens: IMAGE_DESCRIPTION_MAX_TOKENS,
+			temperature: 0.3,
+			stream: false
+		})
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Image description failed: ${response.status} - ${errorText}`);
+	}
+
+	const data = await response.json();
+	const description = data.choices?.[0]?.message?.content || '';
+	const finishReason = data.choices?.[0]?.finish_reason;
+
+	if (finishReason === 'length') {
+		console.warn(`[ImageDescription] Warning: Description for "${filename}" was truncated (hit max_tokens).`);
+	}
+
+	return {
+		description,
+		inputTokens: data.usage?.prompt_tokens || 0,
+		outputTokens: data.usage?.completion_tokens || 0
+	};
+}
+
 /**
  * Map LiteLLM errors to user-friendly messages
  */

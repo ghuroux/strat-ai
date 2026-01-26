@@ -7,7 +7,7 @@
  * Uses Haiku for cost-efficient summarization (~$0.005 per 5K token doc).
  */
 
-import { generateDocumentSummary } from './litellm';
+import { generateDocumentSummary, generateImageDescription } from './litellm';
 import { postgresDocumentRepository } from './persistence/documents-postgres';
 import { postgresUsageRepository } from './persistence/usage-postgres';
 import { estimateCost } from '$lib/config/model-pricing';
@@ -166,4 +166,75 @@ export async function generateSummaryOnDemand(
  */
 export function needsSummarization(charCount: number, existingSummary?: string | null): boolean {
 	return charCount >= MIN_CHARS_FOR_SUMMARY && !existingSummary;
+}
+
+// ============================================================================
+// Image Description (Vision-based summarization)
+// ============================================================================
+
+/** Model used for image description (matches litellm.ts) */
+const IMAGE_DESCRIPTION_MODEL = 'claude-haiku-4-5';
+
+/**
+ * Generate an image description in the background (fire-and-forget)
+ *
+ * Uses vision capabilities to create a text description of the image,
+ * which is then stored as the document's "summary" field.
+ *
+ * @param documentId - Document ID to describe
+ * @param base64Content - Image content as base64 string
+ * @param mimeType - Image MIME type (e.g., 'image/jpeg')
+ * @param filename - Image filename (for context)
+ * @param userId - User who owns the document
+ * @param organizationId - Organization for usage tracking
+ */
+export async function generateImageDescriptionBackground(
+	documentId: string,
+	base64Content: string,
+	mimeType: string,
+	filename: string,
+	userId: string,
+	organizationId: string
+): Promise<void> {
+	console.log(`[ImageDescription] Starting background description for ${filename}`);
+
+	try {
+		// Generate the description using vision
+		const result = await generateImageDescription(base64Content, mimeType, filename);
+
+		// Update document with description (stored in summary field)
+		await postgresDocumentRepository.update(
+			documentId,
+			{ summary: result.description },
+			userId
+		);
+
+		// Calculate cost for usage tracking
+		const totalTokens = result.inputTokens + result.outputTokens;
+		const costMillicents = estimateCost(
+			IMAGE_DESCRIPTION_MODEL,
+			result.inputTokens,
+			result.outputTokens
+		);
+
+		// Track usage (fire-and-forget)
+		postgresUsageRepository.create({
+			organizationId,
+			userId,
+			conversationId: null, // Not tied to a conversation
+			model: IMAGE_DESCRIPTION_MODEL,
+			requestType: 'image_description',
+			promptTokens: result.inputTokens,
+			completionTokens: result.outputTokens,
+			totalTokens,
+			estimatedCostMillicents: costMillicents
+		}).catch((err) => {
+			console.warn(`[ImageDescription] Failed to track usage: ${err.message}`);
+		});
+
+		console.log(`[ImageDescription] Completed ${filename}: ${result.outputTokens} tokens, ${costMillicents} millicents`);
+	} catch (error) {
+		// Log but don't throw - this is background work
+		console.error(`[ImageDescription] Failed for ${filename}:`, error);
+	}
 }

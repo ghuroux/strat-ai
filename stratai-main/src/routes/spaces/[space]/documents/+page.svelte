@@ -17,7 +17,7 @@
 	import DocumentList from '$lib/components/documents/DocumentList.svelte';
 	import ShareDocumentModal from '$lib/components/documents/ShareDocumentModal.svelte';
 	import type { Document } from '$lib/types/documents';
-	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
+	import { ACCEPT_ALL } from '$lib/config/file-types';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -129,20 +129,30 @@
 	async function uploadFiles(files: File[]) {
 		if (!spaceFromStore) return;
 
-		// Filter for supported types
+		// Filter for supported types (documents and images)
 		const supported = files.filter(
 			(f) =>
 				f.type === 'application/pdf' ||
 				f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
 				f.type === 'text/plain' ||
 				f.type === 'text/markdown' ||
+				f.type === 'text/csv' ||
+				f.type === 'application/json' ||
+				f.type.startsWith('image/') ||
 				f.name.endsWith('.md') ||
 				f.name.endsWith('.txt') ||
-				f.name.endsWith('.docx')
+				f.name.endsWith('.docx') ||
+				f.name.endsWith('.csv') ||
+				f.name.endsWith('.json') ||
+				f.name.endsWith('.jpg') ||
+				f.name.endsWith('.jpeg') ||
+				f.name.endsWith('.png') ||
+				f.name.endsWith('.gif') ||
+				f.name.endsWith('.webp')
 		);
 
 		if (supported.length < files.length) {
-			toastStore.warning('Some files were skipped (only PDF, DOCX, TXT, MD supported)');
+			toastStore.warning('Some files were skipped (unsupported file type)');
 		}
 
 		if (supported.length === 0) return;
@@ -238,7 +248,7 @@
 					<span>Upload</span>
 					<input
 						type="file"
-						accept={ACCEPT_DOCUMENTS}
+						accept={ACCEPT_ALL}
 						multiple
 						onchange={handleFileSelect}
 					/>
@@ -338,7 +348,7 @@
 						/>
 					</svg>
 					<p>Drop files here to upload</p>
-					<span>PDF, DOCX, TXT, MD</span>
+					<span>Documents & images</span>
 				</div>
 			</div>
 		{/if}

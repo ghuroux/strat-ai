@@ -408,6 +408,7 @@ CREATE TABLE documents (
     file_size INTEGER NOT NULL,
     char_count INTEGER NOT NULL,
     page_count INTEGER,
+    content_type TEXT NOT NULL DEFAULT 'text' CHECK (content_type IN ('text', 'image')),
     content TEXT NOT NULL,
     content_hash TEXT NOT NULL,
     title TEXT,
@@ -425,6 +426,7 @@ CREATE INDEX idx_documents_hash ON documents(user_id, content_hash) WHERE delete
 CREATE INDEX idx_documents_filename_space ON documents(space_id, filename) WHERE deleted_at IS NULL;
 CREATE INDEX idx_documents_updated ON documents(user_id, updated_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_documents_visibility ON documents(visibility) WHERE deleted_at IS NULL;
+CREATE INDEX idx_documents_content_type ON documents(space_id, content_type) WHERE deleted_at IS NULL;
 
 CREATE TRIGGER documents_updated_at
     BEFORE UPDATE ON documents

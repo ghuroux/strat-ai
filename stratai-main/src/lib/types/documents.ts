@@ -16,6 +16,11 @@ export type DocumentContextRole = 'reference' | 'input' | 'output';
 export type DocumentVisibility = 'private' | 'areas' | 'space';
 
 /**
+ * Document content type for distinguishing text vs image documents
+ */
+export type DocumentContentType = 'text' | 'image';
+
+/**
  * Core Document entity
  */
 export interface Document {
@@ -30,7 +35,10 @@ export interface Document {
 	charCount: number;
 	pageCount?: number;
 
-	// Content (extracted text, not raw binary)
+	// Content type (text = extractable text, image = base64 for vision API)
+	contentType: DocumentContentType;
+
+	// Content (extracted text for documents, base64 for images)
 	content: string;
 	contentHash: string;
 
@@ -61,6 +69,7 @@ export interface DocumentRow {
 	fileSize: number;
 	charCount: number;
 	pageCount: number | null;
+	contentType: string;
 	content: string;
 	contentHash: string;
 	title: string | null;
@@ -110,6 +119,7 @@ export interface CreateDocumentInput {
 	truncated?: boolean;
 	spaceId?: string;
 	title?: string;
+	contentType?: DocumentContentType;
 }
 
 /**
@@ -166,6 +176,7 @@ export function rowToDocument(row: DocumentRow): Document {
 		fileSize: row.fileSize,
 		charCount: row.charCount,
 		pageCount: row.pageCount ?? undefined,
+		contentType: (row.contentType as DocumentContentType) ?? 'text',
 		content: row.content,
 		contentHash: row.contentHash,
 		title: row.title ?? undefined,

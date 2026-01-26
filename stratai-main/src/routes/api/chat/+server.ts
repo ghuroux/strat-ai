@@ -375,6 +375,140 @@ function createLayeredSystemMessage(
 }
 
 /**
+ * Check if a model supports vision (image inputs)
+ * Used to determine whether to include image context documents
+ */
+function modelSupportsVision(model: string): boolean {
+	const lowerModel = model.toLowerCase();
+	// Claude models with vision support
+	if (lowerModel.includes('claude-3') || lowerModel.includes('claude-4') ||
+	    lowerModel.includes('claude-sonnet') || lowerModel.includes('claude-opus') ||
+	    lowerModel.includes('claude-haiku')) {
+		return true;
+	}
+	// GPT-4 vision models
+	if (lowerModel.includes('gpt-4') && (lowerModel.includes('vision') || lowerModel.includes('turbo') || lowerModel.includes('o'))) {
+		return true;
+	}
+	// GPT-4o models have vision
+	if (lowerModel.includes('gpt-4o')) {
+		return true;
+	}
+	// GPT-5 models are expected to have vision
+	if (lowerModel.includes('gpt-5')) {
+		return true;
+	}
+	// Gemini models have vision
+	if (lowerModel.includes('gemini')) {
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Build vision content blocks from image context documents
+ * Returns an array of image_url content blocks ready for injection into messages
+ */
+function buildImageContextBlocks(
+	focusArea?: FocusAreaInfo | null,
+	spaceInfo?: SpaceInfo | null
+): MessageContentBlock[] {
+	const imageBlocks: MessageContentBlock[] = [];
+
+	// Collect image documents from all sources (focus area takes precedence)
+	const allDocs: Array<{ filename: string; content: string; mimeType?: string; contentType?: string }> = [];
+
+	if (focusArea?.contextDocuments) {
+		allDocs.push(...focusArea.contextDocuments);
+	}
+	if (spaceInfo?.contextDocuments) {
+		// Only add space docs that aren't already included from focus area
+		const focusAreaFilenames = new Set(focusArea?.contextDocuments?.map(d => d.filename) || []);
+		for (const doc of spaceInfo.contextDocuments) {
+			if (!focusAreaFilenames.has(doc.filename)) {
+				allDocs.push(doc);
+			}
+		}
+	}
+
+	// Filter to only image documents and build content blocks
+	for (const doc of allDocs) {
+		if (doc.contentType === 'image' && doc.content && doc.mimeType) {
+			imageBlocks.push({
+				type: 'image_url',
+				image_url: {
+					url: `data:${doc.mimeType};base64,${doc.content}`,
+					format: doc.mimeType
+				}
+			});
+		}
+	}
+
+	return imageBlocks;
+}
+
+/**
+ * Inject image context documents as vision content blocks
+ * Images are injected as a user message before the actual user message
+ * with an explanatory text prefix
+ */
+function injectImageContext(
+	messages: ChatMessage[],
+	model: string,
+	focusArea?: FocusAreaInfo | null,
+	spaceInfo?: SpaceInfo | null
+): ChatMessage[] {
+	// Skip if model doesn't support vision
+	if (!modelSupportsVision(model)) {
+		debugLog('CHAT', 'Model does not support vision, skipping image context injection');
+		return messages;
+	}
+
+	// Build image content blocks
+	const imageBlocks = buildImageContextBlocks(focusArea, spaceInfo);
+
+	// No images to inject
+	if (imageBlocks.length === 0) {
+		return messages;
+	}
+
+	debugLog('CHAT', `Injecting ${imageBlocks.length} image(s) as context`);
+
+	// Find the index of the last user message
+	let lastUserIndex = -1;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		if (messages[i].role === 'user') {
+			lastUserIndex = i;
+			break;
+		}
+	}
+
+	// If no user message found, can't inject
+	if (lastUserIndex === -1) {
+		return messages;
+	}
+
+	// Build the image context message
+	// Add introductory text explaining the images
+	const contextText: MessageContentBlock = {
+		type: 'text',
+		text: `[The following images have been shared as reference context for this conversation. They are documents activated in the current area/space.]`
+	};
+
+	// Create user message with images (images first, then text - Claude performs better this way)
+	const imageContextMessage: ChatMessage = {
+		role: 'user',
+		content: [...imageBlocks, contextText]
+	};
+
+	// Insert the image context message before the last user message
+	const updatedMessages = [...messages];
+	updatedMessages.splice(lastUserIndex, 0, imageContextMessage);
+
+	return updatedMessages;
+}
+
+/**
  * Inject platform-level system prompt before user messages
  * This provides consistent baseline behavior across all conversations
  * The platform prompt is composed with any user-provided system prompt
@@ -747,6 +881,7 @@ interface DocumentInfo {
 	filename: string;
 	content: string;
 	charCount: number;
+	contentType?: 'text' | 'image';
 }
 
 /**
@@ -1043,12 +1178,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					// Filter out nulls and map to context format
 					const validDocs = documents.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
 					if (validDocs.length > 0) {
-						// Generate summaries on-demand for documents missing them
+						// Generate summaries on-demand for text documents missing them
+						// Images don't need summarization - they're processed visually
 						spaceContext.contextDocuments = await Promise.all(
 							validDocs.map(async (doc) => {
 								let summary = doc.summary;
-								// Generate summary on-demand if missing and document is substantial
-								if (needsSummarization(doc.charCount, summary)) {
+								// Only generate summary for text documents that need it
+								const isImage = doc.contentType === 'image';
+								if (!isImage && needsSummarization(doc.charCount, summary)) {
 									summary = await generateSummaryOnDemand(
 										doc.id,
 										doc.content,
@@ -1062,7 +1199,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 									filename: doc.filename,
 									content: doc.content,
 									charCount: doc.charCount,
-									summary: summary ?? undefined
+									summary: isImage ? undefined : (summary ?? undefined),
+									contentType: doc.contentType,
+									mimeType: doc.mimeType
 								};
 							})
 						);
@@ -1116,12 +1255,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					// Filter out nulls and map to context format
 					const validDocs = documents.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
 					if (validDocs.length > 0) {
-						// Generate summaries on-demand for documents missing them
+						// Generate summaries on-demand for text documents missing them
+						// Images don't need summarization - they're processed visually
 						focusAreaContext.contextDocuments = await Promise.all(
 							validDocs.map(async (doc) => {
 								let summary = doc.summary;
-								// Generate summary on-demand if missing and document is substantial
-								if (needsSummarization(doc.charCount, summary)) {
+								// Only generate summary for text documents that need it
+								const isImage = doc.contentType === 'image';
+								if (!isImage && needsSummarization(doc.charCount, summary)) {
 									summary = await generateSummaryOnDemand(
 										doc.id,
 										doc.content,
@@ -1135,7 +1276,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 									filename: doc.filename,
 									content: doc.content,
 									charCount: doc.charCount,
-									summary: summary ?? undefined
+									summary: isImage ? undefined : (summary ?? undefined),
+									contentType: doc.contentType,
+									mimeType: doc.mimeType
 								};
 							})
 						);
@@ -1350,8 +1493,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Note: searchEnabled=false here since we're in the non-tool path (needsToolHandling was false)
 		const messagesWithPlatformPrompt = injectPlatformPrompt(cleanBody.messages as ChatMessage[], cleanBody.model as string, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, userTimezone, false);
 
+		// Inject image context documents as vision content blocks (for models that support vision)
+		const messagesWithImageContext = injectImageContext(messagesWithPlatformPrompt, cleanBody.model as string, focusAreaContext, spaceContext);
+
 		// Apply cache breakpoints for Claude models (conversation history caching)
-		const messagesWithCache = addCacheBreakpoints(messagesWithPlatformPrompt, cleanBody.model);
+		const messagesWithCache = addCacheBreakpoints(messagesWithImageContext, cleanBody.model);
 		
 		// Final safety check: enforce Anthropic's 4 cache_control block limit
 		const validatedMessages = enforceCacheControlLimit(messagesWithCache, cleanBody.model);
@@ -1486,7 +1632,8 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 			availableDocuments.set(doc.filename, {
 				filename: doc.filename,
 				content: doc.content,
-				charCount: doc.charCount
+				charCount: doc.charCount,
+				contentType: doc.contentType
 			});
 		}
 	}
@@ -1495,7 +1642,8 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 			availableDocuments.set(doc.filename, {
 				filename: doc.filename,
 				content: doc.content,
-				charCount: doc.charCount
+				charCount: doc.charCount,
+				contentType: doc.contentType
 			});
 		}
 	}
@@ -1505,6 +1653,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 				filename: doc.filename,
 				content: doc.content,
 				charCount: doc.charCount
+				// Plan mode docs don't have contentType yet
 			});
 		}
 	}
@@ -1513,7 +1662,11 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	// Inject platform prompt with space + focus area + custom space context (and assist if active), then cache breakpoints, then search context
 	// Pass searchEnabled to conditionally include commerce search instructions
 	const messagesWithPlatformPrompt = injectPlatformPrompt(body.messages, body.model, space, assistContext, focusedTask, planModeContext, focusArea, spaceInfo, timezone, searchEnabled);
-	const cachedMessages = addCacheBreakpoints(messagesWithPlatformPrompt, body.model);
+
+	// Inject image context documents as vision content blocks (for models that support vision)
+	const messagesWithImageContext = injectImageContext(messagesWithPlatformPrompt, body.model, focusArea, spaceInfo);
+
+	const cachedMessages = addCacheBreakpoints(messagesWithImageContext, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
 	
 	// Final safety check: enforce Anthropic's 4 cache_control block limit
@@ -1746,41 +1899,50 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 								// Look up document in available documents
 								const doc = availableDocuments.get(filename);
 								if (doc) {
-									debugLog('TOOLS', `Document found: ${filename} (${doc.charCount} chars)`);
+									// Handle image documents differently - they're already visible in context
+									if (doc.contentType === 'image') {
+										debugLog('TOOLS', `Image document requested: ${filename} (already visible in context)`);
+										toolResults.push({
+											tool_call_id: toolCall.id,
+											content: `Image "${filename}" is already included visually in the conversation context. You can see and reference it directly without needing to read it.`
+										});
+									} else {
+										debugLog('TOOLS', `Document found: ${filename} (${doc.charCount} chars)`);
 
-									// Send status update for UX feedback
-									sendSSE(controller, encoder, {
-										type: 'status',
-										status: 'reading_document',
-										query: filename
-									});
+										// Send status update for UX feedback
+										sendSSE(controller, encoder, {
+											type: 'status',
+											status: 'reading_document',
+											query: filename
+										});
 
-									const resultContent = `Document "${filename}":\n\n${doc.content}`;
+										const resultContent = `Document "${filename}":\n\n${doc.content}`;
 
-									// Cache the result for future turns
-									if (cacheScope) {
-										try {
-											const toolCache = getToolCacheRepository();
-											await toolCache.create(
-												cacheScope,
-												'read_document',
-												paramsHash,
-												resultContent,
-												null, // TODO: Generate summary for token efficiency
-												doc.charCount,
-												cacheUserId
-											);
-											debugLog('CACHE', `STORED document: ${filename} (${cacheScopeType}: ${cacheScope})`);
-										} catch (cacheError) {
-											console.warn('Failed to cache document:', cacheError);
+										// Cache the result for future turns
+										if (cacheScope) {
+											try {
+												const toolCache = getToolCacheRepository();
+												await toolCache.create(
+													cacheScope,
+													'read_document',
+													paramsHash,
+													resultContent,
+													null, // TODO: Generate summary for token efficiency
+													doc.charCount,
+													cacheUserId
+												);
+												debugLog('CACHE', `STORED document: ${filename} (${cacheScopeType}: ${cacheScope})`);
+											} catch (cacheError) {
+												console.warn('Failed to cache document:', cacheError);
+											}
 										}
-									}
 
-									// Return document content
-									toolResults.push({
-										tool_call_id: toolCall.id,
-										content: resultContent
-									});
+										// Return document content
+										toolResults.push({
+											tool_call_id: toolCall.id,
+											content: resultContent
+										});
+									}
 								} else {
 									// Document not found
 									const availableList = Array.from(availableDocuments.keys()).join(', ');

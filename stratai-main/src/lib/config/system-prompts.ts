@@ -375,6 +375,20 @@ This is a personal, private space for the user:
 };
 
 /**
+ * Document content for context injection
+ * Includes optional summary for cost-efficient context (summaries in prompt, full content via tool)
+ */
+export interface ContextDocument {
+  id: string;
+  filename: string;
+  content: string;
+  charCount: number;
+  summary?: string; // ~200 token summary for context; use read_document tool for full content
+  contentType?: 'text' | 'image'; // Type of content (text = extractable, image = base64 for vision)
+  mimeType?: string; // MIME type for images (e.g., 'image/jpeg', 'image/png')
+}
+
+/**
  * Space information for custom space context injection
  */
 export interface SpaceInfo {
@@ -383,13 +397,7 @@ export interface SpaceInfo {
   slug: string;
   type: "system" | "custom";
   context?: string; // User-provided markdown context
-  contextDocuments?: Array<{
-    id: string;
-    filename: string;
-    content: string;
-    charCount: number;
-    summary?: string; // ~200 token summary for cost-efficient context
-  }>;
+  contextDocuments?: ContextDocument[]; // Documents attached to this space (uses ContextDocument type)
 }
 
 /**
@@ -407,6 +415,7 @@ export function getSpacePromptAddition(
 /**
  * Generate a prompt for a space with user-provided context
  * Uses document summaries for cost efficiency; full content available via read_document tool
+ * Image documents are listed separately and injected visually into context
  */
 export function getCustomSpacePrompt(space: SpaceInfo): string {
   // Check if there's any context to add
@@ -414,6 +423,10 @@ export function getCustomSpacePrompt(space: SpaceInfo): string {
     space.context ||
     (space.contextDocuments && space.contextDocuments.length > 0);
   if (!hasContext) return "";
+
+  // Separate text and image documents
+  const textDocs = space.contextDocuments?.filter(doc => doc.contentType !== 'image') || [];
+  const imageDocs = space.contextDocuments?.filter(doc => doc.contentType === 'image') || [];
 
   let prompt = `
 <space_context>
@@ -429,15 +442,15 @@ You are working within the "${space.name}" space.`;
 ${space.context}`;
   }
 
-  // Include reference document summaries if any
+  // Include reference document summaries for TEXT documents
   // Full content available via read_document tool for detailed analysis
-  if (space.contextDocuments && space.contextDocuments.length > 0) {
+  if (textDocs.length > 0) {
     prompt += `
 
 ### Reference Documents
 The following document summaries provide context for this space:`;
 
-    for (const doc of space.contextDocuments) {
+    for (const doc of textDocs) {
       const sizeKb = Math.round(doc.charCount / 1000);
       prompt += `
 
@@ -447,11 +460,47 @@ ${doc.summary || "[Summary pending - use read_document tool to access content]"}
     }
   }
 
+  // List image documents with descriptions (they're also injected visually)
+  if (imageDocs.length > 0) {
+    prompt += `
+
+### Reference Images
+The following images are included in the conversation context:`;
+    for (const doc of imageDocs) {
+      if (doc.summary) {
+        // Show AI-generated description
+        prompt += `
+
+**${doc.filename}**
+${doc.summary}`;
+      } else {
+        // No description yet (processing or failed)
+        prompt += `
+- ${doc.filename} [Image - visual content included above]`;
+      }
+    }
+  }
+
+  // Build guidelines based on document types
+  const hasTextDocs = textDocs.length > 0;
+  const hasImageDocs = imageDocs.length > 0;
+
   prompt += `
 
 **Guidelines:**
 - Apply this space context to all responses
-- Reference relevant context when helpful${space.contextDocuments?.length ? "\n- Use **read_document** tool to access full document content when you need specific details or quotes" : ""}
+- Reference relevant context when helpful`;
+
+  if (hasTextDocs) {
+    prompt += `
+- Use **read_document** tool to access full document content when you need specific details or quotes`;
+  }
+  if (hasImageDocs) {
+    prompt += `
+- Reference the images when they're relevant to the user's question
+- Image descriptions are provided above; the full images are visible in the conversation`;
+  }
+  prompt += `
 - Stay focused on topics relevant to this space
 </space_context>`;
 
@@ -505,18 +554,6 @@ export function getFullSystemPromptWithSpace(
 }
 
 /**
- * Document content for context injection
- * Includes optional summary for cost-efficient context (summaries in prompt, full content via tool)
- */
-export interface ContextDocument {
-  id: string;
-  filename: string;
-  content: string;
-  charCount: number;
-  summary?: string; // ~200 token summary for context; use read_document tool for full content
-}
-
-/**
  * Focus area information for context injection
  * Inherits space context while adding specialized context
  */
@@ -547,8 +584,13 @@ export interface FocusedTaskInfo {
  * Generate prompt addition for focus area context
  * Focus areas provide specialized context within a space
  * Uses document summaries for cost efficiency; full content available via read_document tool
+ * Image documents are listed separately and injected visually into context
  */
 export function getFocusAreaPrompt(focusArea: FocusAreaInfo): string {
+  // Separate text and image documents
+  const textDocs = focusArea.contextDocuments?.filter(doc => doc.contentType !== 'image') || [];
+  const imageDocs = focusArea.contextDocuments?.filter(doc => doc.contentType === 'image') || [];
+
   let prompt = `
 <focus_area_context>
 ## Focus Area: ${focusArea.name}
@@ -561,15 +603,15 @@ You are assisting within a specialized context called "${focusArea.name}".`;
 ${focusArea.context}`;
   }
 
-  // Include reference document summaries if any
+  // Include reference document summaries for TEXT documents
   // Full content available via read_document tool for detailed analysis
-  if (focusArea.contextDocuments && focusArea.contextDocuments.length > 0) {
+  if (textDocs.length > 0) {
     prompt += `
 
 ### Reference Documents
 The following document summaries provide context for this focus area:`;
 
-    for (const doc of focusArea.contextDocuments) {
+    for (const doc of textDocs) {
       const sizeKb = Math.round(doc.charCount / 1000);
       prompt += `
 
@@ -579,11 +621,48 @@ ${doc.summary || "[Summary pending - use read_document tool to access content]"}
     }
   }
 
+  // List image documents with descriptions (they're also injected visually)
+  if (imageDocs.length > 0) {
+    prompt += `
+
+### Reference Images
+The following images are included in the conversation context:`;
+    for (const doc of imageDocs) {
+      if (doc.summary) {
+        // Show AI-generated description
+        prompt += `
+
+<image_description filename="${doc.filename}">
+${doc.summary}
+</image_description>`;
+      } else {
+        // No description yet (processing or failed)
+        prompt += `
+- ${doc.filename} [Image - visual content included above]`;
+      }
+    }
+  }
+
+  // Build role guidelines based on document types
+  const hasTextDocs = textDocs.length > 0;
+  const hasImageDocs = imageDocs.length > 0;
+
   prompt += `
 
 **Your role:**
 - Apply this specialized context to all responses
-- Reference relevant background information when helpful${focusArea.contextDocuments?.length ? "\n- Use **read_document** tool to access full document content when you need specific details or quotes" : ""}
+- Reference relevant background information when helpful`;
+
+  if (hasTextDocs) {
+    prompt += `
+- Use **read_document** tool to access full document content when you need specific details or quotes`;
+  }
+  if (hasImageDocs) {
+    prompt += `
+- Reference the images when they're relevant to the user's question
+- Image descriptions are provided above; the full images are visible in the conversation`;
+  }
+  prompt += `
 - Stay focused on topics relevant to this context
 - If the user asks about unrelated topics, you can still help but acknowledge it's outside this focus area
 </focus_area_context>`;

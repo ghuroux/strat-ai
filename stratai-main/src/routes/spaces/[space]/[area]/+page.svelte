@@ -1253,10 +1253,16 @@
 		// Reset timeout state from any previous request
 		streamingTimedOut = false;
 
+		// Capture context at resend time for transparency (same as handleSend)
+		const usedContext = captureUsedContext();
+		const hasContextToLoad = usedContext.documents.length > 0 || usedContext.notes.included || usedContext.tasks.length > 0;
+
 		const assistantMessageId = chatStore.addMessage(conversationId, {
 			role: 'assistant',
 			content: '',
-			isStreaming: true
+			isStreaming: true,
+			contextStatus: hasContextToLoad ? 'loading' : undefined,
+			usedContext: hasContextToLoad ? usedContext : undefined
 		});
 
 		const controller = new AbortController();

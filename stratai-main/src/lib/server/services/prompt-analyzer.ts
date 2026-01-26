@@ -63,6 +63,8 @@ export interface DocumentBreakdown {
 	hasSummary: boolean;
 	summaryTokens: number;
 	fullContentTokens: number;
+	/** Whether this is an image document */
+	isImage: boolean;
 }
 
 export type WarningSeverity = 'info' | 'warning' | 'critical';
@@ -192,6 +194,37 @@ const WARNING_THRESHOLDS = {
 	/** Warn if there are more than this many documents */
 	MANY_DOCUMENTS_COUNT: 5
 };
+
+// =============================================================================
+// VISION API TOKEN ESTIMATION
+// =============================================================================
+
+/**
+ * Estimate Vision API token cost for an image
+ *
+ * Vision APIs (Anthropic, OpenAI, Google) process images based on pixel dimensions,
+ * NOT base64 string length. This is a rough estimate based on typical image sizes.
+ *
+ * Anthropic formula: tokens ≈ (width × height) / 750
+ * - A 1000×1000 image ≈ 1,333 tokens
+ * - A 1500×1500 image ≈ 3,000 tokens
+ *
+ * Since we don't store dimensions, we estimate based on base64 size:
+ * - Base64 is ~4/3 the size of binary, so base64Length * 3/4 ≈ file size
+ * - Typical JPEG: ~10 bytes per pixel after compression
+ * - So base64Length ≈ pixels * 10 * 4/3 ≈ pixels * 13.3
+ * - Therefore: pixels ≈ base64Length / 13.3
+ * - Tokens ≈ pixels / 750 ≈ base64Length / 10000
+ *
+ * For safety, we use a minimum of 1,000 tokens and cap at 3,000.
+ */
+function estimateVisionTokens(base64Length: number): number {
+	// Estimate based on base64 size (rough formula)
+	const estimatedTokens = Math.round(base64Length / 10000);
+
+	// Clamp to reasonable bounds
+	return Math.max(1000, Math.min(3000, estimatedTokens));
+}
 
 // =============================================================================
 // CACHE OPTIMIZATION THRESHOLDS
@@ -664,7 +697,9 @@ export async function analyzeSystemPrompt(
 							filename: d.filename,
 							content: d.content,
 							charCount: d.charCount,
-							summary: d.summary || undefined
+							summary: d.summary || undefined,
+							contentType: d.contentType,
+							mimeType: d.mimeType
 						}));
 				}
 
@@ -690,8 +725,13 @@ export async function analyzeSystemPrompt(
 
 					// Track individual documents
 					for (const doc of spaceDocuments) {
+						const isImage = doc.contentType === 'image';
 						const summaryTokens = doc.summary ? countTokens(doc.summary) : 0;
-						const fullTokens = countTokens(doc.content);
+						// For images: estimate vision API tokens (NOT base64 text tokens)
+						// For text: count actual tokens in content
+						const fullTokens = isImage
+							? estimateVisionTokens(doc.content.length)
+							: countTokens(doc.content);
 						documents.push({
 							id: doc.id,
 							filename: doc.filename,
@@ -699,7 +739,8 @@ export async function analyzeSystemPrompt(
 							tokens: summaryTokens || fullTokens, // What's actually in prompt
 							hasSummary: !!doc.summary,
 							summaryTokens,
-							fullContentTokens: fullTokens
+							fullContentTokens: fullTokens,
+							isImage
 						});
 					}
 				}
@@ -731,7 +772,9 @@ export async function analyzeSystemPrompt(
 						filename: d.filename,
 						content: d.content,
 						charCount: d.charCount,
-						summary: d.summary || undefined
+						summary: d.summary || undefined,
+						contentType: d.contentType,
+						mimeType: d.mimeType
 					}));
 			}
 
@@ -761,8 +804,12 @@ export async function analyzeSystemPrompt(
 				// Skip if already tracked
 				if (documents.some((d) => d.id === doc.id)) continue;
 
+				const isImage = doc.contentType === 'image';
 				const summaryTokens = doc.summary ? countTokens(doc.summary) : 0;
-				const fullTokens = countTokens(doc.content);
+				// For images: estimate vision API tokens (NOT base64 text tokens)
+				const fullTokens = isImage
+					? estimateVisionTokens(doc.content.length)
+					: countTokens(doc.content);
 				documents.push({
 					id: doc.id,
 					filename: doc.filename,
@@ -770,7 +817,8 @@ export async function analyzeSystemPrompt(
 					tokens: summaryTokens || fullTokens,
 					hasSummary: !!doc.summary,
 					summaryTokens,
-					fullContentTokens: fullTokens
+					fullContentTokens: fullTokens,
+					isImage
 				});
 			}
 		}

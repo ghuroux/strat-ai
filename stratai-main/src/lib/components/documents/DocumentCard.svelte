@@ -66,13 +66,17 @@
 	}
 
 	// Get file icon based on mime type
-	function getFileIcon(mimeType: string): 'pdf' | 'word' | 'text' | 'generic' {
+	function getFileIcon(mimeType: string): 'pdf' | 'word' | 'text' | 'image' | 'generic' {
 		if (mimeType === 'application/pdf') return 'pdf';
 		if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
 			return 'word';
 		if (mimeType.startsWith('text/')) return 'text';
+		if (mimeType.startsWith('image/')) return 'image';
 		return 'generic';
 	}
+
+	// Check if document is an image
+	const isImage = $derived(document.mimeType?.startsWith('image/'));
 
 	// Get visibility label
 	function getVisibilityLabel(visibility: string): string {
@@ -130,8 +134,8 @@
 		</button>
 	{/if}
 
-	<!-- File icon -->
-	<div class="doc-icon" class:pdf={icon === 'pdf'} class:word={icon === 'word'} class:text={icon === 'text'}>
+	<!-- File icon / Image thumbnail -->
+	<div class="doc-icon" class:pdf={icon === 'pdf'} class:word={icon === 'word'} class:text={icon === 'text'} class:image={icon === 'image'}>
 		{#if icon === 'pdf'}
 			<svg viewBox="0 0 24 24" fill="currentColor">
 				<path
@@ -142,6 +146,14 @@
 			<svg viewBox="0 0 24 24" fill="currentColor">
 				<path
 					d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-4.5-8.5l-1.5 6-1.5-6H9l2.25 7.5h1.5L14.5 13l1.75 6h1.5L20 11.5h-1.5l-1.5 6-1.5-6h-1.5z"
+				/>
+			</svg>
+		{:else if icon === 'image'}
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"
 				/>
 			</svg>
 		{:else}
@@ -159,7 +171,11 @@
 	<div class="doc-info">
 		<span class="doc-name" title={document.filename}>{document.title || document.filename}</span>
 		<div class="doc-meta-row">
-			<span class="doc-meta">{formatCharCount(document.charCount)} chars</span>
+			{#if isImage}
+				<span class="doc-meta">{formatFileSize(document.fileSize)}</span>
+			{:else}
+				<span class="doc-meta">{formatCharCount(document.charCount)} chars</span>
+			{/if}
 			<span class="doc-meta-separator">·</span>
 			<span class="doc-meta">{formatDate(document.updatedAt)}</span>
 			{#if showVisibilityBadge}
@@ -290,6 +306,11 @@
 	.doc-icon.text {
 		background: color-mix(in srgb, var(--area-color) 15%, transparent);
 		color: var(--area-color);
+	}
+
+	.doc-icon.image {
+		background: rgba(16, 185, 129, 0.1);
+		color: #10b981;
 	}
 
 	.doc-icon svg {

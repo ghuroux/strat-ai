@@ -96,15 +96,16 @@ export const postgresDocumentRepository: DocumentRepository = {
 		const id = generateDocumentId();
 		const contentHash = hashContent(input.content);
 		const now = new Date();
+		const contentType = input.contentType ?? 'text';
 
 		await sql`
 			INSERT INTO documents (
 				id, user_id, space_id, filename, mime_type,
-				file_size, char_count, page_count, content, content_hash,
+				file_size, char_count, page_count, content_type, content, content_hash,
 				title, truncated, created_at, updated_at
 			) VALUES (
 				${id}, ${userId}, ${input.spaceId ?? null}, ${input.filename}, ${input.mimeType},
-				${input.fileSize}, ${input.charCount}, ${input.pageCount ?? null}, ${input.content}, ${contentHash},
+				${input.fileSize}, ${input.charCount}, ${input.pageCount ?? null}, ${contentType}, ${input.content}, ${contentHash},
 				${input.title ?? null}, ${input.truncated ?? false}, ${now}, ${now}
 			)
 		`;

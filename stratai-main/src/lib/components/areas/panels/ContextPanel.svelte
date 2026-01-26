@@ -19,7 +19,7 @@
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Document } from '$lib/types/documents';
 	import type { Area } from '$lib/types/areas';
-	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
+	import { ACCEPT_ALL, ALL_TYPES_DISPLAY } from '$lib/config/file-types';
 
 	interface Props {
 		isOpen: boolean;
@@ -129,7 +129,15 @@
 		if (mimeType === 'application/pdf') return 'pdf';
 		if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'word';
 		if (mimeType.startsWith('text/')) return 'text';
+		if (mimeType.startsWith('image/')) return 'image';
 		return 'generic';
+	}
+
+	// Format file size
+	function formatFileSizeShort(bytes: number): string {
+		if (bytes < 1024) return `${bytes} B`;
+		if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+		return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 	}
 
 	// Toggle document activation
@@ -208,20 +216,30 @@
 	}
 
 	async function uploadFiles(files: File[]) {
-		// Filter for supported types
+		// Filter for supported types (documents and images)
 		const supported = files.filter(
 			(f) =>
 				f.type === 'application/pdf' ||
 				f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
 				f.type === 'text/plain' ||
 				f.type === 'text/markdown' ||
+				f.type === 'text/csv' ||
+				f.type === 'application/json' ||
+				f.type.startsWith('image/') ||
 				f.name.endsWith('.md') ||
 				f.name.endsWith('.txt') ||
-				f.name.endsWith('.docx')
+				f.name.endsWith('.docx') ||
+				f.name.endsWith('.csv') ||
+				f.name.endsWith('.json') ||
+				f.name.endsWith('.jpg') ||
+				f.name.endsWith('.jpeg') ||
+				f.name.endsWith('.png') ||
+				f.name.endsWith('.gif') ||
+				f.name.endsWith('.webp')
 		);
 
 		if (supported.length < files.length) {
-			toastStore.warning('Some files were skipped (only PDF, DOCX, TXT, MD supported)');
+			toastStore.warning('Some files were skipped (unsupported file type)');
 		}
 
 		if (supported.length === 0) return;
@@ -482,7 +500,7 @@
 								</button>
 
 								<!-- File icon -->
-								<div class="doc-icon" class:pdf={icon === 'pdf'} class:word={icon === 'word'} class:text={icon === 'text'}>
+								<div class="doc-icon" class:pdf={icon === 'pdf'} class:word={icon === 'word'} class:text={icon === 'text'} class:image={icon === 'image'}>
 									{#if icon === 'pdf'}
 										<svg viewBox="0 0 24 24" fill="currentColor">
 											<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 2l5 5h-5V4zm-3 9c.55 0 1-.45 1-1s-.45-1-1-1H7v4h1v-1h2c.55 0 1-.45 1-1zM8 10h2v1H8v-1zm6 4c.55 0 1-.45 1-1v-2c0-.55-.45-1-1-1h-3v4h3zm-2-3h1v2h-1v-2zm5 3c.55 0 1-.45 1-1v-2c0-.55-.45-1-1-1h-1c-.55 0-1 .45-1 1v2c0 .55.45 1 1 1h1zm0-3v2h-1v-2h1z"/>
@@ -490,6 +508,10 @@
 									{:else if icon === 'word'}
 										<svg viewBox="0 0 24 24" fill="currentColor">
 											<path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-4.5-8.5l-1.5 6-1.5-6H9l2.25 7.5h1.5L14.5 13l1.75 6h1.5L20 11.5h-1.5l-1.5 6-1.5-6h-1.5z"/>
+										</svg>
+									{:else if icon === 'image'}
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+											<path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
 										</svg>
 									{:else}
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -502,7 +524,11 @@
 								<div class="doc-info">
 									<span class="doc-name" title={doc.filename}>{doc.title || doc.filename}</span>
 									<div class="doc-meta-row">
-										<span class="doc-meta">{formatCharCount(doc.charCount)} chars</span>
+										{#if icon === 'image'}
+											<span class="doc-meta">{formatFileSizeShort(doc.fileSize)}</span>
+										{:else}
+											<span class="doc-meta">{formatCharCount(doc.charCount)} chars</span>
+										{/if}
 										{#if doc.visibility === 'space'}
 											<span class="visibility-badge space">Space</span>
 										{:else if doc.visibility === 'areas'}
@@ -580,13 +606,13 @@
 								browse
 								<input
 									type="file"
-									accept={ACCEPT_DOCUMENTS}
+									accept={ACCEPT_ALL}
 									multiple
 									onchange={handleFileSelect}
 								/>
 							</label>
 						</p>
-						<span class="file-types">PDF, DOCX, TXT, MD</span>
+						<span class="file-types">Docs, images & more</span>
 					{/if}
 				</div>
 			</section>
@@ -890,6 +916,11 @@
 	.doc-icon.text {
 		background: color-mix(in srgb, var(--space-color) 15%, transparent);
 		color: var(--space-color);
+	}
+
+	.doc-icon.image {
+		background: rgba(16, 185, 129, 0.1);
+		color: #10b981;
 	}
 
 	.doc-icon svg {
