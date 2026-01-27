@@ -2,7 +2,11 @@
 -- Description: Add content_type column to documents table for distinguishing text vs image documents
 -- Author: Claude Code
 -- Date: 2026-01-26
+-- Updated: 2026-01-27 (ensure deployment)
 -- Rollback: ALTER TABLE documents DROP COLUMN IF EXISTS content_type;
+--
+-- IMPORTANT: This migration is required for image upload support.
+-- Run with: npm run db:migrate
 -- ============================================================================
 
 -- Add content_type column to distinguish text documents from images
