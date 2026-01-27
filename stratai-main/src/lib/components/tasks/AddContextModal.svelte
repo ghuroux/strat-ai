@@ -134,9 +134,11 @@
 
 	async function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (file) {
-			await uploadFile(file);
+		const files = input.files;
+		if (files && files.length > 0) {
+			for (const file of Array.from(files)) {
+				await uploadFile(file);
+			}
 		}
 		if (fileInput) fileInput.value = '';
 	}
@@ -352,6 +354,7 @@
 								bind:this={fileInput}
 								onchange={handleFileSelect}
 								accept={ACCEPT_DOCUMENTS}
+								multiple
 								class="hidden"
 							/>
 

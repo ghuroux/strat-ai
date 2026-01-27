@@ -44,45 +44,65 @@
 
 	async function handleFileSelect(e: Event) {
 		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
+		const files = input.files;
+		if (!files || files.length === 0) return;
 
-		// Check if trying to upload image when model doesn't support vision
-		if (isImageFile(file) && !supportsVision) {
-			toastStore.warning(`${modelName} doesn't support image analysis. Please select a vision-capable model or use a document file.`);
-			if (fileInput) {
-				fileInput.value = '';
+		// Filter out images if model doesn't support vision
+		const validFiles: File[] = [];
+		let skippedImages = 0;
+
+		for (const file of Array.from(files)) {
+			if (isImageFile(file) && !supportsVision) {
+				skippedImages++;
+			} else {
+				validFiles.push(file);
 			}
+		}
+
+		if (skippedImages > 0) {
+			toastStore.warning(`${skippedImages} image${skippedImages > 1 ? 's' : ''} skipped - ${modelName} doesn't support image analysis.`);
+		}
+
+		if (validFiles.length === 0) {
+			if (fileInput) fileInput.value = '';
 			return;
 		}
 
 		isUploading = true;
+		let successCount = 0;
 
 		try {
-			const formData = new FormData();
-			formData.append('file', file);
+			for (const file of validFiles) {
+				const formData = new FormData();
+				formData.append('file', file);
 
-			const response = await fetch('/api/upload', {
-				method: 'POST',
-				body: formData
-			});
+				const response = await fetch('/api/upload', {
+					method: 'POST',
+					body: formData
+				});
 
-			const result = await response.json();
+				const result = await response.json();
 
-			if (!response.ok || result.error) {
-				throw new Error(result.error?.message || 'Upload failed');
+				if (!response.ok || result.error) {
+					toastStore.error(`Failed to upload ${file.name}: ${result.error?.message || 'Upload failed'}`);
+					continue;
+				}
+
+				// Success - pass the parsed file to parent
+				onupload?.(result as FileAttachment);
+				successCount++;
 			}
 
-			// Success - pass the parsed file to parent
-			onupload?.(result as FileAttachment);
-			toastStore.success(`${file.name} attached`);
+			if (successCount > 0) {
+				toastStore.success(`${successCount} file${successCount > 1 ? 's' : ''} attached`);
+			}
 		} catch (err) {
-			const message = err instanceof Error ? err.message : 'Failed to upload file';
+			const message = err instanceof Error ? err.message : 'Failed to upload files';
 			toastStore.error(message);
 			console.error('Upload error:', err);
 		} finally {
 			isUploading = false;
-			// Reset input so same file can be selected again
+			// Reset input so same files can be selected again
 			if (fileInput) {
 				fileInput.value = '';
 			}
@@ -102,6 +122,7 @@
 	bind:this={fileInput}
 	onchange={handleFileSelect}
 	accept={acceptedTypes}
+	multiple
 	class="hidden"
 	aria-hidden="true"
 />

@@ -95,18 +95,20 @@
 	// Document handling
 	async function handleFileSelect(event: Event) {
 		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file || !space) return;
+		const files = input.files;
+		if (!files || files.length === 0 || !space) return;
 
 		isUploading = true;
 		error = null;
 
 		try {
-			const doc = await documentStore.uploadDocument(file, space.slug);
-			if (doc) {
-				contextDocumentIds = [...contextDocumentIds, doc.id];
-			} else {
-				error = documentStore.error || 'Failed to upload document';
+			for (const file of Array.from(files)) {
+				const doc = await documentStore.uploadDocument(file, space.slug);
+				if (doc) {
+					contextDocumentIds = [...contextDocumentIds, doc.id];
+				} else {
+					error = documentStore.error || 'Failed to upload document';
+				}
 			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to upload document';
@@ -398,6 +400,7 @@
 										accept={ACCEPT_DOCUMENTS}
 										onchange={handleFileSelect}
 										disabled={isSubmitting || isUploading}
+										multiple
 									/>
 									<label for="space-document-upload" class="upload-button" class:uploading={isUploading}>
 										{#if isUploading}
