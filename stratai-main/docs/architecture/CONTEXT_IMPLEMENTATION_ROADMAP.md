@@ -31,6 +31,7 @@
 7. [Technical Architecture Decisions](#7-technical-architecture-decisions)
 8. [Risk Mitigation](#8-risk-mitigation)
 9. [Dependencies Map](#9-dependencies-map)
+10. [Feature Dependencies: What Context Enables](#10-feature-dependencies-what-context-enables)
 
 ---
 
@@ -1123,6 +1124,91 @@ D1.1 (Messages) → D2.2 (Extraction) → D3.1 (Memories) → D4.1 (Propagation)
 
 ---
 
+## 10. Feature Dependencies: What Context Enables
+
+The context management infrastructure isn't just about "memory" - it's the foundation that makes other features valuable. Without it, features work in isolation. With it, features compound into organizational intelligence.
+
+### Meeting Lifecycle → Context Integration
+
+The [Meeting Lifecycle System](../features/MEETING_LIFECYCLE.md) has a critical Phase 7: **Context Integration** that assumes this infrastructure exists:
+
+```
+MEETING FINALIZED
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  "Propagate decisions to Area context"                          │
+│                                                                 │
+│  WHERE does this go?                                            │
+│                                                                 │
+│  WITHOUT Context Infrastructure:                                │
+│  └─ area.notes (unstructured markdown) ← Not ideal              │
+│                                                                 │
+│  WITH Context Infrastructure:                                   │
+│  ├─ entity_relationships: meeting → produced → decision         │
+│  ├─ memories table: decision stored with confidence, decay      │
+│  └─ AI tools: searchable, retrievable, attributable             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Impact on user experience:**
+
+| Scenario | Without Context Infra | With Context Infra |
+|----------|----------------------|-------------------|
+| "What did we decide about rate limiting?" | "I don't have that information" | "In Q1 Planning (Jan 15), you decided exponential backoff with jitter. Sarah owns implementation." |
+| New team member asks about project history | Must read old meeting notes manually | AI synthesizes decisions across all meetings |
+| Preparing for follow-up meeting | No automatic context | AI surfaces relevant past decisions |
+
+### Dependency Matrix
+
+| Feature | Phase 1 (Messages) | Phase 2 (Relationships) | Phase 3 (Memories) | Phase 4 (Org Intel) |
+|---------|-------------------|------------------------|-------------------|-------------------|
+| **Meeting Lifecycle** | Helpful | Required | Required | Enhances |
+| **Task Deep Work** | Helpful | Helpful | Enhances | - |
+| **Document Intelligence** | - | Helpful | Required | Enhances |
+| **New Hire Onboarding** | - | Helpful | Required | Required |
+
+- **Required**: Feature's core value proposition depends on this
+- **Helpful**: Feature works without it but is better with it
+- **Enhances**: Adds additional capabilities
+- **-**: No direct dependency
+
+### Strategic Implication
+
+Building Context Infrastructure first means every subsequent feature ships with the flywheel already turning. Building features first means retrofitting the flywheel later - possible, but the compounding starts later.
+
+The recommended approach is **interleaved development**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                    INTERLEAVED DEVELOPMENT PATH                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  CONTEXT                              MEETINGS                                   │
+│  ───────                              ────────                                   │
+│                                                                                  │
+│  Phase 1: Messages, Search ─────────► Meeting Phase 1-2: Schema, OAuth          │
+│           (2-3 weeks)                 (3-4 weeks)                                │
+│                 │                           │                                    │
+│                 ▼                           ▼                                    │
+│  Phase 2: entity_relationships ────► Meeting Phase 3-5: Scheduling, Capture     │
+│           (2-3 weeks)                 (6-8 weeks)                                │
+│                 │                           │                                    │
+│                 ▼                           ▼                                    │
+│  Phase 3: memories table ──────────► Meeting Phase 6-7: AI Extraction,          │
+│           (2-3 weeks)                 Finalization + FULL CONTEXT PROPAGATION   │
+│                                       (4-6 weeks)                                │
+│                                                                                  │
+│  ═══════════════════════════════════════════════════════════════════════════    │
+│  RESULT: Flywheel turns from day one. Meetings feed memory immediately.         │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+This delivers user value incrementally while ensuring the infrastructure is ready when features need it.
+
+---
+
 ## Appendix A: Quick Reference
 
 ### Phase Summary
@@ -1163,6 +1249,7 @@ D1.1 (Messages) → D2.2 (Extraction) → D3.1 (Memories) → D4.1 (Propagation)
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-01-26 | 1.0 | Initial document created |
+| 2026-01-27 | 1.1 | Added Section 10: Feature Dependencies (Meeting Lifecycle integration, dependency matrix, interleaved development recommendation) |
 
 ---
 
