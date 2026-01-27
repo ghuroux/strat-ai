@@ -67,6 +67,7 @@
 	let isLoading = $state(true);
 	let isDragOver = $state(false);
 	let isUploading = $state(false);
+	let dragCounter = $state(0); // Track nested dragenter/dragleave events
 
 	// Share modal state
 	let shareModalOpen = $state(false);
@@ -97,19 +98,41 @@
 		isLoading = false;
 	});
 
-	// Handle drag events
+	// Handle drag events - using counter pattern to prevent flickering
+	// The counter tracks nested dragenter/dragleave events that fire when
+	// moving between child elements, preventing the drop zone from flickering
+	function handleDragEnter(e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		dragCounter++;
+		isDragOver = true;
+	}
+
 	function handleDragOver(e: DragEvent) {
 		e.preventDefault();
-		isDragOver = true;
+		e.stopPropagation();
+		// Keep isDragOver true in case dragenter was missed
+		if (!isDragOver) {
+			isDragOver = true;
+		}
 	}
 
 	function handleDragLeave(e: DragEvent) {
 		e.preventDefault();
-		isDragOver = false;
+		e.stopPropagation();
+		dragCounter--;
+		// Only hide overlay when we've left all elements
+		if (dragCounter <= 0) {
+			dragCounter = 0;
+			isDragOver = false;
+		}
 	}
 
 	async function handleDrop(e: DragEvent) {
 		e.preventDefault();
+		e.stopPropagation();
+		// Reset counter and hide overlay
+		dragCounter = 0;
 		isDragOver = false;
 
 		const files = e.dataTransfer?.files;
@@ -210,7 +233,13 @@
 </svelte:head>
 
 <!-- Global drop zone handler - must be at root level -->
-<svelte:window ondragover={handleDragOver} ondragleave={handleDragLeave} ondrop={handleDrop} />
+<!-- Using dragenter/dragleave counter pattern to prevent flickering -->
+<svelte:window
+	ondragenter={handleDragEnter}
+	ondragover={handleDragOver}
+	ondragleave={handleDragLeave}
+	ondrop={handleDrop}
+/>
 
 {#if isLoading}
 	<div class="loading-container">
@@ -336,9 +365,17 @@
 			</div>
 		</div>
 
-		<!-- Drop zone overlay -->
+		<!-- Drop zone overlay - also handles drop events as safety net -->
 		{#if isDragOver}
-			<div class="drop-overlay">
+			<div
+				class="drop-overlay"
+				role="region"
+				aria-label="Drop zone"
+				ondragenter={handleDragEnter}
+				ondragover={handleDragOver}
+				ondragleave={handleDragLeave}
+				ondrop={handleDrop}
+			>
 				<div class="drop-zone">
 					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
 						<path
