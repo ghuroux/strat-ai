@@ -6,6 +6,7 @@
 
 import { PDFParse } from 'pdf-parse';
 import mammoth from 'mammoth';
+import * as XLSX from 'xlsx';
 import type { AttachmentContent } from '$lib/types/chat';
 import {
 	DOCUMENT_EXTENSIONS,
@@ -54,6 +55,8 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB for images (Claude API limit)
 const DOCUMENT_TYPES: Record<string, string[]> = {
 	'application/pdf': ['.pdf'],
 	'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+	'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+	'application/vnd.ms-excel': ['.xls'],
 	'text/plain': ['.txt'],
 	'text/markdown': ['.md'],
 	'text/csv': ['.csv'],
@@ -230,6 +233,35 @@ async function parseDOCX(buffer: Buffer): Promise<{ content: string }> {
 }
 
 /**
+ * Parse Excel file (XLSX/XLS) and extract text
+ * Converts spreadsheet data to a readable text format
+ */
+function parseExcel(buffer: Buffer): { content: string; sheetCount: number } {
+	try {
+		const workbook = XLSX.read(buffer, { type: 'buffer' });
+		const sheets: string[] = [];
+
+		for (const sheetName of workbook.SheetNames) {
+			const sheet = workbook.Sheets[sheetName];
+			// Convert to CSV format for readable text extraction
+			const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+
+			if (csv.trim()) {
+				sheets.push(`## Sheet: ${sheetName}\n\n${csv}`);
+			}
+		}
+
+		return {
+			content: sheets.join('\n\n---\n\n'),
+			sheetCount: workbook.SheetNames.length
+		};
+	} catch (error) {
+		console.error('Excel parsing error:', error);
+		throw new Error('Failed to parse Excel file');
+	}
+}
+
+/**
  * Parse text-based files (TXT, MD, CSV, JSON)
  */
 function parseText(buffer: Buffer): { content: string } {
@@ -324,6 +356,16 @@ export async function parseFile(
 	) {
 		const result = await parseDOCX(buffer);
 		rawContent = result.content;
+	} else if (
+		extension === '.xlsx' ||
+		extension === '.xls' ||
+		mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+		mimeType === 'application/vnd.ms-excel'
+	) {
+		const result = parseExcel(buffer);
+		rawContent = result.content;
+		// Use sheetCount as pageCount for Excel files
+		pageCount = result.sheetCount;
 	} else {
 		// Treat as text file
 		const result = parseText(buffer);

@@ -1,7 +1,9 @@
 import type { RequestHandler } from './$types';
 import { createChatCompletion, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
-import { postgresConversationRepository } from '$lib/server/persistence';
+import { postgresConversationRepository, postgresAreaRepository, postgresDocumentRepository } from '$lib/server/persistence';
 import type { ChatMessage, ChatCompletionRequest } from '$lib/types/api';
+import { routeQuery, isAutoMode, getDefaultContext, type RoutingContext } from '$lib/services/model-router';
+import { getFocusAreaPrompt, type FocusAreaInfo } from '$lib/config/system-prompts';
 
 /**
  * System prompt for second opinion requests
@@ -30,6 +32,7 @@ IMPORTANT: At the end of your response, include a section titled "## Key Guidanc
  * - conversationId: string - The conversation to get context from
  * - sourceMessageIndex: number - Index of the assistant message to get second opinion on
  * - modelId: string - The model to use for the second opinion
+ * - areaId?: string - Optional area ID to include context (notes, documents)
  * - thinkingEnabled?: boolean - Enable extended thinking if supported
  * - thinkingBudgetTokens?: number - Budget for thinking tokens
  */
@@ -53,6 +56,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		conversationId: string;
 		sourceMessageIndex: number;
 		modelId: string;
+		areaId?: string;
 		thinkingEnabled?: boolean;
 		thinkingBudgetTokens?: number;
 	};
@@ -124,6 +128,54 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			);
 		}
 
+		// Load area context if areaId is provided
+		let focusAreaContext: FocusAreaInfo | null = null;
+		if (body.areaId) {
+			try {
+				const userId = locals.session.userId;
+				const focusArea = await postgresAreaRepository.findById(body.areaId, userId);
+
+				if (focusArea) {
+					focusAreaContext = {
+						id: focusArea.id,
+						name: focusArea.name,
+						context: focusArea.context,
+						spaceId: focusArea.spaceId
+					};
+
+					// Fetch documents if focus area has document IDs
+					if (focusArea.contextDocumentIds && focusArea.contextDocumentIds.length > 0) {
+						const documents = await Promise.all(
+							focusArea.contextDocumentIds.map(async (docId) => {
+								const doc = await postgresDocumentRepository.findById(docId, userId);
+								return doc;
+							})
+						);
+
+						// Filter out nulls and map to context format
+						const validDocs = documents.filter((doc): doc is NonNullable<typeof doc> => doc !== null);
+						if (validDocs.length > 0) {
+							focusAreaContext.contextDocuments = validDocs.map((doc) => ({
+								id: doc.id,
+								filename: doc.filename,
+								content: doc.content,
+								charCount: doc.charCount,
+								summary: doc.contentType === 'image' ? undefined : (doc.summary ?? undefined),
+								contentType: doc.contentType,
+								mimeType: doc.mimeType
+							}));
+							console.log(`Second opinion: loaded ${validDocs.length} document(s) from area "${focusArea.name}"`);
+						}
+					}
+
+					console.log(`Second opinion: loaded area context "${focusArea.name}"`);
+				}
+			} catch (error) {
+				// Log but don't fail - area context is optional enhancement
+				console.warn('Failed to load area context for second opinion:', error);
+			}
+		}
+
 		// Build message history up to (but not including) the source message
 		// This gives us the context the original assistant had
 		const messagesUpToSource = conversation.messages.slice(0, body.sourceMessageIndex);
@@ -133,12 +185,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const userMessageIndex = body.sourceMessageIndex - 1;
 		const userMessage = userMessageIndex >= 0 ? conversation.messages[userMessageIndex] : null;
 
+		// Build system prompt - include area context if available
+		let systemPrompt = SECOND_OPINION_SYSTEM_PROMPT;
+		if (focusAreaContext) {
+			const areaContextPrompt = getFocusAreaPrompt(focusAreaContext);
+			systemPrompt = `${SECOND_OPINION_SYSTEM_PROMPT}\n\n${areaContextPrompt}`;
+		}
+
 		// Build the messages for the second opinion request
 		const messages: ChatMessage[] = [
 			// System prompt for second opinion context
 			{
 				role: 'system',
-				content: SECOND_OPINION_SYSTEM_PROMPT
+				content: systemPrompt
 			}
 		];
 
@@ -167,11 +226,57 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			content: `The previous AI assistant responded:\n\n---\n${sourceMessage.content}\n---\n\nNow provide your independent perspective on this question.`
 		});
 
+		// Resolve AUTO model if needed
+		let resolvedModelId = body.modelId;
+		if (isAutoMode(body.modelId)) {
+			// Use the original user question for complexity analysis
+			// Handle both string and array content formats
+			let userQuery = '';
+			if (userMessage?.content) {
+				if (typeof userMessage.content === 'string') {
+					userQuery = userMessage.content;
+				} else if (Array.isArray(userMessage.content)) {
+					userQuery = (userMessage.content as Array<{ type: string; text?: string }>)
+						.filter(c => c.type === 'text' && c.text)
+						.map(c => c.text)
+						.join(' ');
+				}
+			}
+
+			// Build minimal routing context for second opinion
+			const routingContext: RoutingContext = {
+				...getDefaultContext(),
+				provider: 'anthropic', // Second opinion defaults to Anthropic
+				thinkingEnabled: !!body.thinkingEnabled,
+				userTier: 'pro',
+				spaceType: null,
+				spaceSlug: null,
+				areaId: null,
+				areaHasDocs: false,
+				isTaskPlanMode: false,
+				planModePhase: null,
+				conversationTurn: 1,
+				currentModel: null,
+				recentComplexityScores: []
+			};
+
+			const routingDecision = routeQuery(userQuery, routingContext);
+			resolvedModelId = routingDecision.selectedModel;
+
+			console.log('Second opinion AUTO routing:', {
+				originalQuery: userQuery.slice(0, 100),
+				score: routingDecision.complexity.score,
+				tier: routingDecision.tier,
+				selectedModel: resolvedModelId
+			});
+		}
+
 		// Check if extended thinking is enabled for this model
-		const thinkingEnabled = !!(body.thinkingEnabled && supportsExtendedThinking(body.modelId));
+		const thinkingEnabled = !!(body.thinkingEnabled && supportsExtendedThinking(resolvedModelId));
 
 		console.log('Second opinion request:', {
-			model: body.modelId,
+			model: resolvedModelId,
+			originalModelId: body.modelId,
 			messageCount: messages.length,
 			thinkingEnabled,
 			sourceMessageIndex: body.sourceMessageIndex
@@ -180,7 +285,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// Build the request
 		const thinkingBudget = body.thinkingBudgetTokens || 10000;
 		const chatRequest: ChatCompletionRequest = {
-			model: body.modelId,
+			model: resolvedModelId,
 			messages,
 			stream: true
 		};

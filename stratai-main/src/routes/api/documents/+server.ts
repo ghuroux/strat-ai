@@ -6,11 +6,22 @@
  */
 
 import { json } from '@sveltejs/kit';
+import type { Config } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
 import { parseFile, validateFile } from '$lib/server/file-parser';
 import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import { generateSummaryBackground, generateImageDescriptionBackground } from '$lib/server/summarization';
+
+/**
+ * Increase body size limit for file uploads
+ * Default is 512KB which is too small for images
+ */
+export const config: Config = {
+	body: {
+		maxSize: 10 * 1024 * 1024 // 10MB
+	}
+};
 
 /**
  * GET /api/documents

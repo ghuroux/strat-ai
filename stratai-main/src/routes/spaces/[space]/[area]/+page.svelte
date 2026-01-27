@@ -1017,6 +1017,7 @@
 					conversationId: conversation.id,
 					sourceMessageIndex: messageIndex,
 					modelId,
+					areaId: area?.id,
 					messages: contextMessages
 				})
 			});

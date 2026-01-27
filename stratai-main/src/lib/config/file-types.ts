@@ -10,6 +10,8 @@
 export const DOCUMENT_EXTENSIONS = [
 	'.pdf',
 	'.docx',
+	'.xlsx',
+	'.xls',
 	'.txt',
 	'.md',
 	'.csv',
@@ -48,7 +50,7 @@ export const ACCEPT_IMAGES = [...IMAGE_EXTENSIONS, ...IMAGE_MIME_TYPES].join(','
 export const ACCEPT_ALL = `${ACCEPT_DOCUMENTS},${ACCEPT_IMAGES}`;
 
 // Human-readable list for error messages and tooltips
-export const DOCUMENT_TYPES_DISPLAY = 'PDF, Word, TXT, Markdown, CSV, JSON, SQL, HTML, XML, YAML';
+export const DOCUMENT_TYPES_DISPLAY = 'PDF, Word, Excel, TXT, Markdown, CSV, JSON, SQL, HTML, XML, YAML';
 export const IMAGE_TYPES_DISPLAY = 'JPG, PNG, GIF, WebP';
 export const ALL_TYPES_DISPLAY = `${DOCUMENT_TYPES_DISPLAY}, and images`;
 
