@@ -18,6 +18,7 @@ Enable specialized AI capabilities within Spaces and Areas through reusable inst
 8. [Implementation Phases](#8-implementation-phases)
 9. [Edge Cases](#9-edge-cases)
 10. [Future Enhancements (V2)](#10-future-enhancements-v2)
+11. [Skill Enforcement Techniques](#11-skill-enforcement-techniques)
 
 ---
 
@@ -133,12 +134,20 @@ Skills can be attached at different levels of the hierarchy:
 
 ### Skill vs Document
 
+**Core Distinction:**
+- **Skills** = *How* to work (methodologies, quality standards, workflows, rules)
+- **Documents** = *What* we're working on (context, data, specs, reference materials)
+
+This means quality assurance, review checklists, and process standards belong in Skills—not scattered across documents. A financial analyst's DCF methodology is a Skill; the company's Q3 financials are a Document.
+
 | Aspect | Document | Skill |
 |--------|----------|-------|
 | **Purpose** | Reference information | Behavioral instructions |
 | **Content** | Facts, data, specs | Workflows, methodologies, rules |
 | **Injection** | Summary in prompt, full via tool | Summary in prompt, full via tool |
 | **Example** | "Q1 Budget Spreadsheet" | "Financial Analysis Methodology" |
+| **Changes** | Updated when data changes | Updated when process improves |
+| **Ownership** | Often external (uploaded) | Internal (team-created) |
 
 Both use the same pattern: **summary in prompt, full content via tool call**.
 
@@ -1038,6 +1047,359 @@ When providing financial analysis:
 - [Key risk 2]
 ```
 ```
+
+---
+
+## 11. Skill Enforcement Techniques
+
+> **Research-backed approaches for reliable skill adherence (2025-2026)**
+
+A key challenge with Skills is ensuring the AI *actually follows* the methodology rather than acknowledging it exists. Research shows LLM policy adherence rates vary from 31% to 69% without enforcement mechanisms.
+
+### The Problem
+
+Simply injecting skill content into prompts doesn't guarantee adherence. Models may:
+- Acknowledge the skill but not apply it
+- Apply it partially or inconsistently
+- Override it when user requests seem to conflict
+- Forget it in longer conversations
+
+**Root cause:** LLMs cannot inherently distinguish between system prompts and user prompts—everything is just text. They tend to prioritize the most recent instructions in the context window.
+
+---
+
+### Alternative Techniques Evaluated
+
+We evaluated seven alternative approaches against our baseline (summary + tool pattern):
+
+#### 1. DSPy-Style Programmatic Skills
+
+From [Stanford DSPy](https://dspy.ai/):
+
+```python
+# Define skills as executable signatures, not prose
+class FinancialAnalysis(dspy.Signature):
+    """Analyze company value using DCF methodology"""
+    company_data = dspy.InputField(desc="Financial metrics")
+
+    assumptions = dspy.OutputField(desc="Explicit assumptions")
+    methodology = dspy.OutputField(desc="DCF, Comparables, or LBO")
+    valuation = dspy.OutputField(desc="Range with sensitivity")
+
+# Optimizer automatically tunes prompts for adherence
+optimizer = dspy.MIPROv2(metric=accuracy_metric)
+optimized_skill = optimizer.compile(FinancialAnalysis, trainset=examples)
+```
+
+| Aspect | Assessment |
+|--------|------------|
+| **Adherence** | Higher - structured outputs enforced |
+| **Complexity** | High - requires DSPy integration |
+| **User authoring** | Harder - need to define schemas |
+| **Verdict** | **V2 consideration** for critical skills |
+
+**Reference:** [DSPy Optimization Study](https://arxiv.org/html/2507.03620v1) - "Accuracy improved from 46.2% to 64.0% on prompt evaluation tasks."
+
+#### 2. Constrained Decoding
+
+From [XGrammar](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar):
+
+Enforce output structure at token generation level—model can ONLY generate valid tokens matching a schema.
+
+| Aspect | Assessment |
+|--------|------------|
+| **Adherence** | 100% for structure |
+| **Availability** | NOT available via Claude/OpenAI APIs |
+| **Verdict** | **Not feasible** - requires self-hosted models |
+
+#### 3. Constitutional AI / Self-Critique Loop
+
+From [Anthropic's Constitutional AI](https://arxiv.org/abs/2212.08073):
+
+```
+Generate → Critique → Revise Loop
+─────────────────────────────────
+1. AI generates response
+2. AI critiques: "Did I follow the skill methodology?"
+3. AI revises based on critique
+4. Repeat until satisfactory
+```
+
+**Implementation:**
+```markdown
+After generating your response, self-critique:
+1. Did I follow each step in the skill workflow?
+2. Did I include all required output sections?
+3. Did I violate any constraints?
+
+If any answer is "no", revise your response before presenting.
+```
+
+| Aspect | Assessment |
+|--------|------------|
+| **Adherence** | Higher - self-verification catches errors |
+| **Complexity** | Low - just prompt engineering |
+| **Token cost** | 1.3-1.5x |
+| **Verdict** | **Strong V1 candidate** |
+
+**Reference:** [Constitutional AI Paper](https://arxiv.org/abs/2212.08073) - "Model-generated critiques progressively reduce errors."
+
+#### 4. Extended Thinking Integration
+
+From [Claude Extended Thinking](https://platform.claude.com/docs/en/build-with-claude/extended-thinking):
+
+```
+Use extended thinking for skill compliance checking
+──────────────────────────────────────────────────
+1. Enable extended thinking for skill-heavy responses
+2. Prompt: "In your thinking, verify each skill step"
+3. Thinking traces provide audit trail
+4. Summary shows methodology was followed
+```
+
+| Aspect | Assessment |
+|--------|------------|
+| **Adherence** | Higher - deliberate verification |
+| **Audit trail** | Built-in via thinking summary |
+| **Token cost** | Variable (budget_tokens) |
+| **Verdict** | **Strong V1 candidate** |
+
+**Reference:** [Extended Thinking Tips](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/extended-thinking-tips) - "Valuable for policy-heavy environments when Claude needs to verify compliance."
+
+#### 5. ToolGuard Pattern (Two-Phase Enforcement)
+
+From [IBM ToolGuard](https://arxiv.org/abs/2507.16459):
+
+```
+BUILDTIME: Compile skill → validation rules
+RUNTIME: Check compliance before/after response
+──────────────────────────────────────────────
+Skill: Financial Analysis
+Guards:
+  - MUST contain "Assumptions" section
+  - MUST specify methodology (DCF|Comparables|LBO)
+  - MUST include risk factors
+  - Token count for assumptions >= 50
+
+Post-generation: Validate → Pass/Fail → Retry if needed
+```
+
+| Aspect | Assessment |
+|--------|------------|
+| **Adherence** | High - deterministic validation |
+| **Complexity** | Medium - need validation engine |
+| **Determinism** | Guaranteed checks run |
+| **Verdict** | **Good V2 pattern** |
+
+**Reference:** [ToolGuard Research](https://arxiv.org/abs/2507.16459) - "31-69% baseline adherence without guards."
+
+#### 6. Cognitive Architecture (Procedural + Semantic Memory)
+
+From [Wheeler & Jeunen 2025](https://arxiv.org/abs/2505.03434):
+
+Separate LEARNER (semantic) from ACTOR (procedural):
+- Learner Agent monitors, identifies skills, adapts to context
+- Actor Agent (LLM) executes playbook, focuses on quality
+
+| Aspect | Assessment |
+|--------|------------|
+| **Adherence** | Potentially highest |
+| **Complexity** | Very high - multi-agent |
+| **Research maturity** | Emerging (2025) |
+| **Verdict** | **Over-engineered** for current stage |
+
+#### 7. Meta-Prompting (Prompt Optimization)
+
+From [OpenAI Cookbook](https://cookbook.openai.com/examples/enhance_your_prompts_with_meta_prompting):
+
+```
+Use LLM to optimize skill prompts for adherence
+───────────────────────────────────────────────
+1. User writes skill in natural language
+2. Meta-prompt optimizes for clarity/enforceability
+3. Test against examples, refine iteratively
+4. Store optimized version
+```
+
+| Aspect | Assessment |
+|--------|------------|
+| **Adherence** | Improved prompts = better following |
+| **User experience** | Better - AI helps write skills |
+| **One-time cost** | Optimization on skill creation |
+| **Verdict** | **Good V1.5 feature** |
+
+---
+
+### Recommended Hybrid Approach
+
+#### V1 Enforcement Stack
+
+Layer techniques that require no infrastructure changes:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  V1 SKILL ENFORCEMENT STACK                                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Layer 1: STRUCTURED SKILL TEMPLATE                         │
+│  ─────────────────────────────────────────────────────────  │
+│  • Required sections: Workflow, Output Format, Examples     │
+│  • MUST/NEVER constraints explicitly marked                 │
+│  • Counter-examples showing what NOT to do                  │
+│                                                             │
+│  Layer 2: SELF-CRITIQUE INSTRUCTION                         │
+│  ─────────────────────────────────────────────────────────  │
+│  • Add to skill prompt: "After generating, verify you       │
+│    followed each workflow step. Revise if needed."          │
+│  • ~1.3x token cost, meaningful adherence improvement       │
+│                                                             │
+│  Layer 3: EXTENDED THINKING FOR COMPLEX SKILLS              │
+│  ─────────────────────────────────────────────────────────  │
+│  • Skills can be marked `requires_thinking: true`           │
+│  • Enable extended thinking for those responses             │
+│  • Provides audit trail in thinking summary                 │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### V2 Additions
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  V2 ENFORCEMENT ADDITIONS                                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Layer 4: AI-ASSISTED SKILL AUTHORING                       │
+│  ─────────────────────────────────────────────────────────  │
+│  • Meta-prompt optimizes user-written skills                │
+│  • Suggests improvements for enforceability                 │
+│  • Addresses "users can't write good skills" problem        │
+│                                                             │
+│  Layer 5: POST-GENERATION VALIDATION                        │
+│  ─────────────────────────────────────────────────────────  │
+│  • Skills define validation_rules (required sections, etc.) │
+│  • Lightweight check after generation                       │
+│  • Retry loop if validation fails (max 2 retries)           │
+│                                                             │
+│  Layer 6: STRUCTURED OUTPUT SCHEMAS (critical skills)       │
+│  ─────────────────────────────────────────────────────────  │
+│  • For high-stakes skills (financial, legal, compliance)    │
+│  • JSON schema enforcement via API structured outputs       │
+│  • Guarantees structure, not content quality                │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### Estimated Adherence by Approach
+
+| Approach | Est. Adherence | Token Cost | Complexity |
+|----------|----------------|------------|------------|
+| Baseline (summary + tool) | 50-70% | 1x | Low |
+| + Structured templates | 60-75% | 1x | Low |
+| + Self-critique loop | 70-85% | 1.3x | Low |
+| + Extended thinking | 75-90% | 1.5-2x | Low |
+| + Post-gen validation | 85-95% | 1.5x + retries | Medium |
+| + Structured outputs | 95-100% (structure) | 1x | Medium |
+
+**V1 Target: 75-85% adherence** with layers 1-3, no infrastructure changes.
+
+---
+
+### V1 Skill Template (Enhanced)
+
+```markdown
+# [Skill Name]
+
+## When to Apply
+[Explicit conditions that trigger this methodology]
+
+## Required Workflow (MUST follow in order)
+1. [Step] → Verify: [what proves this step was done]
+2. [Step] → Verify: [checkpoint]
+3. [Step] → Verify: [checkpoint]
+...
+
+## Output Format (MUST match this structure)
+[Exact template the response must follow]
+
+## Constraints (NEVER violate)
+- [Hard constraint 1]
+- [Hard constraint 2]
+
+## Example Application
+
+**User asks:** "[Example query]"
+
+**Correct response:**
+[Full worked example showing methodology applied correctly]
+
+**Incorrect response (common mistake):**
+[Counter-example showing what NOT to do and why]
+
+## Self-Verification
+After generating your response, verify:
+- [ ] Followed each workflow step in order
+- [ ] Output matches required format
+- [ ] No constraints violated
+- [ ] All required sections present
+
+If any check fails, revise before presenting.
+```
+
+---
+
+### Database Schema Addition (V2)
+
+For enforcement features:
+
+```sql
+-- Add to skills table for V2 enforcement
+ALTER TABLE skills ADD COLUMN requires_thinking BOOLEAN DEFAULT false;
+ALTER TABLE skills ADD COLUMN validation_rules JSONB;  -- For post-gen validation
+ALTER TABLE skills ADD COLUMN output_schema JSONB;     -- For structured outputs
+ALTER TABLE skills ADD COLUMN complexity TEXT DEFAULT 'standard'
+  CHECK (complexity IN ('simple', 'standard', 'complex'));
+```
+
+---
+
+### Monitoring Skill Adherence
+
+Track whether skills are being followed:
+
+1. **Context transparency** - Show which skills were active (already planned)
+2. **User feedback** - "Did the AI follow the methodology?" thumbs up/down
+3. **Automated evaluation** - Sample responses, check against skill requirements
+4. **Thinking audit** - Review extended thinking summaries for compliance verification
+
+**Reference:** [LLM Reliability Evaluation](https://galileo.ai/blog/llm-reliability) - "Quality monitoring should assess instruction following as a key indicator."
+
+---
+
+### Research Sources
+
+**Instruction Adherence:**
+- [The Stability Trap: LLM Instruction Adherence Auditing](https://arxiv.org/html/2601.11783)
+- [Towards Verifiably Safe Tool Use](https://arxiv.org/html/2601.08012)
+- [Tool Calling Optimization](https://www.statsig.com/perspectives/tool-calling-optimization) - "Reliable agents are built, not wished into existence"
+
+**Enforcement Frameworks:**
+- [IBM ToolGuard](https://arxiv.org/abs/2507.16459) - Two-phase enforcement pattern
+- [Routine: Structural Planning](https://arxiv.org/pdf/2507.14447) - Workflow encoding
+- [Constitutional AI](https://arxiv.org/abs/2212.08073) - Self-critique methodology
+
+**Advanced Techniques:**
+- [DSPy Framework](https://dspy.ai/) - Programmatic prompt optimization
+- [Claude Extended Thinking](https://platform.claude.com/docs/en/build-with-claude/extended-thinking) - Reasoning traces
+- [Meta-Prompting Guide](https://www.promptingguide.ai/techniques/meta-prompting) - Prompt optimization
+- [Procedural Memory Research](https://arxiv.org/abs/2505.03434) - Cognitive architectures
+
+**Structured Generation:**
+- [Constrained Decoding Guide](https://www.aidancooper.co.uk/constrained-decoding/)
+- [XGrammar](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar)
+- [OpenAI Structured Outputs](https://platform.openai.com/docs/changelog)
 
 ---
 
