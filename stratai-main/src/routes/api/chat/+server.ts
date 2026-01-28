@@ -21,6 +21,10 @@ import { isSystemSpace } from '$lib/types/spaces';
 import { generateSummaryOnDemand, needsSummarization } from '$lib/server/summarization';
 import { commerceTools, executeCommerceTool, isCommerceTool } from '$lib/server/commerce/tools';
 import type { CommerceMessageContent } from '$lib/types/commerce';
+import { postgresIntegrationsRepository } from '$lib/server/persistence/integrations-postgres';
+import { postgresIntegrationCredentialsRepository } from '$lib/server/persistence/integration-credentials-postgres';
+import { calendarTools, isCalendarTool, executeCalendarTool } from '$lib/server/integrations/providers/calendar/tools';
+import { refreshAccessToken, tokensToCredentials } from '$lib/server/integrations/providers/calendar/oauth';
 
 /**
  * Context for tracking usage across streaming responses
@@ -876,6 +880,161 @@ const commerceToolsOpenAI = [
 	}
 ];
 
+// Calendar tools - OpenAI format (type: 'function', function.parameters)
+// Mirrors the Anthropic-format tools in calendar/tools.ts
+const calendarToolsOpenAI = [
+	{
+		type: 'function' as const,
+		function: {
+			name: 'calendar_list_events',
+			description: 'List calendar events within a specified time range. Use this to see what meetings are scheduled.',
+			parameters: {
+				type: 'object',
+				properties: {
+					startDateTime: {
+						type: 'string',
+						description: 'Start of the time range in ISO 8601 format (e.g., "2026-01-28T00:00:00Z"). Use today\'s date if not specified.'
+					},
+					endDateTime: {
+						type: 'string',
+						description: 'End of the time range in ISO 8601 format (e.g., "2026-01-28T23:59:59Z"). Defaults to end of start day if not specified.'
+					},
+					maxResults: {
+						type: 'string',
+						description: 'Maximum number of events to return (default: 10, max: 50)'
+					}
+				},
+				required: ['startDateTime', 'endDateTime']
+			}
+		}
+	},
+	{
+		type: 'function' as const,
+		function: {
+			name: 'calendar_get_event',
+			description: 'Get detailed information about a specific calendar event by its ID.',
+			parameters: {
+				type: 'object',
+				properties: {
+					eventId: {
+						type: 'string',
+						description: 'The unique identifier of the calendar event'
+					}
+				},
+				required: ['eventId']
+			}
+		}
+	},
+	{
+		type: 'function' as const,
+		function: {
+			name: 'calendar_create_event',
+			description: 'Create a new calendar event. Can include attendees and create a Teams meeting link.',
+			parameters: {
+				type: 'object',
+				properties: {
+					subject: {
+						type: 'string',
+						description: 'The title/subject of the meeting'
+					},
+					start: {
+						type: 'string',
+						description: 'Start time in ISO 8601 format (e.g., "2026-01-28T14:00:00")'
+					},
+					end: {
+						type: 'string',
+						description: 'End time in ISO 8601 format (e.g., "2026-01-28T15:00:00")'
+					},
+					timeZone: {
+						type: 'string',
+						description: 'Time zone for the event (e.g., "America/New_York", "Europe/London"). Defaults to UTC.'
+					},
+					body: {
+						type: 'string',
+						description: 'Description or agenda for the meeting (supports HTML)'
+					},
+					location: {
+						type: 'string',
+						description: 'Location of the meeting (e.g., "Conference Room A" or "Virtual")'
+					},
+					attendees: {
+						type: 'string',
+						description: 'Comma-separated list of attendee email addresses'
+					},
+					createTeamsMeeting: {
+						type: 'string',
+						description: 'Set to "true" to create a Microsoft Teams meeting with the event',
+						enum: ['true', 'false']
+					}
+				},
+				required: ['subject', 'start', 'end']
+			}
+		}
+	},
+	{
+		type: 'function' as const,
+		function: {
+			name: 'calendar_get_free_busy',
+			description: 'Check availability (free/busy status) for one or more people during a time range.',
+			parameters: {
+				type: 'object',
+				properties: {
+					emails: {
+						type: 'string',
+						description: 'Comma-separated list of email addresses to check availability for'
+					},
+					startDateTime: {
+						type: 'string',
+						description: 'Start of the time range in ISO 8601 format'
+					},
+					endDateTime: {
+						type: 'string',
+						description: 'End of the time range in ISO 8601 format'
+					},
+					timeZone: {
+						type: 'string',
+						description: 'Time zone for the query (e.g., "America/New_York"). Defaults to UTC.'
+					}
+				},
+				required: ['emails', 'startDateTime', 'endDateTime']
+			}
+		}
+	},
+	{
+		type: 'function' as const,
+		function: {
+			name: 'calendar_find_meeting_times',
+			description: 'Find available time slots that work for all specified attendees.',
+			parameters: {
+				type: 'object',
+				properties: {
+					attendees: {
+						type: 'string',
+						description: 'Comma-separated list of attendee email addresses'
+					},
+					durationMinutes: {
+						type: 'string',
+						description: 'Duration of the meeting in minutes (e.g., "30", "60")'
+					},
+					startDateTime: {
+						type: 'string',
+						description: 'Start of the search range in ISO 8601 format'
+					},
+					endDateTime: {
+						type: 'string',
+						description: 'End of the search range in ISO 8601 format'
+					},
+					timeZone: {
+						type: 'string',
+						description: 'Time zone for the query. Defaults to UTC.'
+					}
+				},
+				required: ['attendees', 'durationMinutes', 'startDateTime', 'endDateTime']
+			}
+		}
+	}
+];
+
 // Document info for tool context
 interface DocumentInfo {
 	filename: string;
@@ -889,9 +1048,10 @@ interface DocumentInfo {
  * Anthropic uses input_schema, OpenAI uses type:'function' with parameters
  * Optionally includes document reading tool when documents are available
  * Optionally includes commerce tools for shopping functionality
+ * Optionally includes calendar tools for meeting/scheduling functionality
  */
-function getToolsForModel(model: string, options: { includeDocumentTool?: boolean; includeCommerceTools?: boolean } = {}): ToolDefinition[] {
-	const { includeDocumentTool = false, includeCommerceTools = false } = options;
+function getToolsForModel(model: string, options: { includeDocumentTool?: boolean; includeCommerceTools?: boolean; includeCalendarTools?: boolean } = {}): ToolDefinition[] {
+	const { includeDocumentTool = false, includeCommerceTools = false, includeCalendarTools = false } = options;
 	const lowerModel = model.toLowerCase();
 
 	// Check if it's an Anthropic/Claude model
@@ -902,6 +1062,9 @@ function getToolsForModel(model: string, options: { includeDocumentTool?: boolea
 		}
 		if (includeCommerceTools) {
 			tools.push(...commerceTools);
+		}
+		if (includeCalendarTools) {
+			tools.push(...calendarTools);
 		}
 		return tools;
 	}
@@ -915,6 +1078,10 @@ function getToolsForModel(model: string, options: { includeDocumentTool?: boolea
 	if (includeCommerceTools) {
 		// Use OpenAI-formatted commerce tools for non-Claude models
 		tools.push(...commerceToolsOpenAI);
+	}
+	if (includeCalendarTools) {
+		// Use OpenAI-formatted calendar tools for non-Claude models
+		tools.push(...calendarToolsOpenAI);
 	}
 	// Cast to unknown first, then to ToolDefinition[] to satisfy type checker
 	return tools as unknown as ToolDefinition[];
@@ -955,16 +1122,70 @@ When presenting search results:
 2. Always mention the actual price and which site it's from
 3. If a user mentions a budget, filter and prioritize results within that budget`;
 
+// System message for calendar tools
+const calendarSystemMessage = `You have access to calendar tools for managing meetings and checking availability.
+
+IMPORTANT: When the user asks about their calendar, meetings, schedule, or wants to book time, you MUST use the appropriate calendar tool. Do NOT answer from assumptions.
+
+Available calendar tools:
+- calendar_list_events: List events in a time range. Use this when users ask "what's on my calendar" or "what meetings do I have".
+- calendar_get_event: Get details about a specific event by ID.
+- calendar_create_event: Create a new meeting. Can add attendees and create a Microsoft Teams meeting link.
+- calendar_get_free_busy: Check availability/busy status for one or more people.
+- calendar_find_meeting_times: Find time slots that work for all specified attendees.
+
+Date/Time handling:
+- Use ISO 8601 format for all dates (e.g., "2026-01-28T14:00:00")
+- If user says "today", use today's date
+- If user says "tomorrow", use tomorrow's date
+- If user says "next week", calculate the appropriate date range
+- For time zones, use the user's timezone if known, otherwise default to UTC
+
+Examples of when to use calendar tools:
+- "What's on my calendar today?" → calendar_list_events with today's date range
+- "Schedule a meeting with john@example.com tomorrow at 2pm" → first ask to confirm details, THEN calendar_create_event
+- "When is everyone free for a 30-minute meeting this week?" → calendar_find_meeting_times
+- "Is Sarah available tomorrow afternoon?" → calendar_get_free_busy
+
+⚠️ CRITICAL - BEFORE CREATING ANY CALENDAR EVENT:
+You MUST confirm ALL of the following with the user before calling calendar_create_event:
+1. **Email address**: Verify the EXACT email address (do not guess or auto-complete)
+2. **Date and time**: Confirm the specific date, start time, and duration
+3. **Meeting type**: Ask if they want a Microsoft Teams video call link included
+4. **Meeting title**: Propose a clear subject line and get approval
+
+DO NOT create a calendar event until the user has explicitly confirmed these details.
+If ANY information is missing or ambiguous, ASK for clarification first.
+
+Example confirmation flow:
+User: "Schedule a meeting with Gabriel tomorrow at 2pm"
+Assistant: "I'll help you schedule that meeting. Before I create it, please confirm:
+- **Attendee email**: What is Gabriel's email address?
+- **Duration**: How long should the meeting be? (30 min, 1 hour, etc.)
+- **Teams meeting**: Should I include a Microsoft Teams video link?
+- **Title**: What should I call this meeting?
+
+Once you confirm these details, I'll create the invite."
+
+NEVER skip the confirmation step for calendar_create_event. This prevents sending invites to wrong people.`;
+
 /**
- * Prepare messages with search and commerce system context
+ * Prepare messages with search, commerce, and calendar system context
  * Adds or augments the system message with tool instructions
  * Preserves cache_control if present on the system message
  */
-function prepareMessagesWithSearchContext(messages: ChatCompletionRequest['messages']): ChatCompletionRequest['messages'] {
+function prepareMessagesWithSearchContext(
+	messages: ChatCompletionRequest['messages'],
+	options: { includeCalendarContext?: boolean } = {}
+): ChatCompletionRequest['messages'] {
+	const { includeCalendarContext = false } = options;
 	const result = [...messages];
 
-	// Combined context for all tools
-	const toolContext = `${searchSystemMessage}\n\n${commerceSystemMessage}`;
+	// Combined context for all tools (conditionally include calendar)
+	let toolContext = `${searchSystemMessage}\n\n${commerceSystemMessage}`;
+	if (includeCalendarContext) {
+		toolContext += `\n\n${calendarSystemMessage}`;
+	}
 
 	// Check if there's already a system message
 	const systemIndex = result.findIndex(m => m.role === 'system');
@@ -1041,6 +1262,73 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	} catch {
 		// Non-critical - temporal context will use default timezone
 		debugLog('CHAT', 'Failed to fetch user timezone, using default');
+	}
+
+	// Check if user has calendar integration connected
+	// This makes calendar tools available in ALL chat contexts (one-size-fits-all approach)
+	let calendarAccessToken: string | null = null;
+	try {
+		const calendarIntegration = await postgresIntegrationsRepository.findByUserAndService(
+			sessionUserId,
+			'calendar'
+		);
+		if (calendarIntegration && calendarIntegration.status === 'connected') {
+			// Check if access token is still valid
+			const hasValidToken = await postgresIntegrationCredentialsRepository.hasValidAccessToken(calendarIntegration.id);
+
+			if (hasValidToken) {
+				// Token is valid, use it directly
+				const accessTokenCred = await postgresIntegrationCredentialsRepository.getDecryptedCredential(
+					calendarIntegration.id,
+					'access_token'
+				);
+				if (accessTokenCred) {
+					calendarAccessToken = accessTokenCred.value;
+					debugLog('CHAT', 'Calendar integration connected - using valid access token');
+				}
+			} else {
+				// Token expired, try to refresh
+				debugLog('CHAT', 'Calendar access token expired, attempting refresh...');
+				const refreshTokenCred = await postgresIntegrationCredentialsRepository.getDecryptedCredential(
+					calendarIntegration.id,
+					'refresh_token'
+				);
+
+				if (refreshTokenCred) {
+					try {
+						// Refresh the tokens
+						const newTokens = await refreshAccessToken(refreshTokenCred.value);
+						const newCredentials = tokensToCredentials(newTokens);
+
+						// Store the new credentials
+						for (const cred of newCredentials) {
+							await postgresIntegrationCredentialsRepository.upsert({
+								integrationId: calendarIntegration.id,
+								credentialType: cred.type,
+								value: cred.value,
+								expiresAt: cred.expiresAt,
+								scope: cred.scope
+							});
+						}
+
+						// Use the new access token
+						calendarAccessToken = newTokens.accessToken;
+						debugLog('CHAT', 'Calendar tokens refreshed successfully');
+					} catch (refreshError) {
+						console.error('Failed to refresh calendar token:', refreshError);
+						// Mark integration as needing reconnection
+						await postgresIntegrationsRepository.updateStatus(calendarIntegration.id, 'error');
+						debugLog('CHAT', 'Calendar token refresh failed - user needs to reconnect');
+					}
+				} else {
+					debugLog('CHAT', 'No refresh token available for calendar');
+				}
+			}
+		}
+	} catch (error) {
+		// Non-critical - calendar tools just won't be available
+		console.error('Calendar integration check failed:', error);
+		debugLog('CHAT', 'Failed to check calendar integration');
 	}
 
 	// Parse request body
@@ -1486,7 +1774,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const needsToolHandling = searchEnabled || hasReferenceDocuments;
 
 		if (needsToolHandling) {
-			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision, userTimezone, searchEnabled);
+			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision, userTimezone, searchEnabled, calendarAccessToken);
 		}
 
 		// Inject platform system prompt with space + focus area + custom space context (before cache breakpoints so it gets cached)
@@ -1613,7 +1901,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 2. Collect ALL results
  * 3. Send ALL tool_result blocks together in ONE message
  */
-async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string, routingDecision?: RoutingDecision | null, timezone?: string, searchEnabled?: boolean): Promise<Response> {
+async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled: boolean = false, space?: SpaceType | null, assistContext?: AssistContext | null, focusedTask?: FocusedTaskInfo | null, planModeContext?: PlanModeContext | null, focusArea?: FocusAreaInfo | null, spaceInfo?: SpaceInfo | null, userId?: string, organizationId?: string, routingDecision?: RoutingDecision | null, timezone?: string, searchEnabled?: boolean, calendarAccessToken?: string | null): Promise<Response> {
 	const encoder = new TextEncoder();
 
 	// Build usage context for tracking (if we have the required data)
@@ -1667,7 +1955,9 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	const messagesWithImageContext = injectImageContext(messagesWithPlatformPrompt, body.model, focusArea, spaceInfo);
 
 	const cachedMessages = addCacheBreakpoints(messagesWithImageContext, body.model);
-	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages);
+	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages, {
+		includeCalendarContext: !!calendarAccessToken
+	});
 	
 	// Final safety check: enforce Anthropic's 4 cache_control block limit
 	const finalMessages = enforceCacheControlLimit(messagesWithSearchContext, body.model);
@@ -1712,11 +2002,13 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 				// Build request options with optional max_tokens constraint
 				// Enable commerce tools for product search/purchase functionality
 				const includeCommerceTools = true; // TODO: Control via space setting or feature flag
+				// Enable calendar tools if user has calendar connected
+				const includeCalendarTools = !!calendarAccessToken;
 				const toolRequestOptions: typeof body & { max_tokens?: number } = {
 					...body,
 					messages: finalMessages,
 					stream: false,
-					tools: getToolsForModel(body.model, { includeDocumentTool: hasDocuments, includeCommerceTools })
+					tools: getToolsForModel(body.model, { includeDocumentTool: hasDocuments, includeCommerceTools, includeCalendarTools })
 				};
 
 				// Structural constraint: limit response length during ALL of Plan Mode elicitation
@@ -2004,6 +2296,54 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 									content: `Commerce operation failed: ${commerceError instanceof Error ? commerceError.message : 'Unknown error'}`
 								});
 							}
+						} else if (isCalendarTool(toolCall.function?.name || '')) {
+							// Calendar tool - events, scheduling, availability
+							const toolName = toolCall.function?.name || '';
+							const args = JSON.parse(toolCall.function?.arguments || '{}');
+
+							debugLog('TOOLS', `Executing calendar tool: ${toolName}`, args);
+
+							// Check if we have calendar access
+							if (!calendarAccessToken) {
+								toolResults.push({
+									tool_call_id: toolCall.id,
+									content: 'Calendar not connected. Please connect your calendar in Settings to use calendar features.'
+								});
+							} else {
+								// Send status for calendar operations
+								const statusMessage = toolName === 'calendar_list_events'
+									? 'Checking your calendar...'
+									: toolName === 'calendar_get_event'
+										? 'Getting event details...'
+										: toolName === 'calendar_create_event'
+											? 'Creating meeting...'
+											: toolName === 'calendar_get_free_busy'
+												? 'Checking availability...'
+												: 'Finding meeting times...';
+
+								sendSSE(controller, encoder, {
+									type: 'status',
+									status: 'calendar',
+									query: statusMessage
+								});
+
+								try {
+									const result = await executeCalendarTool(toolName, args, calendarAccessToken);
+
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: result
+									});
+
+									debugLog('TOOLS', `Calendar tool ${toolName} completed successfully`);
+								} catch (calendarError) {
+									console.error('Calendar tool error:', calendarError);
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: `Calendar operation failed: ${calendarError instanceof Error ? calendarError.message : 'Unknown error'}`
+									});
+								}
+							}
 						} else {
 							// Unknown tool - still need to provide a result
 							toolResults.push({
@@ -2059,7 +2399,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					const finalResponse = await createChatCompletionWithTools({
 						...body,
 						messages: [...messagesWithToolResults, synthesisInstruction],
-						tools: getToolsForModel(body.model, { includeCommerceTools }),
+						tools: getToolsForModel(body.model, { includeCommerceTools, includeCalendarTools }),
 						stream: true
 					});
 

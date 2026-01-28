@@ -157,6 +157,8 @@ export class CalendarClient {
 		headers.set('Authorization', `Bearer ${this.accessToken}`);
 		headers.set('Content-Type', 'application/json');
 
+		console.log(`[Calendar API] ${options.method || 'GET'} ${url}`);
+
 		const response = await fetch(url, {
 			...options,
 			headers
@@ -165,15 +167,23 @@ export class CalendarClient {
 		if (!response.ok) {
 			const errorData = await response.json().catch(() => ({}));
 			const errorMessage = errorData.error?.message || `Request failed: ${response.status}`;
+			console.error('[Calendar API] Error response:', {
+				status: response.status,
+				statusText: response.statusText,
+				error: errorData
+			});
 			throw new Error(errorMessage);
 		}
 
 		// Handle 204 No Content
 		if (response.status === 204) {
+			console.log('[Calendar API] Response: 204 No Content');
 			return {} as T;
 		}
 
-		return response.json();
+		const data = await response.json();
+		console.log(`[Calendar API] Response: ${response.status} OK`);
+		return data;
 	}
 
 	// ==========================================================================

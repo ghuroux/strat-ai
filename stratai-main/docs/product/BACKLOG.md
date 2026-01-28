@@ -256,6 +256,33 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 
 ---
 
+## Calendar Integration Polish
+
+**Status**: Core functionality complete, polish needed
+
+> See `docs/features/CALENDAR_INTEGRATION.md` for full specification
+
+### Completed ✅
+- [x] Microsoft Graph OAuth flow (multi-tenant)
+- [x] Calendar listing tool (`calendar_list_events`)
+- [x] Meeting creation with Teams links (`calendar_create_event`)
+- [x] AI confirmation before creating events
+- [x] Calendar status animation in Quick Chat
+- [x] Token refresh for expired access tokens
+
+### Polish Items
+- [ ] Calendar status animation in Area chat, Task chat, Subtask chat
+  - Currently only shows in Quick Chat
+  - Need to wire up `AIStatusIndicator` with `status="calendar"` in other chat contexts
+- [ ] Cleaner post-creation response
+  - AI currently shows verbose tool result + additional commentary
+  - Consider: context management to reduce repetition in tool acknowledgments
+- [ ] Free/busy checking (`calendar_get_free_busy`)
+- [ ] Find meeting times (`calendar_find_meeting_times`)
+- [ ] Production deployment (Azure redirect URI, env vars)
+
+---
+
 ## Future Phases (0.4+)
 
 | Phase | Goal | Priority |
@@ -307,4 +334,4 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 
 ---
 
-*Last Updated: January 23, 2026*
+*Last Updated: January 28, 2026*

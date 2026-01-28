@@ -8,6 +8,8 @@
  */
 
 import type { IntegrationToolDefinition } from '$lib/types/integrations';
+import type { ToolDefinition } from '$lib/types/api';
+import { CalendarClient } from './client';
 
 // ============================================================================
 // Tool Definitions
@@ -335,4 +337,118 @@ export function formatMeetingTimesForAI(
 	});
 
 	return `Available time slots:\n\n${lines.join('\n')}`;
+}
+
+// ============================================================================
+// Chat Integration Helpers
+// ============================================================================
+
+/**
+ * Calendar tools in Anthropic ToolDefinition format for chat integration
+ */
+export const calendarTools: ToolDefinition[] = getCalendarToolDefinitions().map(tool => ({
+	name: tool.name,
+	description: tool.description,
+	input_schema: {
+		type: 'object' as const,
+		properties: tool.parameters.properties,
+		required: tool.parameters.required || []
+	}
+}));
+
+/**
+ * Check if a tool name is a calendar tool
+ */
+export function isCalendarTool(toolName: string): boolean {
+	return toolName.startsWith('calendar_');
+}
+
+/**
+ * Execute a calendar tool and return formatted result
+ */
+export async function executeCalendarTool(
+	toolName: string,
+	input: Record<string, unknown>,
+	accessToken: string
+): Promise<string> {
+	const client = new CalendarClient(accessToken);
+
+	switch (toolName) {
+		case 'calendar_list_events': {
+			const startDateTime = input.startDateTime as string;
+			const endDateTime = input.endDateTime as string;
+			const maxResults = input.maxResults ? parseInt(input.maxResults as string, 10) : 10;
+
+			const events = await client.listEvents(startDateTime, endDateTime, { maxResults });
+			return formatEventsForAI(events);
+		}
+
+		case 'calendar_get_event': {
+			const eventId = input.eventId as string;
+			const event = await client.getEvent(eventId);
+			if (!event) {
+				return 'Event not found.';
+			}
+			return formatEventsForAI([event]);
+		}
+
+		case 'calendar_create_event': {
+			// Debug logging for event creation
+			const createInput = {
+				subject: input.subject as string,
+				start: input.start as string,
+				end: input.end as string,
+				timeZone: (input.timeZone as string) || 'UTC',
+				body: input.body as string | undefined,
+				location: input.location as string | undefined,
+				attendees: input.attendees
+					? (input.attendees as string).split(',').map(e => e.trim())
+					: undefined,
+				isOnlineMeeting: input.createTeamsMeeting === 'true'
+			};
+			console.log('[Calendar] Creating event with input:', JSON.stringify(createInput, null, 2));
+
+			const event = await client.createEvent(createInput);
+			console.log('[Calendar] Event created successfully:', JSON.stringify({
+				id: event.id,
+				subject: event.subject,
+				start: event.start,
+				end: event.end,
+				webLink: event.webLink,
+				attendees: event.attendees?.length
+			}, null, 2));
+
+			return formatCreatedEventForAI(event);
+		}
+
+		case 'calendar_get_free_busy': {
+			const emails = (input.emails as string).split(',').map(e => e.trim());
+			const startDateTime = input.startDateTime as string;
+			const endDateTime = input.endDateTime as string;
+			const timeZone = (input.timeZone as string) || 'UTC';
+
+			const freeBusy = await client.getFreeBusy(emails, startDateTime, endDateTime, timeZone);
+			return formatFreeBusyForAI(freeBusy);
+		}
+
+		case 'calendar_find_meeting_times': {
+			const attendees = (input.attendees as string).split(',').map(e => e.trim());
+			const durationMinutes = parseInt(input.durationMinutes as string, 10);
+			const startDateTime = input.startDateTime as string;
+			const endDateTime = input.endDateTime as string;
+			const timeZone = (input.timeZone as string) || 'UTC';
+
+			const suggestions = await client.findMeetingTimes(
+				attendees,
+				durationMinutes,
+				startDateTime,
+				endDateTime,
+				timeZone
+			);
+			return formatMeetingTimesForAI(suggestions);
+		}
+
+		default:
+			throw new Error(`Unknown calendar tool: ${toolName}`);
+	}
 }

@@ -2,7 +2,7 @@
 	import { fade, fly } from 'svelte/transition';
 
 	interface Props {
-		status: 'thinking' | 'searching' | 'processing';
+		status: 'thinking' | 'searching' | 'processing' | 'calendar';
 		query?: string;
 		sources?: Array<{ title: string; url: string }>;
 	}
@@ -25,12 +25,12 @@
 	<!-- Main orb area -->
 	<div class="orb-area">
 		<!-- Pulse rings (always present, intensity varies by state) -->
-		<div class="pulse-ring pulse-ring-1" class:searching={status === 'searching'}></div>
-		<div class="pulse-ring pulse-ring-2" class:searching={status === 'searching'}></div>
-		<div class="pulse-ring pulse-ring-3" class:searching={status === 'searching'}></div>
+		<div class="pulse-ring pulse-ring-1" class:searching={status === 'searching'} class:calendar={status === 'calendar'}></div>
+		<div class="pulse-ring pulse-ring-2" class:searching={status === 'searching'} class:calendar={status === 'calendar'}></div>
+		<div class="pulse-ring pulse-ring-3" class:searching={status === 'searching'} class:calendar={status === 'calendar'}></div>
 
 		<!-- Central orb -->
-		<div class="orb" class:searching={status === 'searching'}>
+		<div class="orb" class:searching={status === 'searching'} class:calendar={status === 'calendar'}>
 			<div class="orb-inner"></div>
 
 			<!-- Search icon overlay when searching -->
@@ -44,6 +44,18 @@
 					/>
 				</svg>
 			{/if}
+
+			<!-- Calendar icon overlay when checking calendar -->
+			{#if status === 'calendar'}
+				<svg class="calendar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" in:fade={{ duration: 200 }}>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+					/>
+				</svg>
+			{/if}
 		</div>
 
 		<!-- Orbiting elements when searching -->
@@ -51,6 +63,14 @@
 			<div class="orbit-track">
 				<div class="orbit-dot orbit-dot-1"></div>
 				<div class="orbit-dot orbit-dot-2"></div>
+			</div>
+		{/if}
+
+		<!-- Orbiting elements when checking calendar -->
+		{#if status === 'calendar'}
+			<div class="orbit-track calendar-orbit">
+				<div class="orbit-dot calendar-dot orbit-dot-1"></div>
+				<div class="orbit-dot calendar-dot orbit-dot-2"></div>
 			</div>
 		{/if}
 	</div>
@@ -63,6 +83,11 @@
 				<span class="status-label" in:fade={{ duration: 150 }}>Thinking</span>
 			{:else if status === 'searching'}
 				<span class="status-label searching" in:fade={{ duration: 150 }}>Searching the web</span>
+				{#if query}
+					<span class="query-text" in:fly={{ y: 5, duration: 200, delay: 100 }}>"{query}"</span>
+				{/if}
+			{:else if status === 'calendar'}
+				<span class="status-label calendar" in:fade={{ duration: 150 }}>Checking calendar</span>
 				{#if query}
 					<span class="query-text" in:fly={{ y: 5, duration: 200, delay: 100 }}>"{query}"</span>
 				{/if}
@@ -154,6 +179,13 @@
 		animation: orbPulseSearch 1.5s ease-in-out infinite;
 	}
 
+	.orb.calendar {
+		width: 20px;
+		height: 20px;
+		background: linear-gradient(135deg, #10b981 0%, #14b8a6 50%, #06b6d4 100%);
+		animation: orbPulseCalendar 1.5s ease-in-out infinite;
+	}
+
 	.orb-inner {
 		position: absolute;
 		inset: 2px;
@@ -176,6 +208,15 @@
 		animation: searchIconPulse 1s ease-in-out infinite;
 	}
 
+	.calendar-icon {
+		width: 11px;
+		height: 11px;
+		color: white;
+		position: relative;
+		z-index: 2;
+		animation: searchIconPulse 1s ease-in-out infinite;
+	}
+
 	/* Pulse Rings */
 	.pulse-ring {
 		position: absolute;
@@ -189,6 +230,11 @@
 	.pulse-ring.searching {
 		border-color: rgba(139, 92, 246, 0.5);
 		animation: pulseRingSearch 1.5s ease-out infinite;
+	}
+
+	.pulse-ring.calendar {
+		border-color: rgba(16, 185, 129, 0.5);
+		animation: pulseRingCalendar 1.5s ease-out infinite;
 	}
 
 	.pulse-ring-1 { animation-delay: 0s; }
@@ -224,6 +270,15 @@
 		transform: translateX(-50%);
 	}
 
+	.orbit-dot.calendar-dot {
+		background: linear-gradient(135deg, #10b981, #14b8a6);
+		box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+	}
+
+	.calendar-orbit {
+		animation: orbitRotate 4s linear infinite;
+	}
+
 	/* Status Content */
 	.status-content {
 		flex: 1;
@@ -252,6 +307,13 @@
 
 	.status-label.searching {
 		background: linear-gradient(90deg, #60a5fa 0%, #a78bfa 50%, #60a5fa 100%);
+		background-size: 200% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
+	}
+
+	.status-label.calendar {
+		background: linear-gradient(90deg, #34d399 0%, #2dd4bf 50%, #34d399 100%);
 		background-size: 200% 100%;
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -357,6 +419,17 @@
 		}
 	}
 
+	@keyframes orbPulseCalendar {
+		0%, 100% {
+			transform: scale(1);
+			box-shadow: 0 0 12px rgba(16, 185, 129, 0.6), 0 0 24px rgba(20, 184, 166, 0.4);
+		}
+		50% {
+			transform: scale(1.15);
+			box-shadow: 0 0 18px rgba(16, 185, 129, 0.8), 0 0 36px rgba(20, 184, 166, 0.6);
+		}
+	}
+
 	@keyframes innerGlow {
 		0%, 100% { opacity: 0.7; }
 		50% { opacity: 1; }
@@ -374,6 +447,17 @@
 	}
 
 	@keyframes pulseRingSearch {
+		0% {
+			transform: scale(1);
+			opacity: 0.7;
+		}
+		100% {
+			transform: scale(2.2);
+			opacity: 0;
+		}
+	}
+
+	@keyframes pulseRingCalendar {
 		0% {
 			transform: scale(1);
 			opacity: 0.7;
@@ -474,7 +558,22 @@
 		border-color: rgba(124, 58, 237, 0.4);
 	}
 
+	:global(html.light) .pulse-ring.calendar {
+		border-color: rgba(5, 150, 105, 0.4);
+	}
+
 	:global(html.light) .orbit-dot {
 		box-shadow: 0 0 6px rgba(124, 58, 237, 0.5);
+	}
+
+	:global(html.light) .orbit-dot.calendar-dot {
+		box-shadow: 0 0 6px rgba(5, 150, 105, 0.5);
+	}
+
+	:global(html.light) .status-label.calendar {
+		background: linear-gradient(90deg, #059669 0%, #0d9488 50%, #059669 100%);
+		background-size: 200% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
 	}
 </style>

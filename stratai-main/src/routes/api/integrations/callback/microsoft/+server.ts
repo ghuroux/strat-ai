@@ -40,11 +40,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const state = url.searchParams.get('state');
 	const error = url.searchParams.get('error');
 	const errorDescription = url.searchParams.get('error_description');
+	const adminConsent = url.searchParams.get('admin_consent');
 
 	// Default return URL (settings page with integrations section)
 	let returnUrl = '/settings';
 
 	try {
+		// Handle admin consent response (different from regular OAuth)
+		// Admin consent returns: ?admin_consent=True&tenant={tenant_id}
+		if (adminConsent === 'True') {
+			console.log('Admin consent granted for tenant');
+			return redirect(302, `${returnUrl}?admin_consent=granted`);
+		}
+
 		// Handle OAuth errors (user denied consent, etc.)
 		if (error) {
 			console.error('OAuth error:', error, errorDescription);
@@ -54,7 +62,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 		// Validate required parameters
 		if (!code || !state) {
-			return redirect(302, `${returnUrl}?error=${encodeURIComponent('Missing authorization code or state')}`);
+			return redirect(302, `${returnUrl}?error=${encodeURIComponent('Missing authorization code or state. Please try connecting again.')}`);
 		}
 
 		// Validate state token (CSRF protection)

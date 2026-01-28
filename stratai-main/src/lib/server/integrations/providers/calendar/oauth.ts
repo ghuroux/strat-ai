@@ -86,8 +86,9 @@ export function getAuthorizationUrl(state: string): string {
 		response_mode: 'query',
 		scope: config.scopes.join(' '),
 		state: state,
-		// Request consent for all scopes (useful for first-time connection)
-		prompt: 'consent'
+		// Use select_account to allow switching users without forcing full consent
+		// 'consent' was causing issues with admin approval in multi-tenant scenarios
+		prompt: 'select_account'
 	});
 
 	return `${config.authorizationUrl}?${params.toString()}`;
