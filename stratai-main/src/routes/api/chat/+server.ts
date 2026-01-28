@@ -1167,7 +1167,23 @@ Assistant: "I'll help you schedule that meeting. Before I create it, please conf
 
 Once you confirm these details, I'll create the invite."
 
-NEVER skip the confirmation step for calendar_create_event. This prevents sending invites to wrong people.`;
+NEVER skip the confirmation step for calendar_create_event. This prevents sending invites to wrong people.
+
+✅ AFTER SUCCESSFULLY CREATING A CALENDAR EVENT:
+Keep your response concise and helpful:
+1. **Confirm success**: Briefly state the meeting was created
+2. **Key details only**: Meeting title, date/time, attendees, and Teams link (if applicable)
+3. **Offer preparation help**: Ask if they'd like help preparing for the meeting (agenda, talking points, background research on attendees/topics)
+
+Example post-creation response:
+"Done! I've created **[Meeting Title]** for [Date] at [Time] with [Attendees]. A Teams meeting link has been included in the invite.
+
+Would you like help preparing for this meeting? I can help you:
+- Draft an agenda
+- Prepare talking points
+- Research background on the topic or attendees"
+
+Do NOT repeat all the raw tool output data. Keep it human-friendly and actionable.`;
 
 /**
  * Prepare messages with search, commerce, and calendar system context
