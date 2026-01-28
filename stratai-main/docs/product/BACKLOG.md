@@ -256,30 +256,47 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 
 ---
 
-## Calendar Integration Polish
+## Calendar Integration
 
-**Status**: Core functionality complete, polish needed
+**Status**: Core functionality complete, production deployed ✅
 
 > See `docs/features/CALENDAR_INTEGRATION.md` for full specification
+> See `docs/features/MEETING_LIFECYCLE.md` for the full meeting journey vision
 
 ### Completed ✅
 - [x] Microsoft Graph OAuth flow (multi-tenant)
+- [x] User-level Settings UI for calendar connection
 - [x] Calendar listing tool (`calendar_list_events`)
 - [x] Meeting creation with Teams links (`calendar_create_event`)
+- [x] Free/busy checking (`calendar_get_free_busy`)
+- [x] Find meeting times (`calendar_find_meeting_times`)
 - [x] AI confirmation before creating events
-- [x] Calendar status animation in Quick Chat
+- [x] Calendar status animation (emerald green) in ALL chat contexts
 - [x] Token refresh for expired access tokens
+- [x] Clean post-creation response with meeting prep offer
+- [x] Production deployment (Azure redirect URI, env vars)
 
-### Polish Items
-- [ ] Calendar status animation in Area chat, Task chat, Subtask chat
-  - Currently only shows in Quick Chat
-  - Need to wire up `AIStatusIndicator` with `status="calendar"` in other chat contexts
-- [ ] Cleaner post-creation response
-  - AI currently shows verbose tool result + additional commentary
-  - Consider: context management to reduce repetition in tool acknowledgments
-- [ ] Free/busy checking (`calendar_get_free_busy`)
-- [ ] Find meeting times (`calendar_find_meeting_times`)
-- [ ] Production deployment (Azure redirect URI, env vars)
+### Next Steps (Calendar → Meeting Lifecycle)
+- [ ] **Org-level admin consent** for new organizations
+  - Admin clicks "Grant Org Access" → Azure admin consent flow
+  - URL pattern: `https://login.microsoftonline.com/{tenant}/adminconsent?client_id=...`
+  - Required for orgs with restricted user consent policies
+- [ ] **Calendar context in Tasks Dashboard**
+  - Show "TODAY" section with upcoming meetings alongside tasks
+  - Meeting cards with attendees, time, join link
+  - Visual distinction between tasks and meetings
+- [ ] **Global Tasks View** with calendar integration
+  - Cross-space task aggregation
+  - Calendar events interleaved with tasks
+  - Day/week timeline view option
+- [ ] **Post-meeting capture prompts**
+  - Detect recently ended meetings
+  - Prompt: "Your meeting just ended. Capture decisions?"
+  - Guided capture flow (decisions, actions, follow-ups)
+- [ ] **Meeting = Task** (from MEETING_LIFECYCLE.md)
+  - Meetings create tasks assigned to owner
+  - Task completion triggers capture flow
+  - Action items become subtasks
 
 ---
 
