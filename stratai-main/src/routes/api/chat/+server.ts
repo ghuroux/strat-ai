@@ -1692,6 +1692,9 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 	// Create a ReadableStream for SSE
 	const stream = new ReadableStream({
 		async start(controller) {
+			// Start heartbeat to keep connection alive (prevents Cloudflare 100s timeout)
+			const stopHeartbeat = startHeartbeat(controller, encoder);
+
 			// Emit routing decision first if AUTO mode was used
 			if (routingDecision) {
 				sendSSE(controller, encoder, {
@@ -2160,6 +2163,9 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					error: err instanceof Error ? err.message : 'Unknown error'
 				});
 				controller.close();
+			} finally {
+				// Always stop heartbeat when stream ends
+				stopHeartbeat();
 			}
 		}
 	});
@@ -2233,6 +2239,38 @@ function sendSSE(
 ) {
 	const payload = typeof data === 'string' ? data : JSON.stringify(data);
 	controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+}
+
+/**
+ * Send SSE heartbeat comment to keep connection alive
+ * SSE comments (lines starting with :) are ignored by EventSource but keep the connection active
+ * This prevents Cloudflare and other proxies from dropping idle connections (typically 100s timeout)
+ */
+function sendHeartbeat(
+	controller: ReadableStreamDefaultController,
+	encoder: TextEncoder
+) {
+	try {
+		controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+	} catch {
+		// Controller may be closed, ignore
+	}
+}
+
+/**
+ * Start a heartbeat interval that sends periodic pings
+ * Returns a cleanup function to stop the heartbeat
+ */
+function startHeartbeat(
+	controller: ReadableStreamDefaultController,
+	encoder: TextEncoder,
+	intervalMs: number = 30000 // 30 seconds - well under Cloudflare's 100s timeout
+): () => void {
+	const intervalId = setInterval(() => {
+		sendHeartbeat(controller, encoder);
+	}, intervalMs);
+
+	return () => clearInterval(intervalId);
 }
 
 /**
@@ -2479,6 +2517,9 @@ function streamResponse(
 
 	const stream = new ReadableStream({
 		async start(controller) {
+			// Start heartbeat to keep connection alive (prevents Cloudflare 100s timeout)
+			const stopHeartbeat = startHeartbeat(controller, encoder);
+
 			// Emit routing decision first if AUTO mode was used
 			// This lets the frontend know which model was selected before content starts
 			if (routingDecision) {
@@ -2685,6 +2726,9 @@ function streamResponse(
 			} catch (err) {
 				console.error('Stream error:', err);
 				controller.error(err);
+			} finally {
+				// Always stop heartbeat when stream ends
+				stopHeartbeat();
 			}
 		},
 		cancel() {

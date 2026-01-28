@@ -4,6 +4,8 @@
 -- Generated: 2026-01-20
 -- Updated: V2 migration system (20260120_001_game_scores)
 --          Added game_scores table for org-wide mini-game leaderboards
+-- Updated: 2026-01-27 (20260127_001_integrations_infrastructure)
+--          Added integration tables for OAuth connections (Calendar, GitHub, etc.)
 --
 -- This is the complete database schema for StratAI.
 -- Run this on a fresh PostgreSQL 15+ database.
@@ -846,7 +848,114 @@ CREATE INDEX idx_game_scores_recent ON game_scores(org_id, game_type, created_at
 CREATE INDEX idx_game_scores_user_recent ON game_scores(user_id, created_at DESC);
 
 -- ============================================================================
--- 16. SCHEMA MIGRATIONS TRACKING
+-- 16. INTEGRATIONS (OAuth Connections to External Services)
+-- ============================================================================
+
+-- User-level integration config (service type, status, config)
+CREATE TABLE integrations (
+    id TEXT PRIMARY KEY DEFAULT ('int_' || EXTRACT(EPOCH FROM now())::bigint || '_' || substr(md5(random()::text), 1, 8)),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    space_id TEXT REFERENCES spaces(id) ON DELETE CASCADE,
+    org_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    service_type TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'disconnected',
+    config JSONB DEFAULT '{}'::jsonb,
+    last_error TEXT,
+    last_error_at TIMESTAMPTZ,
+    connected_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT integrations_service_type_check CHECK (service_type IN ('calendar', 'github', 'linear', 'jira', 'slack')),
+    CONSTRAINT integrations_status_check CHECK (status IN ('disconnected', 'connecting', 'connected', 'error', 'expired')),
+    CONSTRAINT integrations_owner_check CHECK (
+        (user_id IS NOT NULL AND space_id IS NULL) OR
+        (user_id IS NULL AND space_id IS NOT NULL)
+    )
+);
+
+CREATE UNIQUE INDEX idx_integrations_user_service ON integrations(user_id, service_type) WHERE user_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_integrations_space_service ON integrations(space_id, service_type) WHERE space_id IS NOT NULL;
+CREATE INDEX idx_integrations_user ON integrations(user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX idx_integrations_space ON integrations(space_id) WHERE space_id IS NOT NULL;
+CREATE INDEX idx_integrations_org ON integrations(org_id);
+
+-- Encrypted OAuth tokens and API keys
+CREATE TABLE integration_credentials (
+    id TEXT PRIMARY KEY DEFAULT ('cred_' || EXTRACT(EPOCH FROM now())::bigint || '_' || substr(md5(random()::text), 1, 8)),
+    integration_id TEXT NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
+    credential_type TEXT NOT NULL,
+    encrypted_value TEXT NOT NULL,
+    encryption_iv TEXT NOT NULL,
+    encryption_tag TEXT NOT NULL,
+    expires_at TIMESTAMPTZ,
+    scope TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT credential_type_check CHECK (credential_type IN ('access_token', 'refresh_token', 'api_key'))
+);
+
+CREATE INDEX idx_integration_credentials_integration ON integration_credentials(integration_id);
+CREATE INDEX idx_integration_credentials_expiring ON integration_credentials(expires_at)
+    WHERE credential_type = 'access_token' AND expires_at IS NOT NULL;
+
+-- Area-level activation and overrides for integrations
+CREATE TABLE area_integrations (
+    id TEXT PRIMARY KEY DEFAULT ('aint_' || EXTRACT(EPOCH FROM now())::bigint || '_' || substr(md5(random()::text), 1, 8)),
+    area_id TEXT NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+    integration_id TEXT NOT NULL REFERENCES integrations(id) ON DELETE CASCADE,
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    overrides JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT area_integrations_unique UNIQUE (area_id, integration_id)
+);
+
+CREATE INDEX idx_area_integrations_area ON area_integrations(area_id);
+CREATE INDEX idx_area_integrations_integration ON area_integrations(integration_id);
+
+-- Audit trail for compliance and debugging
+CREATE TABLE integration_logs (
+    id TEXT PRIMARY KEY DEFAULT ('ilog_' || EXTRACT(EPOCH FROM now())::bigint || '_' || substr(md5(random()::text), 1, 8)),
+    integration_id TEXT REFERENCES integrations(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+    event_type TEXT NOT NULL,
+    service_type TEXT NOT NULL,
+    action TEXT NOT NULL,
+    request_summary JSONB,
+    response_summary JSONB,
+    status TEXT NOT NULL DEFAULT 'success',
+    error_message TEXT,
+    duration_ms INTEGER,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT integration_logs_event_type_check CHECK (event_type IN ('connect', 'disconnect', 'refresh', 'tool_call', 'error', 'rate_limit')),
+    CONSTRAINT integration_logs_status_check CHECK (status IN ('success', 'failure', 'rate_limited'))
+);
+
+CREATE INDEX idx_integration_logs_integration ON integration_logs(integration_id);
+CREATE INDEX idx_integration_logs_user ON integration_logs(user_id);
+CREATE INDEX idx_integration_logs_org ON integration_logs(org_id);
+CREATE INDEX idx_integration_logs_recent ON integration_logs(created_at DESC)
+    WHERE created_at > (NOW() - INTERVAL '7 days');
+
+-- OAuth states for CSRF protection
+CREATE TABLE oauth_states (
+    id TEXT PRIMARY KEY DEFAULT ('oauth_' || EXTRACT(EPOCH FROM now())::bigint || '_' || substr(md5(random()::text), 1, 8)),
+    state TEXT NOT NULL UNIQUE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    service_type TEXT NOT NULL,
+    redirect_uri TEXT,
+    context JSONB DEFAULT '{}'::jsonb,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT oauth_states_service_type_check CHECK (service_type IN ('calendar', 'github', 'linear', 'jira', 'slack'))
+);
+
+CREATE INDEX idx_oauth_states_state ON oauth_states(state);
+CREATE INDEX idx_oauth_states_expired ON oauth_states(expires_at);
+
+-- ============================================================================
+-- 17. SCHEMA MIGRATIONS TRACKING
 -- ============================================================================
 
 CREATE TABLE schema_migrations (
@@ -857,7 +966,8 @@ CREATE TABLE schema_migrations (
 -- Mark baseline versions (fresh install includes all migrations through V2)
 INSERT INTO schema_migrations (version) VALUES
     ('040-fresh-install'),
-    ('20260120_001_game_scores');
+    ('20260120_001_game_scores'),
+    ('20260127_001_integrations_infrastructure');
 
 -- ============================================================================
 -- DONE!

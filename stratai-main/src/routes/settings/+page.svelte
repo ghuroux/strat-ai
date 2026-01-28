@@ -8,6 +8,7 @@
 	import SettingsShortcuts from '$lib/components/settings/SettingsShortcuts.svelte';
 	import SettingsUsage from '$lib/components/settings/SettingsUsage.svelte';
 	import SettingsPrivacy from '$lib/components/settings/SettingsPrivacy.svelte';
+	import SettingsIntegrations from '$lib/components/settings/SettingsIntegrations.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -37,6 +38,8 @@
 		<SettingsAIPreferences />
 	{:else if activeSection === 'shortcuts'}
 		<SettingsShortcuts />
+	{:else if activeSection === 'integrations'}
+		<SettingsIntegrations />
 	{:else if activeSection === 'usage'}
 		<SettingsUsage />
 	{:else if activeSection === 'privacy'}

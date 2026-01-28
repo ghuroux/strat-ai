@@ -32,5 +32,10 @@ export { sql, testConnection, closeConnection } from './db';
 export { postgresGameScoresRepository } from './game-scores-postgres';
 export type { GameScore, GameScoreInput, GameScoreWithUser, GameType } from './game-scores-postgres';
 
+// Integrations (OAuth connections to external services)
+export { postgresIntegrationsRepository } from './integrations-postgres';
+export { postgresIntegrationCredentialsRepository } from './integration-credentials-postgres';
+export { postgresOAuthStatesRepository } from './oauth-states-postgres';
+
 // Backwards compatibility - re-export areas as focusAreas
 export { postgresAreaRepository as postgresFocusAreaRepository } from './areas-postgres';

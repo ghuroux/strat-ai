@@ -382,3 +382,107 @@ ${spaceLink}
 		text
 	};
 }
+
+// ============================================================
+// Calendar Connect Email Template
+// ============================================================
+
+interface CalendarConnectTemplateData {
+	/** Recipient's first name */
+	firstName: string;
+	/** Meeting title/subject */
+	meetingTitle: string;
+	/** Meeting date and time (formatted string) */
+	meetingDateTime: string;
+	/** Name of the person who organized the meeting */
+	organizerName: string;
+	/** Direct link to connect calendar in settings */
+	connectLink: string;
+}
+
+/**
+ * Generate calendar connect prompt email
+ *
+ * Sent when a user is invited to a meeting but hasn't connected their calendar.
+ * Encourages them to connect for better meeting context and AI assistance.
+ */
+export function getCalendarConnectEmail(data: CalendarConnectTemplateData) {
+	const { firstName, meetingTitle, meetingDateTime, organizerName, connectLink } = data;
+
+	const html = `
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Connect your calendar for better meeting preparation</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 8px 8px 0 0;">
+		<h1 style="color: white; margin: 0; font-size: 24px;">StratAI</h1>
+	</div>
+	<div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
+		<h2 style="margin-top: 0;">Get more from your meetings</h2>
+		<p>Hi ${firstName},</p>
+		<p>You've been invited to a meeting:</p>
+
+		<div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin: 20px 0;">
+			<div style="font-weight: 600; color: #374151; margin-bottom: 8px;">${meetingTitle}</div>
+			<div style="font-size: 14px; color: #6b7280;">${meetingDateTime}</div>
+			<div style="font-size: 14px; color: #6b7280;">Organized by ${organizerName}</div>
+		</div>
+
+		<p>Connect your Microsoft Calendar to StratAI to:</p>
+		<ul style="color: #374151; margin: 10px 0 20px 0; padding-left: 20px;">
+			<li style="margin: 8px 0;">Get AI-powered meeting preparation and context</li>
+			<li style="margin: 8px 0;">Have StratAI automatically capture meeting notes and action items</li>
+			<li style="margin: 8px 0;">See your schedule at a glance when planning your day</li>
+		</ul>
+
+		<div style="text-align: center; margin: 30px 0;">
+			<a href="${connectLink}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Connect Calendar</a>
+		</div>
+
+		<p style="color: #6b7280; font-size: 14px;">Your calendar data is encrypted and used only to help you be more productive. You can disconnect at any time.</p>
+
+		<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+		<p style="color: #9ca3af; font-size: 12px;">If the button doesn't work, copy and paste this link into your browser:<br><a href="${connectLink}" style="color: #667eea; word-break: break-all;">${connectLink}</a></p>
+	</div>
+</body>
+</html>`;
+
+	const text = `Get more from your meetings
+
+Hi ${firstName},
+
+You've been invited to a meeting:
+
+${meetingTitle}
+${meetingDateTime}
+Organized by ${organizerName}
+
+Connect your Microsoft Calendar to StratAI to:
+• Get AI-powered meeting preparation and context
+• Have StratAI automatically capture meeting notes and action items
+• See your schedule at a glance when planning your day
+
+Connect your calendar here:
+${connectLink}
+
+Your calendar data is encrypted and used only to help you be more productive. You can disconnect at any time.
+
+- The StratAI Team`;
+
+	return {
+		subject: `Connect your calendar to prepare for "${meetingTitle}"`,
+		html,
+		text
+	};
+}
+
+/**
+ * Create calendar connect link
+ */
+export function createCalendarConnectLink(): string {
+	return `${getBaseUrl()}/settings?section=integrations`;
+}

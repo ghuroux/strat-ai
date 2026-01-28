@@ -27,6 +27,10 @@
 			items: [{ id: 'ai-preferences', label: 'Chat Preferences', icon: 'sparkles' }]
 		},
 		{
+			label: 'CONNECTIONS',
+			items: [{ id: 'integrations', label: 'Integrations', icon: 'plug' }]
+		},
+		{
 			label: 'HELP',
 			items: [{ id: 'shortcuts', label: 'Keyboard Shortcuts', icon: 'command' }]
 		},
@@ -49,6 +53,7 @@
 		lock: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z',
 		sparkles:
 			'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
+		plug: 'M18.36 5.64a9 9 0 11-12.72 0M12 3v9',
 		command:
 			'M18 3a3 3 0 00-3 3v12a3 3 0 003 3 3 3 0 003-3 3 3 0 00-3-3H6a3 3 0 00-3 3 3 3 0 003 3 3 3 0 003-3V6a3 3 0 00-3-3 3 3 0 00-3 3 3 3 0 003 3h12a3 3 0 003-3 3 3 0 00-3-3z',
 		'chart-bar':
