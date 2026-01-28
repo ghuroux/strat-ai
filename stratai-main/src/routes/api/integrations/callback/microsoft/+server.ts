@@ -135,6 +135,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		return redirect(302, `${returnUrl}?connected=calendar`);
 
 	} catch (err) {
+		// SvelteKit's redirect() throws a Redirect object - let it through
+		if (err && typeof err === 'object' && 'status' in err && 'location' in err) {
+			throw err;
+		}
+
 		console.error('OAuth callback error:', err);
 		const errorMsg = err instanceof Error ? err.message : 'Unknown error';
 		return redirect(302, `${returnUrl}?error=${encodeURIComponent(errorMsg)}`);

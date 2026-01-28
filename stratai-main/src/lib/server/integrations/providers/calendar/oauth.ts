@@ -37,11 +37,13 @@ export function getAzureConfig() {
 		);
 	}
 
-	// Use tenant-specific endpoint for single-tenant apps, or 'common' for multi-tenant
-	// Single-tenant apps (registered after 10/15/2018) MUST use tenant-specific endpoint
+	// Use tenant-specific endpoint for single-tenant apps, or 'organizations' for multi-tenant
+	// - Single-tenant: Use tenant ID (required for apps registered after 10/15/2018)
+	// - Multi-tenant: Use 'organizations' (any Azure AD tenant, work/school accounts only)
+	// - 'common' would also allow personal Microsoft accounts (@outlook.com)
 	const authority = tenantId
 		? `https://login.microsoftonline.com/${tenantId}`
-		: 'https://login.microsoftonline.com/common';
+		: 'https://login.microsoftonline.com/organizations';
 
 	return {
 		clientId,
