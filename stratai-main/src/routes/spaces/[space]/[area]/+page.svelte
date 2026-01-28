@@ -830,6 +830,10 @@
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										contextStatus: undefined, searchStatus: 'reading_document', searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'calendar') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										contextStatus: undefined, searchStatus: 'calendar', searchQuery: parsed.query
+									});
 								} else if (parsed.status === 'processing') {
 									// Processing just means server is working - not necessarily searching
 									// Only clear contextStatus, don't set searchStatus
@@ -1345,6 +1349,10 @@
 								if (parsed.status === 'browsing') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: 'browsing', searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'calendar') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'calendar', searchQuery: parsed.query
 									});
 								}
 							} else if (parsed.type === 'thinking_start') {

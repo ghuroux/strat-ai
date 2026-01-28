@@ -36,8 +36,8 @@ export interface Message {
 	timestamp: number;
 	isStreaming?: boolean;
 	error?: string;
-	// Web search and document reading fields
-	searchStatus?: 'searching' | 'reading_document' | 'browsing' | 'complete';
+	// Web search, document reading, and calendar fields
+	searchStatus?: 'searching' | 'reading_document' | 'browsing' | 'calendar' | 'complete';
 	searchQuery?: string;
 	// Context loading status (shows "Loading context" before API call)
 	contextStatus?: 'loading';

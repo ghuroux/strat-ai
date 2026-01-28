@@ -563,15 +563,22 @@
 										searchQuery: parsed.query
 									});
 								} else if (parsed.status === 'processing') {
-									// Sources have been found, now processing with LLM
+									// Tool results received, now processing with LLM
+									// Don't change searchStatus - keep showing current status (calendar, searching, browsing)
+									// Just clear the query text since we're now synthesizing results
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
-										searchStatus: 'searching', // Keep showing search UI but with sources
 										searchQuery: undefined
 									});
 								} else if (parsed.status === 'thinking') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: undefined,
 										searchQuery: undefined
+									});
+								} else if (parsed.status === 'calendar') {
+									// Calendar tool - checking calendar, creating meetings, etc.
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'calendar',
+										searchQuery: parsed.query
 									});
 								}
 							} else if (parsed.type === 'sources_preview') {
@@ -1048,9 +1055,20 @@
 										searchStatus: 'searching',
 										searchQuery: parsed.query
 									});
-								} else if (parsed.status === 'processing') {
+								} else if (parsed.status === 'browsing') {
 									chatStore.updateMessage(conversationId, assistantMessageId, {
-										searchStatus: 'searching',
+										searchStatus: 'browsing',
+										searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'calendar') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: 'calendar',
+										searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'processing') {
+									// Tool results received, now processing with LLM
+									// Don't change searchStatus - keep showing current status (calendar, searching, browsing)
+									chatStore.updateMessage(conversationId, assistantMessageId, {
 										searchQuery: undefined
 									});
 								} else if (parsed.status === 'thinking') {

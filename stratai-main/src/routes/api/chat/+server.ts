@@ -1771,7 +1771,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			(focusAreaContext?.contextDocuments?.length ?? 0) > 0 ||
 			(planModeContext?.context?.documents?.length ?? 0) > 0 ||
 			(spaceContext?.contextDocuments?.length ?? 0) > 0;
-		const needsToolHandling = searchEnabled || hasReferenceDocuments;
+		const hasCalendarAccess = !!calendarAccessToken;
+		const needsToolHandling = searchEnabled || hasReferenceDocuments || hasCalendarAccess;
 
 		if (needsToolHandling) {
 			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision, userTimezone, searchEnabled, calendarAccessToken);
@@ -2079,16 +2080,18 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 						}
 					}
 
-					// Send searching status with first query (or combined)
-					const statusQuery = searchQueries.length === 1
-						? searchQueries[0]
-						: `${searchQueries.length} searches: ${searchQueries.slice(0, 2).join(', ')}${searchQueries.length > 2 ? '...' : ''}`;
+					// Send searching status only if there are actual web searches
+					if (searchQueries.length > 0) {
+						const statusQuery = searchQueries.length === 1
+							? searchQueries[0]
+							: `${searchQueries.length} searches: ${searchQueries.slice(0, 2).join(', ')}${searchQueries.length > 2 ? '...' : ''}`;
 
-					sendSSE(controller, encoder, {
-						type: 'status',
-						status: 'searching',
-						query: statusQuery
-					});
+						sendSSE(controller, encoder, {
+							type: 'status',
+							status: 'searching',
+							query: statusQuery
+						});
+					}
 
 					// Execute ALL tool calls and collect results
 					for (const toolCall of toolCalls) {

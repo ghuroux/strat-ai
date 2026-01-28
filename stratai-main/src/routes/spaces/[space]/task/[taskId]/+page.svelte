@@ -572,6 +572,10 @@
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										contextStatus: undefined, searchStatus: 'searching', searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'calendar') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										contextStatus: undefined, searchStatus: 'calendar', searchQuery: parsed.query
+									});
 								} else if (parsed.status === 'thinking') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										contextStatus: undefined, searchStatus: undefined, searchQuery: undefined
@@ -770,6 +774,16 @@
 									confidence: parsed.confidence,
 									overrides: parsed.overrides || []
 								});
+							} else if (parsed.type === 'status') {
+								if (parsed.status === 'browsing') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: 'browsing', searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'calendar') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: 'calendar', searchQuery: parsed.query
+									});
+								}
 							} else if (parsed.type === 'thinking_start') {
 								chatStore.updateMessage(conversationId, assistantMessageId, { isThinking: true });
 							} else if (parsed.type === 'thinking') {
