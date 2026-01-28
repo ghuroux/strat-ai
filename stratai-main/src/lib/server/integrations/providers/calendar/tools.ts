@@ -199,31 +199,129 @@ export function getCalendarToolDefinition(name: string): IntegrationToolDefiniti
 // Tool Result Formatting
 // ============================================================================
 
+/** Default timezone for calendar display */
+const DEFAULT_TIMEZONE = 'Africa/Johannesburg';
+
+/**
+ * Parse a Microsoft Graph datetime string in its source timezone
+ * Graph returns naive datetimes (no offset) that are in the event's timezone.
+ * We need to interpret the datetime in that timezone to get the correct UTC instant.
+ *
+ * @param dateTimeStr - Naive datetime string like "2026-01-28T14:00:00"
+ * @param sourceTimezone - The timezone this datetime is in (e.g., "Africa/Johannesburg")
+ * @returns Date object representing the correct instant in time
+ */
+function parseGraphDateTime(dateTimeStr: string, sourceTimezone: string): Date {
+	// If the string already has timezone info (Z or offset), parse directly
+	if (dateTimeStr.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateTimeStr)) {
+		return new Date(dateTimeStr);
+	}
+
+	// For naive datetimes, we need to interpret them in the source timezone
+	// Use Intl.DateTimeFormat to get the UTC offset for that timezone at that time
+	const naive = new Date(dateTimeStr);
+
+	// Get the offset for the source timezone at this datetime
+	const formatter = new Intl.DateTimeFormat('en-US', {
+		timeZone: sourceTimezone,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+		hour12: false
+	});
+
+	// Format the naive date as if it were in UTC, then compare with source timezone
+	// to calculate the offset
+	const utcFormatter = new Intl.DateTimeFormat('en-US', {
+		timeZone: 'UTC',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+		hour12: false
+	});
+
+	// Parse parts from both formatters
+	const getParts = (f: Intl.DateTimeFormat, d: Date) => {
+		const parts = f.formatToParts(d);
+		const get = (type: string) => parts.find(p => p.type === type)?.value || '0';
+		return {
+			year: parseInt(get('year')),
+			month: parseInt(get('month')),
+			day: parseInt(get('day')),
+			hour: parseInt(get('hour')),
+			minute: parseInt(get('minute')),
+			second: parseInt(get('second'))
+		};
+	};
+
+	// Create a reference date at the naive time interpreted as UTC
+	const refUtc = new Date(Date.UTC(
+		naive.getFullYear(),
+		naive.getMonth(),
+		naive.getDate(),
+		naive.getHours(),
+		naive.getMinutes(),
+		naive.getSeconds()
+	));
+
+	// Get what time it is in the source timezone when it's that time in UTC
+	const inSourceTz = getParts(formatter, refUtc);
+
+	// Calculate offset: how much to subtract from naive to get UTC
+	const sourceDate = new Date(Date.UTC(
+		inSourceTz.year,
+		inSourceTz.month - 1,
+		inSourceTz.day,
+		inSourceTz.hour,
+		inSourceTz.minute,
+		inSourceTz.second
+	));
+
+	const offsetMs = sourceDate.getTime() - refUtc.getTime();
+
+	// Apply offset: the naive time IS in source timezone, so subtract offset to get UTC
+	return new Date(refUtc.getTime() - offsetMs);
+}
+
 /**
  * Format calendar events for AI response
+ * @param events - Array of calendar events from Microsoft Graph
+ * @param userTimezone - User's timezone for display (IANA format, e.g., 'Africa/Johannesburg')
  */
 export function formatEventsForAI(events: Array<{
 	id: string;
 	subject: string;
-	start: { dateTime: string };
-	end: { dateTime: string };
+	start: { dateTime: string; timeZone?: string };
+	end: { dateTime: string; timeZone?: string };
 	location?: { displayName?: string };
 	attendees?: Array<{ emailAddress: { address: string; name?: string } }>;
 	isOnlineMeeting?: boolean;
 	onlineMeetingUrl?: string;
 	onlineMeeting?: { joinUrl?: string };
 	showAs?: string;
-}>): string {
+}>, userTimezone?: string): string {
 	if (events.length === 0) {
 		return 'No events found in the specified time range.';
 	}
 
+	const tz = userTimezone || DEFAULT_TIMEZONE;
+
 	const lines = events.map(event => {
-		const start = new Date(event.start.dateTime);
-		const end = new Date(event.end.dateTime);
-		const dateStr = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-		const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-		const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+		// Parse datetime - Graph returns naive datetime in the event's timezone
+		// We need to interpret it in that timezone, then display in user's timezone
+		const eventTz = event.start.timeZone || tz;
+		const start = parseGraphDateTime(event.start.dateTime, eventTz);
+		const end = parseGraphDateTime(event.end.dateTime, event.end.timeZone || eventTz);
+
+		const dateStr = start.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' });
+		const startTime = start.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+		const endTime = end.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
 
 		let line = `• ${event.subject} - ${dateStr} ${startTime}-${endTime}`;
 
@@ -254,21 +352,27 @@ export function formatEventsForAI(events: Array<{
 
 /**
  * Format a created event for AI response
+ * @param event - The created event from Microsoft Graph
+ * @param userTimezone - User's timezone for display (IANA format)
  */
 export function formatCreatedEventForAI(event: {
 	subject: string;
-	start: { dateTime: string };
-	end: { dateTime: string };
+	start: { dateTime: string; timeZone?: string };
+	end: { dateTime: string; timeZone?: string };
 	webLink?: string;
 	onlineMeeting?: { joinUrl?: string };
 	onlineMeetingUrl?: string;
 	attendees?: Array<{ emailAddress: { address: string } }>;
-}): string {
-	const start = new Date(event.start.dateTime);
-	const end = new Date(event.end.dateTime);
-	const dateStr = start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-	const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-	const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}, userTimezone?: string): string {
+	const tz = userTimezone || DEFAULT_TIMEZONE;
+	const eventTz = event.start.timeZone || tz;
+
+	const start = parseGraphDateTime(event.start.dateTime, eventTz);
+	const end = parseGraphDateTime(event.end.dateTime, event.end.timeZone || eventTz);
+
+	const dateStr = start.toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+	const startTime = start.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+	const endTime = end.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
 
 	let result = `✅ Created event: "${event.subject}"\n`;
 	result += `📅 ${dateStr} from ${startTime} to ${endTime}\n`;
@@ -291,10 +395,14 @@ export function formatCreatedEventForAI(event: {
 
 /**
  * Format free/busy results for AI response
+ * @param freeBusy - Map of email to busy slots from Microsoft Graph
+ * @param userTimezone - User's timezone for display (IANA format)
  */
 export function formatFreeBusyForAI(
-	freeBusy: Map<string, Array<{ status: string; start: { dateTime: string }; end: { dateTime: string } }>>
+	freeBusy: Map<string, Array<{ status: string; start: { dateTime: string }; end: { dateTime: string } }>>,
+	userTimezone?: string
 ): string {
+	const tz = userTimezone || DEFAULT_TIMEZONE;
 	const lines: string[] = [];
 
 	for (const [email, slots] of freeBusy) {
@@ -306,10 +414,11 @@ export function formatFreeBusyForAI(
 		}
 
 		for (const slot of slots) {
+			// Free/busy times from Graph are typically in UTC
 			const start = new Date(slot.start.dateTime);
 			const end = new Date(slot.end.dateTime);
-			const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-			const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+			const startTime = start.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+			const endTime = end.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
 			lines.push(`  ${slot.status}: ${startTime} - ${endTime}`);
 		}
 	}
@@ -319,20 +428,25 @@ export function formatFreeBusyForAI(
 
 /**
  * Format meeting time suggestions for AI response
+ * @param suggestions - Array of available time slots from Microsoft Graph
+ * @param userTimezone - User's timezone for display (IANA format)
  */
 export function formatMeetingTimesForAI(
-	suggestions: Array<{ start: string; end: string }>
+	suggestions: Array<{ start: string; end: string }>,
+	userTimezone?: string
 ): string {
 	if (suggestions.length === 0) {
 		return 'No available time slots found for all attendees in the specified range.';
 	}
 
+	const tz = userTimezone || DEFAULT_TIMEZONE;
+
 	const lines = suggestions.map((slot, i) => {
 		const start = new Date(slot.start);
 		const end = new Date(slot.end);
-		const dateStr = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-		const startTime = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-		const endTime = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+		const dateStr = start.toLocaleDateString('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric' });
+		const startTime = start.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+		const endTime = end.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
 		return `${i + 1}. ${dateStr} ${startTime} - ${endTime}`;
 	});
 
@@ -365,13 +479,19 @@ export function isCalendarTool(toolName: string): boolean {
 
 /**
  * Execute a calendar tool and return formatted result
+ * @param toolName - The calendar tool to execute
+ * @param input - Tool input parameters from AI
+ * @param accessToken - Microsoft Graph access token
+ * @param userTimezone - User's timezone for display formatting (IANA format)
  */
 export async function executeCalendarTool(
 	toolName: string,
 	input: Record<string, unknown>,
-	accessToken: string
+	accessToken: string,
+	userTimezone?: string
 ): Promise<string> {
 	const client = new CalendarClient(accessToken);
+	const tz = userTimezone || DEFAULT_TIMEZONE;
 
 	switch (toolName) {
 		case 'calendar_list_events': {
@@ -380,7 +500,7 @@ export async function executeCalendarTool(
 			const maxResults = input.maxResults ? parseInt(input.maxResults as string, 10) : 10;
 
 			const events = await client.listEvents(startDateTime, endDateTime, { maxResults });
-			return formatEventsForAI(events);
+			return formatEventsForAI(events, tz);
 		}
 
 		case 'calendar_get_event': {
@@ -389,16 +509,16 @@ export async function executeCalendarTool(
 			if (!event) {
 				return 'Event not found.';
 			}
-			return formatEventsForAI([event]);
+			return formatEventsForAI([event], tz);
 		}
 
 		case 'calendar_create_event': {
-			// Debug logging for event creation
+			// Use user's timezone as default for event creation if not specified
 			const createInput = {
 				subject: input.subject as string,
 				start: input.start as string,
 				end: input.end as string,
-				timeZone: (input.timeZone as string) || 'UTC',
+				timeZone: (input.timeZone as string) || tz,
 				body: input.body as string | undefined,
 				location: input.location as string | undefined,
 				attendees: input.attendees
@@ -418,17 +538,18 @@ export async function executeCalendarTool(
 				attendees: event.attendees?.length
 			}, null, 2));
 
-			return formatCreatedEventForAI(event);
+			return formatCreatedEventForAI(event, tz);
 		}
 
 		case 'calendar_get_free_busy': {
 			const emails = (input.emails as string).split(',').map(e => e.trim());
 			const startDateTime = input.startDateTime as string;
 			const endDateTime = input.endDateTime as string;
-			const timeZone = (input.timeZone as string) || 'UTC';
+			// Use user's timezone for the API query if not specified
+			const queryTimeZone = (input.timeZone as string) || tz;
 
-			const freeBusy = await client.getFreeBusy(emails, startDateTime, endDateTime, timeZone);
-			return formatFreeBusyForAI(freeBusy);
+			const freeBusy = await client.getFreeBusy(emails, startDateTime, endDateTime, queryTimeZone);
+			return formatFreeBusyForAI(freeBusy, tz);
 		}
 
 		case 'calendar_find_meeting_times': {
@@ -436,16 +557,17 @@ export async function executeCalendarTool(
 			const durationMinutes = parseInt(input.durationMinutes as string, 10);
 			const startDateTime = input.startDateTime as string;
 			const endDateTime = input.endDateTime as string;
-			const timeZone = (input.timeZone as string) || 'UTC';
+			// Use user's timezone for the API query if not specified
+			const queryTimeZone = (input.timeZone as string) || tz;
 
 			const suggestions = await client.findMeetingTimes(
 				attendees,
 				durationMinutes,
 				startDateTime,
 				endDateTime,
-				timeZone
+				queryTimeZone
 			);
-			return formatMeetingTimesForAI(suggestions);
+			return formatMeetingTimesForAI(suggestions, tz);
 		}
 
 		default:

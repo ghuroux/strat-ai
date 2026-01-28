@@ -2347,7 +2347,8 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 								});
 
 								try {
-									const result = await executeCalendarTool(toolName, args, calendarAccessToken);
+									// Pass user's timezone for proper time display formatting
+									const result = await executeCalendarTool(toolName, args, calendarAccessToken, timezone);
 
 									toolResults.push({
 										tool_call_id: toolCall.id,
