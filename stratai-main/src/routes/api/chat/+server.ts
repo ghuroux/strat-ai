@@ -655,16 +655,16 @@ function injectPlatformPrompt(
 	let fullPrompt: string;
 	if (focusArea) {
 		// Focus area includes space context
-		fullPrompt = getFullSystemPromptWithFocusArea(model, focusArea);
+		fullPrompt = getFullSystemPromptWithFocusArea(model, focusArea, timezone);
 	} else if (spaceInfo && spaceInfo.type === 'custom' && spaceInfo.context) {
 		// Custom space with user-provided context
-		fullPrompt = getFullSystemPromptWithSpace(model, spaceInfo);
+		fullPrompt = getFullSystemPromptWithSpace(model, spaceInfo, timezone);
 	} else if (spaceInfo && spaceInfo.type === 'system') {
 		// System space - use slug as SpaceType
-		fullPrompt = getFullSystemPrompt(model, spaceInfo.slug as SpaceType);
+		fullPrompt = getFullSystemPrompt(model, spaceInfo.slug as SpaceType, timezone);
 	} else {
 		// Fallback to space from request body (backwards compatibility)
-		fullPrompt = getFullSystemPrompt(model, space);
+		fullPrompt = getFullSystemPrompt(model, space, timezone);
 	}
 
 	// If assist is active, append the assist-specific prompt

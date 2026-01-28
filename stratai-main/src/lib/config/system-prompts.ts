@@ -514,15 +514,17 @@ ${doc.summary}`;
 export function getFullSystemPrompt(
   model: string,
   space?: SpaceType | null,
+  timezone?: string,
 ): string {
+  const temporalContext = getTemporalContext(timezone);
   const platformPrompt = getPlatformPrompt(model);
   const spaceAddition = getSpacePromptAddition(space);
 
   if (!spaceAddition) {
-    return platformPrompt;
+    return `${temporalContext}\n${platformPrompt}`;
   }
 
-  return `${platformPrompt}\n${spaceAddition}`;
+  return `${temporalContext}\n${platformPrompt}\n${spaceAddition}`;
 }
 
 /**
@@ -532,25 +534,27 @@ export function getFullSystemPrompt(
 export function getFullSystemPromptWithSpace(
   model: string,
   space: SpaceInfo,
+  timezone?: string,
 ): string {
+  const temporalContext = getTemporalContext(timezone);
   const platformPrompt = getPlatformPrompt(model);
 
   if (space.type === "system") {
     // Use predefined prompts for system spaces
     const spaceAddition = getSpacePromptAddition(space.slug as SpaceType);
     if (!spaceAddition) {
-      return platformPrompt;
+      return `${temporalContext}\n${platformPrompt}`;
     }
-    return `${platformPrompt}\n${spaceAddition}`;
+    return `${temporalContext}\n${platformPrompt}\n${spaceAddition}`;
   }
 
   // For custom spaces, use the user-provided context
   const customSpacePrompt = getCustomSpacePrompt(space);
   if (!customSpacePrompt) {
-    return platformPrompt;
+    return `${temporalContext}\n${platformPrompt}`;
   }
 
-  return `${platformPrompt}\n${customSpacePrompt}`;
+  return `${temporalContext}\n${platformPrompt}\n${customSpacePrompt}`;
 }
 
 /**
@@ -680,17 +684,19 @@ export function getSpacePromptForFocusArea(focusArea: FocusAreaInfo): string {
 
 /**
  * Get the full system prompt with focus area context
- * Combines: Platform → Space → Focus Area
+ * Combines: Temporal → Platform → Space → Focus Area
  */
 export function getFullSystemPromptWithFocusArea(
   model: string,
   focusArea: FocusAreaInfo,
+  timezone?: string,
 ): string {
+  const temporalContext = getTemporalContext(timezone);
   const platformPrompt = getPlatformPrompt(model);
   const spaceAddition = getSpacePromptForFocusArea(focusArea);
   const focusAreaPrompt = getFocusAreaPrompt(focusArea);
 
-  return `${platformPrompt}${spaceAddition}\n${focusAreaPrompt}`;
+  return `${temporalContext}\n${platformPrompt}${spaceAddition}\n${focusAreaPrompt}`;
 }
 
 /**
