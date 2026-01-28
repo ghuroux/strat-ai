@@ -112,6 +112,7 @@
 	let isGenerating = $derived(chatStore.isStreaming);
 
 	// UI state
+	let isCompacting = $state(false);
 	let isLoading = $state(true);
 	let showSubtaskPanel = $state(true);
 	let subtaskPanelInitialized = $state(false);
@@ -960,6 +961,141 @@
 	// Handle stop generation
 	function handleStop() {
 		chatStore.stopStreaming();
+	}
+
+	/**
+	 * Compact the current conversation by summarizing and creating a new session
+	 */
+	async function handleCompact() {
+		const conversation = chatStore.activeConversation;
+		if (!conversation || !effectiveModel) return;
+
+		isCompacting = true;
+
+		try {
+			const response = await fetch('/api/compact', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					messages: conversation.messages.map((m) => ({
+						role: m.role,
+						content: m.content
+					}))
+				})
+			});
+
+			if (!response.ok) {
+				if (handleUnauthorizedResponse(response)) return;
+				const error = await response.json();
+				throw new Error(error.error?.message || 'Failed to compact conversation');
+			}
+
+			const { summary, continuationSystemPrompt } = await response.json();
+
+			const newConversationId = chatStore.createContinuedConversation(
+				conversation.id,
+				summary,
+				effectiveModel
+			);
+
+			const controller = new AbortController();
+			chatStore.setStreaming(true, controller);
+
+			const assistantMessageId = chatStore.addMessage(newConversationId, {
+				role: 'assistant',
+				content: '',
+				isStreaming: true
+			});
+
+			try {
+				const chatResponse = await fetch('/api/chat', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						model: effectiveModel,
+						messages: [
+							{ role: 'system', content: continuationSystemPrompt },
+							{
+								role: 'user',
+								content:
+									"I've just refreshed our session to manage the context window. Please briefly acknowledge that you have the context and are ready to continue our conversation."
+							}
+						],
+						temperature: settingsStore.temperature,
+						max_tokens: 500
+					}),
+					signal: controller.signal
+				});
+
+				if (!chatResponse.ok) {
+					if (handleUnauthorizedResponse(chatResponse)) return;
+					const error = await chatResponse.json();
+					throw new Error(error.error?.message || 'Failed to get acknowledgment');
+				}
+
+				const reader = chatResponse.body?.getReader();
+				const decoder = new TextDecoder();
+
+				if (!reader) throw new Error('No response body');
+
+				let buffer = '';
+
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+
+					const decoded = decoder.decode(value, { stream: true });
+					buffer += decoded;
+					const lines = buffer.split('\n');
+					buffer = lines.pop() || '';
+
+					for (const line of lines) {
+						if (line.startsWith('data: ')) {
+							const data = line.slice(6);
+							if (data === '[DONE]') continue;
+
+							try {
+								const parsed = JSON.parse(data);
+								if (parsed.type === 'content') {
+									chatStore.appendToMessage(newConversationId, assistantMessageId, parsed.content);
+								} else if (parsed.choices?.[0]?.delta?.content) {
+									chatStore.appendToMessage(
+										newConversationId,
+										assistantMessageId,
+										parsed.choices[0].delta.content
+									);
+								}
+							} catch {
+								// Skip invalid JSON
+							}
+						}
+					}
+				}
+
+				chatStore.updateMessage(newConversationId, assistantMessageId, {
+					isStreaming: false
+				});
+			} catch (err) {
+				if (err instanceof Error && err.name === 'AbortError') {
+					chatStore.updateMessage(newConversationId, assistantMessageId, {
+						isStreaming: false
+					});
+				} else {
+					chatStore.updateMessage(newConversationId, assistantMessageId, {
+						isStreaming: false,
+						error: err instanceof Error ? err.message : 'Unknown error'
+					});
+				}
+			} finally {
+				chatStore.setStreaming(false);
+			}
+
+			toastStore.success('Session refreshed successfully');
+		} catch (err) {
+			toastStore.error(err instanceof Error ? err.message : 'Failed to compact conversation');
+		} finally {
+			isCompacting = false;
+		}
 	}
 
 	// Context Transparency: Document activation handlers
@@ -1962,6 +2098,8 @@
 						<ChatInput
 							onsend={handleSend}
 							onstop={handleStop}
+							oncompact={handleCompact}
+							{isCompacting}
 							disabled={!selectedModel || isGenerating || isTaskCompleted}
 							placeholder={isTaskCompleted ? 'Reopen to continue chatting...' : undefined}
 							{contextSource}

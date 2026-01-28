@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
-	import { Sparkles, Zap } from 'lucide-svelte';
+	import { Sparkles, Zap, ArrowRight, FolderOpen } from 'lucide-svelte';
 	import SpaceIcon from '$lib/components/SpaceIcon.svelte';
 	import type { Assist } from '$lib/types/assists';
 	import { ASSIST_ICONS } from '$lib/config/assists';
@@ -232,9 +232,9 @@
 				</p>
 			{:else}
 				<h2 class="text-2xl font-bold text-gradient mb-3">Welcome to StratAI</h2>
-				<p class="text-surface-400 mb-6">
-					Your AI-powered assistant for intelligent conversations.
-					Select a model and start chatting.
+				<p class="text-surface-400 mb-6 leading-relaxed">
+					Start a quick conversation below, or head to <strong class="text-surface-200">Spaces</strong> for
+					context-rich discussions with documents, tasks, and your team.
 				</p>
 			{/if}
 		{/if}
@@ -255,16 +255,27 @@
 						<span>Select a model above to get started</span>
 					</div>
 				{:else}
-					<button
-						type="button"
-						onclick={onNewChat}
-						class="mx-auto px-6 py-2.5 rounded-xl font-medium transition-all duration-200"
-						style={space
-							? 'background: var(--space-accent); color: white;'
-							: 'background: var(--gradient-primary); color: white;'}
-					>
-						{content?.buttonText || 'Start New Chat'}
-					</button>
+					{#if content}
+						<button
+							type="button"
+							onclick={onNewChat}
+							class="mx-auto px-6 py-2.5 rounded-xl font-medium transition-all duration-200"
+							style="background: var(--space-accent); color: white;"
+						>
+							{content.buttonText}
+						</button>
+					{:else}
+						<a
+							href="/spaces"
+							class="mx-auto inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-medium transition-all duration-200
+								   bg-gradient-to-r from-primary-500 to-cyan-500 hover:from-primary-600 hover:to-cyan-600
+								   text-white shadow-lg shadow-primary-500/20"
+						>
+							<FolderOpen class="w-4 h-4" />
+							Go to Spaces
+							<ArrowRight class="w-4 h-4" />
+						</a>
+					{/if}
 				{/if}
 			</div>
 
@@ -317,7 +328,7 @@
 					</div>
 				{/each}
 			{:else}
-				<!-- Default features -->
+				<!-- Default: Quick chat vs Spaces -->
 				<div class="p-4 rounded-xl bg-surface-900 border border-surface-800">
 					<svg
 						class="w-6 h-6 text-primary-500 mb-2"
@@ -332,12 +343,12 @@
 							d="M13 10V3L4 14h7v7l9-11h-7z"
 						/>
 					</svg>
-					<h3 class="font-medium text-surface-200 mb-1">Fast & Responsive</h3>
-					<p class="text-xs text-surface-500">Real-time streaming responses</p>
+					<h3 class="font-medium text-surface-200 mb-1">Quick Chat</h3>
+					<p class="text-xs text-surface-500">Type below for fast, one-off conversations</p>
 				</div>
-				<div class="p-4 rounded-xl bg-surface-900 border border-surface-800">
+				<div class="p-4 rounded-xl bg-surface-900 border border-primary-500/20">
 					<svg
-						class="w-6 h-6 text-accent-500 mb-2"
+						class="w-6 h-6 text-cyan-500 mb-2"
 						fill="none"
 						stroke="currentColor"
 						viewBox="0 0 24 24"
@@ -346,11 +357,11 @@
 							stroke-linecap="round"
 							stroke-linejoin="round"
 							stroke-width="2"
-							d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+							d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
 						/>
 					</svg>
-					<h3 class="font-medium text-surface-200 mb-1">Secure & Private</h3>
-					<p class="text-xs text-surface-500">Your data stays safe</p>
+					<h3 class="font-medium text-surface-200 mb-1">Spaces</h3>
+					<p class="text-xs text-surface-500">Documents, tasks, and context that make AI smarter</p>
 				</div>
 			{/if}
 		</div>

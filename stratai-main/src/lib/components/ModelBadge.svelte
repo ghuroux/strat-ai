@@ -10,9 +10,10 @@
 	interface Props {
 		model: string;
 		compact?: boolean; // If true, show minimal version (just provider + name)
+		isAutoMode?: boolean; // If true, show AUTO indicator alongside the resolved model
 	}
 
-	let { model, compact = false }: Props = $props();
+	let { model, compact = false, isAutoMode = false }: Props = $props();
 
 	let provider = $derived(getModelProvider(model));
 	let displayName = $derived(getModelDisplayName(model));
@@ -25,8 +26,15 @@
 	<div
 		class="model-badge flex items-center gap-1.5 px-2 py-1 bg-surface-800 border border-surface-700 rounded-lg"
 		class:compact
-		title="Model locked for this conversation"
+		title={isAutoMode ? 'AUTO routing — model selected automatically' : 'Model locked for this conversation'}
 	>
+		{#if isAutoMode}
+			<!-- AUTO mode indicator -->
+			<span class="px-1.5 py-0.5 rounded text-xs font-bold bg-primary-500/20 text-primary-400">
+				AUTO
+			</span>
+		{/if}
+
 		<!-- Provider badge -->
 		<span class="px-1.5 py-0.5 rounded text-xs font-medium {providerColor}">
 			{provider}

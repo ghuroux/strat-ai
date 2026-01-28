@@ -32,6 +32,24 @@
 	// AUTO mode: track the routed model from chat store
 	let routedModel = $derived(chatStore.routedModel);
 
+	// Resolve the actual model for the badge display
+	// When in AUTO mode, show the routed model instead of "auto"
+	let isConversationAutoMode = $derived(
+		chatStore.activeConversation?.model?.toLowerCase() === 'auto'
+	);
+	let badgeModel = $derived.by(() => {
+		const conv = chatStore.activeConversation;
+		if (!conv) return '';
+		if (conv.model.toLowerCase() === 'auto') {
+			// Use current routing state first
+			if (routedModel) return routedModel;
+			// Fall back to last assistant message's routed model
+			const lastRouted = [...conv.messages].reverse().find(m => m.role === 'assistant' && m.routedModel);
+			if (lastRouted?.routedModel) return lastRouted.routedModel;
+		}
+		return conv.model;
+	});
+
 	// Spaces state
 	let showSpaceModal = $state(false);
 	let editingSpace = $state<Space | null>(null);
@@ -316,7 +334,7 @@
 
 		<!-- Current conversation model badge (hide on Space Dashboard and Arena) -->
 		{#if !isSpaceDashboard && !isArena && chatStore.messages && chatStore.messages.length > 0 && chatStore.activeConversation}
-			<ModelBadge model={chatStore.activeConversation.model} />
+			<ModelBadge model={badgeModel} isAutoMode={isConversationAutoMode} />
 		{/if}
 
 		<!-- Settings -->

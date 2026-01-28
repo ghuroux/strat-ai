@@ -50,7 +50,7 @@ const defaultSettings: UserSettings = {
 	extendedThinkingEnabled: false,
 	thinkingBudgetTokens: 10000, // Default budget for thinking
 	// Context Window defaults
-	contextThresholdPercent: 50 // Show indicator at 50% usage
+	contextThresholdPercent: 0 // Show indicator always (0 = always)
 };
 
 class SettingsStore {
