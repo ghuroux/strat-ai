@@ -97,6 +97,7 @@ function generateShareId(prefix: 'pus' | 'pgs'): string {
 async function canAccessPage(userId: string, pageId: string): Promise<PageAccessResult> {
 	// Get page details - use LEFT JOIN so we can still check ownership even if area is deleted
 	// Note: postgres.js auto-transforms column names to camelCase
+	try {
 	const pageRows = await sql<
 		{
 			userId: string;
@@ -230,6 +231,19 @@ async function canAccessPage(userId: string, pageId: string): Promise<PageAccess
 
 	// Fallback: deny access
 	return { hasAccess: false, permission: null, source: 'owner' };
+	} catch (err) {
+		// Log detailed error context for debugging
+		console.error(`[canAccessPage] Error checking access: pageId=${pageId}, userId=${userId}`, err);
+		console.error('[canAccessPage] Error details:', {
+			name: err instanceof Error ? err.name : 'Unknown',
+			message: err instanceof Error ? err.message : String(err),
+			userIdType: typeof userId,
+			userIdLength: userId?.length,
+			// Check if userId looks like a valid UUID (basic pattern check)
+			userIdPattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId || '')
+		});
+		throw err; // Re-throw to propagate the error
+	}
 }
 
 // ============================================================================

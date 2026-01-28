@@ -34,6 +34,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		const page = await postgresPageRepository.findById(pageId, userId);
 
 		if (!page) {
+			console.warn(`[PageLoad] Page not found or access denied: pageId=${pageId}, userId=${userId}`);
 			error(404, 'Page not found');
 		}
 
@@ -63,7 +64,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			userId
 		};
 	} catch (err) {
-		console.error('Failed to load page:', err);
+		console.error(`[PageLoad] Failed to load page: pageId=${pageId}, userId=${userId}`, err);
+		console.error('[PageLoad] Error details:', {
+			name: err instanceof Error ? err.name : 'Unknown',
+			message: err instanceof Error ? err.message : String(err),
+			stack: err instanceof Error ? err.stack : undefined
+		});
 		error(500, 'Failed to load page');
 	}
 };

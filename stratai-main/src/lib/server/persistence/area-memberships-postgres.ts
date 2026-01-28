@@ -134,6 +134,7 @@ export const postgresAreaMembershipsRepository = {
 	 * 4. Space access (if area not restricted)
 	 */
 	async canAccessArea(userId: string, areaId: string): Promise<AreaAccessResult> {
+		try {
 		const rows = await sql<AccessCheckRow[]>`
 			WITH area_info AS (
 				SELECT
@@ -241,6 +242,19 @@ export const postgresAreaMembershipsRepository = {
 		}
 
 		return { hasAccess: false, role: 'viewer', source: 'space' };
+		} catch (err) {
+			// Log detailed error context for debugging
+			console.error(`[canAccessArea] Error checking access: areaId=${areaId}, userId=${userId}`, err);
+			console.error('[canAccessArea] Error details:', {
+				name: err instanceof Error ? err.name : 'Unknown',
+				message: err instanceof Error ? err.message : String(err),
+				userIdType: typeof userId,
+				userIdLength: userId?.length,
+				// Check if userId looks like a valid UUID (basic pattern check)
+				userIdPattern: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId || '')
+			});
+			throw err; // Re-throw to propagate the error
+		}
 	},
 
 	/**
