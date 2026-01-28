@@ -40,7 +40,7 @@ const DEFAULT_TIMEZONE = "Africa/Johannesburg";
 export function getTemporalContext(timezone?: string): string {
   const tz = timezone || DEFAULT_TIMEZONE;
 
-  // Get current date in the specified timezone
+  // Get current date/time in the specified timezone
   const now = new Date();
 
   // Format date as "Thursday, January 16, 2026" (long format with day of week)
@@ -52,6 +52,15 @@ export function getTemporalContext(timezone?: string): string {
     day: "numeric",
   });
   const formattedDate = dateFormatter.format(now);
+
+  // Format time as "6:17 PM" in the user's timezone
+  const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const formattedTime = timeFormatter.format(now);
 
   // Get timezone display name (e.g., "South Africa Standard Time")
   // Use timeZoneName: 'long' to get the full display name
@@ -65,6 +74,7 @@ export function getTemporalContext(timezone?: string): string {
 
   return `<temporal_context>
 Current date: ${formattedDate}
+Current time: ${formattedTime}
 Timezone: ${timeZoneName}
 </temporal_context>`;
 }
