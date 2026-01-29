@@ -17,7 +17,8 @@
 	import type { Task, SubtaskContext } from '$lib/types/tasks';
 	import type { Conversation } from '$lib/types/chat';
 	import { getQuickStarts, type QuickStartIcon } from '$lib/utils/quick-starts';
-	import { MoreVertical, Edit3, Star, Download, Trash2 } from 'lucide-svelte';
+	import { MoreVertical, Edit3, Star, Download, Trash2, FileText, FileCode, FileDown, ChevronDown } from 'lucide-svelte';
+	import { toastStore } from '$lib/stores/toast.svelte';
 
 	// SVG icon paths for quick start icons
 	const ICON_PATHS: Record<QuickStartIcon, string> = {
@@ -96,6 +97,17 @@
 	// Context menu state
 	let openMenuId = $state<string | null>(null);
 	let menuPosition = $state({ top: 0, left: 0 });
+	let showExportOptions = $state(false);
+
+	function exportAs(format: 'markdown' | 'json' | 'plaintext', conversationId: string) {
+		try {
+			window.location.href = `/api/conversations/export/${conversationId}?format=${format}`;
+		} catch {
+			toastStore.error('Failed to export conversation');
+		}
+		showExportOptions = false;
+		openMenuId = null;
+	}
 
 	// Rename state
 	let renamingConversationId = $state<string | null>(null);
@@ -127,6 +139,7 @@
 	}
 
 	function closeMenu() {
+		showExportOptions = false;
 		openMenuId = null;
 	}
 
@@ -574,11 +587,28 @@
 									</button>
 								{/if}
 							{/if}
-							{#if onExportConversation}
-								<button type="button" class="dropdown-item" onclick={() => handleMenuAction(() => onExportConversation!(openMenuId!))}>
+							{#if openMenuId}
+								<button type="button" class="dropdown-item export-trigger" onclick={() => showExportOptions = !showExportOptions}>
 									<Download size={14} />
 									Export
+									<ChevronDown size={12} class="expand-chevron {showExportOptions ? 'expanded' : ''}" />
 								</button>
+								{#if showExportOptions}
+									<div class="export-submenu">
+										<button type="button" class="dropdown-item export-option" onclick={() => exportAs('markdown', openMenuId!)}>
+											<FileText size={12} />
+											Markdown
+										</button>
+										<button type="button" class="dropdown-item export-option" onclick={() => exportAs('json', openMenuId!)}>
+											<FileCode size={12} />
+											JSON
+										</button>
+										<button type="button" class="dropdown-item export-option" onclick={() => exportAs('plaintext', openMenuId!)}>
+											<FileDown size={12} />
+											Plain Text
+										</button>
+									</div>
+								{/if}
 							{/if}
 							{#if onDeleteConversation}
 								<div class="dropdown-divider"></div>
@@ -1276,6 +1306,37 @@
 
 	.dropdown-item-danger:hover {
 		background: rgba(248, 113, 113, 0.1);
+	}
+
+	.export-trigger {
+		justify-content: flex-start;
+	}
+
+	.export-trigger :global(.expand-chevron) {
+		margin-left: auto;
+		opacity: 0.5;
+		transition: transform 0.15s ease;
+	}
+
+	.export-trigger :global(.expand-chevron.expanded) {
+		transform: rotate(180deg);
+	}
+
+	.export-submenu {
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
+		padding: 0.125rem 0;
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.export-option {
+		padding-left: 1.75rem;
+		font-size: 0.75rem;
+		color: rgba(255, 255, 255, 0.5);
+		gap: 0.375rem;
+	}
+
+	.export-option:hover {
+		color: rgba(255, 255, 255, 0.9);
 	}
 
 	.dropdown-divider {

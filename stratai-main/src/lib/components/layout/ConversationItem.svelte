@@ -3,6 +3,7 @@
 	import type { Conversation } from '$lib/types/chat';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
+	import { toastStore } from '$lib/stores/toast.svelte';
 
 	interface Props {
 		conversation: Conversation;
@@ -124,11 +125,24 @@
 		ondelete?.();
 	}
 
-	function doExport(e: MouseEvent) {
+	let showExportOptions = $state(false);
+
+	function toggleExportOptions(e: MouseEvent) {
 		e.preventDefault();
 		e.stopPropagation();
+		showExportOptions = !showExportOptions;
+	}
+
+	function exportAs(format: 'markdown' | 'json' | 'plaintext', e: MouseEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		try {
+			window.location.href = `/api/conversations/export/${conversation.id}?format=${format}`;
+		} catch {
+			toastStore.error('Failed to export conversation');
+		}
+		showExportOptions = false;
 		onMenuToggle?.(false);
-		onexport?.();
 	}
 
 	function doMove(e: MouseEvent) {
@@ -140,6 +154,7 @@
 
 	function handleMenuMouseLeave() {
 		// Close menu when mouse leaves the dropdown
+		showExportOptions = false;
 		onMenuToggle?.(false);
 	}
 
@@ -267,13 +282,38 @@
 				</svg>
 				{isPinned ? 'Unpin' : 'Pin'}
 			</button>
-			<button type="button" class="dropdown-item" onclick={doExport}>
+			<button type="button" class="dropdown-item export-trigger" onclick={toggleExportOptions}>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
 						d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
 				</svg>
 				Export
+				<svg class="expand-chevron" class:expanded={showExportOptions} viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+				</svg>
 			</button>
+			{#if showExportOptions}
+				<div class="export-submenu">
+					<button type="button" class="dropdown-item export-option" onclick={(e) => exportAs('markdown', e)}>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+						</svg>
+						Markdown
+					</button>
+					<button type="button" class="dropdown-item export-option" onclick={(e) => exportAs('json', e)}>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+						</svg>
+						JSON
+					</button>
+					<button type="button" class="dropdown-item export-option" onclick={(e) => exportAs('plaintext', e)}>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+						</svg>
+						Plain Text
+					</button>
+				</div>
+			{/if}
 			<button type="button" class="dropdown-item" onclick={doMove}>
 				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -414,7 +454,7 @@
 
 	.dropdown-menu {
 		position: fixed;
-		width: 140px;
+		width: 160px;
 		padding: 0.25rem 0;
 		background-color: #18181b;
 		border: 1px solid #3f3f46;
@@ -448,6 +488,38 @@
 
 	.dropdown-item-danger:hover {
 		background-color: rgba(248, 113, 113, 0.1);
+	}
+
+	.export-trigger {
+		justify-content: flex-start;
+	}
+
+	.expand-chevron {
+		width: 0.75rem;
+		height: 0.75rem;
+		margin-left: auto;
+		transition: transform 0.15s ease;
+		opacity: 0.5;
+	}
+
+	.expand-chevron.expanded {
+		transform: rotate(180deg);
+	}
+
+	.export-submenu {
+		border-top: 1px solid #3f3f46;
+		padding: 0.125rem 0;
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.export-option {
+		padding-left: 1.5rem;
+		font-size: 0.75rem;
+		color: #a1a1aa;
+	}
+
+	.export-option:hover {
+		color: #e4e4e7;
 	}
 
 	.dropdown-divider {

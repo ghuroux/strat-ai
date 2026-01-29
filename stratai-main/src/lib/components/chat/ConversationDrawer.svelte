@@ -13,6 +13,7 @@
 	import { fly, fade, slide } from 'svelte/transition';
 	import type { Conversation } from '$lib/types/chat';
 	import type { Area } from '$lib/types/areas';
+	import { toastStore } from '$lib/stores/toast.svelte';
 
 	interface TaskInfo {
 		id: string;
@@ -70,6 +71,9 @@
 
 	// Active menu state
 	let activeMenuId = $state<string | null>(null);
+
+	// Export submenu state
+	let showExportOptions = $state(false);
 
 	// Filtered conversations
 	let filteredConversations = $derived.by(() => {
@@ -134,6 +138,7 @@
 		if (event.key === 'Escape') {
 			if (activeMenuId) {
 				activeMenuId = null;
+				showExportOptions = false;
 			} else {
 				onClose();
 			}
@@ -185,11 +190,23 @@
 		renameValue = '';
 	}
 
-	// Export conversation
-	function handleExport(e: MouseEvent, convId: string) {
+	// Toggle export submenu
+	function toggleExportOptions(e: MouseEvent) {
+		e.stopPropagation();
+		showExportOptions = !showExportOptions;
+	}
+
+	// Export conversation in specific format
+	function exportAs(e: MouseEvent, format: string, convId: string) {
 		e.stopPropagation();
 		activeMenuId = null;
-		onExportConversation?.(convId);
+		showExportOptions = false;
+		try {
+			window.location.href = `/api/conversations/export/${convId}?format=${format}`;
+			toastStore.success(`Exporting as ${format}`);
+		} catch {
+			toastStore.error('Export failed');
+		}
 	}
 
 	// Delete conversation
@@ -203,12 +220,14 @@
 	function toggleMenu(e: MouseEvent, convId: string) {
 		e.stopPropagation();
 		activeMenuId = activeMenuId === convId ? null : convId;
+		showExportOptions = false;
 	}
 
 	// Close menu when clicking outside
 	function handleBackdropClick() {
 		if (activeMenuId) {
 			activeMenuId = null;
+			showExportOptions = false;
 		}
 	}
 </script>
@@ -378,14 +397,33 @@
 												</button>
 												<button
 													type="button"
-													class="w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
-													onclick={(e) => handleExport(e, conv.id)}
+													class="export-trigger w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
+													onclick={(e) => toggleExportOptions(e)}
 												>
 													<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
 														<path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
 													</svg>
 													Export
+													<svg class="w-3 h-3 ml-auto transition-transform {showExportOptions ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+													</svg>
 												</button>
+												{#if showExportOptions}
+													<div class="export-submenu">
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'markdown', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+															Markdown
+														</button>
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'json', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+															JSON
+														</button>
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'plaintext', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0-6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0-6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+															Plain Text
+														</button>
+													</div>
+												{/if}
 												<div class="border-t border-surface-700 my-1"></div>
 												<button
 													type="button"
@@ -474,14 +512,33 @@
 												</button>
 												<button
 													type="button"
-													class="w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
-													onclick={(e) => handleExport(e, conv.id)}
+													class="export-trigger w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
+													onclick={(e) => toggleExportOptions(e)}
 												>
 													<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
 														<path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
 													</svg>
 													Export
+													<svg class="w-3 h-3 ml-auto transition-transform {showExportOptions ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+													</svg>
 												</button>
+												{#if showExportOptions}
+													<div class="export-submenu">
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'markdown', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+															Markdown
+														</button>
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'json', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+															JSON
+														</button>
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'plaintext', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0-6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0-6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+															Plain Text
+														</button>
+													</div>
+												{/if}
 												<div class="border-t border-surface-700 my-1"></div>
 												<button
 													type="button"
@@ -591,14 +648,33 @@
 												</button>
 												<button
 													type="button"
-													class="w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
-													onclick={(e) => handleExport(e, conv.id)}
+													class="export-trigger w-full px-3 py-1.5 text-left text-xs text-surface-300 hover:bg-surface-700 flex items-center gap-2"
+													onclick={(e) => toggleExportOptions(e)}
 												>
 													<svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
 														<path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/>
 													</svg>
 													Export
+													<svg class="w-3 h-3 ml-auto transition-transform {showExportOptions ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+													</svg>
 												</button>
+												{#if showExportOptions}
+													<div class="export-submenu">
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'markdown', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/></svg>
+															Markdown
+														</button>
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'json', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+															JSON
+														</button>
+														<button type="button" class="export-option" onclick={(e) => exportAs(e, 'plaintext', conv.id)}>
+															<svg class="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0-6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0-6a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+															Plain Text
+														</button>
+													</div>
+												{/if}
 												<div class="border-t border-surface-700 my-1"></div>
 												<button
 													type="button"
@@ -803,5 +879,34 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		vertical-align: middle;
+	}
+
+	/* Export submenu */
+	.export-trigger {
+		position: relative;
+	}
+
+	.export-submenu {
+		display: flex;
+		flex-direction: column;
+		padding: 0 0.25rem;
+	}
+
+	.export-option {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.25rem 0.75rem 0.25rem 1.75rem;
+		text-align: left;
+		font-size: 0.6875rem;
+		color: rgba(255, 255, 255, 0.5);
+		border-radius: 0.25rem;
+		transition: background-color 0.15s, color 0.15s;
+	}
+
+	.export-option:hover {
+		background: rgba(255, 255, 255, 0.08);
+		color: rgba(255, 255, 255, 0.85);
 	}
 </style>

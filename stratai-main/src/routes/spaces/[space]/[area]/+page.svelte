@@ -1966,63 +1966,95 @@
 				{#if area?.id && memberCount > 1}
 					<AreaAvatarStack areaId={area.id} maxDisplay={3} onClick={() => (showShareModal = true)} />
 				{/if}
-			</div>
 
-			<!-- Tools cluster (Chats/Tasks/Docs panel toggles) -->
-			<div class="header-tools">
-				<button
-					type="button"
-					class="tool-button"
-					onclick={() => drawerOpen = true}
-					title="Conversations ({areaConversations.length})"
-				>
-					<svg viewBox="0 0 20 20" fill="currentColor">
-						<path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-						<path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
-					</svg>
-					{#if areaConversations.length > 0}
-						<span class="tool-badge">{areaConversations.length}</span>
+				<!-- Area actions: Share + New Chat -->
+				<div class="area-actions">
+					{#if canShare}
+						<button
+							type="button"
+							class="share-button"
+							onclick={() => (showShareModal = true)}
+							title="Share this area"
+							aria-label="Share this area"
+						>
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+								/>
+							</svg>
+						</button>
 					{/if}
-				</button>
-				<button
-					type="button"
-					class="tool-button"
-					onclick={() => tasksPanelOpen = true}
-					title="Tasks ({areaTaskCount})"
-				>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-					</svg>
-					{#if areaTaskCount > 0}
-						<span class="tool-badge">{areaTaskCount}</span>
-					{/if}
-				</button>
-				<button
-					type="button"
-					class="tool-button"
-					onclick={goToPages}
-					title="Pages ({areaPageCount})"
-				>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 12H5.625c-.621 0-1.125-.504-1.125-1.125V3.375c0-.621.504-1.125 1.125-1.125h5.25c.207 0 .404.057.573.158L17.625 7.5v7.875c0 .621-.504 1.125-1.125 1.125H13.5" />
-					</svg>
-					{#if areaPageCount > 0}
-						<span class="tool-badge">{areaPageCount}</span>
-					{/if}
-				</button>
-				<button
-					type="button"
-					class="tool-button"
-					onclick={() => contextPanelOpen = true}
-					title="Context ({spaceDocCount} docs)"
-				>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-					</svg>
-					{#if spaceDocCount > 0}
-						<span class="tool-badge">{spaceDocCount}</span>
-					{/if}
-				</button>
+					<button
+						type="button"
+						class="new-chat-button"
+						onclick={handleNewChat}
+						title="New chat in this area"
+					>
+						<svg viewBox="0 0 20 20" fill="currentColor">
+							<path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+						</svg>
+					</button>
+				</div>
+
+				<!-- Tools cluster (Chats/Tasks/Docs panel toggles) -->
+				<div class="header-tools">
+					<button
+						type="button"
+						class="tool-button"
+						onclick={() => drawerOpen = true}
+						title="Conversations ({areaConversations.length})"
+					>
+						<svg viewBox="0 0 20 20" fill="currentColor">
+							<path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+							<path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+						</svg>
+						{#if areaConversations.length > 0}
+							<span class="tool-badge">{areaConversations.length}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="tool-button"
+						onclick={() => tasksPanelOpen = true}
+						title="Tasks ({areaTaskCount})"
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+						</svg>
+						{#if areaTaskCount > 0}
+							<span class="tool-badge">{areaTaskCount}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="tool-button"
+						onclick={goToPages}
+						title="Pages ({areaPageCount})"
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 12H5.625c-.621 0-1.125-.504-1.125-1.125V3.375c0-.621.504-1.125 1.125-1.125h5.25c.207 0 .404.057.573.158L17.625 7.5v7.875c0 .621-.504 1.125-1.125 1.125H13.5" />
+						</svg>
+						{#if areaPageCount > 0}
+							<span class="tool-badge">{areaPageCount}</span>
+						{/if}
+					</button>
+					<button
+						type="button"
+						class="tool-button"
+						onclick={() => contextPanelOpen = true}
+						title="Context ({spaceDocCount} docs)"
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+						</svg>
+						{#if spaceDocCount > 0}
+							<span class="tool-badge">{spaceDocCount}</span>
+						{/if}
+					</button>
+				</div>
 			</div>
 
 			<div class="header-right">
@@ -2035,34 +2067,6 @@
 				{:else}
 					<ModelBadge model={effectiveModel} />
 				{/if}
-				{#if canShare}
-					<button
-						type="button"
-						class="share-button"
-						onclick={() => (showShareModal = true)}
-						title="Share this area"
-						aria-label="Share this area"
-					>
-						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-							/>
-						</svg>
-					</button>
-				{/if}
-				<button
-					type="button"
-					class="new-chat-button"
-					onclick={handleNewChat}
-					title="New chat in this area"
-				>
-					<svg viewBox="0 0 20 20" fill="currentColor">
-						<path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
-					</svg>
-				</button>
 				<button
 					type="button"
 					class="settings-button"
@@ -2073,6 +2077,9 @@
 						<path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
 					</svg>
 				</button>
+				{#if userData}
+					<UserMenu displayName={userData.displayName} role={userData.role} />
+				{/if}
 			</div>
 		</header>
 
@@ -2510,12 +2517,24 @@
 		font-size: 0.875rem;
 	}
 
+	.area-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-left: 0.5rem;
+		padding-left: 0.75rem;
+		border-left: 1px solid rgba(255, 255, 255, 0.1);
+	}
+
 	/* Tools cluster */
 	.header-tools {
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
 		flex-shrink: 0;
+		margin-left: 0.5rem;
+		padding-left: 0.75rem;
+		border-left: 1px solid rgba(255, 255, 255, 0.1);
 	}
 
 	.tool-button {

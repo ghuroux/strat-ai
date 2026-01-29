@@ -28,7 +28,6 @@
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
-	import ConversationExportMenu from '$lib/components/chat/ConversationExportMenu.svelte';
 	import ModelSelector from '$lib/components/ModelSelector.svelte';
 	import ModelBadge from '$lib/components/ModelBadge.svelte';
 	import PlanModePanel from '$lib/components/tasks/PlanModePanel.svelte';
@@ -44,6 +43,9 @@
 	import CreatePageModal from '$lib/components/pages/CreatePageModal.svelte';
 	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
 	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
+	import UserMenu from '$lib/components/layout/UserMenu.svelte';
+	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
+	import { ContextPanel } from '$lib/components/areas';
 	import { FileText, Download, LayoutList } from 'lucide-svelte';
 	import type { Task, ProposedSubtask, SubtaskType } from '$lib/types/tasks';
 	import type { PageType } from '$lib/types/page';
@@ -131,6 +133,12 @@
 	let createPageModalOpen = $state(false);
 	let createPageFromMessageId = $state<string | null>(null);
 	let pageSuggestionPageType = $state<PageType | null>(null);
+
+	// Settings & context panel state
+	let settingsOpen = $state(false);
+	let contextPanelOpen = $state(false);
+	let userData = $derived($page.data.user as { displayName: string | null; role: 'owner' | 'admin' | 'member' } | null);
+	let taskArea = $derived(task?.areaId ? areaStore.getAreaById(task.areaId) : undefined);
 
 	// Delete conversation modal state
 	let showDeleteConversationModal = $state(false);
@@ -1120,6 +1128,11 @@
 		await areaStore.updateArea(areaId, { contextDocumentIds: newIds });
 	}
 
+	// Area update handler for ContextPanel
+	async function handleAreaUpdate(areaId: string, updates: { context?: string; contextDocumentIds?: string[] }) {
+		await areaStore.updateArea(areaId, updates);
+	}
+
 	// Context source for ContextBar (used in ChatInput)
 	let contextSource = $derived.by(() => {
 		if (!task || !spaceParam) return undefined;
@@ -1709,21 +1722,6 @@
 			</div>
 
 			<div class="header-right">
-				<!-- Create Page button - only in chat view with sufficient messages -->
-				{#if viewMode === 'chat' && activeConversation}
-					<button
-						type="button"
-						class="create-page-button"
-						onclick={() => (createPageModalOpen = true)}
-						disabled={visibleMessages.length < 2}
-						title="Create Page from conversation"
-					>
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-						</svg>
-					</button>
-				{/if}
-
 				<!-- Complete buttons -->
 				{#if isSubtask && task.subtaskType === 'conversation' && task.status !== 'completed'}
 					<button type="button" class="complete-button" onclick={handleCompleteCurrentSubtask}>
@@ -1774,12 +1772,6 @@
 					{:else}
 						<ModelBadge model={effectiveModel} />
 					{/if}
-
-					<!-- Export conversation -->
-					<ConversationExportMenu
-						conversationId={activeConversation?.id ?? null}
-						hasMessages={messages.length > 0}
-					/>
 				{/if}
 
 				{#if viewMode === 'chat' && !isPlanModeActive && panelSubtasks.length > 0}
@@ -1794,6 +1786,31 @@
 							<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7" />
 						</svg>
 					</button>
+				{/if}
+				{#if taskArea}
+					<button
+						type="button"
+						class="context-button"
+						onclick={() => contextPanelOpen = true}
+						title="Area context (docs, notes, pages)"
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+						</svg>
+					</button>
+				{/if}
+				<button
+					type="button"
+					class="settings-button"
+					onclick={() => settingsOpen = true}
+					title="Settings"
+				>
+					<svg viewBox="0 0 20 20" fill="currentColor">
+						<path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+					</svg>
+				</button>
+				{#if userData}
+					<UserMenu displayName={userData.displayName} role={userData.role} />
 				{/if}
 			</div>
 		</header>
@@ -2270,6 +2287,23 @@
 			/>
 		{/if}
 
+		<!-- Context Panel (area docs, notes, pages) -->
+		{#if taskArea}
+			<ContextPanel
+				isOpen={contextPanelOpen}
+				area={taskArea}
+				spaceId={task?.spaceId ?? spaceParam ?? ''}
+				spaceColor={spaceConfig?.accentColor}
+				onClose={() => contextPanelOpen = false}
+				onAreaUpdate={handleAreaUpdate}
+			/>
+		{/if}
+
+		<!-- Settings Panel -->
+		{#if settingsOpen}
+			<SettingsPanel open={true} onclose={() => settingsOpen = false} />
+		{/if}
+
 		<!-- Delete Conversation Modal -->
 		<DeleteConversationModal
 			open={showDeleteConversationModal}
@@ -2525,35 +2559,6 @@
 		height: 0.875rem;
 	}
 
-	.create-page-button {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		color: rgba(255, 255, 255, 0.5);
-		background: rgba(255, 255, 255, 0.05);
-		border: none;
-		border-radius: 0.5rem;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.create-page-button:hover:not(:disabled) {
-		color: rgba(255, 255, 255, 0.9);
-		background: rgba(255, 255, 255, 0.1);
-	}
-
-	.create-page-button:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.create-page-button svg {
-		width: 1rem;
-		height: 1rem;
-	}
-
 	.back-to-dashboard {
 		display: flex;
 		align-items: center;
@@ -2631,6 +2636,33 @@
 	}
 
 	.panel-toggle svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.context-button,
+	.settings-button {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		color: rgba(255, 255, 255, 0.5);
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 0.375rem;
+		transition: all 0.15s ease;
+	}
+
+	.context-button:hover,
+	.settings-button:hover {
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.1);
+		border-color: rgba(255, 255, 255, 0.2);
+	}
+
+	.context-button svg,
+	.settings-button svg {
 		width: 1rem;
 		height: 1rem;
 	}

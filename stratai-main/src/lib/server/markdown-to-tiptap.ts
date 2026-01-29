@@ -9,8 +9,9 @@
  */
 
 import MarkdownIt from 'markdown-it';
-// @ts-expect-error - no type declarations for markdown-it-task-lists
-import taskLists from 'markdown-it-task-lists';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const taskLists = require('markdown-it-task-lists');
 import { generateJSON } from '@tiptap/html/server';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
