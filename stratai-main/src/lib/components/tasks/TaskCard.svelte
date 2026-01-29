@@ -28,6 +28,13 @@
 		showStaleBadge?: boolean;
 		showOverdueBadge?: boolean;
 		isExpanded?: boolean;
+		// Global dashboard: space badge
+		showSpaceBadge?: boolean;
+		spaceName?: string;
+		spaceBadgeColor?: string;
+		// Global dashboard: area overrides (denormalized from GlobalTask)
+		areaName?: string;
+		areaColor?: string;
 		onComplete: () => void;
 		onClick: () => void;
 		onToggleExpanded?: () => void;
@@ -45,6 +52,11 @@
 		showStaleBadge = false,
 		showOverdueBadge = false,
 		isExpanded = false,
+		showSpaceBadge = false,
+		spaceName,
+		spaceBadgeColor,
+		areaName: areaNameOverride,
+		areaColor: areaColorOverride,
 		onComplete,
 		onClick,
 		onToggleExpanded,
@@ -195,7 +207,16 @@
 
 			<!-- Meta row -->
 			<div class="task-meta">
-				{#if area}
+				{#if showSpaceBadge && spaceName}
+					<span class="task-space-badge" style="--badge-color: {spaceBadgeColor || spaceColor}">
+						{spaceName}
+					</span>
+				{/if}
+				{#if areaNameOverride}
+					<span class="task-area" style="--area-color: {areaColorOverride || spaceColor}">
+						{areaNameOverride}
+					</span>
+				{:else if area}
 					<span class="task-area" style="--area-color: {area.color || spaceColor}">
 						{area.icon || ''} {area.name}
 					</span>
@@ -456,6 +477,15 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-wrap: wrap;
+	}
+
+	.task-space-badge {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		background: color-mix(in srgb, var(--badge-color, var(--space-color)) 15%, transparent);
+		color: var(--badge-color, var(--space-color));
 	}
 
 	.task-area {

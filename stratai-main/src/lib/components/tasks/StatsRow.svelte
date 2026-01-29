@@ -5,6 +5,8 @@
 	Shows motivational metrics: completed today, streak, needs attention.
 -->
 <script lang="ts">
+	import { Flame } from 'lucide-svelte';
+
 	interface Props {
 		completedToday: number;
 		streak: number;
@@ -45,7 +47,7 @@
 	<!-- Streak -->
 	{#if streakDisplay.show}
 		<div class="stat stat-streak {streakDisplay.class}">
-			<span class="stat-icon-emoji">🔥</span>
+			<Flame size={14} class="stat-icon" />
 			<span class="stat-value">{streakDisplay.text}</span>
 			<span class="stat-label">streak</span>
 		</div>
@@ -99,11 +101,6 @@
 		width: 0.875rem;
 		height: 0.875rem;
 		flex-shrink: 0;
-	}
-
-	.stat-icon-emoji {
-		font-size: 0.875rem;
-		line-height: 1;
 	}
 
 	.stat-value {

@@ -7,6 +7,7 @@
 <script lang="ts">
 	import { slide } from 'svelte/transition';
 	import type { Task } from '$lib/types/tasks';
+	import type { GlobalTask } from '$lib/types/tasks';
 	import type { Area } from '$lib/types/areas';
 	import TaskCard from './TaskCard.svelte';
 
@@ -23,6 +24,9 @@
 		showStaleBadges?: boolean;
 		showOverdueBadges?: boolean;
 		maxVisible?: number; // Max tasks to show before "Show more" (0 = show all)
+		// Global dashboard support
+		isGlobal?: boolean;
+		showSpaceBadge?: boolean;
 		onTaskClick: (task: Task) => void;
 		onCompleteTask: (task: Task) => void;
 		onDismissStale?: (task: Task) => void;
@@ -43,6 +47,8 @@
 		showStaleBadges = false,
 		showOverdueBadges = false,
 		maxVisible = 5,
+		isGlobal = false,
+		showSpaceBadge = false,
 		onTaskClick,
 		onCompleteTask,
 		onDismissStale,
@@ -147,15 +153,21 @@
 			{#if tasks.length > 0}
 				<div class="task-list">
 					{#each visibleTasks as task (task.id)}
+						{@const globalTask = isGlobal ? (task as GlobalTask) : null}
 						<TaskCard
 							{task}
-							area={getArea(task.areaId)}
-							{spaceColor}
-							{spaceSlug}
+							area={isGlobal ? null : getArea(task.areaId)}
+							spaceColor={isGlobal && globalTask ? globalTask.spaceColor : spaceColor}
+							spaceSlug={isGlobal && globalTask ? globalTask.spaceSlug : spaceSlug}
 							variant={variant === 'warning' ? 'attention' : 'default'}
 							showStaleBadge={showStaleBadges && isStale(task) && !isOverdue(task)}
 							showOverdueBadge={showOverdueBadges && isOverdue(task)}
 							isExpanded={isTaskExpanded(task.id)}
+							{showSpaceBadge}
+							spaceName={globalTask?.spaceName}
+							spaceBadgeColor={globalTask?.spaceColor}
+							areaName={globalTask?.areaName}
+							areaColor={globalTask?.areaColor}
 							onClick={() => onTaskClick(task)}
 							onComplete={() => onCompleteTask(task)}
 							onToggleExpanded={() => toggleTaskExpanded(task.id)}

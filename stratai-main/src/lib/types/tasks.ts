@@ -296,6 +296,46 @@ export interface TaskListFilter {
 	includeCompleted?: boolean;
 }
 
+// ============================================================================
+// GLOBAL TASK TYPES (Cross-space task aggregation)
+// ============================================================================
+
+/**
+ * Task with denormalized space/area metadata from JOIN
+ * Used by the Global Tasks Dashboard for cross-space display
+ */
+export interface GlobalTask extends Task {
+	spaceName: string;
+	spaceSlug: string;
+	spaceColor: string;
+	areaName?: string;
+	areaSlug?: string;
+	areaColor?: string;
+}
+
+/**
+ * Database row for GlobalTask (extends TaskRow with JOIN columns)
+ * postgres.js auto-transforms snake_case → camelCase
+ */
+export interface GlobalTaskRow extends TaskRow {
+	spaceName: string;
+	spaceSlug: string;
+	spaceColor: string;
+	areaName: string | null;
+	areaSlug: string | null;
+	areaColor: string | null;
+}
+
+/**
+ * Filter options for global (cross-space) task listing
+ */
+export interface GlobalTaskFilter {
+	spaceId?: string;
+	status?: TaskStatus | TaskStatus[];
+	priority?: TaskPriority;
+	includeCompleted?: boolean;
+}
+
 /**
  * Greeting data for returning users
  */

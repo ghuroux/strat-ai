@@ -18,7 +18,10 @@ import type {
 	TaskRelationshipType,
 	RelatedTaskRow,
 	RelatedTaskInfo,
-	PlanningData
+	PlanningData,
+	GlobalTask,
+	GlobalTaskRow,
+	GlobalTaskFilter
 } from '$lib/types/tasks';
 import type { TaskRepository } from './types';
 import { sql, type JSONValue } from './db';
@@ -86,6 +89,23 @@ function dbRowToTask(row: TaskRow): Task {
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
 		deletedAt: row.deletedAt ?? undefined
+	};
+}
+
+/**
+ * Convert database row with JOIN data to GlobalTask entity
+ * Extends the base task with denormalized space/area metadata
+ */
+function dbRowToGlobalTask(row: GlobalTaskRow): GlobalTask {
+	const task = dbRowToTask(row);
+	return {
+		...task,
+		spaceName: row.spaceName,
+		spaceSlug: row.spaceSlug,
+		spaceColor: row.spaceColor,
+		areaName: row.areaName ?? undefined,
+		areaSlug: row.areaSlug ?? undefined,
+		areaColor: row.areaColor ?? undefined
 	};
 }
 
@@ -164,6 +184,40 @@ export const postgresTaskRepository: TaskRepository = {
 
 		const rows = await query;
 		return rows.map(dbRowToTask);
+	},
+
+	async findAllForUser(userId: string, filter?: GlobalTaskFilter): Promise<GlobalTask[]> {
+		// Build conditional fragments
+		const spaceFilter = filter?.spaceId ? sql`AND t.space_id = ${filter.spaceId}` : sql``;
+
+		let statusFilter;
+		if (filter?.status) {
+			const statuses = Array.isArray(filter.status) ? filter.status : [filter.status];
+			statusFilter = sql`AND t.status = ANY(${statuses})`;
+		} else if (filter?.includeCompleted) {
+			statusFilter = sql``;
+		} else {
+			statusFilter = sql`AND t.status != 'completed'`;
+		}
+
+		const rows = await sql<GlobalTaskRow[]>`
+			SELECT t.*,
+				s.name AS space_name, s.slug AS space_slug, s.color AS space_color,
+				a.name AS area_name, a.slug AS area_slug, a.color AS area_color
+			FROM tasks t
+			INNER JOIN spaces s ON t.space_id = s.id
+			LEFT JOIN areas a ON t.area_id = a.id
+			WHERE t.user_id = ${userId}
+				AND t.deleted_at IS NULL
+				AND t.parent_task_id IS NULL
+				${spaceFilter}
+				${statusFilter}
+			ORDER BY
+				CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END,
+				CASE WHEN t.priority = 'high' THEN 0 ELSE 1 END,
+				t.created_at DESC
+		`;
+		return rows.map(dbRowToGlobalTask);
 	},
 
 	async findById(id: string, userId: string): Promise<Task | null> {

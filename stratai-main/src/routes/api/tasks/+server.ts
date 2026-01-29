@@ -9,7 +9,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
-import type { CreateTaskInput, TaskListFilter, TaskStatus } from '$lib/types/tasks';
+import type { CreateTaskInput, TaskListFilter, TaskStatus, GlobalTaskFilter } from '$lib/types/tasks';
 
 /**
  * GET /api/tasks
@@ -27,6 +27,36 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const userId = locals.session.userId;
 
 	try {
+		// Global mode: cross-space task aggregation
+		const isGlobal = url.searchParams.get('global') === 'true';
+
+		if (isGlobal) {
+			const globalFilter: GlobalTaskFilter = {};
+
+			// Optional space filter (resolve slug → ID)
+			const spaceParam = url.searchParams.get('spaceId');
+			if (spaceParam) {
+				const resolvedId = await resolveSpaceIdAccessible(spaceParam, userId);
+				if (!resolvedId) {
+					return json({ error: `Space not found: ${spaceParam}` }, { status: 404 });
+				}
+				globalFilter.spaceId = resolvedId;
+			}
+
+			// Optional status filter
+			const globalStatusParam = url.searchParams.get('status');
+			if (globalStatusParam) {
+				const statuses = globalStatusParam.split(',') as TaskStatus[];
+				globalFilter.status = statuses.length === 1 ? statuses[0] : statuses;
+			}
+
+			globalFilter.includeCompleted = url.searchParams.get('includeCompleted') === 'true';
+
+			const tasks = await postgresTaskRepository.findAllForUser(userId, globalFilter);
+			return json({ tasks });
+		}
+
+		// Per-space mode (existing behavior)
 		const spaceIdParam = url.searchParams.get('spaceId') ?? undefined;
 		const areaId = url.searchParams.get('areaId');
 		const statusParam = url.searchParams.get('status');

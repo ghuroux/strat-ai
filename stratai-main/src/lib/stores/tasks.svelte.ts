@@ -23,7 +23,9 @@ import type {
 	TaskRelationshipType,
 	TaskContext,
 	PlanModeSynopsis,
-	SubtaskContext
+	SubtaskContext,
+	GlobalTask,
+	GlobalTaskFilter
 } from '$lib/types/tasks';
 import type { TaskContextInfo } from '$lib/utils/context-builder';
 
@@ -56,6 +58,12 @@ class TaskStore {
 		firstSubtaskId?: string;
 		synopsis?: PlanModeSynopsis;
 	} | null>(null);
+
+	// Global tasks state (cross-space aggregation)
+	globalTasks = $state<SvelteMap<string, GlobalTask>>(new SvelteMap());
+	isGlobalLoading = $state(false);
+	globalError = $state<string | null>(null);
+	private globalInitialized = false;
 
 	// Version counter for fine-grained updates
 	_version = $state(0);
@@ -214,6 +222,34 @@ class TaskStore {
 	 * Check if Plan Mode is active (derived)
 	 */
 	isPlanModeActive = $derived(this.planningTask !== null);
+
+	// =====================================================
+	// Global Task Derived Values
+	// =====================================================
+
+	/**
+	 * All global tasks as a sorted array (high priority first, then by createdAt)
+	 */
+	globalTaskList = $derived.by(() => {
+		const _ = this._version;
+		return Array.from(this.globalTasks.values())
+			.filter((t) => t && t.id)
+			.sort((a, b) => {
+				// High priority first
+				if (a.priority === 'high' && b.priority !== 'high') return -1;
+				if (a.priority !== 'high' && b.priority === 'high') return 1;
+				// Then by created date (newest first)
+				return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+			});
+	});
+
+	/**
+	 * Only active (pending) global tasks
+	 */
+	globalPendingTasks = $derived.by(() => {
+		const _ = this._version;
+		return this.globalTaskList.filter((t) => t.status === 'active');
+	});
 
 	// =====================================================
 	// API Methods
@@ -1511,6 +1547,130 @@ class TaskStore {
 	}
 
 	// =====================================================
+	// Global Task Methods
+	// =====================================================
+
+	/**
+	 * Load global (cross-space) tasks from API
+	 */
+	async loadGlobalTasks(filter?: GlobalTaskFilter): Promise<void> {
+		this.isGlobalLoading = true;
+		this.globalError = null;
+
+		try {
+			const params = new URLSearchParams({ global: 'true', includeCompleted: 'true' });
+			if (filter?.spaceId) params.set('spaceId', filter.spaceId);
+			if (filter?.status) {
+				const statuses = Array.isArray(filter.status) ? filter.status.join(',') : filter.status;
+				params.set('status', statuses);
+			}
+			if (filter?.includeCompleted !== undefined) {
+				params.set('includeCompleted', String(filter.includeCompleted));
+			}
+
+			const response = await fetch(`/api/tasks?${params}`);
+
+			if (!response.ok) {
+				throw new Error(`Failed to load global tasks: ${response.status}`);
+			}
+
+			const data = await response.json();
+
+			// Replace global tasks (full refresh)
+			this.globalTasks = new SvelteMap();
+			if (data.tasks && Array.isArray(data.tasks)) {
+				for (const task of data.tasks) {
+					this.globalTasks.set(task.id, this.parseGlobalTaskDates(task));
+				}
+			}
+			this.globalInitialized = true;
+			this._version++;
+		} catch (e) {
+			console.error('Failed to load global tasks:', e);
+			this.globalError = e instanceof Error ? e.message : 'Failed to load global tasks';
+		} finally {
+			this.isGlobalLoading = false;
+		}
+	}
+
+	/**
+	 * Force re-fetch global tasks (always hits API)
+	 */
+	async reloadGlobalTasks(filter?: GlobalTaskFilter): Promise<void> {
+		this.globalInitialized = false;
+		await this.loadGlobalTasks(filter);
+	}
+
+	/**
+	 * Get count of tasks completed today across all spaces
+	 */
+	getGlobalCompletedToday(): number {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+
+		return Array.from(this.globalTasks.values()).filter((t) => {
+			if (t.status !== 'completed') return false;
+			if (!t.completedAt) return false;
+			const completedDate = new Date(t.completedAt);
+			completedDate.setHours(0, 0, 0, 0);
+			return completedDate.getTime() === today.getTime();
+		}).length;
+	}
+
+	/**
+	 * Calculate completion streak across all spaces
+	 */
+	calculateGlobalStreak(): number {
+		const completedTasks = Array.from(this.globalTasks.values()).filter(
+			(t) => t.status === 'completed' && t.completedAt
+		);
+
+		if (completedTasks.length === 0) return 0;
+
+		const completionDates = new Set<string>();
+		for (const task of completedTasks) {
+			const date = new Date(task.completedAt!);
+			date.setHours(0, 0, 0, 0);
+			completionDates.add(date.toISOString().split('T')[0]);
+		}
+
+		let streak = 0;
+		const checkDate = new Date();
+		checkDate.setHours(0, 0, 0, 0);
+
+		const todayStr = checkDate.toISOString().split('T')[0];
+		if (!completionDates.has(todayStr)) {
+			checkDate.setDate(checkDate.getDate() - 1);
+			const yesterdayStr = checkDate.toISOString().split('T')[0];
+			if (!completionDates.has(yesterdayStr)) {
+				return 0;
+			}
+		}
+
+		while (completionDates.has(checkDate.toISOString().split('T')[0])) {
+			streak++;
+			checkDate.setDate(checkDate.getDate() - 1);
+		}
+
+		return streak;
+	}
+
+	/**
+	 * Parse date strings from global task API response
+	 */
+	private parseGlobalTaskDates(task: GlobalTask): GlobalTask {
+		return {
+			...this.parseTaskDates(task),
+			spaceName: task.spaceName,
+			spaceSlug: task.spaceSlug,
+			spaceColor: task.spaceColor,
+			areaName: task.areaName,
+			areaSlug: task.areaSlug,
+			areaColor: task.areaColor
+		};
+	}
+
+	// =====================================================
 	// Helper Methods
 	// =====================================================
 
@@ -1563,15 +1723,18 @@ class TaskStore {
 	 */
 	clearAll(): void {
 		this.tasks = new SvelteMap();
+		this.globalTasks = new SvelteMap();
 		this.focusedTaskId = null;
 		this.expandedTasks = new Set();
 		// planMode is derived from tasks with status='planning', no need to clear
 		this.relatedTasks.clear();
 		this.taskContext.clear();
 		this.initializedSpaceIds.clear();
+		this.globalInitialized = false;
 		this.loadedRelatedTasks.clear();
 		this.loadedTaskContext.clear();
 		this.error = null;
+		this.globalError = null;
 		this._version = 0;
 	}
 
