@@ -15,6 +15,7 @@ import type {
 	DocumentWithTaskInfo,
 	CreateDocumentInput
 } from '$lib/types/documents';
+import { toastStore } from './toast.svelte';
 
 /**
  * Document link info for UI display
@@ -90,6 +91,7 @@ class DocumentStore {
 		} catch (e) {
 			console.error('Failed to load documents:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load documents';
+			toastStore.error('Failed to load documents');
 		} finally {
 			this.isLoading = false;
 		}
@@ -125,6 +127,7 @@ class DocumentStore {
 		} catch (e) {
 			console.error('Failed to load shared documents:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load shared documents';
+			toastStore.error('Failed to load shared documents');
 		}
 	}
 
@@ -170,6 +173,7 @@ class DocumentStore {
 				};
 				this.documents.set(doc.id, doc);
 				this._version++;
+				toastStore.success('Document uploaded');
 				return doc;
 			}
 
@@ -177,6 +181,7 @@ class DocumentStore {
 		} catch (e) {
 			console.error('Failed to upload document:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to upload document';
+			toastStore.error(e instanceof Error ? e.message : 'Failed to upload document');
 			return null;
 		} finally {
 			this.isLoading = false;
@@ -207,10 +212,12 @@ class DocumentStore {
 			}
 
 			this._version++;
+			toastStore.success('Document deleted');
 			return true;
 		} catch (e) {
 			console.error('Failed to delete document:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to delete document';
+			toastStore.error('Failed to delete document');
 			return false;
 		}
 	}
@@ -293,6 +300,7 @@ class DocumentStore {
 		} catch (e) {
 			console.error('Failed to link document to task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to link document';
+			toastStore.error('Failed to link document');
 			return false;
 		}
 	}
@@ -322,6 +330,7 @@ class DocumentStore {
 		} catch (e) {
 			console.error('Failed to unlink document from task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to unlink document';
+			toastStore.error('Failed to unlink document');
 			return false;
 		}
 	}

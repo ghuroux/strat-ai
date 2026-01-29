@@ -23,6 +23,7 @@ import type {
 	TipTapContent
 } from '$lib/types/page';
 import { areaStore } from './areas.svelte';
+import { toastStore } from './toast.svelte';
 
 /**
  * Pages Store - manages pages with API sync
@@ -131,6 +132,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to refresh pages for space:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to refresh pages for space';
+			toastStore.error('Failed to load pages');
 		} finally {
 			this.isLoading = false;
 		}
@@ -164,6 +166,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to load pages:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load pages';
+			toastStore.error('Failed to load pages');
 		} finally {
 			this.isLoading = false;
 		}
@@ -197,6 +200,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to get page:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to get page';
+			toastStore.error('Failed to load page');
 			return null;
 		}
 	}
@@ -216,8 +220,14 @@ class PageStore {
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json();
-				throw new Error(errorData.error || `Create failed: ${response.status}`);
+				let errorMessage = `Create failed: ${response.status}`;
+				try {
+					const errorData = await response.json();
+					errorMessage = errorData.error || errorMessage;
+				} catch {
+					// Response may not be JSON (e.g. Cloudflare 504 HTML page)
+				}
+				throw new Error(errorMessage);
 			}
 
 			const data = await response.json();
@@ -225,6 +235,7 @@ class PageStore {
 				const page = this.parseDates(data.page);
 				this.pages.set(page.id, page);
 				this._version++;
+				toastStore.success('Page created');
 				return page;
 			}
 
@@ -232,6 +243,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to create page:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create page';
+			toastStore.error('Failed to create page');
 			return null;
 		} finally {
 			this.isLoading = false;
@@ -273,6 +285,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to update page:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update page';
+			toastStore.error('Failed to save page');
 			return null;
 		}
 	}
@@ -301,10 +314,12 @@ class PageStore {
 			}
 
 			this._version++;
+			toastStore.success('Page deleted');
 			return true;
 		} catch (e) {
 			console.error('Failed to delete page:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to delete page';
+			toastStore.error('Failed to delete page');
 			return false;
 		}
 	}
@@ -327,6 +342,7 @@ class PageStore {
 				const page = this.parseDates(data.page);
 				this.pages.set(page.id, page);
 				this._version++;
+				toastStore.success('Page duplicated');
 				return page;
 			}
 
@@ -334,6 +350,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to duplicate page:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to duplicate page';
+			toastStore.error('Failed to duplicate page');
 			return null;
 		}
 	}
@@ -363,6 +380,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to search pages:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to search pages';
+			toastStore.error('Failed to search pages');
 			return [];
 		}
 	}
@@ -438,6 +456,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to create version:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create version';
+			toastStore.error('Failed to create version');
 			return null;
 		}
 	}
@@ -493,6 +512,7 @@ class PageStore {
 				this.versions.delete(pageId);
 				this._version++;
 
+				toastStore.success('Version restored');
 				return page;
 			}
 
@@ -500,6 +520,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to restore version:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to restore version';
+			toastStore.error('Failed to restore version');
 			return null;
 		}
 	}
@@ -623,6 +644,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to set page in context:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to toggle context';
+			toastStore.error('Failed to toggle context');
 			return null;
 		}
 	}
@@ -655,6 +677,7 @@ class PageStore {
 		} catch (e) {
 			console.error('Failed to unlock page:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to unlock page';
+			toastStore.error('Failed to unlock page');
 			return null;
 		}
 	}

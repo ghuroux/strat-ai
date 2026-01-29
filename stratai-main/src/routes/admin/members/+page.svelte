@@ -1,12 +1,17 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { fly, fade } from 'svelte/transition';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { PageData, ActionData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	// Active tab state
 	let activeTab = $state<'members' | 'invitations'>('members');
+
+	// Revoke invitation confirmation
+	let revokeTarget = $state<{ id: string; formRef: HTMLFormElement | null }>({ id: '', formRef: null });
+	let showRevokeConfirm = $state(false);
 
 	// Search/filter state
 	let searchQuery = $state('');
@@ -392,6 +397,7 @@
 										<form
 											method="POST"
 											action="?/revokeInvitation"
+											bind:this={revokeTarget.formRef}
 											use:enhance={() => {
 												return async ({ update }) => {
 													await update();
@@ -400,13 +406,13 @@
 										>
 											<input type="hidden" name="userId" value={invitation.id} />
 											<button
-												type="submit"
+												type="button"
 												class="btn-icon text-error-400"
 												title="Revoke invitation"
 												onclick={(e) => {
-													if (!confirm('Are you sure you want to revoke this invitation? The user will be deleted.')) {
-														e.preventDefault();
-													}
+													const form = (e.currentTarget as HTMLElement).closest('form') as HTMLFormElement;
+													revokeTarget = { id: invitation.id, formRef: form };
+													showRevokeConfirm = true;
 												}}
 											>
 												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -620,6 +626,22 @@
 		</div>
 	</div>
 {/if}
+
+<!-- Revoke invitation confirmation -->
+<ConfirmModal
+	open={showRevokeConfirm}
+	title="Revoke invitation"
+	message="Are you sure you want to revoke this invitation? The user will be deleted."
+	confirmLabel="Revoke"
+	confirmVariant="danger"
+	onConfirm={() => {
+		showRevokeConfirm = false;
+		if (revokeTarget.formRef) {
+			revokeTarget.formRef.requestSubmit();
+		}
+	}}
+	onCancel={() => { showRevokeConfirm = false; }}
+/>
 
 <style>
 	.members-page {

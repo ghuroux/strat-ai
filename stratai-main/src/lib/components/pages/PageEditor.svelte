@@ -43,6 +43,7 @@
 	import FinalizePageModal from './FinalizePageModal.svelte';
 	import UnlockPageModal from './UnlockPageModal.svelte';
 	import DiscardChangesModal from './DiscardChangesModal.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import PageAuditLog from './PageAuditLog.svelte';
 	import VersionHistoryPanel from './VersionHistoryPanel.svelte';
 	import RestoreVersionModal from './RestoreVersionModal.svelte';
@@ -239,6 +240,7 @@
 	let lastSavedAt = $state<Date | null>(null);
 	let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 	let chatPanelOpen = $state(false);
+	let showCloseConfirm = $state(false);
 	let editorTick = $state(0); // Increments on each transaction to force toolbar reactivity
 
 	// Diagram editor modal state
@@ -578,6 +580,7 @@
 		} catch (error) {
 			console.error('Failed to save:', error);
 			saveStatus = 'error';
+			toastStore.error('Failed to save page');
 		} finally {
 			isSaving = false;
 		}
@@ -600,8 +603,8 @@
 	// Handle close with unsaved changes warning
 	function handleClose() {
 		if (isDirty) {
-			const confirmed = confirm('You have unsaved changes. Are you sure you want to leave?');
-			if (!confirmed) return;
+			showCloseConfirm = true;
+			return;
 		}
 		onClose();
 	}
@@ -2072,6 +2075,17 @@
 	currentVersion={page?.currentVersion ?? 1}
 	onClose={() => { showRestoreModal = false; restoreTargetVersion = null; }}
 	onConfirm={handleRestoreVersion}
+/>
+
+<!-- Unsaved changes confirmation -->
+<ConfirmModal
+	open={showCloseConfirm}
+	title="Unsaved changes"
+	message="You have unsaved changes. Are you sure you want to leave?"
+	confirmLabel="Discard changes"
+	confirmVariant="danger"
+	onConfirm={() => { showCloseConfirm = false; onClose(); }}
+	onCancel={() => { showCloseConfirm = false; }}
 />
 
 <style>

@@ -239,10 +239,7 @@
 	}
 
 	async function handleDeleteDocument(doc: Document) {
-		const success = await documentStore.deleteDocument(doc.id);
-		if (success) {
-			toastStore.success('Document deleted');
-		}
+		await documentStore.deleteDocument(doc.id);
 		deleteConfirmId = null;
 	}
 

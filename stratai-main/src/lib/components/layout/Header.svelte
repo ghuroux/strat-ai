@@ -133,19 +133,29 @@
 	}
 
 	async function handleUpdateSpace(id: string, input: UpdateSpaceInput) {
-		await spacesStore.updateSpace(id, input);
-		handleCloseModal();
+		try {
+			await spacesStore.updateSpace(id, input);
+			handleCloseModal();
+		} catch (e) {
+			console.error('Failed to update space:', e);
+			toastStore.error('Failed to update space');
+		}
 	}
 
 	async function handleDeleteSpace(id: string) {
-		const success = await spacesStore.deleteSpace(id);
-		if (success) {
-			handleCloseModal();
-			// If we're currently viewing the deleted space, navigate away
-			const deletedSpace = customSpaces.find(s => s.id === id);
-			if (deletedSpace && currentSpaceSlug === deletedSpace.slug) {
-				goto('/spaces');
+		try {
+			const success = await spacesStore.deleteSpace(id);
+			if (success) {
+				handleCloseModal();
+				// If we're currently viewing the deleted space, navigate away
+				const deletedSpace = customSpaces.find(s => s.id === id);
+				if (deletedSpace && currentSpaceSlug === deletedSpace.slug) {
+					goto('/spaces');
+				}
 			}
+		} catch (e) {
+			console.error('Failed to delete space:', e);
+			toastStore.error('Failed to delete space');
 		}
 	}
 

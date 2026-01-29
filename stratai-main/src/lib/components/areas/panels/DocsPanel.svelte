@@ -12,6 +12,7 @@
 -->
 <script lang="ts">
 	import PanelBase from './PanelBase.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Document } from '$lib/types/documents';
@@ -36,6 +37,7 @@
 	// Local state
 	let isDragOver = $state(false);
 	let isUploading = $state(false);
+	let deleteConfirmDoc = $state<Document | null>(null);
 
 	// Load documents when panel opens
 	$effect(() => {
@@ -132,14 +134,16 @@
 		isUploading = false;
 	}
 
-	async function handleDelete(doc: Document, e: Event) {
+	function handleDelete(doc: Document, e: Event) {
 		e.stopPropagation();
-		if (confirm(`Delete "${doc.filename}"? This cannot be undone.`)) {
-			const success = await documentStore.deleteDocument(doc.id);
-			if (success) {
-				toastStore.success('Document deleted');
-			}
-		}
+		deleteConfirmDoc = doc;
+	}
+
+	async function confirmDelete() {
+		if (!deleteConfirmDoc) return;
+		const doc = deleteConfirmDoc;
+		deleteConfirmDoc = null;
+		await documentStore.deleteDocument(doc.id);
 	}
 </script>
 
@@ -247,6 +251,17 @@
 		</div>
 	{/snippet}
 </PanelBase>
+
+<!-- Delete document confirmation -->
+<ConfirmModal
+	open={deleteConfirmDoc !== null}
+	title="Delete document"
+	message={deleteConfirmDoc ? `Delete "${deleteConfirmDoc.filename}"? This cannot be undone.` : ''}
+	confirmLabel="Delete"
+	confirmVariant="danger"
+	onConfirm={confirmDelete}
+	onCancel={() => { deleteConfirmDoc = null; }}
+/>
 
 <style>
 	.docs-content {

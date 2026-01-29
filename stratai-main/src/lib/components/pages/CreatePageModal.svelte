@@ -61,6 +61,7 @@
 	let isExtracting = $state(false);
 	let isCreating = $state(false);
 	let error = $state<string | null>(null);
+	let usedFallbackFormatting = $state(false);
 
 	// AI suggestions
 	let suggestedType = $state<PageType>('general');
@@ -88,6 +89,7 @@
 			customInstructions = '';
 			extractedContent = null;
 			error = null;
+			usedFallbackFormatting = false;
 		}
 	});
 
@@ -99,18 +101,6 @@
 		if (content.type !== 'doc') return false;
 		if (!Array.isArray(content.content)) return false;
 		if (content.content.length === 0) return false;
-
-		// Check for raw JSON in text content (indicates failed parsing)
-		for (const node of content.content) {
-			if (node.type === 'paragraph' && node.content?.[0]?.text) {
-				const text = node.content[0].text;
-				if (text.trim().startsWith('{"type":') || text.trim().startsWith('{ "type":')) {
-					console.error('[CreatePageModal] Invalid content - raw JSON detected');
-					return false;
-				}
-			}
-		}
-
 		return true;
 	}
 
@@ -140,19 +130,21 @@
 			});
 
 			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.error || data.details || 'Extraction failed');
+				// Handle non-JSON error responses (e.g. Cloudflare 504 HTML page)
+				const text = await response.text();
+				let errorMessage = `Extraction failed (${response.status})`;
+				try {
+					const data = JSON.parse(text);
+					errorMessage = data.error || data.details || errorMessage;
+				} catch {
+					if (response.status === 504) {
+						errorMessage = 'The AI model took too long to respond. Please try again with a shorter conversation or a different extraction type.';
+					}
+				}
+				throw new Error(errorMessage);
 			}
 
 			const data = await response.json();
-			console.log('[CreatePageModal] Extract API response:', JSON.stringify(data).substring(0, 500));
-			console.log('[CreatePageModal] Content type:', data.content?.type);
-			console.log('[CreatePageModal] First node:', JSON.stringify(data.content?.content?.[0]).substring(0, 200));
-
-			// Log retry metadata for debugging
-			if (data.meta?.attempts > 1) {
-				console.log('[CreatePageModal] Extraction succeeded after retry:', data.meta.retryReason);
-			}
 
 			// Validate the extracted content
 			if (!isValidTipTapContent(data.content)) {
@@ -160,6 +152,7 @@
 			}
 
 			extractedContent = data.content;
+			usedFallbackFormatting = data.meta?.fallback === true;
 			return true;
 		} catch (err) {
 			console.error('Extraction error:', err);
@@ -216,8 +209,17 @@
 			});
 
 			if (!response.ok) {
-				const data = await response.json();
-				throw new Error(data.error || 'Failed to create page');
+				const text = await response.text();
+				let errorMessage = `Failed to create page (${response.status})`;
+				try {
+					const data = JSON.parse(text);
+					errorMessage = data.error || errorMessage;
+				} catch {
+					if (response.status === 504) {
+						errorMessage = 'Server timed out. Please try again.';
+					}
+				}
+				throw new Error(errorMessage);
 			}
 
 			const data = await response.json();
@@ -394,6 +396,13 @@
 						{/if}
 					</div>
 				</div>
+
+				<!-- Fallback formatting notice -->
+				{#if usedFallbackFormatting && !error}
+					<div class="fallback-notice">
+						Converted with basic formatting. Some markdown formatting may not have been preserved.
+					</div>
+				{/if}
 
 				<!-- Error message with suggestions -->
 				{#if error}
@@ -688,6 +697,15 @@
 		color: var(--editor-text-secondary);
 		white-space: pre-wrap;
 		line-height: 1.5;
+	}
+
+	.fallback-notice {
+		padding: 0.5rem 0.75rem;
+		background: color-mix(in srgb, #f59e0b 15%, transparent);
+		border: 1px solid color-mix(in srgb, #f59e0b 40%, transparent);
+		border-radius: 8px;
+		color: var(--editor-text-secondary);
+		font-size: 0.8125rem;
 	}
 
 	.error-message {

@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { SPACES, isValidSpace } from '$lib/config/spaces';
 	import type { SpaceType } from '$lib/types/chat';
+	import ErrorFallback from '$lib/components/ErrorFallback.svelte';
 
 	let { children } = $props();
 
@@ -23,7 +24,12 @@
 	class="h-screen flex flex-col overflow-hidden"
 	data-space={currentSpace}
 >
-	{@render children()}
+	<svelte:boundary onerror={(e) => console.error('[Space Boundary Error]', e)}>
+		{@render children()}
+		{#snippet failed(error, reset)}
+			<ErrorFallback {error} {reset} variant="page" />
+		{/snippet}
+	</svelte:boundary>
 </div>
 
 <style>

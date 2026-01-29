@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { getSessionCookie, verifySession } from '$lib/server/session';
 import { postgresUserRepository, postgresOrgMembershipRepository } from '$lib/server/persistence';
@@ -109,4 +109,24 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	return response;
+};
+
+/**
+ * Server-side error handler
+ * Catches SSR errors and sanitizes messages before sending to client.
+ * 500 errors get a generic message (don't leak internals), others pass through.
+ */
+export const handleError: HandleServerError = async ({ error, event, status, message }) => {
+	const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+
+	console.error('[Server Error]', {
+		error,
+		status,
+		message,
+		url: event.url?.pathname
+	});
+
+	return {
+		message: status === 500 ? 'Something went wrong' : errorMessage
+	};
 };

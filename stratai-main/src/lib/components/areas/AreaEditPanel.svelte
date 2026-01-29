@@ -114,7 +114,9 @@
 			toastStore.success('Area updated');
 			onClose();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save area';
+			const msg = e instanceof Error ? e.message : 'Failed to save area';
+			error = msg;
+			toastStore.error(msg);
 		} finally {
 			isSubmitting = false;
 		}
@@ -139,7 +141,9 @@
 				}
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to upload document';
+			const msg = e instanceof Error ? e.message : 'Failed to upload document';
+			error = msg;
+			toastStore.error(msg);
 		} finally {
 			isUploading = false;
 			if (fileInputRef) fileInputRef.value = '';

@@ -28,6 +28,7 @@ import type {
 	GlobalTaskFilter
 } from '$lib/types/tasks';
 import type { TaskContextInfo } from '$lib/utils/context-builder';
+import { toastStore } from './toast.svelte';
 
 /**
  * Task Store - manages persistent tasks with API sync
@@ -296,6 +297,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to load tasks:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to load tasks';
+			toastStore.error('Failed to load tasks');
 		} finally {
 			this.isLoading = false;
 		}
@@ -327,11 +329,13 @@ class TaskStore {
 			// Add to store
 			this.tasks.set(task.id, task);
 			this._version++;
+			toastStore.success('Task created');
 
 			return task;
 		} catch (e) {
 			console.error('Failed to create task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create task';
+			toastStore.error('Failed to create task');
 			return null;
 		}
 	}
@@ -386,6 +390,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to create tasks from assist:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create tasks';
+			toastStore.error('Failed to create tasks');
 			return [];
 		}
 	}
@@ -427,6 +432,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to update task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update task';
+			toastStore.error('Failed to update task');
 			return null;
 		}
 	}
@@ -465,10 +471,12 @@ class TaskStore {
 				this.focusedTaskId = null;
 			}
 
+			toastStore.success('Task completed');
 			return task;
 		} catch (e) {
 			console.error('Failed to complete task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to complete task';
+			toastStore.error('Failed to complete task');
 			return null;
 		}
 	}
@@ -500,10 +508,12 @@ class TaskStore {
 			this.tasks.set(task.id, task);
 			this._version++;
 
+			toastStore.success('Task reopened');
 			return task;
 		} catch (e) {
 			console.error('Failed to reopen task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to reopen task';
+			toastStore.error('Failed to reopen task');
 			return null;
 		}
 	}
@@ -561,10 +571,12 @@ class TaskStore {
 				this.focusedTaskId = null;
 			}
 
+			toastStore.success('Task deleted');
 			return true;
 		} catch (e) {
 			console.error('Failed to delete task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to delete task';
+			toastStore.error('Failed to delete task');
 			return false;
 		}
 	}
@@ -663,6 +675,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to link conversation:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to link conversation';
+			toastStore.error('Failed to link conversation');
 			return null;
 		}
 	}
@@ -698,6 +711,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to unlink conversation:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to unlink conversation';
+			toastStore.error('Failed to unlink conversation');
 			return null;
 		}
 	}
@@ -763,6 +777,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to create subtask:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to create subtask';
+			toastStore.error('Failed to create subtask');
 			return null;
 		}
 	}
@@ -928,6 +943,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to start plan mode:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to start plan mode';
+			toastStore.error('Failed to start plan mode');
 			return { success: false, existingPlanningCount };
 		}
 	}
@@ -987,6 +1003,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to exit plan mode:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to exit plan mode';
+			toastStore.error('Failed to exit plan mode');
 			return false;
 		}
 	}
@@ -1217,6 +1234,7 @@ class TaskStore {
 			};
 		} catch (e) {
 			console.error('Failed to generate plan context:', e);
+			toastStore.error('Failed to generate plan context');
 			return null;
 		}
 	}
@@ -1312,6 +1330,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to update planning data:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to update planning data';
+			toastStore.error('Failed to update planning data');
 			return false;
 		}
 	}
@@ -1398,6 +1417,7 @@ class TaskStore {
 			}
 		} catch (e) {
 			console.error('Failed to load related tasks:', e);
+			toastStore.error('Failed to load related tasks');
 			this.relatedTasks.set(taskId, []);
 		}
 	}
@@ -1437,6 +1457,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to link related task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to link task';
+			toastStore.error('Failed to link related task');
 			return false;
 		}
 	}
@@ -1469,6 +1490,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to unlink related task:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to unlink task';
+			toastStore.error('Failed to unlink related task');
 			return false;
 		}
 	}
@@ -1517,6 +1539,7 @@ class TaskStore {
 			return null;
 		} catch (e) {
 			console.error('Failed to load task context:', e);
+			toastStore.error('Failed to load task context');
 			return null;
 		}
 	}
@@ -1588,6 +1611,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to load global tasks:', e);
 			this.globalError = e instanceof Error ? e.message : 'Failed to load global tasks';
+			toastStore.error('Failed to load tasks');
 		} finally {
 			this.isGlobalLoading = false;
 		}
@@ -1796,6 +1820,7 @@ class TaskStore {
 		} catch (e) {
 			console.error('Failed to set approach chosen:', e);
 			this.error = e instanceof Error ? e.message : 'Failed to set approach chosen';
+			toastStore.error('Failed to set approach');
 			return false;
 		}
 	}

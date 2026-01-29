@@ -351,7 +351,9 @@
 
 			onClose();
 		} catch (e) {
-			error = e instanceof Error ? e.message : isEditMode ? 'Failed to update task' : 'Failed to create task';
+			const msg = e instanceof Error ? e.message : isEditMode ? 'Failed to update task' : 'Failed to create task';
+			error = msg;
+			toastStore.error(msg);
 		} finally {
 			isSubmitting = false;
 		}

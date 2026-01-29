@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fly, fade } from 'svelte/transition';
 	import { arenaStore, type ArenaBattle } from '$lib/stores/arena.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ArenaBattleItem from './ArenaBattleItem.svelte';
 
 	interface Props {
@@ -14,6 +15,7 @@
 	let { battles, activeBattleId, onSelectBattle, onNewBattle, onRerunBattle }: Props = $props();
 
 	let openMenuId = $state<string | null>(null);
+	let showClearConfirm = $state(false);
 
 	// Get battles from props or store, split by pinned status
 	let pinnedBattles = $derived.by(() => {
@@ -144,9 +146,12 @@
 	}
 
 	function handleClearHistory() {
-		if (confirm('Clear all battle history? This cannot be undone.')) {
-			arenaStore.clearHistory();
-		}
+		showClearConfirm = true;
+	}
+
+	function confirmClearHistory() {
+		showClearConfirm = false;
+		arenaStore.clearHistory();
 	}
 
 	// Close menu when clicking outside
@@ -290,6 +295,17 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Clear history confirmation -->
+<ConfirmModal
+	open={showClearConfirm}
+	title="Clear history"
+	message="Clear all battle history? This cannot be undone."
+	confirmLabel="Clear history"
+	confirmVariant="danger"
+	onConfirm={confirmClearHistory}
+	onCancel={() => { showClearConfirm = false; }}
+/>
 
 <style>
 	.section-header {

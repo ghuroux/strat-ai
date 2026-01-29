@@ -8,6 +8,7 @@
 	import Confetti from '$lib/components/effects/Confetti.svelte';
 	import { SnakeGame, WordleGame } from '$lib/components/games';
 	import { BuyModal } from '$lib/components/commerce';
+	import ErrorFallback from '$lib/components/ErrorFallback.svelte';
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
 	import { commandPaletteStore } from '$lib/stores/commandPalette.svelte';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -237,7 +238,12 @@
 <svelte:body onclick={handleGlobalClick} />
 
 <div class="min-h-screen bg-surface-950">
-	{@render children()}
+	<svelte:boundary onerror={(e) => console.error('[Boundary Error]', e)}>
+		{@render children()}
+		{#snippet failed(error, reset)}
+			<ErrorFallback {error} {reset} variant="page" />
+		{/snippet}
+	</svelte:boundary>
 </div>
 
 <Toast />
