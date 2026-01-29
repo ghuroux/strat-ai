@@ -585,6 +585,10 @@
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										contextStatus: undefined, searchStatus: 'calendar', searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'email') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										contextStatus: undefined, searchStatus: 'email', searchQuery: parsed.query
+									});
 								} else if (parsed.status === 'thinking') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										contextStatus: undefined, searchStatus: undefined, searchQuery: undefined
@@ -791,6 +795,10 @@
 								} else if (parsed.status === 'calendar') {
 									chatStore.updateMessage(conversationId, assistantMessageId, {
 										searchStatus: 'calendar', searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'email') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: 'email', searchQuery: parsed.query
 									});
 								}
 							} else if (parsed.type === 'thinking_start') {

@@ -2,7 +2,7 @@
 	import { fade, fly } from 'svelte/transition';
 
 	interface Props {
-		status: 'thinking' | 'searching' | 'processing' | 'calendar';
+		status: 'thinking' | 'searching' | 'processing' | 'calendar' | 'email';
 		query?: string;
 		sources?: Array<{ title: string; url: string }>;
 	}
@@ -25,12 +25,12 @@
 	<!-- Main orb area -->
 	<div class="orb-area">
 		<!-- Pulse rings (always present, intensity varies by state) -->
-		<div class="pulse-ring pulse-ring-1" class:searching={status === 'searching'} class:calendar={status === 'calendar'}></div>
-		<div class="pulse-ring pulse-ring-2" class:searching={status === 'searching'} class:calendar={status === 'calendar'}></div>
-		<div class="pulse-ring pulse-ring-3" class:searching={status === 'searching'} class:calendar={status === 'calendar'}></div>
+		<div class="pulse-ring pulse-ring-1" class:searching={status === 'searching'} class:calendar={status === 'calendar'} class:email={status === 'email'}></div>
+		<div class="pulse-ring pulse-ring-2" class:searching={status === 'searching'} class:calendar={status === 'calendar'} class:email={status === 'email'}></div>
+		<div class="pulse-ring pulse-ring-3" class:searching={status === 'searching'} class:calendar={status === 'calendar'} class:email={status === 'email'}></div>
 
 		<!-- Central orb -->
-		<div class="orb" class:searching={status === 'searching'} class:calendar={status === 'calendar'}>
+		<div class="orb" class:searching={status === 'searching'} class:calendar={status === 'calendar'} class:email={status === 'email'}>
 			<div class="orb-inner"></div>
 
 			<!-- Search icon overlay when searching -->
@@ -56,6 +56,18 @@
 					/>
 				</svg>
 			{/if}
+
+			<!-- Envelope icon overlay when sending email -->
+			{#if status === 'email'}
+				<svg class="email-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" in:fade={{ duration: 200 }}>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+					/>
+				</svg>
+			{/if}
 		</div>
 
 		<!-- Orbiting elements when searching -->
@@ -73,6 +85,14 @@
 				<div class="orbit-dot calendar-dot orbit-dot-2"></div>
 			</div>
 		{/if}
+
+		<!-- Orbiting elements when sending email -->
+		{#if status === 'email'}
+			<div class="orbit-track email-orbit">
+				<div class="orbit-dot email-dot orbit-dot-1"></div>
+				<div class="orbit-dot email-dot orbit-dot-2"></div>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Status content -->
@@ -88,6 +108,11 @@
 				{/if}
 			{:else if status === 'calendar'}
 				<span class="status-label calendar" in:fade={{ duration: 150 }}>Checking calendar</span>
+				{#if query}
+					<span class="query-text" in:fly={{ y: 5, duration: 200, delay: 100 }}>"{query}"</span>
+				{/if}
+			{:else if status === 'email'}
+				<span class="status-label email" in:fade={{ duration: 150 }}>Sending email</span>
 				{#if query}
 					<span class="query-text" in:fly={{ y: 5, duration: 200, delay: 100 }}>"{query}"</span>
 				{/if}
@@ -186,6 +211,13 @@
 		animation: orbPulseCalendar 1.5s ease-in-out infinite;
 	}
 
+	.orb.email {
+		width: 20px;
+		height: 20px;
+		background: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #ea580c 100%);
+		animation: orbPulseEmail 1.5s ease-in-out infinite;
+	}
+
 	.orb-inner {
 		position: absolute;
 		inset: 2px;
@@ -217,6 +249,15 @@
 		animation: searchIconPulse 1s ease-in-out infinite;
 	}
 
+	.email-icon {
+		width: 11px;
+		height: 11px;
+		color: white;
+		position: relative;
+		z-index: 2;
+		animation: searchIconPulse 1s ease-in-out infinite;
+	}
+
 	/* Pulse Rings */
 	.pulse-ring {
 		position: absolute;
@@ -235,6 +276,11 @@
 	.pulse-ring.calendar {
 		border-color: rgba(16, 185, 129, 0.5);
 		animation: pulseRingCalendar 1.5s ease-out infinite;
+	}
+
+	.pulse-ring.email {
+		border-color: rgba(245, 158, 11, 0.5);
+		animation: pulseRingEmail 1.5s ease-out infinite;
 	}
 
 	.pulse-ring-1 { animation-delay: 0s; }
@@ -275,8 +321,17 @@
 		box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
 	}
 
+	.orbit-dot.email-dot {
+		background: linear-gradient(135deg, #f59e0b, #f97316);
+		box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+	}
+
 	.calendar-orbit {
 		animation: orbitRotate 4s linear infinite;
+	}
+
+	.email-orbit {
+		animation: orbitRotate 3.5s linear infinite;
 	}
 
 	/* Status Content */
@@ -314,6 +369,13 @@
 
 	.status-label.calendar {
 		background: linear-gradient(90deg, #34d399 0%, #2dd4bf 50%, #34d399 100%);
+		background-size: 200% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
+	}
+
+	.status-label.email {
+		background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 50%, #fbbf24 100%);
 		background-size: 200% 100%;
 		-webkit-background-clip: text;
 		background-clip: text;
@@ -430,6 +492,17 @@
 		}
 	}
 
+	@keyframes orbPulseEmail {
+		0%, 100% {
+			transform: scale(1);
+			box-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(249, 115, 22, 0.4);
+		}
+		50% {
+			transform: scale(1.15);
+			box-shadow: 0 0 18px rgba(245, 158, 11, 0.8), 0 0 36px rgba(249, 115, 22, 0.6);
+		}
+	}
+
 	@keyframes innerGlow {
 		0%, 100% { opacity: 0.7; }
 		50% { opacity: 1; }
@@ -458,6 +531,17 @@
 	}
 
 	@keyframes pulseRingCalendar {
+		0% {
+			transform: scale(1);
+			opacity: 0.7;
+		}
+		100% {
+			transform: scale(2.2);
+			opacity: 0;
+		}
+	}
+
+	@keyframes pulseRingEmail {
 		0% {
 			transform: scale(1);
 			opacity: 0.7;
@@ -572,6 +656,21 @@
 
 	:global(html.light) .status-label.calendar {
 		background: linear-gradient(90deg, #059669 0%, #0d9488 50%, #059669 100%);
+		background-size: 200% 100%;
+		-webkit-background-clip: text;
+		background-clip: text;
+	}
+
+	:global(html.light) .pulse-ring.email {
+		border-color: rgba(217, 119, 6, 0.4);
+	}
+
+	:global(html.light) .orbit-dot.email-dot {
+		box-shadow: 0 0 6px rgba(217, 119, 6, 0.5);
+	}
+
+	:global(html.light) .status-label.email {
+		background: linear-gradient(90deg, #d97706 0%, #b45309 50%, #d97706 100%);
 		background-size: 200% 100%;
 		-webkit-background-clip: text;
 		background-clip: text;

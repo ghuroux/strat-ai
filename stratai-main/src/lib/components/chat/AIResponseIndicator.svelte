@@ -12,7 +12,7 @@
 	 * 1. Processing (brief) → 2. Reasoning/Searching → 3. Generating
 	 */
 
-	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'calendar' | 'generating' | 'loading_context' | 'complete';
+	type AIState = 'processing' | 'reasoning' | 'searching' | 'reading_document' | 'browsing' | 'calendar' | 'email' | 'generating' | 'loading_context' | 'complete';
 
 	interface ContextInfo {
 		documents?: Array<{ filename: string }>;
@@ -58,6 +58,7 @@
 			case 'reading_document': return 'Reading';
 			case 'browsing': return 'Browsing';
 			case 'calendar': return 'Checking calendar';
+			case 'email': return 'Sending email';
 			case 'generating': return 'Writing';
 			case 'loading_context': return 'Loading context';
 			default: return '';
@@ -72,6 +73,7 @@
 			case 'reading_document': return searchQuery ? `"${searchQuery}"` : 'reference documents';
 			case 'browsing': return searchQuery ? searchQuery : 'retailer sites';
 			case 'calendar': return searchQuery || 'your schedule';
+			case 'email': return searchQuery || 'via Outlook';
 			case 'generating': return 'Crafting response';
 			case 'loading_context': return totalContextItems > 0 ? `${totalContextItems} source${totalContextItems !== 1 ? 's' : ''}` : 'Preparing';
 			default: return '';
@@ -88,6 +90,7 @@
 		class:state-reading-document={state === 'reading_document'}
 		class:state-browsing={state === 'browsing'}
 		class:state-calendar={state === 'calendar'}
+		class:state-email={state === 'email'}
 		class:state-generating={state === 'generating'}
 		class:state-loading-context={state === 'loading_context'}
 		in:scale={{ duration: 400, start: 0.9, opacity: 0, easing: backOut }}
@@ -129,6 +132,10 @@
 						{:else if state === 'calendar'}
 							<svg class="orb-icon calendar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+							</svg>
+						{:else if state === 'email'}
+							<svg class="orb-icon email-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
 							</svg>
 						{:else if state === 'generating'}
 							<svg class="orb-icon pen-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -294,6 +301,12 @@
 		--color-glow: rgba(16, 185, 129, 0.35);
 	}
 
+	.state-email {
+		--color-primary: 245, 158, 11; /* amber-500 */
+		--color-secondary: 249, 115, 22; /* orange-500 */
+		--color-glow: rgba(245, 158, 11, 0.35);
+	}
+
 	.state-loading-context {
 		--color-primary: 14, 165, 233; /* sky-500 */
 		--color-secondary: 59, 130, 246; /* blue-500 */
@@ -356,6 +369,15 @@
 			rgba(30, 41, 59, 0.5) 100%
 		);
 		border-color: rgba(16, 185, 129, 0.15);
+	}
+
+	.state-email .indicator-card {
+		background: linear-gradient(
+			135deg,
+			rgba(245, 158, 11, 0.08) 0%,
+			rgba(30, 41, 59, 0.5) 100%
+		);
+		border-color: rgba(245, 158, 11, 0.15);
 	}
 
 	.state-loading-context .indicator-card {
@@ -510,6 +532,10 @@
 
 	.calendar-icon {
 		animation: calendarPulse 1.6s ease-in-out infinite;
+	}
+
+	.email-icon {
+		animation: emailPulse 1.6s ease-in-out infinite;
 	}
 
 	/* Orbiting particles */
@@ -860,6 +886,17 @@
 		}
 	}
 
+	@keyframes emailPulse {
+		0%, 100% {
+			transform: scale(1);
+			opacity: 0.9;
+		}
+		50% {
+			transform: scale(1.08);
+			opacity: 1;
+		}
+	}
+
 	@keyframes chipFadeIn {
 		0% {
 			opacity: 0;
@@ -984,6 +1021,15 @@
 			rgba(255, 255, 255, 0.9) 100%
 		);
 		border-color: rgba(16, 185, 129, 0.2);
+	}
+
+	:global(html.light) .state-email .indicator-card {
+		background: linear-gradient(
+			135deg,
+			rgba(245, 158, 11, 0.1) 0%,
+			rgba(255, 255, 255, 0.9) 100%
+		);
+		border-color: rgba(245, 158, 11, 0.2);
 	}
 
 	:global(html.light) .state-loading-context .indicator-card {

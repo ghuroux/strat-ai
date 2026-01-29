@@ -52,9 +52,10 @@ export function getAzureConfig() {
 		redirectUri,
 		authorizationUrl: `${authority}/oauth2/v2.0/authorize`,
 		tokenUrl: `${authority}/oauth2/v2.0/token`,
-		// Scopes required for calendar access
+		// Scopes required for calendar and email access
 		scopes: [
 			'https://graph.microsoft.com/Calendars.ReadWrite',
+			'https://graph.microsoft.com/Mail.Send',
 			'https://graph.microsoft.com/User.Read',
 			'offline_access' // Required for refresh tokens
 		]

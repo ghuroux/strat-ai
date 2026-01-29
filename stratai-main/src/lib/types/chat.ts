@@ -37,7 +37,7 @@ export interface Message {
 	isStreaming?: boolean;
 	error?: string;
 	// Web search, document reading, and calendar fields
-	searchStatus?: 'searching' | 'reading_document' | 'browsing' | 'calendar' | 'complete';
+	searchStatus?: 'searching' | 'reading_document' | 'browsing' | 'calendar' | 'email' | 'complete';
 	searchQuery?: string;
 	// Context loading status (shows "Loading context" before API call)
 	contextStatus?: 'loading';

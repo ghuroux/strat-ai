@@ -327,11 +327,11 @@ export interface IntegrationWithStatus extends Integration {
 export const SERVICE_METADATA: Record<ServiceType, ServiceMetadata> = {
 	calendar: {
 		type: 'calendar',
-		displayName: 'Microsoft Calendar',
-		description: 'Access your Outlook calendar to view, create, and manage meetings',
+		displayName: 'Microsoft Calendar & Email',
+		description: 'Access your Outlook calendar to view, create, and manage meetings. Send emails via Microsoft Graph.',
 		tier: 'foundational',
 		icon: 'Calendar',
-		requiredScopes: ['Calendars.ReadWrite', 'User.Read', 'offline_access'],
+		requiredScopes: ['Calendars.ReadWrite', 'Mail.Send', 'User.Read', 'offline_access'],
 		documentationUrl: 'https://docs.microsoft.com/en-us/graph/api/resources/calendar'
 	},
 	github: {

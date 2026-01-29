@@ -25,6 +25,7 @@ import type { CommerceMessageContent } from '$lib/types/commerce';
 import { postgresIntegrationsRepository } from '$lib/server/persistence/integrations-postgres';
 import { postgresIntegrationCredentialsRepository } from '$lib/server/persistence/integration-credentials-postgres';
 import { calendarTools, isCalendarTool, executeCalendarTool } from '$lib/server/integrations/providers/calendar/tools';
+import { emailTools, isEmailTool, executeEmailTool } from '$lib/server/integrations/providers/calendar/email-tools';
 import { refreshAccessToken, tokensToCredentials } from '$lib/server/integrations/providers/calendar/oauth';
 
 /**
@@ -1036,6 +1037,49 @@ const calendarToolsOpenAI = [
 	}
 ];
 
+// Email tools - OpenAI format (type: 'function', function.parameters)
+// Mirrors the Anthropic-format tools in calendar/email-tools.ts
+const emailToolsOpenAI = [
+	{
+		type: 'function' as const,
+		function: {
+			name: 'email_send_email',
+			description: 'Send an email on behalf of the user via Microsoft Outlook. CRITICAL: You MUST draft the email in the conversation and get explicit user approval before calling this tool. Never call this tool without user confirmation.',
+			parameters: {
+				type: 'object',
+				properties: {
+					to: {
+						type: 'string',
+						description: 'Comma-separated list of recipient email addresses (To field)'
+					},
+					cc: {
+						type: 'string',
+						description: 'Comma-separated list of CC email addresses (optional)'
+					},
+					bcc: {
+						type: 'string',
+						description: 'Comma-separated list of BCC email addresses (optional)'
+					},
+					subject: {
+						type: 'string',
+						description: 'Email subject line'
+					},
+					body: {
+						type: 'string',
+						description: 'Email body in HTML format. Use <p> tags for paragraphs, <br> for line breaks, <strong> for bold, <em> for italic.'
+					},
+					saveToSentItems: {
+						type: 'string',
+						description: 'Whether to save the email in Sent Items folder. Defaults to "true".',
+						enum: ['true', 'false']
+					}
+				},
+				required: ['to', 'subject', 'body']
+			}
+		}
+	}
+];
+
 // Document info for tool context
 interface DocumentInfo {
 	filename: string;
@@ -1051,8 +1095,8 @@ interface DocumentInfo {
  * Optionally includes commerce tools for shopping functionality
  * Optionally includes calendar tools for meeting/scheduling functionality
  */
-function getToolsForModel(model: string, options: { includeDocumentTool?: boolean; includeCommerceTools?: boolean; includeCalendarTools?: boolean } = {}): ToolDefinition[] {
-	const { includeDocumentTool = false, includeCommerceTools = false, includeCalendarTools = false } = options;
+function getToolsForModel(model: string, options: { includeDocumentTool?: boolean; includeCommerceTools?: boolean; includeCalendarTools?: boolean; includeEmailTools?: boolean } = {}): ToolDefinition[] {
+	const { includeDocumentTool = false, includeCommerceTools = false, includeCalendarTools = false, includeEmailTools = false } = options;
 	const lowerModel = model.toLowerCase();
 
 	// Check if it's an Anthropic/Claude model
@@ -1066,6 +1110,9 @@ function getToolsForModel(model: string, options: { includeDocumentTool?: boolea
 		}
 		if (includeCalendarTools) {
 			tools.push(...calendarTools);
+		}
+		if (includeEmailTools) {
+			tools.push(...emailTools);
 		}
 		return tools;
 	}
@@ -1083,6 +1130,10 @@ function getToolsForModel(model: string, options: { includeDocumentTool?: boolea
 	if (includeCalendarTools) {
 		// Use OpenAI-formatted calendar tools for non-Claude models
 		tools.push(...calendarToolsOpenAI);
+	}
+	if (includeEmailTools) {
+		// Use OpenAI-formatted email tools for non-Claude models
+		tools.push(...emailToolsOpenAI);
 	}
 	// Cast to unknown first, then to ToolDefinition[] to satisfy type checker
 	return tools as unknown as ToolDefinition[];
@@ -1186,22 +1237,69 @@ Would you like help preparing for this meeting? I can help you:
 
 Do NOT repeat all the raw tool output data. Keep it human-friendly and actionable.`;
 
+// System message for email tools
+const emailSystemMessage = `You have access to the email_send_email tool for sending emails via the user's Microsoft Outlook account.
+
+⚠️ CRITICAL EMAIL PROTOCOL — You MUST follow these steps IN ORDER. Skipping any step is a serious error:
+
+1. **DETECT email intent**: Look for signals like "send an email", "email [name]", "write to [person]", "follow up with", "let them know", etc. You may also proactively offer to draft an email when context makes it natural (e.g., after a meeting discussion).
+
+2. **DRAFT in conversation (MANDATORY)**: Before calling the tool, you MUST show the full draft in conversation:
+   - **To:** [recipients]
+   - **CC:** [if any]
+   - **Subject:** [subject line]
+   - **Body:**
+   [Full email body text]
+
+3. **ASK for confirmation (MANDATORY)**: After showing the draft, ask: "Shall I send this?" or similar. Wait for explicit approval.
+
+4. **SEND only after approval**: Only call email_send_email AFTER the user explicitly confirms (e.g., "yes", "send it", "looks good, send", "go ahead").
+
+NEVER skip the draft preview. NEVER send on the first response. NEVER call the tool without explicit user approval.
+
+If the user wants changes to the draft, revise it and show the updated version before asking again.
+
+Example flow:
+User: "Email Sarah about the project timeline update"
+Assistant: "Here's a draft email:
+
+**To:** [need Sarah's email address]
+**Subject:** Project Timeline Update
+
+**Body:**
+Hi Sarah,
+
+I wanted to share an update on the project timeline...
+
+Could you provide Sarah's email address so I can finalize this draft?"
+
+Available email tools:
+- email_send_email: Send an email via Microsoft Outlook. Requires to, subject, and body (HTML format). Optional: cc, bcc, saveToSentItems.
+
+Email body format:
+- Use HTML: <p> for paragraphs, <br> for line breaks, <strong> for bold, <em> for italic
+- Keep formatting clean and professional
+- Convert the plain text draft to proper HTML when sending`;
+
 /**
- * Prepare messages with search, commerce, and calendar system context
+ * Prepare messages with search, commerce, calendar, and email system context
  * Adds or augments the system message with tool instructions
  * Preserves cache_control if present on the system message
  */
 function prepareMessagesWithSearchContext(
 	messages: ChatCompletionRequest['messages'],
-	options: { includeCalendarContext?: boolean } = {}
+	options: { includeCalendarContext?: boolean; includeEmailContext?: boolean } = {}
 ): ChatCompletionRequest['messages'] {
-	const { includeCalendarContext = false } = options;
+	const { includeCalendarContext = false, includeEmailContext = false } = options;
 	const result = [...messages];
 
-	// Combined context for all tools (conditionally include calendar)
+	// Combined context for all tools (conditionally include calendar and email)
 	let toolContext = `${searchSystemMessage}\n\n${commerceSystemMessage}`;
 	if (includeCalendarContext) {
 		toolContext += `\n\n${calendarSystemMessage}`;
+	}
+	if (includeEmailContext) {
+		toolContext += `\n\n${emailSystemMessage}`;
 	}
 
 	// Check if there's already a system message
@@ -1997,7 +2095,8 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 
 	const cachedMessages = addCacheBreakpoints(messagesWithImageContext, body.model);
 	const messagesWithSearchContext = prepareMessagesWithSearchContext(cachedMessages, {
-		includeCalendarContext: !!calendarAccessToken
+		includeCalendarContext: !!calendarAccessToken,
+		includeEmailContext: !!calendarAccessToken
 	});
 	
 	// Final safety check: enforce Anthropic's 4 cache_control block limit
@@ -2045,11 +2144,13 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 				const includeCommerceTools = true; // TODO: Control via space setting or feature flag
 				// Enable calendar tools if user has calendar connected
 				const includeCalendarTools = !!calendarAccessToken;
+				// Enable email tools if user has Microsoft integration connected (same token)
+				const includeEmailTools = !!calendarAccessToken;
 				const toolRequestOptions: typeof body & { max_tokens?: number } = {
 					...body,
 					messages: finalMessages,
 					stream: false,
-					tools: getToolsForModel(body.model, { includeDocumentTool: hasDocuments, includeCommerceTools, includeCalendarTools })
+					tools: getToolsForModel(body.model, { includeDocumentTool: hasDocuments, includeCommerceTools, includeCalendarTools, includeEmailTools })
 				};
 
 				// Structural constraint: limit response length during ALL of Plan Mode elicitation
@@ -2388,6 +2489,44 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 									});
 								}
 							}
+						} else if (isEmailTool(toolCall.function?.name || '')) {
+							// Email tool - sending emails
+							const toolName = toolCall.function?.name || '';
+							const args = JSON.parse(toolCall.function?.arguments || '{}');
+
+							debugLog('TOOLS', `Executing email tool: ${toolName}`, args);
+
+							// Check if we have access (same token as calendar)
+							if (!calendarAccessToken) {
+								toolResults.push({
+									tool_call_id: toolCall.id,
+									content: 'Email not connected. Please connect your Microsoft account in Settings to use email features.'
+								});
+							} else {
+								// Send status for email operations
+								sendSSE(controller, encoder, {
+									type: 'status',
+									status: 'email',
+									query: 'Sending email...'
+								});
+
+								try {
+									const result = await executeEmailTool(toolName, args, calendarAccessToken);
+
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: result
+									});
+
+									debugLog('TOOLS', `Email tool ${toolName} completed successfully`);
+								} catch (emailError) {
+									console.error('Email tool error:', emailError);
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: `Email operation failed: ${emailError instanceof Error ? emailError.message : 'Unknown error'}`
+									});
+								}
+							}
 						} else {
 							// Unknown tool - still need to provide a result
 							toolResults.push({
@@ -2443,7 +2582,7 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 					const finalResponse = await createChatCompletionWithTools({
 						...body,
 						messages: [...messagesWithToolResults, synthesisInstruction],
-						tools: getToolsForModel(body.model, { includeCommerceTools, includeCalendarTools }),
+						tools: getToolsForModel(body.model, { includeCommerceTools, includeCalendarTools, includeEmailTools }),
 						stream: true
 					});
 

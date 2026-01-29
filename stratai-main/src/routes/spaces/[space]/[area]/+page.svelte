@@ -12,7 +12,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { fly, fade } from 'svelte/transition';
-	import { Clock, AlertCircle, RotateCcw, X, Paperclip, MessageSquare, ListTodo, FileText, FolderOpen, Share2, Plus, Settings, LayoutDashboard } from 'lucide-svelte';
+	import { Clock, AlertCircle, RotateCcw, X, Paperclip, MessageSquare, ListTodo, FileText, FolderOpen, Share2, Plus, Settings, LayoutDashboard, Calendar } from 'lucide-svelte';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
 	import ChatInput from '$lib/components/ChatInput.svelte';
 	import ChatMessageList from '$lib/components/chat/ChatMessageList.svelte';
@@ -35,6 +35,7 @@
 	import { shouldSuggestPage, type PageSuggestion as PageSuggestionType } from '$lib/utils/page-detection';
 	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
 	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
+	import { CreateMeetingModal } from '$lib/components/meetings';
 	import AreaAvatarStack from '$lib/components/areas/AreaAvatarStack.svelte';
 	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -250,6 +251,9 @@
 
 	// Share Area modal state
 	let showShareModal = $state(false);
+
+	// Meeting wizard modal state
+	let meetingModalOpen = $state(false);
 
 	// Page suggestion state (P6-IN-02: dismissed state persists in session)
 	let dismissedPageSuggestions = $state<Set<string>>(new Set());
@@ -834,6 +838,10 @@
 								} else if (parsed.status === 'calendar') {
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										contextStatus: undefined, searchStatus: 'calendar', searchQuery: parsed.query
+									});
+								} else if (parsed.status === 'email') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										contextStatus: undefined, searchStatus: 'email', searchQuery: parsed.query
 									});
 								} else if (parsed.status === 'processing') {
 									// Processing just means server is working - not necessarily searching
@@ -1499,6 +1507,10 @@
 									chatStore.updateMessage(conversationId!, assistantMessageId, {
 										searchStatus: 'calendar', searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'email') {
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'email', searchQuery: parsed.query
+									});
 								}
 							} else if (parsed.type === 'thinking_start') {
 								chatStore.updateMessage(conversationId!, assistantMessageId, { isThinking: true });
@@ -1989,6 +2001,15 @@
 					{/if}
 					<button
 						type="button"
+						class="new-meeting-button"
+						onclick={() => (meetingModalOpen = true)}
+						title="New meeting"
+						aria-label="New meeting"
+					>
+						<Calendar class="w-4 h-4" />
+					</button>
+					<button
+						type="button"
 						class="new-chat-button"
 						onclick={handleNewChat}
 						title="New chat in this area"
@@ -2400,6 +2421,18 @@
 
 		<!-- Share Area Modal -->
 		<ShareAreaModal open={showShareModal} {area} onClose={() => (showShareModal = false)} />
+
+		<!-- Create Meeting Modal -->
+		{#if area}
+			<CreateMeetingModal
+				open={meetingModalOpen}
+				spaceId={properSpaceId}
+				areaId={area.id}
+				areaName={area.name}
+				currentUserId={userStore.id || ''}
+				onClose={() => (meetingModalOpen = false)}
+			/>
+		{/if}
 	</div>
 {:else}
 	<div class="error-container">
@@ -2585,6 +2618,7 @@
 	}
 
 	.share-button,
+	.new-meeting-button,
 	.new-chat-button,
 	.settings-button {
 		display: flex;
@@ -2600,6 +2634,7 @@
 	}
 
 	.share-button:hover,
+	.new-meeting-button:hover,
 	.new-chat-button:hover,
 	.settings-button:hover {
 		color: rgba(255, 255, 255, 0.9);

@@ -580,6 +580,12 @@
 										searchStatus: 'calendar',
 										searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'email') {
+									// Email tool - sending emails
+									chatStore.updateMessage(conversationId!, assistantMessageId, {
+										searchStatus: 'email',
+										searchQuery: parsed.query
+									});
 								}
 							} else if (parsed.type === 'sources_preview') {
 								// Early sources preview - show in search animation
@@ -1065,9 +1071,14 @@
 										searchStatus: 'calendar',
 										searchQuery: parsed.query
 									});
+								} else if (parsed.status === 'email') {
+									chatStore.updateMessage(conversationId, assistantMessageId, {
+										searchStatus: 'email',
+										searchQuery: parsed.query
+									});
 								} else if (parsed.status === 'processing') {
 									// Tool results received, now processing with LLM
-									// Don't change searchStatus - keep showing current status (calendar, searching, browsing)
+									// Don't change searchStatus - keep showing current status (calendar, searching, browsing, email)
 									chatStore.updateMessage(conversationId, assistantMessageId, {
 										searchQuery: undefined
 									});

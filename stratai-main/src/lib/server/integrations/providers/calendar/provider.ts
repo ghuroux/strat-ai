@@ -29,6 +29,8 @@ import {
 	formatFreeBusyForAI,
 	formatMeetingTimesForAI
 } from './tools';
+import { getEmailToolDefinitions } from './email-tools';
+import { EmailClient, type SendEmailInput } from './email-client';
 
 // ============================================================================
 // Calendar Provider
@@ -108,10 +110,10 @@ export class CalendarProvider extends BaseProvider {
 	// ==========================================================================
 
 	/**
-	 * Get tool definitions for AI
+	 * Get tool definitions for AI (calendar + email)
 	 */
 	getToolDefinitions(): IntegrationToolDefinition[] {
-		return getCalendarToolDefinitions();
+		return [...getCalendarToolDefinitions(), ...getEmailToolDefinitions()];
 	}
 
 	/**
@@ -140,6 +142,9 @@ export class CalendarProvider extends BaseProvider {
 
 				case 'calendar_find_meeting_times':
 					return this.executeFindMeetingTimes(client, params);
+
+				case 'email_send_email':
+					return this.executeSendEmail(params);
 
 				default:
 					return { success: false, error: `Unknown tool: ${name}` };
@@ -191,7 +196,7 @@ export class CalendarProvider extends BaseProvider {
 			);
 
 			// Build context summary
-			let summary = 'User has Microsoft Calendar connected.\n\n';
+			let summary = 'User has Microsoft Calendar and Email connected.\n\n';
 
 			if (events.length > 0) {
 				summary += `Today's meetings (${events.length} event${events.length > 1 ? 's' : ''}):\n`;
@@ -208,7 +213,7 @@ export class CalendarProvider extends BaseProvider {
 			return summary;
 		} catch (error) {
 			// Return basic info if we can't fetch events
-			return 'User has Microsoft Calendar connected. Use calendar tools to check schedule.';
+			return 'User has Microsoft Calendar and Email connected. Use calendar tools to check schedule, or email tools to send emails.';
 		}
 	}
 
@@ -404,6 +409,43 @@ export class CalendarProvider extends BaseProvider {
 		return {
 			success: true,
 			data: formatMeetingTimesForAI(suggestions)
+		};
+	}
+
+	private async executeSendEmail(
+		params: Record<string, unknown>
+	): Promise<IntegrationToolResult> {
+		const accessToken = this.getAccessToken();
+		if (!accessToken) {
+			return { success: false, error: 'No access token available for email' };
+		}
+
+		const emailClient = new EmailClient(accessToken);
+
+		const toStr = String(params.to);
+		const to = toStr.split(',').map(e => e.trim()).filter(e => e.includes('@'));
+
+		if (to.length === 0) {
+			return { success: false, error: 'No valid recipient email addresses provided' };
+		}
+
+		const ccStr = params.cc ? String(params.cc) : undefined;
+		const bccStr = params.bcc ? String(params.bcc) : undefined;
+
+		const input: SendEmailInput = {
+			to,
+			cc: ccStr ? ccStr.split(',').map(e => e.trim()).filter(e => e.includes('@')) : undefined,
+			bcc: bccStr ? bccStr.split(',').map(e => e.trim()).filter(e => e.includes('@')) : undefined,
+			subject: String(params.subject),
+			body: String(params.body),
+			saveToSentItems: params.saveToSentItems !== 'false'
+		};
+
+		const result = await emailClient.sendEmail(input);
+
+		return {
+			success: true,
+			data: `Email sent successfully to ${result.recipientCount} recipient(s). Subject: "${result.subject}"`
 		};
 	}
 }
