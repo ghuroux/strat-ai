@@ -753,24 +753,161 @@ The "NOW" divider shows where you are in the day, and past items are visually de
 | **Store size** | Global tasks separate from space-scoped cache |
 | **Page load** | Tasks and calendar load in parallel; show tasks immediately, calendar when ready |
 
-### 8.3 Loading States
+### 8.3 Progressive Loading (Page Load Animation)
+
+The dashboard uses **progressive population** — show what we have as it arrives, rather than blocking on the slowest fetch. This is critical because tasks load from our database (~200ms) but calendar events come from Microsoft Graph (~500-1500ms).
+
+#### Three-Phase Load Sequence
 
 ```
+Phase 1: Page Shell (instant)
 ┌─────────────────────────────────────────────────────────────────┐
-│  HERO CARD: Skeleton shimmer (greeting placeholder)             │
+│            Tasks                                    + Add Task  │
 │                                                                 │
-│  TASKS: Loading spinner ("Loading tasks...")                    │
-│  CALENDAR: Secondary spinner ("Connecting to calendar...")      │
+│  ┌─ HERO CARD ─────────────────────────────────────────────────┐│
+│  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                    ││
+│  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░                                ││
+│  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░                        ││
+│  └──────────────────────────────────────────────────────────────┘│
 │                                                                 │
-│  Order of appearance:                                           │
-│  1. Page shell + hero skeleton         (instant)                │
-│  2. Tasks populate                     (~200ms, from our DB)    │
-│  3. Calendar events populate           (~500ms, from Graph API) │
-│  4. Hero card updates with analysis    (after both loaded)      │
+│  ┌──────────────────────────────────────────────────────────────┐│
+│  │ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  ││
+│  └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│   ░░░░░░░░░░  ·  ░░░░░░░░░░  ·  ░░░░░░░░░░                     │
+│                                                                 │
+│  ── ░░░░░░ ────────────────────────────────────────────────────  │
+│  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │
+│  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │
+│  │  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │
 └─────────────────────────────────────────────────────────────────┘
+
+→ Skeleton shimmer on hero card, filters, stats, and first section
+→ Subtle pulse animation (not spinner — feels faster)
 ```
 
-Tasks load first (our database, fast). Calendar events arrive second (Graph API, slower). The hero card shows a task-only greeting initially, then upgrades to include calendar intelligence once events arrive.
+```
+Phase 2: Tasks Populated (~200ms from our DB)
+┌─────────────────────────────────────────────────────────────────┐
+│            Tasks                                    + Add Task  │
+│                                                                 │
+│  ┌─ HERO CARD ─────────────────────────────────────────────────┐│
+│  │  Good morning — 3 tasks due today                           ││
+│  │  ┌───────────────────────────────────────────────────┐      ││
+│  │  │  🔴 Quarterly budget review         Due today (hard)│      ││
+│  │  └───────────────────────────────────────────────────┘      ││
+│  │  [Focus on this →]                                          ││
+│  └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────────┐│
+│  │ [All] [Tasks only] [Calendar only]   [All spaces ▼] [⚙]    ││
+│  └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│   ✓ 2 TODAY  ·  ☐ 12 ACTIVE  ·  🔥 3 STREAK                    │
+│                                                                 │
+│  ── TODAY (3) ─────────────────────────────────────────────────  │
+│   ☐  Review auth PR                           Due today         │
+│      StratAI · Product Development                              │
+│   ☐  Quarterly budget review  🔴               Due today (hard)  │
+│      StratAI · Product Development                              │
+│   ☐  Send weekly update                       Due today         │
+│      StratLoyalty · General                                     │
+│                                                                 │
+│   ⏳ Checking your calendar...                                  │
+│                                                                 │
+│  ── THIS WEEK (4) ─────────────────────────────────────────────  │
+│  ...                                                            │
+└─────────────────────────────────────────────────────────────────┘
+
+→ Tasks appear with smooth fade-in
+→ Hero card shows task-only greeting (no calendar intelligence yet)
+→ Calendar placeholder: "⏳ Checking your calendar..."
+→ Page is fully interactive — user can filter, click tasks, create tasks
+```
+
+```
+Phase 3: Calendar Events Arrive (~500-1500ms from Graph API)
+┌─────────────────────────────────────────────────────────────────┐
+│  ┌─ HERO CARD (UPGRADES) ──────────────────────────────────────┐│
+│  │  ⚠️ Tight day ahead                                          ││
+│  │  4 meetings today (3.5h) and a hard deadline:               ││
+│  │  "Quarterly budget review". ~3.5h free time today.          ││
+│  │  ┌───────────────────────────────────────────────────┐      ││
+│  │  │  🔴 Quarterly budget review         Due today (hard)│      ││
+│  │  └───────────────────────────────────────────────────┘      ││
+│  │  [Focus on this now →]       [See free time →]              ││
+│  └──────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  ── TODAY (7) ── 4 meetings · 3.5h · 3.5h free ───────────────  │
+│                                                                 │
+│   🗓  09:00-09:30  Team standup                    [Join →]      │ ← slides in
+│      with Sarah, Mike, Jennifer                                 │
+│   ☐  Review auth PR                           Due today         │
+│      StratAI · Product Development                              │
+│   🗓  10:30-11:30  Client sync call               [Join →]      │ ← slides in
+│      with Alex Chen                                             │
+│   ☐  Quarterly budget review  🔴               Due today (hard)  │
+│      StratAI · Product Development                              │
+│   🗓  14:00-16:00  Sprint planning                [Join →]      │ ← slides in
+│      with 8 attendees                                           │
+│   ☐  Send weekly update                       Due today         │
+│      StratLoyalty · General                                     │
+│   🗓  16:30-17:00  1:1 with manager               [Join →]      │ ← slides in
+│      with David Park                                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+→ Calendar events slide into timeline (transition:slide, ~200ms per item, staggered)
+→ Hero card upgrades to full analysis (smooth crossfade transition)
+→ Section headers update: "TODAY (3)" → "TODAY (7) · 4 meetings · 3.5h"
+→ Calendar placeholder disappears
+→ "⏳ Checking your calendar..." replaced by interleaved events
+```
+
+#### Animation Details
+
+| Element | Animation | Duration | Easing |
+|---------|-----------|----------|--------|
+| **Page skeleton** | Shimmer pulse | Continuous | ease-in-out |
+| **Tasks appearing** | fade + fly(y: 8) | 200ms | ease-out |
+| **Calendar events** | slide + fade | 250ms, staggered 50ms | ease-out |
+| **Hero card upgrade** | crossfade (text swap) | 300ms | ease-in-out |
+| **Section count update** | No animation (instant) | — | — |
+| **Placeholder removal** | fade out | 150ms | ease-out |
+
+#### Calendar Placeholder States
+
+The placeholder below the tasks section adapts based on calendar connection status:
+
+```
+Connected, loading:
+⏳ Checking your calendar...
+
+Connected, loaded (0 events today):
+📅 No meetings today — clear day for deep work!
+
+Not connected:
+📅 Connect your calendar to see meetings alongside tasks
+   [Connect Calendar →]
+
+Connection error:
+📅 Couldn't reach your calendar — showing tasks only
+   [Retry →]
+```
+
+#### Hero Card Transition
+
+The hero card goes through up to 3 states:
+
+```
+State 1 (instant):     Skeleton shimmer
+State 2 (~200ms):      Task-only greeting    "Good morning — 3 tasks due today"
+State 3 (~500-1500ms): Full analysis          "⚠️ Tight day — 4 meetings + deadline"
+```
+
+Each transition uses a smooth crossfade. The hero card container maintains a fixed minimum height to prevent layout shifts during transitions.
+
+If calendar never loads (error/timeout after 5 seconds), the hero card stays at State 2 — the task-only greeting is complete and useful on its own.
 
 ---
 
