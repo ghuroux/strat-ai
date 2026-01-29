@@ -651,6 +651,16 @@
 	<!-- Header -->
 	<header class="dashboard-header">
 		<div class="header-center">
+			<button
+				type="button"
+				class="back-btn"
+				onclick={() => history.back()}
+				title="Go back"
+			>
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+					<path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+				</svg>
+			</button>
 			<h1 class="dashboard-title">Tasks</h1>
 			<span class="task-total">{totalTasks}</span>
 			{#if needsAttentionCount > 0}
@@ -917,7 +927,32 @@
 	.header-center {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.5rem;
+	}
+
+	.back-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		color: rgba(255, 255, 255, 0.5);
+		background: transparent;
+		border: none;
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.back-btn:hover {
+		color: rgba(255, 255, 255, 0.9);
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.back-btn svg {
+		width: 1.125rem;
+		height: 1.125rem;
 	}
 
 	.dashboard-title {
