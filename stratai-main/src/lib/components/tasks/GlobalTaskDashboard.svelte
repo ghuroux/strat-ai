@@ -14,7 +14,7 @@
 	import { fade, fly } from 'svelte/transition';
 	import type { Task, GlobalTask, GlobalTaskFilter, CreateTaskInput } from '$lib/types/tasks';
 	import type { Space } from '$lib/types/spaces';
-	import type { DashboardView } from '$lib/types/calendar';
+	import type { DashboardView, DashboardDensity } from '$lib/types/calendar';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { calendarStore } from '$lib/stores/calendar.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
@@ -69,6 +69,40 @@
 	let displayColor = $derived(activeSpace?.color || defaultColor);
 
 	// =====================================================
+	// Density Preference (localStorage-persisted)
+	// =====================================================
+
+	const DASHBOARD_PREFS_KEY = 'strathost-dashboard-prefs';
+	let density = $state<DashboardDensity>('standard');
+
+	function loadDashboardPrefs() {
+		try {
+			const stored = localStorage.getItem(DASHBOARD_PREFS_KEY);
+			if (stored) {
+				const prefs = JSON.parse(stored);
+				if (prefs.density === 'compact' || prefs.density === 'standard') {
+					density = prefs.density;
+				}
+			}
+		} catch {
+			// Ignore parse errors
+		}
+	}
+
+	function saveDashboardPrefs() {
+		try {
+			localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify({ density }));
+		} catch {
+			// Ignore quota errors
+		}
+	}
+
+	function handleDensityChange(d: DashboardDensity) {
+		density = d;
+		saveDashboardPrefs();
+	}
+
+	// =====================================================
 	// Data Loading (parallel: tasks + calendar)
 	// =====================================================
 
@@ -107,6 +141,9 @@
 
 	// Load tasks and calendar in parallel on mount
 	onMount(async () => {
+		// Hydrate density preference from localStorage
+		loadDashboardPrefs();
+
 		const { start, end } = getCalendarRange();
 
 		// Tasks and calendar load in parallel — tasks appear first
@@ -133,16 +170,22 @@
 		if (typeof document !== 'undefined') {
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
 		}
+		if (reloadTimeout) clearTimeout(reloadTimeout);
 	});
 
-	// Reload when filters change
+	// Reload when filters change (debounced to prevent rapid reloads)
+	let reloadTimeout: ReturnType<typeof setTimeout> | null = null;
+
 	$effect(() => {
 		// Track dependencies
 		const _slug = activeSpaceSlug;
 		const _status = activeStatus;
 
 		if (hasLoaded) {
-			taskStore.reloadGlobalTasks(buildFilter());
+			if (reloadTimeout) clearTimeout(reloadTimeout);
+			reloadTimeout = setTimeout(() => {
+				taskStore.reloadGlobalTasks(buildFilter());
+			}, 100);
 		}
 	});
 
@@ -480,9 +523,131 @@
 		if (!spaceId) return [];
 		return areaStore.getAreasForSpace(spaceId);
 	});
+
+	// =====================================================
+	// Keyboard Navigation
+	// =====================================================
+
+	let focusedItemIndex = $state(-1);
+	let keyboardActive = $state(false);
+
+	function getNavigableItems(): NodeListOf<Element> {
+		return document.querySelectorAll('[data-timeline-item]');
+	}
+
+	function updateFocusRing() {
+		// Remove existing focus ring
+		document.querySelectorAll('.keyboard-focused').forEach(el => el.classList.remove('keyboard-focused'));
+		if (focusedItemIndex < 0 || !keyboardActive) return;
+
+		const items = getNavigableItems();
+		const target = items[focusedItemIndex];
+		if (target) {
+			target.classList.add('keyboard-focused');
+			target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+		}
+	}
+
+	// Sync focus ring when state changes
+	$effect(() => {
+		// Track dependencies
+		const _idx = focusedItemIndex;
+		const _active = keyboardActive;
+		updateFocusRing();
+	});
+
+	function isInputFocused(): boolean {
+		const active = document.activeElement;
+		if (!active) return false;
+		const tag = active.tagName.toLowerCase();
+		return tag === 'input' || tag === 'textarea' || tag === 'select' || (active as HTMLElement).isContentEditable;
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		// Don't capture when typing in inputs or when modals are open
+		if (isInputFocused()) return;
+		if (showCompleteModal || showDeleteConfirm || showTaskPanel) return;
+
+		const items = getNavigableItems();
+		const itemCount = items.length;
+
+		switch (e.key.toLowerCase()) {
+			case 'j': {
+				e.preventDefault();
+				keyboardActive = true;
+				focusedItemIndex = Math.min(focusedItemIndex + 1, itemCount - 1);
+				break;
+			}
+			case 'k': {
+				e.preventDefault();
+				keyboardActive = true;
+				focusedItemIndex = Math.max(focusedItemIndex - 1, 0);
+				break;
+			}
+			case 'enter': {
+				if (!keyboardActive || focusedItemIndex < 0) return;
+				e.preventDefault();
+				const target = items[focusedItemIndex];
+				if (!target) return;
+				const itemType = target.getAttribute('data-item-type');
+				const itemId = target.getAttribute('data-item-id');
+				if (itemType === 'task' && itemId) {
+					const task = allTasks.find(t => t.id === itemId);
+					if (task) handleTaskClick(task);
+				} else if (itemType === 'event' && itemId) {
+					const event = calendarStore.events.find(ev => ev.id === itemId);
+					if (event?.webLink) window.open(event.webLink, '_blank');
+				}
+				break;
+			}
+			case 'x': {
+				if (!keyboardActive || focusedItemIndex < 0) return;
+				e.preventDefault();
+				const target = items[focusedItemIndex];
+				if (!target) return;
+				const itemType = target.getAttribute('data-item-type');
+				const itemId = target.getAttribute('data-item-id');
+				if (itemType === 'task' && itemId) {
+					const task = allTasks.find(t => t.id === itemId);
+					if (task) handleCompleteTask(task);
+				}
+				break;
+			}
+			case 'n': {
+				e.preventDefault();
+				handleOpenTaskPanel();
+				break;
+			}
+			case '/': {
+				e.preventDefault();
+				const select = document.querySelector('.space-select') as HTMLSelectElement | null;
+				if (select) select.focus();
+				break;
+			}
+			case 'escape': {
+				if (keyboardActive) {
+					e.preventDefault();
+					keyboardActive = false;
+					focusedItemIndex = -1;
+				}
+				break;
+			}
+		}
+	}
+
+	function handleMouseMove() {
+		if (keyboardActive) {
+			keyboardActive = false;
+			focusedItemIndex = -1;
+			// Clean up focus ring immediately
+			document.querySelectorAll('.keyboard-focused').forEach(el => el.classList.remove('keyboard-focused'));
+		}
+	}
 </script>
 
-<div class="global-dashboard" style="--space-color: {displayColor}">
+<svelte:window onkeydown={handleKeydown} />
+
+<div class="global-dashboard" style="--space-color: {displayColor}" onmousemove={handleMouseMove}>
 	<!-- Header -->
 	<header class="dashboard-header">
 		<div class="header-center">
@@ -543,6 +708,8 @@
 				{activeView}
 				calendarConnected={calendarStore.connected}
 				onViewChange={handleViewChange}
+				{density}
+				onDensityChange={handleDensityChange}
 			/>
 
 			<!-- Calendar status banners -->
@@ -595,6 +762,7 @@
 								{showSpaceBadge}
 								sectionKey={group.key}
 								sectionSummary={formatSectionSummary(group)}
+								compact={density === 'compact'}
 								onTaskClick={handleTaskClick}
 								onCompleteTask={handleCompleteTask}
 								onDismissStale={handleDismissStale}
@@ -614,6 +782,7 @@
 							sectionKey={group.key}
 							sectionSummary={formatSectionSummary(group)}
 							showNowDivider={true}
+							compact={density === 'compact'}
 							onTaskClick={handleTaskClick}
 							onCompleteTask={handleCompleteTask}
 							onEditTask={handleEditTask}
@@ -632,6 +801,7 @@
 							sectionKey={group.key}
 							sectionSummary={formatSectionSummary(group)}
 							showDayBadge={group.key === 'thisWeek' || group.key === 'later'}
+							compact={density === 'compact'}
 							onTaskClick={handleTaskClick}
 							onCompleteTask={handleCompleteTask}
 							onEditTask={handleEditTask}
@@ -1049,5 +1219,13 @@
 	.btn-delete:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	/* Keyboard navigation focus ring */
+	:global([data-timeline-item].keyboard-focused) {
+		outline: 2px solid var(--space-color, #3b82f6);
+		outline-offset: -1px;
+		border-radius: 0.5rem;
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--space-color, #3b82f6) 10%, transparent);
 	}
 </style>

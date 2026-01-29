@@ -69,6 +69,19 @@
 		}
 	});
 
+	// Keep currentPage in sync with store updates (e.g., after finalize/unlock)
+	$effect(() => {
+		if (pageIdParam) {
+			const fromStore = pageStore.getPageById(pageIdParam);
+			if (fromStore && currentPage) {
+				// Only update if the store version is newer (avoids overwriting initial load)
+				if (fromStore.updatedAt > currentPage.updatedAt || fromStore.status !== currentPage.status) {
+					currentPage = fromStore;
+				}
+			}
+		}
+	});
+
 	// Load data on mount
 	onMount(async () => {
 		if (!spaceParam || !areaParam) {

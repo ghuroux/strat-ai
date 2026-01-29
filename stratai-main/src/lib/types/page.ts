@@ -23,6 +23,14 @@ export type PageType =
 export type PageVisibility = 'private' | 'area' | 'space';  // Updated for Phase 1: Page Sharing
 
 /**
+ * Page lifecycle status
+ * - draft: Working document, only owner can edit
+ * - shared: Visible to area/space members, owner can edit
+ * - finalized: Locked, creates version on finalize, can be added to AI context
+ */
+export type PageStatus = 'draft' | 'shared' | 'finalized';
+
+/**
  * Relationship types for page-conversation links
  */
 export type PageConversationRelationship = 'source' | 'discussion' | 'reference';
@@ -46,6 +54,18 @@ export interface Page {
 	visibility: PageVisibility;
 	sourceConversationId?: string;
 	wordCount: number;
+
+	// Lifecycle status (Phase 1: Page Lifecycle)
+	status: PageStatus;
+	finalizedAt?: Date;
+	finalizedBy?: string;
+	currentVersion?: number;
+
+	// Context integration (Phase 2: Page Context)
+	inContext: boolean;
+
+	// Context-aware unlock (Phase 4: Polish)
+	contextVersionNumber?: number;
 
 	// Timestamps
 	createdAt: Date;
@@ -97,6 +117,16 @@ export interface PageRow {
 	visibility: string;
 	sourceConversationId: string | null;
 	wordCount: number;
+	// Lifecycle status (Phase 1: Page Lifecycle)
+	status: string;
+	finalizedAt: Date | null;
+	finalizedBy: string | null;
+	currentVersion: number | null;
+	// Context integration (Phase 2: Page Context)
+	inContext: boolean;
+	// Context-aware unlock (Phase 4: Polish)
+	contextVersionNumber: number | null;
+	// Timestamps
 	createdAt: Date;
 	updatedAt: Date;
 	deletedAt: Date | null;
@@ -246,6 +276,16 @@ export function rowToPage(row: PageRow): Page {
 		visibility: row.visibility as PageVisibility,
 		sourceConversationId: row.sourceConversationId ?? undefined,
 		wordCount: row.wordCount ?? 0,
+		// Lifecycle status (Phase 1: Page Lifecycle)
+		status: (row.status as PageStatus) ?? 'draft',
+		finalizedAt: row.finalizedAt ?? undefined,
+		finalizedBy: row.finalizedBy ?? undefined,
+		currentVersion: row.currentVersion ?? undefined,
+		// Context integration (Phase 2: Page Context)
+		inContext: row.inContext ?? false,
+		// Context-aware unlock (Phase 4: Polish)
+		contextVersionNumber: row.contextVersionNumber ?? undefined,
+		// Timestamps
 		createdAt: row.createdAt,
 		updatedAt: row.updatedAt,
 		deletedAt: row.deletedAt ?? undefined
@@ -353,4 +393,13 @@ export const PAGE_TYPE_ICONS: Record<PageType, string> = {
 	project_brief: 'Briefcase',
 	weekly_update: 'Calendar',
 	technical_spec: 'Code'
+};
+
+/**
+ * Page status display labels
+ */
+export const PAGE_STATUS_LABELS: Record<PageStatus, string> = {
+	draft: 'Draft',
+	shared: 'Shared',
+	finalized: 'Finalized'
 };

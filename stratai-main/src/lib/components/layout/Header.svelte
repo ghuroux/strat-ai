@@ -75,6 +75,11 @@
 		return $page.url.pathname.startsWith('/arena');
 	});
 
+	// Detect if we're on the global tasks dashboard
+	let isGlobalTasks = $derived.by(() => {
+		return $page.url.pathname.startsWith('/tasks');
+	});
+
 	// Detect if we're on main chat (/)
 	let isMainChat = $derived.by(() => {
 		return $page.url.pathname === '/';
@@ -250,6 +255,22 @@
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
 				</svg>
 			</a>
+			<!-- Tasks Icon -->
+			<a
+				href="/tasks"
+				class="flex items-center justify-center w-9 h-9 rounded-lg
+				       transition-colors"
+				class:bg-primary-500={isGlobalTasks}
+				class:text-white={isGlobalTasks}
+				class:text-surface-400={!isGlobalTasks}
+				class:hover:text-surface-100={!isGlobalTasks}
+				class:hover:bg-surface-800={!isGlobalTasks}
+				title="Tasks"
+			>
+				<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+				</svg>
+			</a>
 			<!-- Arena Icon -->
 			<a
 				href="/arena"
@@ -284,6 +305,17 @@
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
 				</svg>
 			</a>
+			<!-- Tasks Button -->
+			<a
+				href="/tasks"
+				class="space-nav-chat"
+				class:active={isGlobalTasks}
+				title="Tasks"
+			>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+				</svg>
+			</a>
 			<!-- Arena Link (Desktop) -->
 			<a
 				href="/arena"
@@ -307,8 +339,8 @@
 		</div>
 	</div>
 
-	<!-- Center: Model Selector (hide on Space Dashboard and Arena, show when no messages elsewhere) -->
-	{#if isSpaceDashboard || isArena}
+	<!-- Center: Model Selector (hide on Space Dashboard, Arena, and Tasks, show when no messages elsewhere) -->
+	{#if isSpaceDashboard || isArena || isGlobalTasks}
 		<!-- No model selector on Space Dashboard or Arena (Arena has its own) -->
 		<div class="flex-1"></div>
 	{:else if !chatStore.messages || chatStore.messages.length === 0}

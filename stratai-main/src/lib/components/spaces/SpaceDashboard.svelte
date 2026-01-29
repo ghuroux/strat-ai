@@ -220,8 +220,8 @@
 	}
 
 	function handleViewAllTasks() {
-		// Navigate to tasks page for this space
-		goto(`/spaces/${spaceSlug}/tasks`);
+		// Navigate to global tasks page filtered to this space
+		goto(`/tasks?space=${spaceSlug}`);
 	}
 
 	function handleEditTask(task: Task) {

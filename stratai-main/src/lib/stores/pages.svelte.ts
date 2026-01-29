@@ -443,6 +443,68 @@ class PageStore {
 	}
 
 	/**
+	 * Load a single version (fallback when not in cache)
+	 */
+	async loadVersion(pageId: string, versionNumber: number): Promise<PageVersion | null> {
+		try {
+			const response = await fetch(`/api/pages/${pageId}/versions/${versionNumber}`);
+
+			if (!response.ok) {
+				if (response.status === 404) return null;
+				throw new Error(`API error: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.version) {
+				return {
+					...data.version,
+					createdAt: new Date(data.version.createdAt)
+				};
+			}
+
+			return null;
+		} catch (e) {
+			console.error('Failed to load version:', e);
+			return null;
+		}
+	}
+
+	/**
+	 * Restore a page to a previous version
+	 * Updates page in store and invalidates version cache
+	 */
+	async restoreVersion(pageId: string, versionNumber: number): Promise<Page | null> {
+		try {
+			const response = await fetch(`/api/pages/${pageId}/versions/${versionNumber}/restore`, {
+				method: 'POST'
+			});
+
+			if (!response.ok) {
+				throw new Error(`Restore failed: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.page) {
+				const page = this.parseDates(data.page);
+				this.pages.set(page.id, page);
+
+				// Invalidate version cache — page content changed
+				this.loadedVersions.delete(pageId);
+				this.versions.delete(pageId);
+				this._version++;
+
+				return page;
+			}
+
+			return null;
+		} catch (e) {
+			console.error('Failed to restore version:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to restore version';
+			return null;
+		}
+	}
+
+	/**
 	 * Get versions for a page (from cache)
 	 */
 	getVersions(pageId: string): PageVersion[] {
@@ -527,6 +589,101 @@ class PageStore {
 	 */
 	markClean(): void {
 		this.isDirty = false;
+	}
+
+	// =====================================================
+	// Context Integration (Phase 2: Page Context)
+	// =====================================================
+
+	/**
+	 * Toggle a page's in_context status via API
+	 * Returns the updated page, or null on failure
+	 */
+	async setPageInContext(pageId: string, inContext: boolean): Promise<Page | null> {
+		try {
+			const response = await fetch(`/api/pages/${pageId}/context`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ inContext })
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to toggle context: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.page) {
+				const page = this.parseDates(data.page);
+				this.pages.set(page.id, page);
+				this._version++;
+				return page;
+			}
+
+			return null;
+		} catch (e) {
+			console.error('Failed to set page in context:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to toggle context';
+			return null;
+		}
+	}
+
+	/**
+	 * Unlock a finalized page for editing via API
+	 * Supports keepInContext to pin the finalized version for AI while editing
+	 */
+	async unlockPage(pageId: string, keepInContext?: boolean): Promise<Page | null> {
+		try {
+			const response = await fetch(`/api/pages/${pageId}/unlock`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ keepInContext })
+			});
+
+			if (!response.ok) {
+				throw new Error(`Unlock failed: ${response.status}`);
+			}
+
+			const data = await response.json();
+			if (data.page) {
+				const page = this.parseDates(data.page);
+				this.pages.set(page.id, page);
+				this._version++;
+				return page;
+			}
+
+			return null;
+		} catch (e) {
+			console.error('Failed to unlock page:', e);
+			this.error = e instanceof Error ? e.message : 'Failed to unlock page';
+			return null;
+		}
+	}
+
+	/**
+	 * Get finalized pages currently in AI context for an area (from cache)
+	 * Includes both normal in-context pages and pages with pinned frozen versions
+	 */
+	getPagesInContext(areaId: string): Page[] {
+		void this._version;
+		return this.pageList.filter(
+			(p) => p.areaId === areaId && (
+				(p.status === 'finalized' && p.inContext) ||
+				(p.contextVersionNumber != null)
+			)
+		);
+	}
+
+	/**
+	 * Get all finalized pages for an area (from cache)
+	 * Includes both in-context and available finalized pages, plus pages with pinned versions
+	 */
+	getFinalizedPagesForArea(areaId: string): Page[] {
+		void this._version;
+		return this.pageList.filter(
+			(p) => p.areaId === areaId && (
+				p.status === 'finalized' || p.contextVersionNumber != null
+			)
+		);
 	}
 
 	// =====================================================

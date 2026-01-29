@@ -219,6 +219,18 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 - [ ] Paste from clipboard support
 - [ ] Phase 2: Page assets table (production)
 
+### ~~Context-Aware Unlock (Page Lifecycle)~~ ✅ RESOLVED
+**Resolved in Phase 4: Page Lifecycle Polish (2026-01-29)**
+
+- [x] On unlock: If page has `in_context = true`, show modal asking "Keep v{N} active in context while you edit?"
+  - **Yes**: Sets `context_version_number` on pages table → context system serves frozen version content (not draft)
+  - **No**: Current behavior (clear `in_context`)
+- [x] On finalize: If `context_version_number` is set, auto-replace with new version and clear the field
+- [x] On finalize (without prior context): Normal "Add to Context" checkbox behavior
+- [x] Schema: Added `context_version_number INTEGER` to pages table (nullable)
+- [x] Context loading: `findPagesInContext` JOINs `page_versions` when `context_version_number` is set
+- [x] Bonus: Added "Editing v{N}" indicator, pinned context badge, discard changes flow, ContextPanel pinned state
+
 ### Editor UX Polish
 
 | Priority | Items | Status |
@@ -226,7 +238,7 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 | P1 (High) | Undo/redo buttons, paragraph option, link modal | Planned |
 | P2 (Medium) | Title input auto-select, clear formatting, visibility confirm | Planned |
 | P3 (Low) | Text alignment, shortcuts ref, auto-save indicator | Planned |
-| P4 (Future) | Drag handles, link click-edit, version history UI | Future |
+| P4 (Future) | Drag handles, link click-edit | Future |
 
 ---
 
@@ -300,6 +312,44 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 
 ---
 
+## Jira Service Manager Integration
+
+**Status**: Researched, backlogged
+**Phase**: 2 (Team Intelligence) per `docs/features/INTEGRATIONS_ARCHITECTURE.md`
+**Tier**: Contextual (add-on UX, per-Area activation)
+
+> Research completed January 2026. MCP ecosystem ready.
+
+### MCP Options Available
+
+| Option | Type | Cloud | Server/DC | Notes |
+|--------|------|-------|-----------|-------|
+| **Atlassian Rovo MCP** | Official | ✅ | ❌ | OAuth 2.1, read+write, Beta |
+| **mcp-atlassian** (sooperset) | Community | ✅ | ✅ | Combined Confluence + Jira |
+| **jira-mcp** (cosmix) | Community | ✅ | ✅ | Relationship tracking, AI-optimized |
+
+### Target Use Cases
+
+- [ ] **Project ticket summary** — open ticket count, status breakdown
+- [ ] **Highest priority tickets** — sorted by priority, SLA breach status
+- [ ] **Tickets with no responses** — requires client-side filtering (JQL limitation)
+- [ ] **Sprint context** — current sprint progress, blockers
+- [ ] **Area-scoped ticket views** — filter by labels, components, queues
+
+### Key Findings
+
+- Official Atlassian Rovo MCP provides `searchJiraIssuesUsingJql` (JQL-powered search), `getJiraIssue`, `createJiraIssue`, `editJiraIssue`, and 9 more tools
+- **JQL limitation**: Cannot natively filter by comment count (no "tickets with zero responses" query). Workaround: fetch issues → filter client-side in StratAI wrapper layer
+- JSM-specific statuses (`Waiting for customer`, `SLA breach`) may be better proxies for "needs attention"
+- Architecture fit: StratAI MCP Host + provider model handles this cleanly (same pattern as Calendar)
+
+### Dependencies
+
+- [ ] Integrations Architecture foundation (Phase 0 from `INTEGRATIONS_ARCHITECTURE.md`)
+- [ ] Calendar integration validates the MCP Host pattern first
+
+---
+
 ## Future Phases (0.4+)
 
 | Phase | Goal | Priority |
@@ -351,4 +401,4 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 
 ---
 
-*Last Updated: January 28, 2026*
+*Last Updated: January 29, 2026*

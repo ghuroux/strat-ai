@@ -61,6 +61,15 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const { id } = params;
 
 	try {
+		// Verify page exists and check finalization status
+		const existingPage = await postgresPageRepository.findById(id, userId);
+		if (!existingPage) {
+			return json({ error: 'Page not found' }, { status: 404 });
+		}
+		if (existingPage.status === 'finalized') {
+			return json({ error: 'Cannot edit a finalized page. Unlock it first.' }, { status: 403 });
+		}
+
 		const body = await request.json();
 
 		const updates: UpdatePageInput = {};

@@ -112,6 +112,13 @@ export type DashboardView = 'all' | 'tasks' | 'calendar';
  */
 export type EventDisplayMode = 'standard' | 'compact';
 
+/**
+ * Dashboard density preference.
+ * - standard: Multi-line task cards with meta row, subtask accordion, action buttons
+ * - compact: Single-line task cards with inline meta, tighter padding
+ */
+export type DashboardDensity = 'standard' | 'compact';
+
 // ============================================================================
 // Hero Intelligence Types (Phase 3: Hero Card Intelligence)
 // ============================================================================

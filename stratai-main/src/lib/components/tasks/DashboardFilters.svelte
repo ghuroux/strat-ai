@@ -6,7 +6,8 @@
 -->
 <script lang="ts">
 	import type { Space } from '$lib/types/spaces';
-	import type { DashboardView } from '$lib/types/calendar';
+	import type { DashboardView, DashboardDensity } from '$lib/types/calendar';
+	import { LayoutList, AlignJustify } from 'lucide-svelte';
 
 	interface Props {
 		spaces: Space[];
@@ -18,6 +19,9 @@
 		activeView?: DashboardView;
 		calendarConnected?: boolean;
 		onViewChange?: (view: DashboardView) => void;
+		// Density toggle
+		density?: DashboardDensity;
+		onDensityChange?: (density: DashboardDensity) => void;
 	}
 
 	let {
@@ -28,7 +32,9 @@
 		onStatusChange,
 		activeView = 'all',
 		calendarConnected = false,
-		onViewChange
+		onViewChange,
+		density = 'standard',
+		onDensityChange
 	}: Props = $props();
 
 	function handleSpaceSelect(e: Event) {
@@ -38,6 +44,10 @@
 
 	function handleViewClick(view: DashboardView) {
 		onViewChange?.(view);
+	}
+
+	function handleDensityClick(d: DashboardDensity) {
+		onDensityChange?.(d);
 	}
 </script>
 
@@ -111,6 +121,31 @@
 				onclick={() => handleViewClick('calendar')}
 			>
 				Calendar
+			</button>
+		</div>
+	{/if}
+
+	<!-- Density toggle (always visible) -->
+	{#if onDensityChange}
+		<div class="view-separator"></div>
+		<div class="density-toggle">
+			<button
+				type="button"
+				class="density-btn"
+				class:active={density === 'standard'}
+				onclick={() => handleDensityClick('standard')}
+				title="Standard view"
+			>
+				<LayoutList size={14} />
+			</button>
+			<button
+				type="button"
+				class="density-btn"
+				class:active={density === 'compact'}
+				onclick={() => handleDensityClick('compact')}
+				title="Compact view"
+			>
+				<AlignJustify size={14} />
 			</button>
 		</div>
 	{/if}
@@ -217,6 +252,46 @@
 		color: #6366f1;
 		background: rgba(99, 102, 241, 0.1);
 		border-color: rgba(99, 102, 241, 0.3);
+	}
+
+	/* Density toggle */
+	.density-toggle {
+		display: flex;
+		gap: 0.25rem;
+	}
+
+	.density-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		padding: 0;
+		color: rgba(255, 255, 255, 0.4);
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 0.375rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	:global(.light) .density-btn,
+	:global([data-theme='light']) .density-btn {
+		color: rgba(0, 0, 0, 0.4);
+		background: rgba(0, 0, 0, 0.04);
+		border-color: rgba(0, 0, 0, 0.1);
+	}
+
+	.density-btn:hover {
+		color: rgba(255, 255, 255, 0.7);
+		background: rgba(255, 255, 255, 0.08);
+		border-color: rgba(255, 255, 255, 0.15);
+	}
+
+	.density-btn.active {
+		color: #3b82f6;
+		background: rgba(59, 130, 246, 0.1);
+		border-color: rgba(59, 130, 246, 0.3);
 	}
 
 	/* Responsive: stack on narrow screens */

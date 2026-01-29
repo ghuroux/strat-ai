@@ -62,6 +62,18 @@
 			]
 		},
 		{
+			category: 'Tasks Dashboard',
+			items: [
+				{ keys: ['J'], description: 'Next item' },
+				{ keys: ['K'], description: 'Previous item' },
+				{ keys: ['Enter'], description: 'Open focused item' },
+				{ keys: ['X'], description: 'Complete focused task' },
+				{ keys: ['N'], description: 'New task' },
+				{ keys: ['/'], description: 'Focus filters' },
+				{ keys: ['Esc'], description: 'Clear focus' }
+			]
+		},
+		{
 			category: 'Secrets',
 			items: [
 				{ keys: ['↑↑↓↓←→←→', 'B', 'A'], description: '???' },

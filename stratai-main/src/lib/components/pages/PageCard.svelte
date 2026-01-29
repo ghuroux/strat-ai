@@ -17,7 +17,7 @@
 	 */
 
 	import { goto } from '$app/navigation';
-	import { FileEdit, Users, Scale, Lock, MoreVertical, Eye, Share2, Trash2 } from 'lucide-svelte';
+	import { FileEdit, Users, Scale, Lock, BookOpen, MoreVertical, Eye, Share2, Trash2, CheckCircle2 } from 'lucide-svelte';
 	import type { Page, PageType } from '$lib/types/page';
 	import { PAGE_TYPE_LABELS } from '$lib/types/page';
 
@@ -157,11 +157,26 @@
 			</div>
 		{/if}
 
-		<!-- Metadata row: Type + Word count -->
-		<div class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+		<!-- Metadata row: Type + Word count + Status -->
+		<div class="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 flex-wrap">
 			<span class="font-medium">{typeLabel}</span>
 			<span class="opacity-50">·</span>
 			<span>{wordCount} words</span>
+			{#if page.status === 'finalized'}
+				<span class="opacity-50">·</span>
+				<span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+					<CheckCircle2 size={12} />
+					Finalized v{page.currentVersion ?? 1}
+				</span>
+			{/if}
+			{#if page.inContext}
+				<span class="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-full
+							 bg-purple-100 dark:bg-purple-500/15
+							 text-purple-600 dark:text-purple-400">
+					<BookOpen size={10} />
+					In Context
+				</span>
+			{/if}
 		</div>
 
 		<!-- Footer: Lock + Timestamp + Ownership -->

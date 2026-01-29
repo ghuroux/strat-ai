@@ -16,10 +16,13 @@
 	import ShareDocumentModal from '$lib/components/documents/ShareDocumentModal.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
+	import { pageStore } from '$lib/stores/pages.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Document } from '$lib/types/documents';
 	import type { Area } from '$lib/types/areas';
 	import { ACCEPT_ALL, ALL_TYPES_DISPLAY } from '$lib/config/file-types';
+	import { BookOpen } from 'lucide-svelte';
+	import { untrack } from 'svelte';
 
 	interface Props {
 		isOpen: boolean;
@@ -60,6 +63,19 @@
 	$effect(() => {
 		if (isOpen && spaceId) {
 			documentStore.loadDocuments(spaceId);
+		}
+	});
+
+	// Load pages when panel opens (for finalized pages section)
+	// Use reloadArea to bypass cache — pages may have been finalized since last load
+	// IMPORTANT: untrack() prevents the $effect from tracking reactive state inside reloadArea
+	// (which iterates/mutates SvelteMap and _version), avoiding an infinite re-trigger loop
+	$effect(() => {
+		if (isOpen && area?.id) {
+			const areaId = area.id;
+			untrack(() => {
+				pageStore.reloadArea(areaId);
+			});
 		}
 	});
 
@@ -105,6 +121,27 @@
 			.filter(doc => activeIds.has(doc.id))
 			.reduce((sum, doc) => sum + doc.charCount, 0);
 	});
+
+	// Finalized pages for this area (includes pages with pinned context versions)
+	let finalizedPages = $derived.by(() => {
+		return pageStore.getFinalizedPagesForArea(area.id);
+	});
+	let pagesInContextCount = $derived(
+		finalizedPages.filter(p => p.inContext || p.contextVersionNumber != null).length
+	);
+
+	// Toggle page context
+	async function togglePageContext(pageId: string) {
+		const page = pageStore.getPageById(pageId);
+		if (!page) return;
+
+		try {
+			await pageStore.setPageInContext(pageId, !page.inContext);
+		} catch (e) {
+			toastStore.error('Failed to toggle page context');
+			console.error('Failed to toggle page context:', e);
+		}
+	}
 
 	// Check if a document is active
 	function isDocActive(docId: string): boolean {
@@ -429,6 +466,74 @@
 				{:else}
 					<div class="notes-empty">
 						No notes yet. Add context to help the AI understand this area.
+					</div>
+				{/if}
+			</section>
+
+			<!-- Finalized Pages Section (Phase 2: Page Context) -->
+			<section class="pages-section">
+				<div class="section-header">
+					<div class="section-title">
+						<BookOpen size={14} />
+						<span>Finalized Pages</span>
+					</div>
+					<div class="doc-stats">
+						{#if pagesInContextCount > 0}
+							<span class="stat-badge">{pagesInContextCount} active</span>
+						{:else}
+							<span class="stat-none">None active</span>
+						{/if}
+					</div>
+				</div>
+
+				{#if finalizedPages.length > 0}
+					<div class="doc-list">
+						{#each finalizedPages as page (page.id)}
+							{@const isPinned = page.contextVersionNumber != null && page.status !== 'finalized'}
+							{@const active = page.inContext || isPinned}
+							<div class="doc-item" class:active>
+								<!-- Activation toggle (disabled for pinned pages — context managed via unlock flow) -->
+								<button
+									type="button"
+									class="doc-toggle"
+									class:checked={active}
+									onclick={() => !isPinned && togglePageContext(page.id)}
+									disabled={isPinned}
+									title={isPinned ? `v${page.contextVersionNumber} pinned while editing` : active ? 'Remove from AI context' : 'Add to AI context'}
+								>
+									{#if active}
+										<svg viewBox="0 0 24 24" fill="currentColor">
+											<path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" />
+										</svg>
+									{:else}
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+										</svg>
+									{/if}
+								</button>
+
+								<!-- Page icon -->
+								<div class="doc-icon text">
+									<BookOpen size={14} />
+								</div>
+
+								<!-- Page info -->
+								<div class="doc-info">
+									<span class="doc-name" title={page.title}>{page.title}</span>
+									<div class="doc-meta-row">
+										{#if isPinned}
+											<span class="doc-meta pinned">v{page.contextVersionNumber} pinned &middot; editing</span>
+										{:else}
+											<span class="doc-meta">v{page.currentVersion ?? 1} &middot; {page.wordCount} words</span>
+										{/if}
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="empty-state">
+						<p>No finalized pages in this area</p>
 					</div>
 				{/if}
 			</section>
@@ -878,8 +983,13 @@
 		transition: all 0.15s ease;
 	}
 
-	.doc-toggle:hover {
+	.doc-toggle:hover:not(:disabled) {
 		color: rgba(255, 255, 255, 0.6);
+	}
+
+	.doc-toggle:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
 	}
 
 	.doc-toggle.checked {
@@ -948,6 +1058,10 @@
 	.doc-meta {
 		font-size: 0.625rem;
 		color: rgba(255, 255, 255, 0.4);
+	}
+
+	.doc-meta.pinned {
+		color: #f59e0b;
 	}
 
 	.doc-meta-row {

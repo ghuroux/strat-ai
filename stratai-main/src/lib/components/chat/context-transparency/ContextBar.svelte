@@ -16,9 +16,11 @@
 	import DocumentsPanel from './panels/DocumentsPanel.svelte';
 	import NotesPanel from './panels/NotesPanel.svelte';
 	import TasksPanel from './panels/TasksPanel.svelte';
+	import PagesPanel from './panels/PagesPanel.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { taskStore } from '$lib/stores/tasks.svelte';
+	import { pageStore } from '$lib/stores/pages.svelte';
 	import type { Task } from '$lib/types/tasks';
 
 	interface ContextSource {
@@ -34,6 +36,8 @@
 		contextSource: ContextSource;
 		onActivateDocument: (docId: string) => Promise<void>;
 		onDeactivateDocument: (docId: string) => Promise<void>;
+		onActivatePage?: (pageId: string) => Promise<void>;
+		onDeactivatePage?: (pageId: string) => Promise<void>;
 		onOpenContextPanel: () => void;
 		onOpenTasksPanel?: () => void;
 	}
@@ -42,12 +46,14 @@
 		contextSource,
 		onActivateDocument,
 		onDeactivateDocument,
+		onActivatePage,
+		onDeactivatePage,
 		onOpenContextPanel,
 		onOpenTasksPanel
 	}: Props = $props();
 
 	// Panel state - only one can be open at a time
-	let openPanel = $state<'documents' | 'notes' | 'tasks' | null>(null);
+	let openPanel = $state<'documents' | 'notes' | 'tasks' | 'pages' | null>(null);
 
 	// Refs for click-outside detection
 	let containerRef: HTMLElement | undefined = $state();
@@ -59,6 +65,7 @@
 		if (!areaId) {
 			return {
 				documents: { active: [], available: [] },
+				pages: { active: [] as { id: string; title: string; wordCount: number; currentVersion?: number }[], available: [] as { id: string; title: string; wordCount: number; currentVersion?: number }[] },
 				notes: { hasNotes: false, preview: undefined },
 				relatedTasks: []
 			};
@@ -67,6 +74,15 @@
 		const area = areaStore.getAreaById(areaId);
 		const allDocs = documentStore.getDocuments(contextSource.spaceId);
 		const activeIds = new Set(area?.contextDocumentIds ?? []);
+
+		// Get finalized pages for this area
+		const allPages = pageStore.getPagesForArea(areaId);
+		const contextPages = allPages
+			.filter(p => p.status === 'finalized' && p.inContext)
+			.map(p => ({ id: p.id, title: p.title, wordCount: p.wordCount, currentVersion: p.currentVersion }));
+		const availablePages = allPages
+			.filter(p => p.status === 'finalized' && !p.inContext)
+			.map(p => ({ id: p.id, title: p.title, wordCount: p.wordCount, currentVersion: p.currentVersion }));
 
 		// Get tasks for this area
 		const tasks = taskStore.getTasksForAreaId(areaId)
@@ -88,6 +104,10 @@
 					.filter(d => !activeIds.has(d.id))
 					.map(d => ({ id: d.id, filename: d.filename, charCount: d.charCount, title: d.title }))
 			},
+			pages: {
+				active: contextPages,
+				available: availablePages
+			},
 			notes: {
 				hasNotes: !!area?.context,
 				preview: area?.context?.slice(0, 200)
@@ -100,10 +120,12 @@
 	let activeDocCount = $derived(activeContext.documents.active.length);
 	let availableDocCount = $derived(activeContext.documents.available.length);
 	let totalDocCount = $derived(activeDocCount + availableDocCount);
+	let activePageCount = $derived(activeContext.pages.active.length);
+	let availablePageCount = $derived(activeContext.pages.available.length);
 	let taskCount = $derived(activeContext.relatedTasks.length);
 
 	// Toggle panel
-	function togglePanel(panel: 'documents' | 'notes' | 'tasks') {
+	function togglePanel(panel: 'documents' | 'notes' | 'tasks' | 'pages') {
 		openPanel = openPanel === panel ? null : panel;
 	}
 
@@ -133,6 +155,15 @@
 
 	async function handleDeactivate(docId: string) {
 		await onDeactivateDocument(docId);
+	}
+
+	// Page handlers
+	async function handleActivatePage(pageId: string) {
+		await onActivatePage?.(pageId);
+	}
+
+	async function handleDeactivatePage(pageId: string) {
+		await onDeactivatePage?.(pageId);
 	}
 
 	// Task click handler
@@ -205,6 +236,29 @@
 			/>
 		{/if}
 	</div>
+
+	<!-- Pages Chip (show if any finalized pages exist) -->
+	{#if activePageCount > 0 || availablePageCount > 0}
+		<div class="relative">
+			<ContextChip
+				icon="book-open"
+				label={activePageCount > 0 ? `${activePageCount} page${activePageCount !== 1 ? 's' : ''}` : 'Pages'}
+				count={availablePageCount > 0 ? availablePageCount : undefined}
+				active={activePageCount > 0}
+				expanded={openPanel === 'pages'}
+				onclick={() => togglePanel('pages')}
+			/>
+			{#if openPanel === 'pages'}
+				<PagesPanel
+					activePages={activeContext.pages.active}
+					availablePages={activeContext.pages.available}
+					onActivate={handleActivatePage}
+					onDeactivate={handleDeactivatePage}
+					onManage={handleManageDocuments}
+				/>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Tasks Chip (only show if we have tasks) -->
 	{#if taskCount > 0}

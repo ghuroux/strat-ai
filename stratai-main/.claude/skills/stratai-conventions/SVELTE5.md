@@ -238,6 +238,40 @@ items.set(id, newItem);
 this._version++;
 ```
 
+### 5. Calling store methods that mutate reactive state inside `$effect` without `untrack()`
+
+`$effect` tracks **all** reactive values read during execution — including values read inside called functions. If an `$effect` calls a store method that iterates or mutates a `SvelteMap` or `$state`, the effect becomes dependent on that internal state. When the method then *changes* that state, the effect re-triggers → infinite loop → flood of console errors.
+
+```svelte
+<script lang="ts">
+    import { untrack } from 'svelte';
+    import { myStore } from '$lib/stores/my.svelte';
+
+    let isOpen = $props().isOpen;
+    let areaId = $props().areaId;
+
+    // WRONG — reloadArea iterates/mutates SvelteMap + _version inside the effect
+    // Effect tracks those reactive values → mutation triggers re-run → infinite loop
+    $effect(() => {
+        if (isOpen && areaId) {
+            myStore.reloadArea(areaId); // 💥 Infinite loop!
+        }
+    });
+
+    // CORRECT — untrack() prevents the effect from tracking store internals
+    $effect(() => {
+        if (isOpen && areaId) {
+            const id = areaId; // capture tracked value
+            untrack(() => {
+                myStore.reloadArea(id); // ✅ Safe — only isOpen and areaId are tracked
+            });
+        }
+    });
+</script>
+```
+
+**Rule of thumb**: When an `$effect` calls a store method that *mutates* reactive state (SvelteMap, $state, _version), always wrap the call in `untrack()`. The effect should only depend on the values that determine *whether* to call the method, not on the store's internal state that the method changes.
+
 ## File Reference
 
 Real examples in codebase:

@@ -6,6 +6,8 @@
 --          Added game_scores table for org-wide mini-game leaderboards
 -- Updated: 2026-01-27 (20260127_001_integrations_infrastructure)
 --          Added integration tables for OAuth connections (Calendar, GitHub, etc.)
+-- Updated: 2026-01-28 (20260128_001_page_lifecycle)
+--          Added page lifecycle columns (status, finalized_at, finalized_by, current_version)
 --
 -- This is the complete database schema for StratAI.
 -- Run this on a fresh PostgreSQL 15+ database.
@@ -548,9 +550,21 @@ CREATE TABLE pages (
     page_type TEXT NOT NULL DEFAULT 'general' CHECK (page_type IN ('general', 'meeting_notes', 'decision_record', 'proposal', 'project_brief', 'weekly_update', 'technical_spec')),
     visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'area', 'space')),
     source_conversation_id TEXT,
+    -- Lifecycle status (Phase 1: Page Lifecycle)
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'shared', 'finalized')),
+    finalized_at TIMESTAMPTZ,
+    finalized_by TEXT,
+    current_version INTEGER DEFAULT 1,
+    -- Context integration (Phase 2: Page Context)
+    in_context BOOLEAN NOT NULL DEFAULT false,
+    -- Context-aware unlock (Phase 4: Polish)
+    context_version_number INTEGER,
+    -- Timestamps
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+    -- Only finalized pages can be in context
+    CONSTRAINT chk_context_requires_finalized CHECK (in_context = false OR status = 'finalized')
 );
 
 CREATE INDEX idx_pages_user ON pages(user_id) WHERE deleted_at IS NULL;
@@ -558,6 +572,11 @@ CREATE INDEX idx_pages_area ON pages(area_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_pages_task ON pages(task_id) WHERE task_id IS NOT NULL AND deleted_at IS NULL;
 CREATE INDEX idx_pages_updated ON pages(user_id, updated_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_pages_search ON pages USING GIN(to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(content_text, ''))) WHERE deleted_at IS NULL;
+-- Lifecycle indexes (Phase 1: Page Lifecycle)
+CREATE INDEX idx_pages_status ON pages(status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_pages_finalized ON pages(area_id, finalized_at DESC) WHERE status = 'finalized' AND deleted_at IS NULL;
+-- Context integration index (Phase 2: Page Context)
+CREATE INDEX idx_pages_in_context ON pages(area_id) WHERE in_context = true AND status = 'finalized' AND deleted_at IS NULL;
 
 CREATE TRIGGER pages_updated_at
     BEFORE UPDATE ON pages
@@ -967,7 +986,9 @@ CREATE TABLE schema_migrations (
 INSERT INTO schema_migrations (version) VALUES
     ('040-fresh-install'),
     ('20260120_001_game_scores'),
-    ('20260127_001_integrations_infrastructure');
+    ('20260127_001_integrations_infrastructure'),
+    ('20260128_001_page_lifecycle'),
+    ('20260128_002_page_context');
 
 -- ============================================================================
 -- DONE!

@@ -29,7 +29,7 @@
 	import { common, createLowlight } from 'lowlight';
 	import { recalculateTable, updateTableTotalsInEditor, extractTableData, type TableData } from '$lib/services/table-calculations';
 	import { buildCellRef } from '$lib/services/cell-references';
-	import { Lock, Save, Share2, History, MoreVertical } from 'lucide-svelte';
+	import { Lock, Save, Share2, History, MoreVertical, Clock, RotateCcw, ArrowLeft } from 'lucide-svelte';
 	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
 	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
 	import type { Page, TipTapContent, PageType, PageVisibility } from '$lib/types/page';
@@ -40,8 +40,16 @@
 	import PageHeader from './PageHeader.svelte';
 	import EditorChatPanel from './EditorChatPanel.svelte';
 	import SharePageModal from './SharePageModal.svelte';
+	import FinalizePageModal from './FinalizePageModal.svelte';
+	import UnlockPageModal from './UnlockPageModal.svelte';
+	import DiscardChangesModal from './DiscardChangesModal.svelte';
 	import PageAuditLog from './PageAuditLog.svelte';
+	import VersionHistoryPanel from './VersionHistoryPanel.svelte';
+	import RestoreVersionModal from './RestoreVersionModal.svelte';
+	import type { PageVersion } from '$lib/types/page';
 	import { userStore } from '$lib/stores/user.svelte';
+	import { pageStore } from '$lib/stores/pages.svelte';
+	import { toastStore } from '$lib/stores/toast.svelte';
 	import { SlashCommands, DiagramNode, getDefaultCommands, createSuggestionConfig } from './extensions';
 	import { ExcalidrawEditor, LibraryPicker, type DiagramLibrary } from '$lib/components/diagrams';
 
@@ -259,6 +267,13 @@
 	// Activity panel state
 	let activityPanelOpen = $state(false);
 
+	// Version history state (Phase 3: Version Management)
+	let versionHistoryOpen = $state(false);
+	let previewVersion = $state<PageVersion | null>(null);
+	let isPreviewMode = $derived(previewVersion !== null);
+	let showRestoreModal = $state(false);
+	let restoreTargetVersion = $state<number | null>(null);
+
 	// Phase 2.5: Formula mode state for row formulas
 	interface FormulaMode {
 		active: boolean;
@@ -331,11 +346,23 @@
 	let currentUserId = $derived(userStore.id ?? '');
 
 	// Permission-based derived states
-	let isReadOnly = $derived(userPermission === 'viewer');
+	// Read-only if viewer OR if page is finalized (locked)
+	let isFinalized = $derived(page?.status === 'finalized');
+	let isReadOnly = $derived(userPermission === 'viewer' || isFinalized);
 	let isAdmin = $derived(userPermission === 'admin');
 
 	// Check if current user can manage sharing (owner has admin permission)
 	let canManageSharing = $derived(page ? page.userId === currentUserId : false);
+
+	// Page lifecycle (Phase 1: Page Lifecycle)
+	let isOwner = $derived(page ? page.userId === currentUserId : false);
+	let canFinalize = $derived(isOwner && page?.status !== 'finalized');
+	let canUnlock = $derived(isOwner && page?.status === 'finalized');
+
+	// Lifecycle modal states
+	let showFinalizeModal = $state(false);
+	let showUnlockModal = $state(false);
+	let showDiscardModal = $state(false);
 
 	// Sync state with props when page or initial values change
 	$effect(() => {
@@ -492,7 +519,7 @@
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && e.key === 's') {
 				e.preventDefault();
-				if (!isReadOnly) {
+				if (!isReadOnly && !isPreviewMode) {
 					handleSave();
 				}
 			}
@@ -516,8 +543,8 @@
 
 	// Auto-save with 30-second debounce (disabled for viewers)
 	function scheduleAutoSave() {
-		// Don't auto-save for read-only users
-		if (isReadOnly) return;
+		// Don't auto-save for read-only users or in version preview mode
+		if (isReadOnly || isPreviewMode) return;
 
 		if (autoSaveTimer) {
 			clearTimeout(autoSaveTimer);
@@ -577,6 +604,159 @@
 			if (!confirmed) return;
 		}
 		onClose();
+	}
+
+	// Handle finalize (Phase 1: Page Lifecycle, Phase 2: Context Integration)
+	async function handleFinalize(changeSummary?: string, addToContext?: boolean) {
+		if (!page?.id) return;
+
+		try {
+			const response = await fetch(`/api/pages/${page.id}/finalize`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ changeSummary, addToContext })
+			});
+
+			if (!response.ok) {
+				throw new Error('Failed to finalize page');
+			}
+
+			const data = await response.json();
+			if (data.page) {
+				// Update the store — parent route syncs via $effect
+				const updatedPage = {
+					...data.page,
+					createdAt: new Date(data.page.createdAt),
+					updatedAt: new Date(data.page.updatedAt)
+				};
+				pageStore.addPage(updatedPage);
+
+				// Make editor read-only immediately
+				editor?.setEditable(false);
+			}
+			showFinalizeModal = false;
+
+			// Invalidate version cache so panel shows new version
+			if (page?.id) {
+				pageStore.clearPageCache(page.id);
+			}
+
+			const contextMsg = addToContext ? ' and added to AI context' : '';
+			toastStore.success(`Page finalized${contextMsg}`);
+		} catch (error) {
+			console.error('Failed to finalize page:', error);
+			toastStore.error('Failed to finalize page. Please try again.');
+		}
+	}
+
+	// Handle unlock (Phase 4: Context-aware unlock)
+	async function handleUnlock(keepInContext: boolean) {
+		if (!page?.id) return;
+
+		try {
+			const updatedPage = await pageStore.unlockPage(page.id, keepInContext);
+			if (updatedPage) {
+				// Re-enable editing
+				editor?.setEditable(true);
+				showUnlockModal = false;
+				const contextMsg = keepInContext
+					? `. v${page.currentVersion} remains in AI context.`
+					: '';
+				toastStore.success(`Page unlocked for editing${contextMsg}`);
+			} else {
+				toastStore.error('Failed to unlock page');
+			}
+		} catch (error) {
+			console.error('Failed to unlock page:', error);
+			toastStore.error('Failed to unlock page. Please try again.');
+		}
+	}
+
+	// Handle discard changes (Phase 4: Polish)
+	async function handleDiscardChanges() {
+		if (!page?.id || !page?.currentVersion) return;
+
+		try {
+			const restored = await pageStore.restoreVersion(page.id, page.currentVersion);
+			if (restored) {
+				editor?.commands.setContent(restored.content);
+				content = restored.content;
+				title = restored.title;
+				isDirty = false;
+				showDiscardModal = false;
+				toastStore.success(`Reverted to v${page.currentVersion}`);
+			} else {
+				toastStore.error('Failed to discard changes');
+			}
+		} catch (error) {
+			console.error('Failed to discard changes:', error);
+			toastStore.error('Failed to discard changes. Please try again.');
+		}
+	}
+
+	// Handle context toggle (Phase 2: Page Context)
+	async function handleToggleContext() {
+		if (!page?.id) return;
+		const newValue = !page.inContext;
+		const updated = await pageStore.setPageInContext(page.id, newValue);
+		if (updated) {
+			toastStore.success(newValue ? 'Added to AI context' : 'Removed from AI context');
+		} else {
+			toastStore.error('Failed to update context status');
+		}
+	}
+
+	// Version preview handlers (Phase 3: Version Management)
+	function handleViewVersion(version: PageVersion) {
+		previewVersion = version;
+		editor?.commands.setContent(version.content);
+		editor?.setEditable(false);
+	}
+
+	function exitPreviewMode() {
+		previewVersion = null;
+		editor?.commands.setContent(content); // Restore actual page content
+		editor?.setEditable(!isReadOnly);
+	}
+
+	function handleInitiateRestore(versionNumber: number) {
+		restoreTargetVersion = versionNumber;
+		showRestoreModal = true;
+	}
+
+	async function handleRestoreVersion() {
+		if (!page?.id || !restoreTargetVersion) return;
+
+		const restoredVersionNum = restoreTargetVersion;
+		const restored = await pageStore.restoreVersion(page.id, restoredVersionNum);
+		if (restored) {
+			previewVersion = null;
+			editor?.commands.setContent(restored.content);
+			editor?.setEditable(true);
+			content = restored.content;
+			title = restored.title;
+			showRestoreModal = false;
+			restoreTargetVersion = null;
+			versionHistoryOpen = false;
+			toastStore.success(`Restored to v${restoredVersionNum}`);
+		} else {
+			toastStore.error('Failed to restore version');
+		}
+	}
+
+	// Format version date for preview banner
+	function formatVersionDate(date: Date | string): string {
+		const d = typeof date === 'string' ? new Date(date) : date;
+		if (isNaN(d.getTime())) return 'Unknown';
+		const now = new Date();
+		const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
+
+		if (diff < 60) return 'just now';
+		if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+		if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+		if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+
+		return d.toLocaleDateString();
 	}
 
 	// Format last saved time
@@ -1608,9 +1788,19 @@
 		isDirty={isReadOnly ? false : isDirty}
 		{canManageSharing}
 		{userPermission}
+		status={page?.status ?? 'draft'}
+		currentVersion={page?.currentVersion}
+		{isOwner}
+		inContext={page?.inContext ?? false}
+		contextVersionNumber={page?.contextVersionNumber}
+		onToggleContext={isOwner ? handleToggleContext : undefined}
 		onTitleChange={handleTitleChange}
 		onOpenShareModal={() => showShareModal = true}
 		onOpenActivityLog={() => activityPanelOpen = !activityPanelOpen}
+		onOpenVersionHistory={() => { versionHistoryOpen = !versionHistoryOpen; if (!versionHistoryOpen) exitPreviewMode(); }}
+		onFinalize={() => showFinalizeModal = true}
+		onUnlock={() => showUnlockModal = true}
+		onDiscardChanges={() => showDiscardModal = true}
 		onSave={handleSave}
 		onClose={handleClose}
 	/>
@@ -1618,7 +1808,7 @@
 	<!-- Main content area -->
 	<div class="editor-content">
 		<!-- Editor main area -->
-		<div class="editor-main" class:chat-open={chatPanelOpen} class:activity-open={activityPanelOpen}>
+		<div class="editor-main" class:chat-open={chatPanelOpen} class:activity-open={activityPanelOpen} class:version-history-open={versionHistoryOpen}>
 			<!-- Toolbar (hidden for viewers) -->
 			{#if editor && !isReadOnly}
 				<EditorToolbar
@@ -1629,8 +1819,41 @@
 				/>
 			{/if}
 
+			<!-- Version preview banner (Phase 3: Version Management) -->
+			{#if isPreviewMode && previewVersion}
+				<div class="version-preview-banner">
+					<div class="preview-info">
+						<Clock size={16} />
+						<span>Viewing v{previewVersion.versionNumber}</span>
+						<span class="preview-date">from {formatVersionDate(previewVersion.createdAt)}</span>
+					</div>
+					<div class="preview-actions">
+						{#if isOwner && previewVersion.versionNumber !== page?.currentVersion}
+							<button class="preview-restore-btn" onclick={() => { restoreTargetVersion = previewVersion!.versionNumber; showRestoreModal = true; }}>
+								<RotateCcw size={14} />
+								Restore
+							</button>
+						{/if}
+						<button class="preview-back-btn" onclick={exitPreviewMode}>
+							<ArrowLeft size={14} />
+							Back to current
+						</button>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Read-only banner -->
-			{#if isReadOnly}
+			{#if !isPreviewMode && isFinalized}
+				<div class="read-only-banner finalized">
+					<Lock size={16} />
+					<span>
+						Finalized (v{page?.currentVersion ?? 1})
+						{#if canUnlock}
+							- Click "Unlock" above to edit
+						{/if}
+					</span>
+				</div>
+			{:else if !isPreviewMode && userPermission === 'viewer'}
 				<div class="read-only-banner">
 					<Lock size={16} />
 					<span>Read-only - You have viewer permission</span>
@@ -1698,6 +1921,19 @@
 				<PageAuditLog
 					pageId={page.id}
 					onClose={() => activityPanelOpen = false}
+				/>
+			</div>
+		{/if}
+
+		<!-- Version history panel (Phase 3: Version Management) -->
+		{#if versionHistoryOpen && page}
+			<div class="version-panel-container">
+				<VersionHistoryPanel
+					pageId={page.id}
+					currentVersion={page.currentVersion}
+					onClose={() => { versionHistoryOpen = false; exitPreviewMode(); }}
+					onViewVersion={handleViewVersion}
+					onRestoreVersion={handleInitiateRestore}
 				/>
 			</div>
 		{/if}
@@ -1800,6 +2036,44 @@
 	</div>
 {/if}
 
+<!-- Finalize Modal (Phase 1: Page Lifecycle) -->
+<FinalizePageModal
+	open={showFinalizeModal}
+	pageTitle={title}
+	contextVersionNumber={page?.contextVersionNumber}
+	onClose={() => showFinalizeModal = false}
+	onConfirm={handleFinalize}
+/>
+
+<!-- Unlock Modal (Phase 4: Context-aware unlock) -->
+<UnlockPageModal
+	open={showUnlockModal}
+	pageTitle={title}
+	currentVersion={page?.currentVersion ?? 1}
+	isInContext={page?.inContext ?? false}
+	onClose={() => showUnlockModal = false}
+	onConfirm={handleUnlock}
+/>
+
+<!-- Discard Changes Modal (Phase 4: Polish) -->
+<DiscardChangesModal
+	open={showDiscardModal}
+	pageTitle={title}
+	targetVersion={page?.currentVersion ?? 1}
+	onClose={() => showDiscardModal = false}
+	onConfirm={handleDiscardChanges}
+/>
+
+<!-- Restore Version Modal (Phase 3: Version Management) -->
+<RestoreVersionModal
+	open={showRestoreModal}
+	pageTitle={title}
+	versionNumber={restoreTargetVersion ?? 0}
+	currentVersion={page?.currentVersion ?? 1}
+	onClose={() => { showRestoreModal = false; restoreTargetVersion = null; }}
+	onConfirm={handleRestoreVersion}
+/>
+
 <style>
 	.page-editor {
 		position: relative;
@@ -1839,12 +2113,14 @@
 		margin-right: 350px;
 	}
 
-	.editor-main.activity-open {
+	.editor-main.activity-open,
+	.editor-main.version-history-open {
 		margin-right: 380px;
 	}
 
-	.editor-main.chat-open.activity-open {
-		margin-right: 730px; /* 350px chat + 380px activity */
+	.editor-main.chat-open.activity-open,
+	.editor-main.chat-open.version-history-open {
+		margin-right: 730px; /* 350px chat + 380px activity/version */
 	}
 
 	/* Read-only banner */
@@ -1859,6 +2135,12 @@
 		font-size: 0.875rem;
 		color: #6b7280;
 		margin: 1rem 1.5rem 0;
+	}
+
+	.read-only-banner.finalized {
+		background: rgba(34, 197, 94, 0.1);
+		border-color: rgba(34, 197, 94, 0.2);
+		color: #22c55e;
 	}
 
 	.editor-body-wrapper {
@@ -2038,6 +2320,90 @@
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+	}
+
+	/* Version history panel container */
+	.version-panel-container {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		width: 380px;
+		background: var(--editor-bg);
+		border-left: 1px solid var(--editor-border);
+		z-index: 20;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+	}
+
+	/* Version preview banner */
+	.version-preview-banner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.625rem 1.5rem;
+		background: rgba(245, 158, 11, 0.1);
+		border: 1px solid rgba(245, 158, 11, 0.25);
+		border-radius: 0.5rem;
+		margin: 0.75rem 1.5rem 0;
+	}
+
+	.preview-info {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: #f59e0b;
+		font-size: 0.875rem;
+		font-weight: 500;
+	}
+
+	.preview-date {
+		color: var(--editor-text-secondary);
+		font-weight: 400;
+	}
+
+	.preview-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.preview-restore-btn,
+	.preview-back-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.75rem;
+		border: 1px solid;
+		border-radius: 6px;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: all 100ms ease;
+	}
+
+	.preview-restore-btn {
+		background: rgba(245, 158, 11, 0.15);
+		border-color: rgba(245, 158, 11, 0.4);
+		color: #f59e0b;
+	}
+
+	.preview-restore-btn:hover {
+		background: rgba(245, 158, 11, 0.25);
+		border-color: rgba(245, 158, 11, 0.6);
+	}
+
+	.preview-back-btn {
+		background: var(--toolbar-button-hover);
+		border-color: var(--editor-border);
+		color: var(--editor-text-secondary);
+	}
+
+	.preview-back-btn:hover {
+		background: var(--toolbar-button-active);
+		color: var(--editor-text);
 	}
 
 	/* Diagram Modal */

@@ -342,15 +342,19 @@ Don't revisit without good reason:
 - [ ] README.md outdated (needs rewrite)
 - [ ] No error boundaries (add before production)
 - [ ] Missing favicon.png (404 errors in console)
+- [x] **✅ AUTO router model name mismatch - RESOLVED** - `model-tiers.ts` had stale model names (`gemini-pro`, `gpt-5`, `gemini-2.0-flash-lite`) not matching `litellm-config.yaml`. Fixed to use actual model names. Added `model-tiers.ts` to "Adding a New Model" checklist.
 
 ---
 
 ## Quick Reference
 
 ### Adding a New Model
-1. Edit `litellm-config.yaml`
+1. Edit `litellm-config.yaml` (model_name must match exactly everywhere)
 2. Update `src/lib/config/model-capabilities.ts`
-3. `docker-compose restart litellm`
+3. Update `src/lib/services/model-router/config/model-tiers.ts` (AUTO routing tier mappings)
+4. `docker-compose restart litellm`
+
+> **WARNING:** The AUTO model router uses model names from `model-tiers.ts` to call LiteLLM. If those names don't match `litellm-config.yaml` exactly, users will get "Invalid model name" errors. Always verify all three files are in sync when adding, renaming, or removing models.
 
 ### Common Patterns
 - **Stores:** Svelte 5 runes (`$state`, `$derived`, `$effect`)

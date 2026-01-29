@@ -36,6 +36,8 @@
 		// Global dashboard support
 		isGlobal?: boolean;
 		showSpaceBadge?: boolean;
+		// Density
+		compact?: boolean;
 		// Task callbacks
 		onTaskClick: (task: Task) => void;
 		onCompleteTask: (task: Task) => void;
@@ -60,6 +62,7 @@
 		sectionKey,
 		isGlobal = false,
 		showSpaceBadge = false,
+		compact = false,
 		onTaskClick,
 		onCompleteTask,
 		onDismissStale,
@@ -89,19 +92,27 @@
 		return findNowDividerIndex(timedItems);
 	});
 
-	// Auto-compact: use compact mode when 5+ timed events in this section
+	// Auto-compact: use compact mode when 5+ timed events in this section, or when density is compact
 	let useCompactEvents = $derived.by(() => {
+		if (compact) return true;
 		if (eventDisplayMode) return eventDisplayMode === 'compact';
 		const timedEventCount = timedItems.filter(i => i.type === 'event').length;
 		return timedEventCount >= 5;
 	});
 
-	// Visible timed items based on maxVisible
+	// Safety valve: auto-paginate when maxVisible=0 but items exceed 20
+	let effectiveMaxVisible = $derived.by(() => {
+		if (maxVisible > 0) return maxVisible;
+		if (timedItems.length > 20) return 10;
+		return 0;
+	});
+
+	// Visible timed items based on effectiveMaxVisible
 	let visibleItems = $derived.by(() => {
-		if (maxVisible === 0 || showAll || timedItems.length <= maxVisible) {
+		if (effectiveMaxVisible === 0 || showAll || timedItems.length <= effectiveMaxVisible) {
 			return timedItems;
 		}
-		return timedItems.slice(0, maxVisible);
+		return timedItems.slice(0, effectiveMaxVisible);
 	});
 
 	let hiddenCount = $derived(timedItems.length - visibleItems.length);
@@ -133,7 +144,7 @@
 		return item.type === 'task' ? `task-${item.data.id}` : `event-${item.data.id}`;
 	}
 
-	// Calculate stagger delay for event fly-in animation
+	// Calculate stagger delay for event fly-in animation (capped at 5 to prevent 1s+ delays)
 	function eventStaggerDelay(item: TimelineItem, idx: number): number {
 		if (item.type !== 'event') return 0;
 		// Count events before this index in the displayed list
@@ -141,7 +152,7 @@
 		for (let i = 0; i < idx; i++) {
 			if (displayItems[i]?.type === 'event') eventPos++;
 		}
-		return eventPos * 50;
+		return Math.min(eventPos, 5) * 50;
 	}
 
 	// Check if task is overdue (hard deadline passed)
@@ -224,7 +235,7 @@
 					</div>
 				{/if}
 
-				<div class="item-list">
+				<div class="item-list" class:compact-gap={compact}>
 					<!-- Past items toggle (collapsed by default when NOW divider is active) -->
 				{#if pastItems.length > 0 && !showPastItems}
 					<button type="button" class="past-toggle" onclick={() => showPastItems = true}>
@@ -247,29 +258,32 @@
 						{#if item.type === 'task'}
 							{@const task = item.data}
 							{@const globalTask = isGlobal ? (task as GlobalTask) : null}
-							<TaskCard
-								{task}
-								area={null}
-								spaceColor={isGlobal && globalTask ? globalTask.spaceColor : spaceColor}
-								spaceSlug={isGlobal && globalTask ? globalTask.spaceSlug : ''}
-								variant={variant === 'warning' ? 'attention' : 'default'}
-								showStaleBadge={variant === 'warning' && isStale(task) && !isOverdue(task)}
-								showOverdueBadge={variant === 'warning' && isOverdue(task)}
-								isExpanded={expandedTaskIds.has(task.id)}
-								{showSpaceBadge}
-								spaceName={globalTask?.spaceName}
-								spaceBadgeColor={globalTask?.spaceColor}
-								areaName={globalTask?.areaName}
-								areaColor={globalTask?.areaColor}
-								onClick={() => onTaskClick(task)}
-								onComplete={() => onCompleteTask(task)}
-								onToggleExpanded={() => toggleTaskExpanded(task.id)}
-								onDismissStale={onDismissStale ? () => onDismissStale(task) : undefined}
-								onEdit={onEditTask ? () => onEditTask(task) : undefined}
-								onDelete={onDeleteTask ? () => onDeleteTask(task) : undefined}
-							/>
+							<div data-timeline-item data-item-type="task" data-item-id={task.id}>
+								<TaskCard
+									{task}
+									area={null}
+									spaceColor={isGlobal && globalTask ? globalTask.spaceColor : spaceColor}
+									spaceSlug={isGlobal && globalTask ? globalTask.spaceSlug : ''}
+									variant={variant === 'warning' ? 'attention' : 'default'}
+									showStaleBadge={variant === 'warning' && isStale(task) && !isOverdue(task)}
+									showOverdueBadge={variant === 'warning' && isOverdue(task)}
+									isExpanded={expandedTaskIds.has(task.id)}
+									{compact}
+									{showSpaceBadge}
+									spaceName={globalTask?.spaceName}
+									spaceBadgeColor={globalTask?.spaceColor}
+									areaName={globalTask?.areaName}
+									areaColor={globalTask?.areaColor}
+									onClick={() => onTaskClick(task)}
+									onComplete={() => onCompleteTask(task)}
+									onToggleExpanded={() => toggleTaskExpanded(task.id)}
+									onDismissStale={onDismissStale ? () => onDismissStale(task) : undefined}
+									onEdit={onEditTask ? () => onEditTask(task) : undefined}
+									onDelete={onDeleteTask ? () => onDeleteTask(task) : undefined}
+								/>
+							</div>
 						{:else}
-							<div in:fly={{ y: 8, duration: 250, delay: eventStaggerDelay(item, idx) }}>
+							<div data-timeline-item data-item-type="event" data-item-id={item.data.id} in:fly={{ y: 8, duration: 250, delay: eventStaggerDelay(item, idx) }}>
 								<CalendarEventCard
 									event={item.data}
 									mode={useCompactEvents ? 'compact' : 'standard'}
@@ -290,7 +304,7 @@
 					>
 						Show {hiddenCount} more
 					</button>
-				{:else if showAll && items.length > maxVisible}
+				{:else if showAll && timedItems.length > effectiveMaxVisible}
 					<button
 						type="button"
 						class="show-more-btn"
@@ -425,6 +439,10 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.375rem;
+	}
+
+	.item-list.compact-gap {
+		gap: 0.25rem;
 	}
 
 	/* All-day events summary row */

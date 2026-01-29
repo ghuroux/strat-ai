@@ -15,10 +15,10 @@
 	 * Updated for Phase 2 Page Sharing
 	 */
 
-	import { Share2, Lock, Users, Globe, History } from 'lucide-svelte';
-	import type { PageType, PageVisibility } from '$lib/types/page';
+	import { Share2, Lock, LockOpen, Users, Globe, History, FileEdit, CheckCircle, BookOpen, Clock, RotateCcw } from 'lucide-svelte';
+	import type { PageType, PageVisibility, PageStatus } from '$lib/types/page';
 	import type { PagePermission } from '$lib/types/page-sharing';
-	import { PAGE_TYPE_LABELS } from '$lib/types/page';
+	import { PAGE_TYPE_LABELS, PAGE_STATUS_LABELS } from '$lib/types/page';
 	import ExportMenu from './ExportMenu.svelte';
 
 	// Props
@@ -32,9 +32,22 @@
 		userPermission?: PagePermission | null;
 		saveStatus: 'idle' | 'saving' | 'saved' | 'error';
 		isDirty: boolean;
+		// Lifecycle props (Phase 1: Page Lifecycle)
+		status?: PageStatus;
+		currentVersion?: number;
+		isOwner?: boolean;
+		// Context integration (Phase 2: Page Context)
+		inContext?: boolean;
+		// Context-aware unlock (Phase 4: Polish)
+		contextVersionNumber?: number;
+		onToggleContext?: () => void;
 		onTitleChange: (title: string) => void;
 		onOpenShareModal?: () => void;
 		onOpenActivityLog?: () => void;
+		onOpenVersionHistory?: () => void;
+		onFinalize?: () => void;
+		onUnlock?: () => void;
+		onDiscardChanges?: () => void;
 		onSave: () => void;
 		onClose: () => void;
 	}
@@ -49,17 +62,35 @@
 		userPermission,
 		saveStatus,
 		isDirty,
+		// Lifecycle props
+		status = 'draft',
+		currentVersion,
+		isOwner = false,
+		// Context integration
+		inContext = false,
+		contextVersionNumber,
+		onToggleContext,
 		onTitleChange,
 		onOpenShareModal,
 		onOpenActivityLog,
+		onOpenVersionHistory,
+		onFinalize,
+		onUnlock,
+		onDiscardChanges,
 		onSave,
 		onClose
 	}: Props = $props();
 
-	// Derived: Check if user has read-only access (viewer permission)
-	let isReadOnly = $derived(userPermission === 'viewer');
+	// Derived: Check if user has read-only access (viewer permission or finalized)
+	let isReadOnly = $derived(userPermission === 'viewer' || status === 'finalized');
 	// Derived: Check if user is admin (can view activity log)
 	let isAdmin = $derived(userPermission === 'admin');
+	// Derived: Page is finalized (locked)
+	let isFinalized = $derived(status === 'finalized');
+	// Derived: Can finalize (owner and not already finalized)
+	let canFinalize = $derived(isOwner && status !== 'finalized');
+	// Derived: Can unlock (owner and finalized)
+	let canUnlock = $derived(isOwner && status === 'finalized');
 
 	// Local state for title editing
 	let isEditingTitle = $state(false);
@@ -183,6 +214,70 @@
 			<span class="visibility-text">{visibilityLabel}</span>
 		</div>
 
+		<!-- Status badge (Phase 1: Page Lifecycle) -->
+		{#if status === 'finalized'}
+			<button
+				type="button"
+				class="status-badge finalized"
+				onclick={canUnlock && onUnlock ? onUnlock : undefined}
+				disabled={!canUnlock || !onUnlock}
+				title={canUnlock ? 'Click to unlock and edit' : `Finalized (v${currentVersion ?? 1})`}
+			>
+				<Lock size={14} strokeWidth={2} />
+				<span>v{currentVersion ?? 1}</span>
+			</button>
+		{:else if canFinalize && onFinalize}
+			<button
+				type="button"
+				class="status-badge draft-action"
+				onclick={onFinalize}
+				title="Finalize page"
+			>
+				<CheckCircle size={14} strokeWidth={2} />
+				<span>Finalize</span>
+			</button>
+		{:else if status === 'draft'}
+			<div class="status-badge draft" title="Draft - only visible to you">
+				<FileEdit size={14} strokeWidth={2} />
+				<span>Draft</span>
+			</div>
+		{:else if status === 'shared' && currentVersion && currentVersion >= 1}
+			<div class="status-badge editing" title="Editing (based on v{currentVersion})">
+				<FileEdit size={14} strokeWidth={2} />
+				<span>Editing v{currentVersion}</span>
+			</div>
+			{#if contextVersionNumber}
+				<div class="context-badge active" title="v{contextVersionNumber} serving in AI context">
+					<BookOpen size={14} strokeWidth={2} />
+					<span>v{contextVersionNumber} in Context</span>
+				</div>
+			{/if}
+		{:else if status === 'shared'}
+			<div class="status-badge shared" title="Shared - visible to members">
+				<Users size={14} strokeWidth={2} />
+				<span>Shared</span>
+			</div>
+		{/if}
+
+		<!-- Context indicator (Phase 2: Page Context) -->
+		{#if isFinalized && onToggleContext}
+			<button
+				type="button"
+				class="context-badge"
+				class:active={inContext}
+				onclick={onToggleContext}
+				title={inContext ? 'Remove from AI context' : 'Add to AI context'}
+			>
+				<BookOpen size={14} strokeWidth={2} />
+				<span>{inContext ? 'In Context' : 'Add to Context'}</span>
+			</button>
+		{:else if isFinalized && inContext}
+			<div class="context-badge active" title="In AI Context">
+				<BookOpen size={14} strokeWidth={2} />
+				<span>In Context</span>
+			</div>
+		{/if}
+
 		<!-- Share button -->
 		{#if canManageSharing && onOpenShareModal}
 			<button
@@ -207,6 +302,33 @@
 			>
 				<History size={16} strokeWidth={2} />
 				<span>Activity</span>
+			</button>
+		{/if}
+
+		<!-- Version History button (visible when page has versions) -->
+		{#if currentVersion && currentVersion >= 1 && onOpenVersionHistory}
+			<button
+				type="button"
+				class="activity-btn"
+				onclick={onOpenVersionHistory}
+				title="View version history"
+				aria-label="View version history"
+			>
+				<Clock size={16} strokeWidth={2} />
+				<span>Versions</span>
+			</button>
+		{/if}
+
+		<!-- Discard button (Phase 4: visible when editing an unlocked page with changes) -->
+		{#if onDiscardChanges && isDirty && status === 'shared' && currentVersion && currentVersion >= 1}
+			<button
+				type="button"
+				class="discard-btn"
+				onclick={onDiscardChanges}
+				title="Discard changes and revert to v{currentVersion}"
+			>
+				<RotateCcw size={14} strokeWidth={2} />
+				<span>Discard</span>
 			</button>
 		{/if}
 
@@ -422,6 +544,93 @@
 		white-space: nowrap;
 	}
 
+	/* Status badge (Phase 1: Page Lifecycle) */
+	.status-badge {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.625rem;
+		border-radius: 6px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		white-space: nowrap;
+		border: none;
+		cursor: default;
+	}
+
+	.status-badge.draft {
+		background: rgba(107, 114, 128, 0.15);
+		color: #9ca3af;
+	}
+
+	.status-badge.shared {
+		background: rgba(245, 158, 11, 0.15);
+		color: #f59e0b;
+	}
+
+	.status-badge.editing {
+		background: rgba(245, 158, 11, 0.15);
+		color: #f59e0b;
+	}
+
+	.status-badge.finalized {
+		background: rgba(34, 197, 94, 0.15);
+		color: #22c55e;
+		cursor: pointer;
+		transition: background-color 150ms ease;
+	}
+
+	.status-badge.finalized:hover:not(:disabled) {
+		background: rgba(34, 197, 94, 0.25);
+	}
+
+	.status-badge.finalized:disabled {
+		cursor: default;
+	}
+
+	.status-badge.draft-action {
+		background: rgba(59, 130, 246, 0.15);
+		color: #3b82f6;
+		cursor: pointer;
+		transition: background-color 150ms ease;
+	}
+
+	.status-badge.draft-action:hover {
+		background: rgba(59, 130, 246, 0.25);
+	}
+
+	/* Context badge (Phase 2: Page Context) */
+	.context-badge {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.625rem;
+		border-radius: 6px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		white-space: nowrap;
+		border: none;
+		cursor: pointer;
+		transition: background-color 150ms ease;
+		background: rgba(107, 114, 128, 0.15);
+		color: #9ca3af;
+	}
+
+	.context-badge:hover {
+		background: rgba(139, 92, 246, 0.2);
+		color: #a78bfa;
+	}
+
+	.context-badge.active {
+		background: rgba(139, 92, 246, 0.15);
+		color: #a78bfa;
+	}
+
+	.context-badge.active:hover {
+		background: rgba(239, 68, 68, 0.15);
+		color: #ef4444;
+	}
+
 	/* Share button */
 	.share-btn {
 		display: flex;
@@ -461,6 +670,27 @@
 	.activity-btn:hover {
 		background: var(--toolbar-button-active);
 		color: var(--editor-text);
+	}
+
+	/* Discard button (Phase 4: Polish) */
+	.discard-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.625rem;
+		border: none;
+		border-radius: 6px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background-color 100ms ease, color 100ms ease;
+		background: rgba(239, 68, 68, 0.1);
+		color: rgba(239, 68, 68, 0.8);
+	}
+
+	.discard-btn:hover {
+		background: rgba(239, 68, 68, 0.2);
+		color: #ef4444;
 	}
 
 	/* Read-only title */

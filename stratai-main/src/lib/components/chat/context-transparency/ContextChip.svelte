@@ -5,10 +5,10 @@
 	Part of the Context Transparency system.
 -->
 <script lang="ts">
-	import { FileText, StickyNote, ListTodo } from 'lucide-svelte';
+	import { FileText, StickyNote, ListTodo, BookOpen } from 'lucide-svelte';
 
 	interface Props {
-		icon: 'file-text' | 'sticky-note' | 'list-todo';
+		icon: 'file-text' | 'sticky-note' | 'list-todo' | 'book-open';
 		label: string;
 		count?: number;
 		active: boolean;      // Has content
@@ -29,7 +29,8 @@
 	const iconComponents = {
 		'file-text': FileText,
 		'sticky-note': StickyNote,
-		'list-todo': ListTodo
+		'list-todo': ListTodo,
+		'book-open': BookOpen
 	};
 
 	let IconComponent = $derived(iconComponents[icon]);

@@ -16,12 +16,12 @@ export const MODEL_TIERS: Record<string, ProviderTiers> = {
 	openai: {
 		simple: 'gpt-4o-mini',
 		medium: 'gpt-4o',
-		complex: 'gpt-5'
+		complex: 'gpt-5.2'
 	},
 	google: {
-		simple: 'gemini-2.0-flash-lite',
-		medium: 'gemini-2.5-flash',
-		complex: 'gemini-pro'
+		simple: 'gemini-2.5-flash',
+		medium: 'gemini-3-flash',
+		complex: 'gemini-3-pro'
 	}
 };
 
@@ -42,15 +42,19 @@ export const MODEL_TO_TIER: Record<string, 'simple' | 'medium' | 'complex'> = {
 	'gpt-4o-mini': 'simple',
 	'gpt-4o': 'medium',
 	'gpt-4.1': 'medium',
-	'gpt-5': 'complex',
+	'gpt-4.1-mini': 'simple',
+	'gpt-5.1': 'complex',
+	'gpt-5.2': 'complex',
+	'gpt-5.2-pro': 'complex',
 	o3: 'complex',
 	'o3-mini': 'medium',
 	'o4-mini': 'medium',
 
 	// Google
-	'gemini-2.0-flash-lite': 'simple',
-	'gemini-2.5-flash': 'medium',
-	'gemini-pro': 'complex'
+	'gemini-2.5-flash': 'simple',
+	'gemini-2.5-pro': 'medium',
+	'gemini-3-flash': 'medium',
+	'gemini-3-pro': 'complex'
 };
 
 /**

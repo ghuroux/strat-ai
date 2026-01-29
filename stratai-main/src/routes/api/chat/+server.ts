@@ -2,9 +2,10 @@ import type { RequestHandler } from './$types';
 import { createChatCompletion, createChatCompletionWithTools, mapErrorMessage, supportsExtendedThinking } from '$lib/server/litellm';
 import { searchWeb, formatSearchResultsForLLM, isBraveSearchConfigured } from '$lib/server/brave-search';
 import type { ChatCompletionRequest, ToolDefinition, ThinkingConfig, ChatMessage, MessageContentBlock } from '$lib/types/api';
-import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, getFullSystemPromptForPlanModeWithContext, getFullSystemPromptWithFocusArea, getFullSystemPromptWithSpace, getFocusAreaPrompt, getSystemPromptLayers, supportsLayeredCaching, getCommerceSearchPrompt, type FocusedTaskInfo, type PlanModePhase, type TaskContextInfo, type FocusAreaInfo, type SpaceInfo, type PlanModeTaskContext, type PromptLayer } from '$lib/config/system-prompts';
+import { getFullSystemPrompt, getFocusedTaskPrompt, getFullSystemPromptForPlanMode, getFullSystemPromptForPlanModeWithContext, getFullSystemPromptWithFocusArea, getFullSystemPromptWithSpace, getFocusAreaPrompt, getSystemPromptLayers, supportsLayeredCaching, getCommerceSearchPrompt, type FocusedTaskInfo, type PlanModePhase, type TaskContextInfo, type FocusAreaInfo, type SpaceInfo, type PlanModeTaskContext, type PromptLayer, type ContextDocument } from '$lib/config/system-prompts';
 import { routeQuery, isAutoMode, getDefaultContext, type RoutingContext, type RoutingDecision } from '$lib/services/model-router';
 import { postgresDocumentRepository } from '$lib/server/persistence/documents-postgres';
+import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import { postgresConversationRepository } from '$lib/server/persistence/postgres';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
@@ -1591,6 +1592,29 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				}
 
 				debugLog('CHAT', `Focus area context loaded: "${focusArea.name}" in space "${focusArea.spaceId}"`);
+
+				// Phase 2: Load finalized pages in context for this area
+				try {
+					const contextPages = await postgresPageRepository.findPagesInContext(areaId);
+					if (contextPages.length > 0) {
+						const pageContextDocs: ContextDocument[] = contextPages.map(page => ({
+							id: page.id,
+							filename: `[Page] ${page.title}${page.contextVersionNumber ? ` (v${page.contextVersionNumber}, being updated)` : ''}`,
+							content: page.contentText || '',
+							charCount: page.contentText?.length || page.wordCount * 5,
+							summary: page.contentText?.slice(0, 800) || undefined,
+							contentType: 'text' as const
+						}));
+
+						focusAreaContext.contextDocuments = [
+							...(focusAreaContext.contextDocuments || []),
+							...pageContextDocs
+						];
+						debugLog('CHAT', `Loaded ${contextPages.length} page(s) in context for area "${focusArea.name}"`);
+					}
+				} catch (pageError) {
+					console.warn('Failed to load pages in context:', pageError);
+				}
 			}
 		} catch (error) {
 			// Log but don't fail - focus area context is optional enhancement

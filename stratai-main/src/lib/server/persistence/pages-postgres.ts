@@ -20,7 +20,8 @@ import type {
 	PageListFilter,
 	PageSummary,
 	TipTapContent,
-	PageConversationRelationship
+	PageConversationRelationship,
+	PageStatus
 } from '$lib/types/page';
 import {
 	rowToPage,
@@ -169,7 +170,9 @@ export interface PageRepository {
 
 	// Versions
 	getVersions(pageId: string, userId: string): Promise<PageVersion[]>;
+	getVersion(pageId: string, versionNumber: number, userId: string): Promise<PageVersion | null>;
 	createVersion(pageId: string, changeSummary: string | undefined, userId: string): Promise<PageVersion | null>;
+	restoreVersion(pageId: string, versionNumber: number, userId: string): Promise<Page | null>;
 
 	// Page-conversation links
 	getConversations(pageId: string, userId: string): Promise<PageConversation[]>;
@@ -188,6 +191,14 @@ export interface PageRepository {
 	// Permission checks (Phase 1: Page Sharing)
 	canUserAccessPage(userId: string, pageId: string): Promise<boolean>;
 	getUserPagePermission(userId: string, pageId: string): Promise<PagePermission | null>;
+
+	// Page lifecycle (Phase 1: Page Lifecycle)
+	finalizePage(pageId: string, userId: string, changeSummary?: string, addToContext?: boolean): Promise<Page | null>;
+	unlockPage(pageId: string, userId: string, keepInContext?: boolean): Promise<Page | null>;
+
+	// Context integration (Phase 2: Page Context)
+	findPagesInContext(areaId: string): Promise<Page[]>;
+	setPageInContext(pageId: string, inContext: boolean, userId: string): Promise<Page | null>;
 }
 
 /**
@@ -491,6 +502,21 @@ export const postgresPageRepository: PageRepository = {
 		return rows.map(rowToPageVersion);
 	},
 
+	async getVersion(pageId: string, versionNumber: number, userId: string): Promise<PageVersion | null> {
+		// Verify user has access to the page
+		const page = await this.findById(pageId, userId);
+		if (!page) return null;
+
+		const rows = await sql<PageVersionRow[]>`
+			SELECT *
+			FROM page_versions
+			WHERE page_id = ${pageId}
+				AND version_number = ${versionNumber}
+		`;
+
+		return rows.length > 0 ? rowToPageVersion(rows[0]) : null;
+	},
+
 	async createVersion(pageId: string, changeSummary: string | undefined, userId: string): Promise<PageVersion | null> {
 		// Get current page state
 		const page = await this.findById(pageId, userId);
@@ -531,6 +557,44 @@ export const postgresPageRepository: PageRepository = {
 		`;
 
 		return rows.length > 0 ? rowToPageVersion(rows[0]) : null;
+	},
+
+	async restoreVersion(pageId: string, versionNumber: number, userId: string): Promise<Page | null> {
+		// Get current page state
+		const page = await this.findById(pageId, userId);
+		if (!page) return null;
+
+		// Verify ownership (only owner can restore)
+		if (page.userId !== userId) {
+			console.warn('[restoreVersion] User is not owner:', { pageId, userId, ownerId: page.userId });
+			return null;
+		}
+
+		// Fetch the target version
+		const version = await this.getVersion(pageId, versionNumber, userId);
+		if (!version) {
+			console.warn('[restoreVersion] Version not found:', { pageId, versionNumber });
+			return null;
+		}
+
+		// Restore version content to the page
+		// Sets status to 'shared' (auto-unlock), clears context (matches unlockPage pattern)
+		await sql`
+			UPDATE pages
+			SET
+				title = ${version.title},
+				content = ${sql.json(version.content as JSONValue)},
+				content_text = ${version.contentText ?? null},
+				word_count = ${version.wordCount},
+				status = 'shared',
+				in_context = false,
+				context_version_number = NULL,
+				updated_at = NOW()
+			WHERE id = ${pageId}
+				AND deleted_at IS NULL
+		`;
+
+		return this.findById(pageId, userId);
 	},
 
 	async getConversations(pageId: string, userId: string): Promise<PageConversation[]> {
@@ -681,6 +745,218 @@ export const postgresPageRepository: PageRepository = {
 		const { postgresPageSharingRepository } = await import('./page-sharing-postgres');
 		const access = await postgresPageSharingRepository.canAccessPage(userId, pageId);
 		return access.hasAccess ? access.permission : null;
+	},
+
+	/**
+	 * Finalize a page (Phase 1: Page Lifecycle)
+	 *
+	 * Finalizing a page:
+	 * 1. Verifies user is the owner
+	 * 2. Checks the page isn't already finalized
+	 * 3. Creates a version snapshot
+	 * 4. Updates status to 'finalized' with metadata
+	 *
+	 * @param pageId - The page to finalize
+	 * @param userId - The user finalizing (must be owner)
+	 * @param changeSummary - Optional description of changes
+	 * @returns The updated page, or null if not found/not authorized
+	 */
+	async finalizePage(pageId: string, userId: string, changeSummary?: string, addToContext?: boolean): Promise<Page | null> {
+		// Get current page state (includes ownership check via access)
+		const page = await this.findById(pageId, userId);
+		if (!page) return null;
+
+		// Verify ownership (only owner can finalize)
+		if (page.userId !== userId) {
+			console.warn('[finalizePage] User is not owner:', { pageId, userId, ownerId: page.userId });
+			return null;
+		}
+
+		// Check page isn't already finalized
+		if (page.status === 'finalized') {
+			console.warn('[finalizePage] Page is already finalized:', pageId);
+			return null;
+		}
+
+		// Create version snapshot before finalizing
+		const version = await this.createVersion(pageId, changeSummary, userId);
+		if (!version) {
+			console.error('[finalizePage] Failed to create version:', pageId);
+			return null;
+		}
+
+		// Update page status (and optionally add to context)
+		// Clear context_version_number: re-finalizing replaces any pinned version
+		await sql`
+			UPDATE pages
+			SET
+				status = 'finalized',
+				finalized_at = NOW(),
+				finalized_by = ${userId},
+				current_version = ${version.versionNumber},
+				in_context = ${addToContext ?? false},
+				context_version_number = NULL,
+				updated_at = NOW()
+			WHERE id = ${pageId}
+				AND deleted_at IS NULL
+		`;
+
+		// Return updated page
+		return this.findById(pageId, userId);
+	},
+
+	/**
+	 * Unlock a finalized page for editing (Phase 1: Page Lifecycle)
+	 *
+	 * Unlocking:
+	 * 1. Verifies user is the owner
+	 * 2. Checks the page is finalized
+	 * 3. Sets status to 'shared' (allows collaboration)
+	 *
+	 * Note: The version remains, so AI context still has the finalized version.
+	 * Re-finalizing will create a new version.
+	 *
+	 * @param pageId - The page to unlock
+	 * @param userId - The user unlocking (must be owner)
+	 * @returns The updated page, or null if not found/not authorized
+	 */
+	async unlockPage(pageId: string, userId: string, keepInContext?: boolean): Promise<Page | null> {
+		// Get current page state
+		const page = await this.findById(pageId, userId);
+		if (!page) return null;
+
+		// Verify ownership (only owner can unlock)
+		if (page.userId !== userId) {
+			console.warn('[unlockPage] User is not owner:', { pageId, userId, ownerId: page.userId });
+			return null;
+		}
+
+		// Check page is finalized
+		if (page.status !== 'finalized') {
+			console.warn('[unlockPage] Page is not finalized:', { pageId, status: page.status });
+			return null;
+		}
+
+		if (keepInContext && page.inContext && page.currentVersion) {
+			// Context-aware unlock: pin the current version for context
+			// in_context must be false to satisfy DB constraint (status != 'finalized')
+			// context_version_number stores the frozen version to serve to AI
+			await sql`
+				UPDATE pages
+				SET
+					status = 'shared',
+					in_context = false,
+					context_version_number = ${page.currentVersion},
+					updated_at = NOW()
+				WHERE id = ${pageId}
+					AND deleted_at IS NULL
+			`;
+		} else {
+			// Standard unlock: clear context entirely
+			await sql`
+				UPDATE pages
+				SET
+					status = 'shared',
+					in_context = false,
+					context_version_number = NULL,
+					updated_at = NOW()
+				WHERE id = ${pageId}
+					AND deleted_at IS NULL
+			`;
+		}
+
+		// Return updated page
+		return this.findById(pageId, userId);
+	},
+
+	/**
+	 * Find all pages in AI context for a specific area (Phase 2: Page Context)
+	 *
+	 * This is called from the chat pipeline (server-side) to load pages that
+	 * should be included in the AI's context. No user-scoping needed since
+	 * this is for the AI system prompt, not user-facing queries.
+	 *
+	 * @param areaId - The area to query
+	 * @returns Finalized pages with in_context = true, sorted by finalized_at DESC
+	 */
+	async findPagesInContext(areaId: string): Promise<Page[]> {
+		// 1. Normal finalized pages in context
+		const normalRows = await sql<PageRow[]>`
+			SELECT *
+			FROM pages
+			WHERE area_id = ${areaId}
+				AND in_context = true
+				AND status = 'finalized'
+				AND deleted_at IS NULL
+			ORDER BY finalized_at DESC
+		`;
+
+		// 2. Pages with frozen context version (unlocked, still serving pinned version to AI)
+		// JOIN page_versions to project the versioned content (not the current draft)
+		const frozenRows = await sql<PageRow[]>`
+			SELECT p.id, p.user_id, p.area_id, p.task_id,
+				pv.title, pv.content, pv.content_text, pv.word_count,
+				p.page_type, p.visibility, p.source_conversation_id,
+				p.status, p.finalized_at, p.finalized_by, p.current_version,
+				true AS in_context, p.context_version_number,
+				p.created_at, p.updated_at, p.deleted_at
+			FROM pages p
+			JOIN page_versions pv ON p.id = pv.page_id
+				AND pv.version_number = p.context_version_number
+			WHERE p.area_id = ${areaId}
+				AND p.context_version_number IS NOT NULL
+				AND p.deleted_at IS NULL
+			ORDER BY p.finalized_at DESC
+		`;
+
+		// Combine, dedup by id (normal takes precedence)
+		const seenIds = new Set<string>();
+		const all: Page[] = [];
+		for (const row of normalRows) {
+			if (!seenIds.has(row.id)) { seenIds.add(row.id); all.push(rowToPage(row)); }
+		}
+		for (const row of frozenRows) {
+			if (!seenIds.has(row.id)) { seenIds.add(row.id); all.push(rowToPage(row)); }
+		}
+		return all;
+	},
+
+	/**
+	 * Toggle a page's in_context status (Phase 2: Page Context)
+	 *
+	 * @param pageId - The page to toggle
+	 * @param inContext - Whether to add to or remove from context
+	 * @param userId - The requesting user (must be page owner)
+	 * @returns Updated page, or null if not found/unauthorized
+	 */
+	async setPageInContext(pageId: string, inContext: boolean, userId: string): Promise<Page | null> {
+		// Get current page state
+		const page = await this.findById(pageId, userId);
+		if (!page) return null;
+
+		// Verify ownership
+		if (page.userId !== userId) {
+			console.warn('[setPageInContext] User is not owner:', { pageId, userId, ownerId: page.userId });
+			return null;
+		}
+
+		// If enabling context, verify page is finalized
+		if (inContext && page.status !== 'finalized') {
+			console.warn('[setPageInContext] Page is not finalized:', { pageId, status: page.status });
+			return null;
+		}
+
+		await sql`
+			UPDATE pages
+			SET
+				in_context = ${inContext},
+				context_version_number = CASE WHEN ${inContext} THEN context_version_number ELSE NULL END,
+				updated_at = NOW()
+			WHERE id = ${pageId}
+				AND deleted_at IS NULL
+		`;
+
+		return this.findById(pageId, userId);
 	}
 };
 

@@ -12,7 +12,9 @@ import type {
 	CreateSubtaskInput,
 	TaskRelationshipType,
 	RelatedTaskInfo,
-	PlanningData
+	PlanningData,
+	GlobalTask,
+	GlobalTaskFilter
 } from '$lib/types/tasks';
 import type {
 	Document,
@@ -157,6 +159,7 @@ export interface ArenaDataAccess {
  */
 export interface TaskRepository {
 	findAll(userId: string, filter?: TaskListFilter): Promise<Task[]>;
+	findAllForUser(userId: string, filter?: GlobalTaskFilter): Promise<GlobalTask[]>;
 	findById(id: string, userId: string): Promise<Task | null>;
 	create(input: CreateTaskInput, userId: string): Promise<Task>;
 	createBulk(inputs: CreateTaskInput[], userId: string): Promise<Task[]>;

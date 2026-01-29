@@ -31,6 +31,7 @@
 	// Filter state
 	let searchQuery = $state('');
 	let typeFilter = $state<PageType | ''>('');
+	let statusFilter = $state<'all' | 'draft' | 'finalized'>('all');
 
 	// Page types for filter dropdown
 	const pageTypes: { type: PageType | ''; label: string }[] = [
@@ -63,14 +64,22 @@
 			result = result.filter((p) => p.pageType === typeFilter);
 		}
 
+		// Apply status filter
+		if (statusFilter === 'finalized') {
+			result = result.filter((p) => p.status === 'finalized');
+		} else if (statusFilter === 'draft') {
+			result = result.filter((p) => p.status !== 'finalized');
+		}
+
 		// Sort by updated date (newest first)
 		return result.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 	});
 
 	// Check if list is empty
 	let isEmpty = $derived(!loading && filteredPages.length === 0);
-	let isEmptyWithFilters = $derived(isEmpty && (searchQuery || typeFilter));
-	let isEmptyNoPages = $derived(isEmpty && !searchQuery && !typeFilter && pages.length === 0);
+	let hasActiveFilters = $derived(!!searchQuery || !!typeFilter || statusFilter !== 'all');
+	let isEmptyWithFilters = $derived(isEmpty && hasActiveFilters);
+	let isEmptyNoPages = $derived(isEmpty && !hasActiveFilters && pages.length === 0);
 </script>
 
 <div class="page-list">
@@ -102,6 +111,11 @@
 			{#each pageTypes as pt}
 				<option value={pt.type}>{pt.label}</option>
 			{/each}
+		</select>
+		<select bind:value={statusFilter} class="type-filter">
+			<option value="all">All statuses</option>
+			<option value="draft">Draft</option>
+			<option value="finalized">Finalized</option>
 		</select>
 	</div>
 
@@ -152,7 +166,7 @@
 			<button
 				type="button"
 				class="empty-action secondary"
-				onclick={() => { searchQuery = ''; typeFilter = ''; }}
+				onclick={() => { searchQuery = ''; typeFilter = ''; statusFilter = 'all'; }}
 			>
 				Clear filters
 			</button>

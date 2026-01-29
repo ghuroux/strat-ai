@@ -45,6 +45,8 @@
 		contextSource,
 		onActivateDocument,
 		onDeactivateDocument,
+		onActivatePage,
+		onDeactivatePage,
 		onOpenContextPanel,
 		onOpenTasksPanel
 	}: {
@@ -60,6 +62,8 @@
 		contextSource?: ContextSource;
 		onActivateDocument?: (docId: string) => Promise<void>;
 		onDeactivateDocument?: (docId: string) => Promise<void>;
+		onActivatePage?: (pageId: string) => Promise<void>;
+		onDeactivatePage?: (pageId: string) => Promise<void>;
 		onOpenContextPanel?: () => void;
 		onOpenTasksPanel?: () => void;
 	} = $props();
@@ -1365,6 +1369,8 @@ Where every request is a round-trip to yourself. Very zen. 🧘`,
 					{contextSource}
 					onActivateDocument={onActivateDocument ?? (() => Promise.resolve())}
 					onDeactivateDocument={onDeactivateDocument ?? (() => Promise.resolve())}
+					onActivatePage={onActivatePage}
+					onDeactivatePage={onDeactivatePage}
 					onOpenContextPanel={onOpenContextPanel ?? (() => {})}
 					onOpenTasksPanel={onOpenTasksPanel}
 				/>

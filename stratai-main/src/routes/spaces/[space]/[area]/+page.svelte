@@ -1291,6 +1291,15 @@
 		await areaStore.updateArea(area.id, { contextDocumentIds: newIds });
 	}
 
+	// Context Transparency: Page context activation handlers (Phase 2: Page Context)
+	async function handleActivatePage(pageId: string) {
+		await pageStore.setPageInContext(pageId, true);
+	}
+
+	async function handleDeactivatePage(pageId: string) {
+		await pageStore.setPageInContext(pageId, false);
+	}
+
 	// Context source for ContextBar (used in ChatInput)
 	let contextSource = $derived.by(() => {
 		if (!area || !properSpaceId) return undefined;
@@ -2264,6 +2273,8 @@
 				{contextSource}
 				onActivateDocument={handleActivateDocument}
 				onDeactivateDocument={handleDeactivateDocument}
+				onActivatePage={handleActivatePage}
+				onDeactivatePage={handleDeactivatePage}
 				onOpenContextPanel={() => contextPanelOpen = true}
 				onOpenTasksPanel={() => tasksPanelOpen = true}
 			/>

@@ -601,8 +601,9 @@ export interface FocusedTaskInfo {
  * Image documents are listed separately and injected visually into context
  */
 export function getFocusAreaPrompt(focusArea: FocusAreaInfo): string {
-  // Separate text and image documents
-  const textDocs = focusArea.contextDocuments?.filter(doc => doc.contentType !== 'image') || [];
+  // Separate text documents, image documents, and pages
+  const pageDocs = focusArea.contextDocuments?.filter(doc => doc.filename.startsWith('[Page] ')) || [];
+  const textDocs = focusArea.contextDocuments?.filter(doc => doc.contentType !== 'image' && !doc.filename.startsWith('[Page] ')) || [];
   const imageDocs = focusArea.contextDocuments?.filter(doc => doc.contentType === 'image') || [];
 
   let prompt = `
@@ -657,9 +658,27 @@ ${doc.summary}
     }
   }
 
+  // Include finalized pages as authoritative context
+  if (pageDocs.length > 0) {
+    prompt += `
+
+### Finalized Pages
+The following team pages provide authoritative context:`;
+    for (const page of pageDocs) {
+      const title = page.filename.replace('[Page] ', '');
+      const sizeKb = Math.round(page.charCount / 1000);
+      prompt += `
+
+<page_summary title="${title}" size="${sizeKb}k chars">
+${page.summary || "[Use read_document tool to access content]"}
+</page_summary>`;
+    }
+  }
+
   // Build role guidelines based on document types
   const hasTextDocs = textDocs.length > 0;
   const hasImageDocs = imageDocs.length > 0;
+  const hasPages = pageDocs.length > 0;
 
   prompt += `
 
@@ -667,14 +686,18 @@ ${doc.summary}
 - Apply this specialized context to all responses
 - Reference relevant background information when helpful`;
 
-  if (hasTextDocs) {
+  if (hasTextDocs || hasPages) {
     prompt += `
-- Use **read_document** tool to access full document content when you need specific details or quotes`;
+- Use **read_document** tool to access full content of documents or pages when you need specific details or quotes`;
   }
   if (hasImageDocs) {
     prompt += `
 - Reference the images when they're relevant to the user's question
 - Image descriptions are provided above; the full images are visible in the conversation`;
+  }
+  if (hasPages) {
+    prompt += `
+- Finalized pages are authoritative team content — treat them as reliable reference material`;
   }
   prompt += `
 - Stay focused on topics relevant to this context

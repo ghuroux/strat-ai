@@ -50,6 +50,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			title: page.title,
 			pageType: page.pageType,
 			visibility: page.visibility,
+			status: page.status,
+			inContext: page.inContext,
+			currentVersion: page.currentVersion,
 			wordCount: page.wordCount,
 			createdAt: page.createdAt,
 			updatedAt: page.updatedAt
