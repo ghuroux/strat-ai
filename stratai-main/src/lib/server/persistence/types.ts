@@ -34,6 +34,17 @@ import type {
 	CreateFocusAreaInput,
 	UpdateFocusAreaInput
 } from '$lib/types/focus-areas';
+import type {
+	Meeting,
+	MeetingAttendee,
+	MeetingWithAttendees,
+	CreateMeetingInput,
+	UpdateMeetingInput,
+	CreateAttendeeInput,
+	MeetingListFilter,
+	MeetingStatus,
+	ResponseStatus
+} from '$lib/types/meetings';
 
 // =====================================================
 // Tool Cache Types (for document reading, etc.)
@@ -569,4 +580,49 @@ export interface ToolCacheRepository {
 	 * Clean up expired entries
 	 */
 	cleanupExpired(): Promise<number>;
+}
+
+// =====================================================
+// Meeting Types (Meeting Creation Wizard)
+// =====================================================
+
+/**
+ * Repository interface for Meeting entities
+ * Supports full CRUD, status transitions, and scoped queries
+ */
+export interface MeetingsRepository {
+	// CRUD
+	findById(id: string, userId: string): Promise<Meeting | null>;
+	findByIdWithAttendees(id: string, userId: string): Promise<MeetingWithAttendees | null>;
+	findAll(userId: string, filter?: MeetingListFilter): Promise<Meeting[]>;
+	create(input: CreateMeetingInput, userId: string): Promise<MeetingWithAttendees>;
+	update(id: string, updates: UpdateMeetingInput, userId: string): Promise<Meeting | null>;
+	delete(id: string, userId: string): Promise<boolean>;
+
+	// Status transitions
+	schedule(
+		id: string,
+		userId: string,
+		options?: { externalEventId?: string; externalJoinUrl?: string; externalProvider?: string }
+	): Promise<Meeting | null>;
+	cancel(id: string, userId: string): Promise<Meeting | null>;
+	complete(id: string, userId: string): Promise<Meeting | null>;
+
+	// Scoped queries
+	findByArea(areaId: string, userId: string, status?: MeetingStatus | MeetingStatus[]): Promise<Meeting[]>;
+	findBySpace(spaceId: string, userId: string, status?: MeetingStatus | MeetingStatus[]): Promise<Meeting[]>;
+	findUpcoming(userId: string, limit?: number): Promise<Meeting[]>;
+	findAwaitingCapture(userId: string): Promise<Meeting[]>;
+}
+
+/**
+ * Repository interface for Meeting Attendee entities
+ */
+export interface MeetingAttendeesRepository {
+	findByMeeting(meetingId: string): Promise<MeetingAttendee[]>;
+	addAttendee(meetingId: string, input: CreateAttendeeInput): Promise<MeetingAttendee | null>;
+	addAttendees(meetingId: string, inputs: CreateAttendeeInput[]): Promise<MeetingAttendee[]>;
+	removeAttendee(meetingId: string, attendeeId: string): Promise<boolean>;
+	setOwner(meetingId: string, attendeeId: string): Promise<boolean>;
+	updateResponseStatus(attendeeId: string, status: ResponseStatus): Promise<MeetingAttendee | null>;
 }
