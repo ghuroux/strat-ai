@@ -13,10 +13,12 @@
 <script lang="ts">
 	import { fly, fade, slide } from 'svelte/transition';
 	import type { Area } from '$lib/types/areas';
+	import type { Space } from '$lib/types/spaces';
 	import type { Task, CreateTaskInput, TaskPriority, DueDateType, EstimatedEffort } from '$lib/types/tasks';
 	import type { Document } from '$lib/types/documents';
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
+	import { areaStore } from '$lib/stores/areas.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
 
@@ -39,6 +41,9 @@
 		initialValues?: InitialValues;
 		onClose: () => void;
 		onCreate: (input: CreateTaskInput) => Promise<Task | null>;
+		// Global dashboard: let user pick a space
+		spaces?: Space[];
+		showSpaceSelector?: boolean;
 	}
 
 	let {
@@ -49,11 +54,47 @@
 		task = null,
 		initialValues,
 		onClose,
-		onCreate
+		onCreate,
+		spaces = [],
+		showSpaceSelector = false
 	}: Props = $props();
 
 	// Derived: is this edit mode?
 	let isEditMode = $derived(!!task);
+
+	// Space selection for global dashboard context
+	let selectedSpaceId = $state('');
+
+	// Effective space: user-selected (global) or parent-provided
+	let effectiveSpaceId = $derived(showSpaceSelector ? selectedSpaceId : spaceId);
+
+	// Effective areas: from areaStore when user picks a space, otherwise from prop
+	let effectiveAreas = $derived.by(() => {
+		if (showSpaceSelector && selectedSpaceId) {
+			return areaStore.getAreasForSpace(selectedSpaceId);
+		}
+		return areas;
+	});
+
+	// Effective color: from selected space or prop
+	let effectiveColor = $derived.by(() => {
+		if (showSpaceSelector && selectedSpaceId) {
+			const space = spaces.find(s => s.id === selectedSpaceId);
+			return space?.color || spaceColor;
+		}
+		return spaceColor;
+	});
+
+	// Reload areas and docs when space selection changes
+	$effect(() => {
+		if (showSpaceSelector && selectedSpaceId && isOpen) {
+			// Reset area selection when space changes
+			areaId = '';
+			// Load areas + documents for the newly selected space
+			areaStore.loadAreas(selectedSpaceId);
+			documentStore.loadDocuments(selectedSpaceId);
+		}
+	});
 
 	// Form state
 	let title = $state('');
@@ -82,9 +123,9 @@
 		{ value: 'multi_day', label: 'Multi-day', hint: 'Days' }
 	];
 
-	// Get space documents
+	// Get space documents (uses effective space — either selected or prop)
 	let spaceDocuments = $derived.by(() => {
-		return documentStore.getDocuments(spaceId);
+		return documentStore.getDocuments(effectiveSpaceId);
 	});
 
 	// Existing linked documents (edit mode)
@@ -129,6 +170,8 @@
 				areaId = '';
 				selectedSpaceDocIds = new Set();
 			}
+			// Reset space selection for global mode (default to prop spaceId)
+			selectedSpaceId = spaceId;
 			// Load space documents
 			documentStore.loadDocuments(spaceId);
 			// Reset document state
@@ -221,7 +264,7 @@
 		let uploadedCount = 0;
 
 		for (const file of pendingFiles) {
-			const doc = await documentStore.uploadDocument(file, spaceId);
+			const doc = await documentStore.uploadDocument(file, effectiveSpaceId);
 			if (doc) {
 				await documentStore.linkToTask(doc.id, taskId);
 				uploadedCount++;
@@ -251,6 +294,10 @@
 			error = 'Title is required';
 			return;
 		}
+		if (showSpaceSelector && !selectedSpaceId) {
+			error = 'Please select a space';
+			return;
+		}
 
 		isSubmitting = true;
 		error = null;
@@ -275,7 +322,7 @@
 				// Create mode: create new task
 				const input: CreateTaskInput = {
 					title: trimmedTitle,
-					spaceId,
+					spaceId: effectiveSpaceId,
 					priority,
 					dueDateType,
 					source: { type: 'manual' }
@@ -346,7 +393,7 @@
 	<!-- Panel -->
 	<aside
 		class="panel fixed top-0 right-0 h-full flex flex-col bg-surface-900/98 backdrop-blur-md border-l border-surface-700 shadow-2xl z-50"
-		style="width: 24rem; --space-color: {spaceColor};"
+		style="width: 24rem; --space-color: {effectiveColor};"
 		transition:fly={{ x: 384, duration: 200, opacity: 1 }}
 		role="dialog"
 		aria-modal="true"
@@ -503,6 +550,50 @@
 						</div>
 					</div>
 
+					{#if showSpaceSelector && spaces.length > 0}
+						<div class="field">
+							<label for="space" class="field-label">Space</label>
+							<select
+								id="space"
+								class="field-input"
+								bind:value={selectedSpaceId}
+								disabled={isSubmitting}
+							>
+								<option value="">Select a space...</option>
+								{#each spaces as space (space.id)}
+									<option value={space.id}>{space.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
+					{#if effectiveAreas.length > 0 || (showSpaceSelector && selectedSpaceId)}
+						<div class="field">
+							<label for="area" class="field-label">
+								Area
+								<span class="field-hint">(optional)</span>
+							</label>
+							<select
+								id="area"
+								class="field-input"
+								bind:value={areaId}
+								disabled={isSubmitting || effectiveAreas.length === 0}
+							>
+								{#if effectiveAreas.length === 0}
+									<option value="">No areas in this space</option>
+								{:else}
+									<option value="">No specific area</option>
+									{#each effectiveAreas as area (area.id)}
+										<option value={area.id}>
+											{area.name}
+											{#if area.isGeneral}(General){/if}
+										</option>
+									{/each}
+								{/if}
+							</select>
+						</div>
+					{/if}
+
 					<div class="field">
 						<label class="field-label">Priority</label>
 						<div class="toggle-group">
@@ -529,29 +620,6 @@
 							</button>
 						</div>
 					</div>
-
-					{#if areas.length > 0}
-						<div class="field">
-							<label for="area" class="field-label">
-								Area
-								<span class="field-hint">(optional)</span>
-							</label>
-							<select
-								id="area"
-								class="field-input"
-								bind:value={areaId}
-								disabled={isSubmitting}
-							>
-								<option value="">No specific area</option>
-								{#each areas as area (area.id)}
-									<option value={area.id}>
-										{area.name}
-										{#if area.isGeneral}(General){/if}
-									</option>
-								{/each}
-							</select>
-						</div>
-					{/if}
 				</section>
 
 				<!-- Documents Section -->
@@ -684,7 +752,7 @@
 					<button
 						type="submit"
 						class="btn-primary"
-						disabled={isSubmitting || !title.trim()}
+						disabled={isSubmitting || !title.trim() || (showSpaceSelector && !selectedSpaceId)}
 					>
 						{#if isSubmitting}
 							{isEditMode ? 'Saving...' : 'Creating...'}

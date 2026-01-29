@@ -856,6 +856,8 @@
 		task={taskToEdit}
 		onClose={closeTaskPanel}
 		onCreate={handleCreateTask}
+		{spaces}
+		showSpaceSelector={true}
 	/>
 {/if}
 
