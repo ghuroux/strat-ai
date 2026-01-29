@@ -246,6 +246,7 @@ export const postgresMeetingsRepository: MeetingsRepository = {
 				scheduled_start = ${updates.scheduledStart === null ? null : updates.scheduledStart ?? sql`scheduled_start`},
 				scheduled_end = ${updates.scheduledEnd === null ? null : updates.scheduledEnd ?? sql`scheduled_end`},
 				capture_method = ${updates.captureMethod === null ? null : updates.captureMethod ?? sql`capture_method`},
+				task_id = ${updates.taskId ?? sql`task_id`},
 				updated_at = NOW()
 			WHERE id = ${id}
 				AND deleted_at IS NULL

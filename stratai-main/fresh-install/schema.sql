@@ -474,6 +474,7 @@ CREATE TABLE tasks (
     source_type TEXT NOT NULL DEFAULT 'manual' CHECK (source_type IN ('assist', 'meeting', 'chat', 'manual', 'document')),
     source_assist_id TEXT,
     source_conversation_id TEXT,
+    source_meeting_id TEXT,
     linked_conversation_ids TEXT[] DEFAULT '{}'::text[],
     -- Subtask support
     parent_task_id TEXT REFERENCES tasks(id) ON DELETE CASCADE,
@@ -501,6 +502,7 @@ CREATE INDEX idx_tasks_has_subtasks ON tasks(parent_task_id) WHERE parent_task_i
 CREATE INDEX idx_tasks_planning ON tasks(user_id, space_id) WHERE status = 'planning' AND deleted_at IS NULL;
 CREATE INDEX idx_tasks_estimated_effort ON tasks(estimated_effort) WHERE estimated_effort IS NOT NULL;
 CREATE INDEX idx_tasks_source_document ON tasks(source_assist_id) WHERE source_type = 'document' AND deleted_at IS NULL;
+CREATE INDEX idx_tasks_source_meeting ON tasks(source_meeting_id) WHERE source_meeting_id IS NOT NULL AND deleted_at IS NULL;
 
 CREATE TRIGGER tasks_updated_at
     BEFORE UPDATE ON tasks

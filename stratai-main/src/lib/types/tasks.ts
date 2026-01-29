@@ -55,6 +55,7 @@ export interface TaskSource {
 	type: TaskSourceType;
 	assistId?: string;
 	conversationId?: string;
+	meetingId?: string;
 }
 
 /**
@@ -266,6 +267,7 @@ export interface TaskRow {
 	sourceType: string;
 	sourceAssistId: string | null;
 	sourceConversationId: string | null;
+	sourceMeetingId: string | null;
 	linkedConversationIds: string[] | null;
 	// Subtask columns
 	parentTaskId: string | null;
@@ -368,7 +370,8 @@ export function rowToTask(row: TaskRow): Task {
 		source: {
 			type: row.sourceType as TaskSourceType,
 			assistId: row.sourceAssistId ?? undefined,
-			conversationId: row.sourceConversationId ?? undefined
+			conversationId: row.sourceConversationId ?? undefined,
+			meetingId: row.sourceMeetingId ?? undefined
 		},
 		linkedConversationIds: row.linkedConversationIds ?? [],
 		// Subtask fields

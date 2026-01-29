@@ -212,6 +212,7 @@ export interface UpdateMeetingInput {
 	scheduledStart?: Date | null;
 	scheduledEnd?: Date | null;
 	captureMethod?: CaptureMethod | null;
+	taskId?: string;
 }
 
 /**

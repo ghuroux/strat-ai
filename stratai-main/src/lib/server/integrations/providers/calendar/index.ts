@@ -45,3 +45,27 @@ export {
 	formatFreeBusyForAI,
 	formatMeetingTimesForAI
 } from './tools';
+
+// Email Client
+export {
+	EmailClient,
+	type SendEmailInput,
+	type SendEmailResult
+} from './email-client';
+
+// Email Tools
+export {
+	emailTools,
+	isEmailTool,
+	executeEmailTool,
+	getEmailToolDefinitions
+} from './email-tools';
+
+// Helpers
+export {
+	getAuthenticatedCalendarClient,
+	type GetCalendarClientResult
+} from './helpers';
+
+// Invite Body
+export { generateInviteBodyHtml, type InviteBodyInput } from './invite-body';

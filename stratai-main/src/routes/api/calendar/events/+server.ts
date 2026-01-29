@@ -11,18 +11,15 @@
  * - Always returns 200 for graceful degradation (dashboard never blocks on calendar)
  * - Returns { connected: false } if user hasn't connected calendar
  * - 5-second timeout on Microsoft Graph API calls
- * - Automatically refreshes expired access tokens
+ * - Automatically refreshes expired access tokens (via helper)
  */
 
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import type { CalendarEventSummary, CalendarEventsResponse } from '$lib/types/calendar';
 import type { CalendarEvent } from '$lib/server/integrations/providers/calendar/client';
-import { CalendarClient } from '$lib/server/integrations/providers/calendar/client';
-import { refreshAccessToken, tokensToCredentials } from '$lib/server/integrations/providers/calendar/oauth';
+import { getAuthenticatedCalendarClient } from '$lib/server/integrations/providers/calendar/helpers';
 import { parseGraphDateTime, DEFAULT_TIMEZONE } from '$lib/server/integrations/providers/calendar/datetime';
-import { postgresIntegrationsRepository } from '$lib/server/persistence/integrations-postgres';
-import { postgresIntegrationCredentialsRepository } from '$lib/server/persistence/integration-credentials-postgres';
 
 /**
  * GET /api/calendar/events?start=YYYY-MM-DD&end=YYYY-MM-DD
@@ -49,75 +46,21 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	}
 
 	try {
-		// Step 1: Check if user has a calendar integration
-		const integration = await postgresIntegrationsRepository.findByUserAndService(userId, 'calendar');
+		// Get authenticated calendar client (handles integration lookup + token refresh)
+		const result = await getAuthenticatedCalendarClient(userId);
 
-		if (!integration || integration.status !== 'connected') {
+		if (!result.connected) {
 			return json({
 				events: [],
 				connected: false,
-				fetchedAt: new Date().toISOString()
-			} satisfies CalendarEventsResponse);
-		}
-
-		// Step 2: Get credentials
-		const credentials = await postgresIntegrationCredentialsRepository.getDecryptedCredentials(integration.id);
-		let accessTokenCred = credentials.find(c => c.type === 'access_token');
-		const refreshTokenCred = credentials.find(c => c.type === 'refresh_token');
-
-		if (!accessTokenCred) {
-			return json({
-				events: [],
-				connected: true,
 				fetchedAt: new Date().toISOString(),
-				error: 'No access token found — please reconnect your calendar'
+				error: result.reason !== 'Calendar not connected' ? result.reason : undefined
 			} satisfies CalendarEventsResponse);
 		}
 
-		// Step 3: Refresh token if expired
-		if (accessTokenCred.expiresAt && new Date(accessTokenCred.expiresAt) < new Date()) {
-			if (!refreshTokenCred) {
-				return json({
-					events: [],
-					connected: true,
-					fetchedAt: new Date().toISOString(),
-					error: 'Access token expired and no refresh token — please reconnect your calendar'
-				} satisfies CalendarEventsResponse);
-			}
+		const client = result.client;
 
-			try {
-				const newTokens = await refreshAccessToken(refreshTokenCred.value);
-				const newCredentials = tokensToCredentials(newTokens);
-
-				// Upsert new credentials
-				for (const cred of newCredentials) {
-					await postgresIntegrationCredentialsRepository.upsert({
-						integrationId: integration.id,
-						credentialType: cred.type,
-						value: cred.value,
-						expiresAt: cred.expiresAt,
-						scope: cred.scope
-					});
-				}
-
-				// Use the new access token
-				const refreshedCred = newCredentials.find(c => c.type === 'access_token');
-				if (refreshedCred) {
-					accessTokenCred = refreshedCred;
-				}
-			} catch (refreshError) {
-				console.error('[Calendar API] Token refresh failed:', refreshError);
-				return json({
-					events: [],
-					connected: true,
-					fetchedAt: new Date().toISOString(),
-					error: 'Failed to refresh calendar access — please reconnect'
-				} satisfies CalendarEventsResponse);
-			}
-		}
-
-		// Step 4: Fetch events from Microsoft Graph with timeout
-		const client = new CalendarClient(accessTokenCred.value);
+		// Fetch events from Microsoft Graph with timeout
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -141,7 +84,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			void controller;
 		}
 
-		// Step 5: Map to lightweight CalendarEventSummary
+		// Map to lightweight CalendarEventSummary
 		const events: CalendarEventSummary[] = graphEvents.map(mapEventToSummary);
 
 		return json({

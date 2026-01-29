@@ -70,7 +70,8 @@ function dbRowToTask(row: TaskRow): Task {
 		source: {
 			type: row.sourceType as Task['source']['type'],
 			assistId: row.sourceAssistId ?? undefined,
-			conversationId: row.sourceConversationId ?? undefined
+			conversationId: row.sourceConversationId ?? undefined,
+			meetingId: row.sourceMeetingId ?? undefined
 		},
 		linkedConversationIds: row.linkedConversationIds ?? [],
 		// Subtask fields
@@ -240,7 +241,7 @@ export const postgresTaskRepository: TaskRepository = {
 			INSERT INTO tasks (
 				id, title, description, status, priority, color,
 				due_date, due_date_type, estimated_effort,
-				source_type, source_assist_id, source_conversation_id,
+				source_type, source_assist_id, source_conversation_id, source_meeting_id,
 				area_id,
 				space_id, user_id,
 				last_activity_at, created_at, updated_at
@@ -257,6 +258,7 @@ export const postgresTaskRepository: TaskRepository = {
 				${input.source?.type ?? 'manual'},
 				${input.source?.assistId ?? null},
 				${input.source?.conversationId ?? null},
+				${input.source?.meetingId ?? null},
 				${input.areaId ?? null},
 				${input.spaceId},
 				${userId},
