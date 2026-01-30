@@ -389,5 +389,34 @@ export const postgresDocumentRepository: DocumentRepository = {
 			ORDER BY d.updated_at DESC
 		`;
 		return rows.map(rowToDocument);
+	},
+
+	/**
+	 * Full-text search across document title, filename, and summary
+	 * Excludes content field for performance
+	 */
+	async search(query: string, userId: string, limit = 20): Promise<Document[]> {
+		const ilikePattern = `%${query.trim()}%`;
+		if (!query.trim()) return [];
+
+		const rows = await sql<DocumentRow[]>`
+			SELECT *
+			FROM documents
+			WHERE user_id = ${userId}
+				AND deleted_at IS NULL
+				AND (
+					title ILIKE ${ilikePattern}
+					OR filename ILIKE ${ilikePattern}
+					OR summary ILIKE ${ilikePattern}
+				)
+			ORDER BY
+				CASE WHEN title ILIKE ${ilikePattern} THEN 0
+					 WHEN filename ILIKE ${ilikePattern} THEN 1
+					 ELSE 2 END,
+				updated_at DESC
+			LIMIT ${limit}
+		`;
+
+		return rows.map(rowToDocument);
 	}
 };

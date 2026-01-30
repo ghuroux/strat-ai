@@ -76,6 +76,7 @@ export interface CreateAreaInput {
 	contextDocumentIds?: string[];
 	color?: string;
 	icon?: string;
+	isRestricted?: boolean; // If true, only creator can see the area (default: false = open to space members)
 }
 
 /**

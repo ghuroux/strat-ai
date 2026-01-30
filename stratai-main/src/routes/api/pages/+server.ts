@@ -9,6 +9,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
 import { postgresAreaRepository } from '$lib/server/persistence/areas-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 import { createEntitiesFromGuidedCreation } from '$lib/services/guided-entity-creator';
 import type { CreatePageInput, PageType, PageVisibility } from '$lib/types/page';
 import type { EntityCreationResult } from '$lib/types/guided-creation';
@@ -114,6 +115,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 
 		const page = await postgresPageRepository.create(input, userId);
+
+		// Log audit event
+		postgresAuditRepository.logEvent(
+			userId, 'page_created', 'page', page.id, 'create',
+			{
+				page_type: input.pageType,
+				visibility: input.visibility,
+				area_id: input.areaId,
+				source_conversation_id: input.sourceConversationId ?? null
+			},
+			locals.session.organizationId
+		);
 
 		// Handle entity creation from guided creation
 		let entitiesCreated: EntityCreationResult[] = [];

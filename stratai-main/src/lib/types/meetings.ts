@@ -28,9 +28,38 @@ export type MeetingStatus =
 
 export type ExternalProvider = 'microsoft' | 'google';
 
-export type CaptureMethod = 'manual_upload' | 'auto_teams' | 'auto_zoom' | 'manual_notes';
+export type CaptureMethod = 'manual_upload' | 'auto_teams' | 'auto_zoom' | 'manual_notes' | 'wizard' | 'auto_expired';
 
 export type AttendeeType = 'required' | 'optional' | 'organizer';
+
+// =====================================================
+// Status Transition Engine
+// =====================================================
+
+/**
+ * Valid status transitions for the meeting lifecycle.
+ * Key = current status, Value = array of valid target statuses.
+ *
+ * Flow: draft → scheduled → in_progress → awaiting_capture → captured
+ *                                       → completed
+ *              → cancelled
+ */
+export const MEETING_STATUS_TRANSITIONS: Record<MeetingStatus, MeetingStatus[]> = {
+	draft: ['scheduled', 'cancelled'],
+	scheduled: ['in_progress', 'awaiting_capture', 'cancelled'],
+	in_progress: ['completed', 'awaiting_capture', 'cancelled'],
+	completed: ['awaiting_capture'],
+	awaiting_capture: ['captured'],
+	captured: [],
+	cancelled: []
+};
+
+/**
+ * Check if a status transition is valid
+ */
+export function isValidTransition(from: MeetingStatus, to: MeetingStatus): boolean {
+	return MEETING_STATUS_TRANSITIONS[from]?.includes(to) ?? false;
+}
 
 export type ResponseStatus = 'pending' | 'accepted' | 'declined' | 'tentative';
 

@@ -9,6 +9,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { CreateSubtaskInput, SubtaskType } from '$lib/types/tasks';
+import { sendTaskAssignmentNotification } from '$lib/server/email/task-notifications';
 
 /**
  * GET /api/tasks/[id]/subtasks
@@ -91,12 +92,21 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 			title: body.title.trim(),
 			parentTaskId: params.id,
 			subtaskType: (body.subtaskType as SubtaskType) ?? 'conversation',
+			assigneeId: body.assigneeId, // Who should complete this subtask
 			priority: body.priority ?? 'normal',
 			sourceConversationId: body.sourceConversationId, // Plan Mode conversation ID for context injection
 			contextSummary: body.contextSummary // Rich context generated during Plan Mode
 		};
 
 		const subtask = await postgresTaskRepository.createSubtask(input, userId);
+
+		// Fire-and-forget: send assignment notification if assigned to someone else
+		if (subtask.assigneeId && subtask.assigneeId !== userId) {
+			sendTaskAssignmentNotification({
+				task: subtask, assigneeId: subtask.assigneeId, assignerId: userId,
+				orgId: locals.session.organizationId
+			}).catch(console.error);
+		}
 
 		return json({ subtask }, { status: 201 });
 	} catch (error) {

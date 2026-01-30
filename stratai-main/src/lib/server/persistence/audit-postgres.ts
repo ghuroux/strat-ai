@@ -33,7 +33,17 @@ export interface AuditRepository {
 		resourceType: AuditResourceType,
 		resourceId: string,
 		action: string,
-		metadata?: Record<string, unknown>
+		metadata?: Record<string, unknown>,
+		organizationId?: string
+	): Promise<void>;
+
+	/**
+	 * Log a page view event with deduplication (1 per user per page per day)
+	 */
+	logPageView(
+		userId: string,
+		pageId: string,
+		organizationId?: string
 	): Promise<void>;
 
 	/**
@@ -72,14 +82,19 @@ async function logEvent(
 	resourceType: AuditResourceType,
 	resourceId: string,
 	action: string,
-	metadata: Record<string, unknown> = {}
+	metadata: Record<string, unknown> = {},
+	organizationId?: string
 ): Promise<void> {
 	try {
 		await sql`
-			INSERT INTO audit_events (user_id, event_type, resource_type, resource_id, action, metadata)
-			VALUES (${userId}, ${eventType}, ${resourceType}, ${resourceId}, ${action}, ${sql.json(
-				metadata as never
-			)})
+			INSERT INTO audit_events (
+				user_id, event_type, resource_type, resource_id,
+				action, metadata, organization_id
+			) VALUES (
+				${userId}, ${eventType}, ${resourceType}, ${resourceId},
+				${action}, ${sql.json(metadata as never)},
+				${organizationId ?? null}
+			)
 		`;
 	} catch (error) {
 		// Log error but don't throw - audit logging should not break main operations
@@ -91,6 +106,38 @@ async function logEvent(
 			action,
 			error
 		});
+	}
+}
+
+/**
+ * Log a page view event with deduplication (1 per user per page per day)
+ * Fire-and-forget: errors are logged but don't throw
+ */
+async function logPageView(
+	userId: string,
+	pageId: string,
+	organizationId?: string
+): Promise<void> {
+	try {
+		await sql`
+			INSERT INTO audit_events (
+				user_id, event_type, resource_type, resource_id,
+				action, metadata, organization_id
+			)
+			SELECT
+				${userId}, 'page_viewed', 'page', ${pageId},
+				'view', '{}'::jsonb, ${organizationId ?? null}
+			WHERE NOT EXISTS (
+				SELECT 1 FROM audit_events
+				WHERE user_id = ${userId}
+					AND resource_id = ${pageId}
+					AND event_type = 'page_viewed'
+					AND created_at >= CURRENT_DATE
+					AND created_at < CURRENT_DATE + INTERVAL '1 day'
+			)
+		`;
+	} catch (error) {
+		console.error('Failed to log page view:', { userId, pageId, error });
 	}
 }
 
@@ -259,6 +306,7 @@ async function getUserActivity(
 
 export const postgresAuditRepository: AuditRepository = {
 	logEvent,
+	logPageView,
 	getResourceAudit,
 	getUserActivity
 };

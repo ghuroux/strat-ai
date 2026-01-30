@@ -83,7 +83,11 @@ async function authenticateUser(
 }
 
 export const actions: Actions = {
-	default: async ({ request, cookies, url }) => {
+	default: async ({ request, cookies, url, locals }) => {
+		if (locals.rateLimited) {
+			return fail(429, { error: 'Too many login attempts. Please wait a few minutes and try again.' });
+		}
+
 		const data = await request.formData();
 		const username = data.get('username')?.toString().trim() || null;
 		const password = data.get('password')?.toString() || '';

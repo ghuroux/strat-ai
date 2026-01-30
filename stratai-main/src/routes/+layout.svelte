@@ -6,7 +6,7 @@
 	import KeyboardShortcutsModal from '$lib/components/KeyboardShortcutsModal.svelte';
 	import MatrixRain from '$lib/components/effects/MatrixRain.svelte';
 	import Confetti from '$lib/components/effects/Confetti.svelte';
-	import { SnakeGame, WordleGame } from '$lib/components/games';
+	import { SnakeGame, WordleGame, PromptRunnerGame } from '$lib/components/games';
 	import { BuyModal } from '$lib/components/commerce';
 	import ErrorFallback from '$lib/components/ErrorFallback.svelte';
 	import { moveChatModalStore } from '$lib/stores/moveChatModal.svelte';
@@ -63,6 +63,11 @@
 		// Detect and sync timezone (silent operation - no UI feedback)
 		if (data.user) {
 			syncTimezone();
+		}
+
+		// Proactive calendar token refresh (silent - keeps tokens alive)
+		if (data.user) {
+			checkCalendarHealth();
 		}
 
 		// Listen for system theme changes when using 'system' preference
@@ -127,6 +132,24 @@
 		} catch {
 			// Silent failure - timezone sync is not critical
 			console.debug('Failed to sync timezone');
+		}
+	}
+
+	/**
+	 * Proactive calendar token health check.
+	 * Calls the health endpoint to trigger a token refresh if the access token
+	 * is expired or expiring soon. This prevents the "please reconnect" experience
+	 * by keeping tokens alive on every page load.
+	 *
+	 * Silent operation — does not show UI feedback.
+	 */
+	async function checkCalendarHealth() {
+		try {
+			await fetch('/api/integrations/calendar/health');
+			// Response intentionally ignored — the server-side refresh is the goal
+		} catch {
+			// Silent failure — calendar health is not critical for page load
+			console.debug('Calendar health check failed (non-critical)');
 		}
 	}
 
@@ -276,6 +299,12 @@
 <WordleGame
 	isOpen={gameStore.isWordleOpen}
 	onClose={() => gameStore.closeWordle()}
+/>
+
+<!-- Prompt Runner Game Modal -->
+<PromptRunnerGame
+	isOpen={gameStore.isPromptRunnerOpen}
+	onClose={() => gameStore.closePromptRunner()}
 />
 
 <!-- Matrix Rain Effect (Hacker Mode) -->

@@ -48,7 +48,7 @@ import type { Conversation } from '$lib/types/chat';
 // Types
 // =============================================================================
 
-export type CommandCategory = 'navigation' | 'action' | 'admin' | 'settings' | 'conversations';
+export type CommandCategory = 'navigation' | 'action' | 'admin' | 'settings' | 'conversations' | 'search_results';
 
 export interface Command {
 	id: string;
@@ -71,7 +71,8 @@ export const categoryConfig: Record<CommandCategory, { label: string; order: num
 	action: { label: 'Actions', order: 2 },
 	admin: { label: 'Admin', order: 3 },
 	settings: { label: 'Settings', order: 4 },
-	conversations: { label: 'Conversations', order: 5 }
+	conversations: { label: 'Conversations', order: 5 },
+	search_results: { label: 'Search Results', order: 6 }
 };
 
 // =============================================================================
@@ -157,6 +158,15 @@ export function getStaticCommands(): Command[] {
 			icon: Gamepad2,
 			keywords: ['wordle', 'game', 'play', 'word', 'puzzle', 'guess', 'daily', 'letters'],
 			action: () => gameStore.openWordle()
+		},
+		{
+			id: 'action-play-prompt-runner',
+			label: 'Play Prompt Runner',
+			description: 'Navigate the LLM pipeline - dodge errors',
+			category: 'action',
+			icon: Gamepad2,
+			keywords: ['prompt', 'runner', 'game', 'play', 'run', 'jump', 'endless', 'arcade', 'llm', 'token'],
+			action: () => gameStore.openPromptRunner()
 		},
 
 		// =========================================================================
@@ -531,7 +541,7 @@ export function groupByCategory(commands: Command[]): Map<CommandCategory, Comma
 	const groups = new Map<CommandCategory, Command[]>();
 
 	// Initialize groups in order
-	const orderedCategories: CommandCategory[] = ['navigation', 'action', 'admin', 'settings', 'conversations'];
+	const orderedCategories: CommandCategory[] = ['navigation', 'action', 'admin', 'settings', 'conversations', 'search_results'];
 	for (const cat of orderedCategories) {
 		groups.set(cat, []);
 	}
@@ -782,4 +792,112 @@ export function filterWithConversations(commands: Command[], query: string): Com
 	}
 
 	return filteredCommands;
+}
+
+// =============================================================================
+// Server-Side Search Result Conversion
+// =============================================================================
+
+/**
+ * Shape returned by GET /api/search
+ */
+export interface SearchResultItem {
+	id: string;
+	type: 'page' | 'task' | 'area' | 'space' | 'document' | 'conversation';
+	title: string;
+	description?: string;
+	spaceId?: string;
+	areaId?: string;
+	slug?: string;
+	status?: string;
+	meta?: Record<string, string>;
+}
+
+const SEARCH_RESULT_ICONS: Record<string, ComponentType> = {
+	page: FileText,
+	task: ListTodo,
+	area: Target,
+	space: FolderOpen,
+	document: FileText,
+	conversation: MessageSquare
+};
+
+/**
+ * Resolve navigation action + description for a search result
+ * Returns null action if we can't build a valid navigation path
+ */
+function getSearchResultNavigation(result: SearchResultItem): { action: (() => void) | null; description: string } {
+	switch (result.type) {
+		case 'space': {
+			if (!result.slug) return { action: null, description: '' };
+			return {
+				action: () => goto(`/spaces/${result.slug}`),
+				description: 'Space'
+			};
+		}
+		case 'area': {
+			const space = result.spaceId ? spacesStore.getSpaceById(result.spaceId) : null;
+			if (!space || !result.slug) return { action: null, description: '' };
+			return {
+				action: () => goto(`/spaces/${space.slug}/${result.slug}`),
+				description: `Area in ${space.name}`
+			};
+		}
+		case 'page': {
+			const area = result.areaId ? areaStore.getAreaById(result.areaId) : null;
+			const space = area?.spaceId ? spacesStore.getSpaceById(area.spaceId) : null;
+			if (!area || !space) return { action: null, description: '' };
+			const typeLabel = result.meta?.pageType
+				? result.meta.pageType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+				: 'Page';
+			return {
+				action: () => goto(`/spaces/${space.slug}/${area.slug}/pages/${result.id}`),
+				description: `${typeLabel} in ${space.name} → ${area.name}`
+			};
+		}
+		case 'task': {
+			let space = result.spaceId ? spacesStore.getSpaceById(result.spaceId) : null;
+			if (!space && result.areaId) {
+				const area = areaStore.getAreaById(result.areaId);
+				space = area?.spaceId ? spacesStore.getSpaceById(area.spaceId) : null;
+			}
+			if (!space) return { action: null, description: '' };
+			const statusLabel = result.status ? ` · ${result.status}` : '';
+			return {
+				action: () => goto(`/spaces/${space!.slug}/task/${result.id}`),
+				description: `Task in ${space.name}${statusLabel}`
+			};
+		}
+		default:
+			return { action: null, description: '' };
+	}
+}
+
+/**
+ * Convert server-side search results into Command objects for the palette.
+ * Only includes results where navigation can be resolved from client stores.
+ * Filters to navigable entity types (pages, tasks, areas, spaces).
+ */
+export function convertSearchResults(results: SearchResultItem[]): Command[] {
+	const commands: Command[] = [];
+
+	for (const result of results) {
+		if (!['page', 'task', 'area', 'space'].includes(result.type)) continue;
+
+		const icon = SEARCH_RESULT_ICONS[result.type] || Search;
+		const nav = getSearchResultNavigation(result);
+		if (!nav.action) continue;
+
+		commands.push({
+			id: `search-${result.type}-${result.id}`,
+			label: result.title,
+			description: nav.description,
+			category: 'search_results' as CommandCategory,
+			icon,
+			keywords: [],
+			action: nav.action
+		});
+	}
+
+	return commands;
 }

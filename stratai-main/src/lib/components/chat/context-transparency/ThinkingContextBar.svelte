@@ -2,7 +2,7 @@
 	ThinkingContextBar.svelte
 
 	Compact row showing context being used during AI generation.
-	Displayed in ThinkingIndicator while streaming.
+	Displayed in ThinkingDisplay while streaming.
 -->
 <script lang="ts">
 	import { scale } from 'svelte/transition';

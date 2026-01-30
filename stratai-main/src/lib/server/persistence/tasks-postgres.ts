@@ -83,6 +83,8 @@ function dbRowToTask(row: TaskRow): Task {
 		areaId: row.areaId ?? undefined,
 		// Planning state - use parsed value
 		planningData: parsedPlanningData,
+		// Assignment
+		assigneeId: row.assigneeId ?? undefined,
 		// Scope
 		spaceId: row.spaceId,
 		userId: row.userId,
@@ -116,6 +118,7 @@ function dbRowToGlobalTask(row: GlobalTaskRow): GlobalTask {
 export const postgresTaskRepository: TaskRepository = {
 	async findAll(userId: string, filter?: TaskListFilter): Promise<Task[]> {
 		// Build WHERE conditions based on filter
+		// Note: queries filter by assignee_id (who should complete the task)
 		let query;
 
 		if (filter?.spaceId && filter?.status) {
@@ -123,7 +126,7 @@ export const postgresTaskRepository: TaskRepository = {
 			query = sql<TaskRow[]>`
 				SELECT *
 				FROM tasks
-				WHERE user_id = ${userId}
+				WHERE assignee_id = ${userId}
 					AND space_id = ${filter.spaceId}
 					AND status = ANY(${statuses})
 					AND deleted_at IS NULL
@@ -136,7 +139,7 @@ export const postgresTaskRepository: TaskRepository = {
 				query = sql<TaskRow[]>`
 					SELECT *
 					FROM tasks
-					WHERE user_id = ${userId}
+					WHERE assignee_id = ${userId}
 						AND space_id = ${filter.spaceId}
 						AND deleted_at IS NULL
 					ORDER BY
@@ -148,7 +151,7 @@ export const postgresTaskRepository: TaskRepository = {
 				query = sql<TaskRow[]>`
 					SELECT *
 					FROM tasks
-					WHERE user_id = ${userId}
+					WHERE assignee_id = ${userId}
 						AND space_id = ${filter.spaceId}
 						AND status != 'completed'
 						AND deleted_at IS NULL
@@ -162,7 +165,7 @@ export const postgresTaskRepository: TaskRepository = {
 			query = sql<TaskRow[]>`
 				SELECT *
 				FROM tasks
-				WHERE user_id = ${userId}
+				WHERE assignee_id = ${userId}
 					AND status = ANY(${statuses})
 					AND deleted_at IS NULL
 				ORDER BY
@@ -174,7 +177,7 @@ export const postgresTaskRepository: TaskRepository = {
 			query = sql<TaskRow[]>`
 				SELECT *
 				FROM tasks
-				WHERE user_id = ${userId}
+				WHERE assignee_id = ${userId}
 					AND status != 'completed'
 					AND deleted_at IS NULL
 				ORDER BY
@@ -208,7 +211,7 @@ export const postgresTaskRepository: TaskRepository = {
 			FROM tasks t
 			INNER JOIN spaces s ON t.space_id = s.id
 			LEFT JOIN areas a ON t.area_id = a.id
-			WHERE t.user_id = ${userId}
+			WHERE t.assignee_id = ${userId}
 				AND t.deleted_at IS NULL
 				AND t.parent_task_id IS NULL
 				${spaceFilter}
@@ -226,7 +229,7 @@ export const postgresTaskRepository: TaskRepository = {
 			SELECT *
 			FROM tasks
 			WHERE id = ${id}
-				AND user_id = ${userId}
+				AND (user_id = ${userId} OR assignee_id = ${userId})
 				AND deleted_at IS NULL
 		`;
 		return rows.length > 0 ? dbRowToTask(rows[0]) : null;
@@ -243,7 +246,7 @@ export const postgresTaskRepository: TaskRepository = {
 				due_date, due_date_type, estimated_effort,
 				source_type, source_assist_id, source_conversation_id, source_meeting_id,
 				area_id,
-				space_id, user_id,
+				space_id, user_id, assignee_id,
 				last_activity_at, created_at, updated_at
 			) VALUES (
 				${id},
@@ -262,6 +265,7 @@ export const postgresTaskRepository: TaskRepository = {
 				${input.areaId ?? null},
 				${input.spaceId},
 				${userId},
+				${input.assigneeId ?? userId},
 				${now},
 				${now},
 				${now}
@@ -322,6 +326,7 @@ export const postgresTaskRepository: TaskRepository = {
 				status = COALESCE(${updates.status ?? null}, status),
 				priority = COALESCE(${updates.priority ?? null}, priority),
 				area_id = ${updates.areaId === null ? null : updates.areaId ?? sql`area_id`},
+				assignee_id = ${updates.assigneeId === null ? null : updates.assigneeId ?? sql`assignee_id`},
 				due_date = ${updates.dueDate === null ? null : updates.dueDate ?? sql`due_date`},
 				due_date_type = ${updates.dueDateType === null ? null : updates.dueDateType ?? sql`due_date_type`},
 				estimated_effort = ${updates.estimatedEffort === null ? null : updates.estimatedEffort ?? sql`estimated_effort`},
@@ -331,7 +336,7 @@ export const postgresTaskRepository: TaskRepository = {
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}
-				AND user_id = ${userId}
+				AND (user_id = ${userId} OR assignee_id = ${userId})
 				AND deleted_at IS NULL
 		`;
 
@@ -349,7 +354,7 @@ export const postgresTaskRepository: TaskRepository = {
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}
-				AND user_id = ${userId}
+				AND (user_id = ${userId} OR assignee_id = ${userId})
 				AND deleted_at IS NULL
 		`;
 
@@ -366,7 +371,7 @@ export const postgresTaskRepository: TaskRepository = {
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}
-				AND user_id = ${userId}
+				AND (user_id = ${userId} OR assignee_id = ${userId})
 				AND deleted_at IS NULL
 		`;
 
@@ -385,7 +390,7 @@ export const postgresTaskRepository: TaskRepository = {
 				last_activity_at = NOW(),
 				updated_at = NOW()
 			WHERE id = ${id}
-				AND user_id = ${userId}
+				AND (user_id = ${userId} OR assignee_id = ${userId})
 				AND deleted_at IS NULL
 		`;
 
@@ -411,7 +416,7 @@ export const postgresTaskRepository: TaskRepository = {
 				result = await sql<{ count: string }[]>`
 					SELECT COUNT(*) as count
 					FROM tasks
-					WHERE user_id = ${userId}
+					WHERE assignee_id = ${userId}
 						AND space_id = ${filter.spaceId}
 						AND deleted_at IS NULL
 				`;
@@ -419,7 +424,7 @@ export const postgresTaskRepository: TaskRepository = {
 				result = await sql<{ count: string }[]>`
 					SELECT COUNT(*) as count
 					FROM tasks
-					WHERE user_id = ${userId}
+					WHERE assignee_id = ${userId}
 						AND space_id = ${filter.spaceId}
 						AND status != 'completed'
 						AND deleted_at IS NULL
@@ -430,14 +435,14 @@ export const postgresTaskRepository: TaskRepository = {
 				result = await sql<{ count: string }[]>`
 					SELECT COUNT(*) as count
 					FROM tasks
-					WHERE user_id = ${userId}
+					WHERE assignee_id = ${userId}
 						AND deleted_at IS NULL
 				`;
 			} else {
 				result = await sql<{ count: string }[]>`
 					SELECT COUNT(*) as count
 					FROM tasks
-					WHERE user_id = ${userId}
+					WHERE assignee_id = ${userId}
 						AND status != 'completed'
 						AND deleted_at IS NULL
 				`;
@@ -451,7 +456,7 @@ export const postgresTaskRepository: TaskRepository = {
 		const rows = await sql<TaskRow[]>`
 			SELECT *
 			FROM tasks
-			WHERE user_id = ${userId}
+			WHERE assignee_id = ${userId}
 				AND space_id = ${spaceId}
 				AND status = 'active'
 				AND deleted_at IS NULL
@@ -501,7 +506,7 @@ export const postgresTaskRepository: TaskRepository = {
 		const rows = await sql<TaskRow[]>`
 			SELECT *
 			FROM tasks
-			WHERE user_id = ${userId}
+			WHERE (user_id = ${userId} OR assignee_id = ${userId})
 				AND ${conversationId} = ANY(linked_conversation_ids)
 				AND deleted_at IS NULL
 			LIMIT 1
@@ -556,7 +561,7 @@ export const postgresTaskRepository: TaskRepository = {
 				parent_task_id, subtask_type, subtask_order,
 				context_summary,
 				source_type, source_conversation_id, area_id,
-				space_id, user_id,
+				space_id, user_id, assignee_id,
 				last_activity_at, created_at, updated_at
 			) VALUES (
 				${id},
@@ -573,6 +578,7 @@ export const postgresTaskRepository: TaskRepository = {
 				${parent.areaId ?? null},
 				${parent.spaceId},
 				${userId},
+				${input.assigneeId ?? userId},
 				${now},
 				${now},
 				${now}
@@ -727,5 +733,32 @@ export const postgresTaskRepository: TaskRepository = {
 		}
 
 		return results;
+	},
+
+	/**
+	 * Full-text search across task title and description
+	 */
+	async search(query: string, userId: string, limit = 20): Promise<Task[]> {
+		const searchTerms = query.trim().split(/\s+/).filter(Boolean);
+		if (searchTerms.length === 0) return [];
+
+		const ilikePattern = `%${query.trim()}%`;
+
+		const rows = await sql<TaskRow[]>`
+			SELECT *
+			FROM tasks
+			WHERE user_id = ${userId}
+				AND deleted_at IS NULL
+				AND (
+					title ILIKE ${ilikePattern}
+					OR description ILIKE ${ilikePattern}
+				)
+			ORDER BY
+				CASE WHEN title ILIKE ${ilikePattern} THEN 0 ELSE 1 END,
+				updated_at DESC
+			LIMIT ${limit}
+		`;
+
+		return rows.map(dbRowToTask);
 	}
 };

@@ -327,13 +327,14 @@ export interface AreaSkillActivation {
   activatedBy: string;
 }
 
-// For context injection (matches ContextDocument pattern)
+// For context injection (hybrid: full content or summary based on size)
 export interface SkillContext {
   id: string;
   name: string;
   description: string;
   content: string;
   summary: string | null;
+  activationMode: SkillActivationMode;  // Needed for injection priority sorting
 }
 ```
 
@@ -699,16 +700,80 @@ ALTER TABLE skills ADD COLUMN platform_version TEXT;   -- Track version for upda
 
 ## 7. System Prompt Integration
 
-### Skill Prompt Generation
+### Injection Strategy: Hybrid (Full Content + Summary Fallback)
 
-Skills integrate into the existing prompt layering system, following the same pattern as documents.
+> **Decision (2026-01-30):** Skills use a **hybrid injection strategy**, NOT the document summary+tool pattern. Skills are behavioral instructions that the AI must follow — they need to be visible in the system prompt for reliable adherence. Documents are reference material looked up on demand. Different usage patterns warrant different injection strategies.
+
+#### Why Not Follow the Document Pattern?
+
+| | Documents | Skills |
+|---|-----------|--------|
+| **AI's relationship** | Reference material — look up *when relevant* | Behavioral instructions — follow *always when active* |
+| **Usage pattern** | Occasional lookup | Continuous adherence |
+| **Failure mode** | AI doesn't cite a fact → minor quality issue | AI doesn't follow methodology → **feature failed** |
+| **Conclusion** | Summary + tool is optimal | Full visibility needed for adherence |
+
+Research (Section 11) shows 50-70% adherence with summaries vs 70-85% with full content visible. For a system whose core value is "consistent AI behavior," that difference matters.
+
+#### Hybrid Injection Rules
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                    HYBRID SKILL INJECTION                                         │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   For each active skill:                                                         │
+│                                                                                  │
+│   Content ≤ 800 tokens?  ──YES──▶  Inject FULL CONTENT in system prompt         │
+│        │                           (inside <skill> tags)                          │
+│        │                                                                         │
+│        └──NO───▶  Inject SUMMARY/DESCRIPTION + tool instruction                  │
+│                   (AI uses read_skill to get full content)                        │
+│                                                                                  │
+│   BUDGET GUARDRAIL:                                                              │
+│   Total skill injection capped at 3000 tokens.                                   │
+│   If active skills exceed budget:                                                │
+│   1. Always-active skills get priority                                           │
+│   2. Shorter skills get priority (more likely to fit)                             │
+│   3. Remaining skills fall back to summary + tool                                │
+│   4. AI informed: "Additional skills available via read_skill tool"              │
+│                                                                                  │
+│   read_skill tool is ALWAYS registered (even for fully-injected skills)          │
+│   as a fallback for mid-conversation re-reads.                                   │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Prompt Caching Economics
+
+Skills in the system prompt benefit from **prefix caching** (Anthropic: 0.1x cost on cache hit). This makes full injection cheaper than it appears:
+
+```
+3 active skills × 500 tokens = 1,500 tokens in system prompt
+
+Message 1:  Cache WRITE (1.25x)  = 1,875 token-equivalents
+Message 2+: Cache HIT (0.1x)    = 150 token-equivalents each
+
+Over a 10-message conversation:
+  Full injection avg:    ~323 tokens/message (cached after msg 1)
+  Summary + tool avg:   ~480 tokens/message (tool results NOT cached)
+
+Full injection is CHEAPER after message 3, AND gives better adherence.
+```
+
+**Why skills are cache-friendly:**
+- Content changes rarely (methodology documents, not live data)
+- Active skills per Area are stable within a conversation
+- Deterministic sort order (by ID) prevents cache-busting from reordering
+
+### Skill Prompt Generation
 
 **Location:** Update `src/lib/config/system-prompts.ts`
 
 ```typescript
 /**
- * Skill context for prompt injection
- * Follows same pattern as ContextDocument
+ * Skill context for prompt injection.
+ * Uses hybrid strategy: full content for short skills, summary for long ones.
  */
 export interface SkillContext {
   id: string;
@@ -716,34 +781,97 @@ export interface SkillContext {
   description: string;
   content: string;
   summary: string | null;
+  activationMode: SkillActivationMode;
+}
+
+// Skill injection budget (tokens). Prevents unbounded prompt growth.
+const SKILL_TOKEN_BUDGET = 3000;
+// Skills under this threshold get full content injection.
+// ~800 tokens ≈ a well-structured skill with workflow + output format + constraints.
+const FULL_INJECTION_THRESHOLD = 800;
+
+/**
+ * Estimate token count from string length.
+ * Rough heuristic: 1 token ≈ 4 characters for English text.
+ */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
 }
 
 /**
- * Generate prompt section for active skills
- * Summaries in prompt, full content via read_skill tool
+ * Generate prompt section for active skills using hybrid injection.
+ *
+ * Strategy:
+ * 1. Sort: always-active first, then by content length (shorter first)
+ * 2. Skills ≤ 800 tokens AND within budget → inject FULL content
+ * 3. Skills > 800 tokens OR over budget → inject summary/description
+ * 4. read_skill tool always available as fallback
  */
 export function getSkillsPrompt(skills: SkillContext[]): string {
   if (!skills || skills.length === 0) return '';
+
+  let tokensUsed = 0;
+  const fullInjection: SkillContext[] = [];
+  const summaryOnly: SkillContext[] = [];
+
+  // Sort: always-active first, then by content length (shorter first)
+  // Deterministic sort by ID as tiebreaker (cache stability)
+  const sorted = [...skills].sort((a, b) => {
+    if (a.activationMode === 'always' && b.activationMode !== 'always') return -1;
+    if (b.activationMode === 'always' && a.activationMode !== 'always') return 1;
+    const lenDiff = a.content.length - b.content.length;
+    if (lenDiff !== 0) return lenDiff;
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const skill of sorted) {
+    const contentTokens = estimateTokens(skill.content);
+    if (contentTokens <= FULL_INJECTION_THRESHOLD
+        && tokensUsed + contentTokens <= SKILL_TOKEN_BUDGET) {
+      fullInjection.push(skill);
+      tokensUsed += contentTokens;
+    } else {
+      summaryOnly.push(skill);
+    }
+  }
 
   let prompt = `
 <active_skills>
 ## Active Skills
 
-You have access to these specialized skills that define methodologies and workflows:`;
+You have specialized skills that define methodologies and workflows you MUST follow:`;
 
-  for (const skill of skills) {
+  // Full content injection (high-adherence path)
+  for (const skill of fullInjection) {
     prompt += `
 
-<skill name="${skill.name}">
-${skill.summary || skill.description}
+<skill name="${skill.name}" injection="full">
+${skill.content}
 </skill>`;
+  }
+
+  // Summary injection (fallback path — use read_skill for full content)
+  if (summaryOnly.length > 0) {
+    prompt += `
+
+The following skills are available via the **read_skill** tool:`;
+
+    for (const skill of summaryOnly) {
+      prompt += `
+
+<skill name="${skill.name}" injection="summary">
+${skill.summary || skill.description}
+(Use read_skill tool to access the full methodology)
+</skill>`;
+    }
   }
 
   prompt += `
 
 **Skill Usage:**
-- Apply active skill methodologies when relevant to the conversation
-- Use **read_skill** tool to access full skill content when you need detailed workflows or steps
+- Follow active skill methodologies for ALL relevant responses — these are instructions, not suggestions
+- For skills shown in full above, apply the workflow directly
+- For summarized skills, use **read_skill** tool to load the full methodology before applying
 - Skills define *how* to work; documents provide *what* to reference
 - If multiple skills apply, combine their principles thoughtfully
 </active_skills>`;
@@ -763,7 +891,7 @@ export function getFocusAreaPrompt(
 ): string {
   // ... existing document handling ...
 
-  // Add skills section
+  // Add skills section (hybrid injection)
   if (skills && skills.length > 0) {
     prompt += getSkillsPrompt(skills);
   }
@@ -774,7 +902,10 @@ export function getFocusAreaPrompt(
 
 ### Tool: read_skill
 
-New tool for AI to access full skill content.
+The `read_skill` tool is **always registered** when skills are active, even for fully-injected skills. It serves as:
+1. **Fallback** for summarized skills (over threshold or over budget)
+2. **Re-read** for fully-injected skills when context window is long and AI needs a refresh
+3. **Trigger-mode** access for skills not yet activated in the conversation
 
 **Location:** `src/lib/server/tools/read-skill.ts`
 
@@ -783,7 +914,7 @@ export const READ_SKILL_TOOL = {
   type: 'function',
   function: {
     name: 'read_skill',
-    description: 'Read the full content of an active skill to access detailed workflows, steps, and methodologies',
+    description: 'Read the full content of an active skill to access detailed workflows, steps, and methodologies. Use this for skills shown as summaries, or to re-read a skill\'s full methodology.',
     parameters: {
       type: 'object',
       properties: {
@@ -820,7 +951,7 @@ Update `ResponseContextBadge.svelte` to show active skills:
 ```typescript
 interface Props {
   // ... existing props ...
-  activeSkills?: Array<{ name: string }>;
+  activeSkills?: Array<{ name: string; injection: 'full' | 'summary' }>;
 }
 ```
 
@@ -1296,14 +1427,17 @@ Layer techniques that require no infrastructure changes:
 
 | Approach | Est. Adherence | Token Cost | Complexity |
 |----------|----------------|------------|------------|
-| Baseline (summary + tool) | 50-70% | 1x | Low |
-| + Structured templates | 60-75% | 1x | Low |
-| + Self-critique loop | 70-85% | 1.3x | Low |
-| + Extended thinking | 75-90% | 1.5-2x | Low |
-| + Post-gen validation | 85-95% | 1.5x + retries | Medium |
+| Summary + tool (document pattern) | 50-70% | 1x | Low |
+| **Hybrid injection (V1 baseline)** | **65-80%** | **~1x (cached)** | **Low** |
+| + Structured templates | 70-85% | ~1x | Low |
+| + Self-critique loop | 80-90% | 1.3x | Low |
+| + Extended thinking | 85-95% | 1.5-2x | Low |
+| + Post-gen validation | 90-97% | 1.5x + retries | Medium |
 | + Structured outputs | 95-100% (structure) | 1x | Medium |
 
-**V1 Target: 75-85% adherence** with layers 1-3, no infrastructure changes.
+**V1 baseline: Hybrid injection** — full content for skills ≤800 tokens (most skills), summary + tool for oversized skills. Budget cap at 3000 tokens. Prompt caching makes full injection cost-neutral after message 3.
+
+**V1 Target: 80-90% adherence** with hybrid injection + structured templates + self-critique (layers 1-3).
 
 ---
 
@@ -1414,14 +1548,21 @@ Documents are **reference material** (facts, data, specifications). Skills are *
 3. **Conflict Resolution**: When methodologies conflict, resolution is explicit
 4. **Reusability**: Skills are designed to be applied across contexts
 
-### Why Summary + Tool Pattern?
+### Why Hybrid Injection (Not Pure Summary + Tool)?
 
-Same rationale as documents:
+> **Updated 2026-01-30:** Originally specified as summary + tool (matching documents). Changed to hybrid injection after analyzing the fundamental difference between reference material and behavioral instructions.
 
-1. **Token Efficiency**: Only inject summary (~200 tokens) into context
-2. **On-Demand Detail**: AI calls `read_skill` when it needs full workflow
-3. **Context Window Management**: Scale to many skills without context overflow
-4. **Caching**: Stable summaries maximize prompt cache hits
+Skills are **instructions the AI must follow**, not reference material it looks up. The document pattern optimizes for token efficiency at the cost of adherence. For Skills, adherence IS the feature.
+
+**Hybrid injection** (full content for ≤800 token skills, summary for larger ones):
+
+1. **Adherence**: Full content visibility → 65-80% baseline (vs 50-70% for summary-only)
+2. **Cache economics**: Full content in system prompt gets prefix caching (0.1x after msg 1). Tool results in message history are NOT prefix-cached. Full injection is actually *cheaper* after 3 messages.
+3. **Latency**: No tool round-trip for the common case (most skills are ≤800 tokens)
+4. **Graceful degradation**: 3000-token budget cap prevents unbounded growth. Oversized/overflow skills automatically fall back to summary + tool.
+5. **Tool still available**: `read_skill` always registered for re-reads, trigger-mode skills, and summarized overflow skills
+
+The key insight: **prompt caching makes the "expensive" approach cheaper than the "efficient" approach** for content that doesn't change within a conversation. Skills are the most cache-friendly content in the system prompt.
 
 ### Why Space-Level First?
 

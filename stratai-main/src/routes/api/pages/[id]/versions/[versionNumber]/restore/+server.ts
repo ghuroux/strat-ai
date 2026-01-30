@@ -16,6 +16,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 
 /**
  * POST /api/pages/:id/versions/:versionNumber/restore
@@ -36,6 +37,18 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 
 	try {
 		const page = await postgresPageRepository.restoreVersion(id, versionNumber, userId);
+
+		if (page) {
+			// Log audit event
+			postgresAuditRepository.logEvent(
+				userId, 'page_version_restored', 'page', id, 'restore_version',
+				{
+					restored_version: versionNumber,
+					current_version_before: page.currentVersion ?? 1
+				},
+				locals.session.organizationId
+			);
+		}
 
 		if (!page) {
 			return json({ error: 'Page or version not found' }, { status: 404 });

@@ -89,7 +89,21 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 
 > See `docs/features/CONTEXT_TRANSPARENCY.md` Phase 2 for full specification
 
-### Features
+### 2.0 Enhanced Area Creation Modal
+
+#### Completed ✅
+- [x] Visibility selector in Create Area modal (Open / Private radio group)
+- [x] Default based on space type: org space → private, personal → open
+- [x] "Recommended" badge for private option in org spaces
+- [x] Contextual privacy hint for documents when Private selected
+- [x] `isRestricted` wired through type → API → repository → database
+
+#### Remaining
+- [ ] AreaModal light/dark theme support — modal uses scoped dark CSS with no `html.light` overrides. Needs full light mode pass across entire modal (not just visibility selector). See `DESIGN-SYSTEM.md`.
+
+### 2.1 Context Snapshot Modal
+
+#### Features
 - [ ] ContextSnapshotModal - appears on first message in NEW conversation
 - [ ] Shows: Area notes, active documents, available documents, team context, related tasks
 - [ ] Quick activate/deactivate documents directly from modal
@@ -98,7 +112,7 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 - [ ] Mobile responsive (bottom sheet pattern)
 - [ ] Light/dark theme support
 
-### Acceptance Criteria (Key)
+#### Acceptance Criteria (Key)
 - [ ] Modal ONLY appears for new conversations (no messages yet)
 - [ ] "Available but not activated" section highlights unactivated Space documents
 - [ ] Preference persisted in localStorage: `stratai-context-modal-dismissed-{type}-{id}`
@@ -215,7 +229,9 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 ## Pages System: Future Enhancements
 
 ### Image Upload
-- [ ] Phase 1: Base64 in JSONB (MVP)
+- [x] Phase 1: Base64 in TEXT field with `content_type` discriminator ✅ (2026-01-26)
+- [x] AI-generated descriptions via Haiku 4.5 vision ✅ (2026-01-26)
+- [x] Vision context injection for capable models ✅ (2026-01-26)
 - [ ] Paste from clipboard support
 - [ ] Phase 2: Page assets table (production)
 
@@ -231,13 +247,36 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 - [x] Context loading: `findPagesInContext` JOINs `page_versions` when `context_version_number` is set
 - [x] Bonus: Added "Editing v{N}" indicator, pinned context badge, discard changes flow, ContextPanel pinned state
 
+### ~~Audit Trail & Activity Log (Page Lifecycle Phase 5)~~ ✅ Tier 1+2 Complete
+
+> See `docs/features/PAGE_AUDIT_TRAIL.md` for full specification
+
+**Tier 1 — Core Compliance** ✅ (2026-01-30):
+- [x] 16 event types covering full page lifecycle
+- [x] Wire `logEvent()` in all page API endpoints (9 endpoints)
+- [x] View deduplication (1 per user/page/day)
+- [x] Populate `organization_id` on events
+- [x] Backfill `organizationId` in existing sharing audit calls
+
+**Tier 2 — Usability** ✅ (2026-01-30):
+- [x] Activity Log accessible to page owners (not just admins)
+- [x] "Lifecycle" filter tab (finalize, unlock, restore, create, delete)
+- [x] Formatters and icons for all 16 event types
+- [x] Expandable metadata details for rich events (word counts, context state, summaries)
+
+**Tier 3 — Enterprise** (Future):
+- [ ] Immutable audit table (DB rules preventing UPDATE/DELETE)
+- [ ] Retention policy (13-month active, 7-year archive)
+- [ ] IP/User-Agent capture
+- [ ] Organization audit dashboard + export
+
 ### Editor UX Polish
 
 | Priority | Items | Status |
 |----------|-------|--------|
-| P1 (High) | Undo/redo buttons, paragraph option, link modal | Planned |
-| P2 (Medium) | Title input auto-select, clear formatting, visibility confirm | Planned |
-| P3 (Low) | Text alignment, shortcuts ref, auto-save indicator | Planned |
+| P1 (High) | Undo/redo buttons, paragraph option, link modal | ✅ Complete |
+| P2 (Medium) | Title input auto-select, clear formatting, visibility confirm | ✅ Complete |
+| P3 (Low) | Text alignment, shortcuts ref | Remaining (auto-save indicator ✅) |
 | P4 (Future) | Drag handles, link click-edit | Future |
 
 ---
@@ -401,4 +440,4 @@ Phase 1 builds ambient awareness of what context the AI has access to.
 
 ---
 
-*Last Updated: January 29, 2026*
+*Last Updated: January 30, 2026*

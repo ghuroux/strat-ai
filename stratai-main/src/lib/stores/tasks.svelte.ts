@@ -753,6 +753,7 @@ class TaskStore {
 					title: input.title,
 					subtaskType: input.subtaskType ?? 'conversation',
 					priority: input.priority ?? 'normal',
+					assigneeId: input.assigneeId,
 					sourceConversationId: input.sourceConversationId,
 					contextSummary: input.contextSummary // Rich context from Plan Mode
 				})

@@ -263,7 +263,7 @@ Don't revisit without good reason:
 
 | Decision | Rationale |
 |----------|-----------|
-| LiteLLM for routing | Flexible, multi-provider, virtual keys |
+| LiteLLM for routing (transitional) | Flexible multi-provider proxy for MVP; will transition to direct provider SDKs (see below) |
 | Svelte 5 runes | Modern reactivity, cleaner code |
 | PostgreSQL | Enterprise-ready, supports team features |
 | AWS Bedrock us-east-1 | Max model availability; use `us.*` inference profile IDs |
@@ -329,6 +329,12 @@ Don't revisit without good reason:
 | Image descriptions via vision AI | Generate ~250 token AI description at upload time using Haiku 4.5 vision. Stored as `summary` field - same pattern as text document summaries |
 | Vision context injection | Images injected as vision content blocks in user message (not system prompt text). `modelSupportsVision()` helper gates injection |
 | Vision tokens ≠ base64 tokens | Vision APIs bill by pixel dimensions (~1-3K tokens), NOT base64 string length (~1.3M "tokens"). Prompt Inspector uses `estimateVisionTokens()` for accuracy |
+| Centralized token service | Single `ensureValidToken()` entry point for OAuth token refresh. Eliminates duplicated inline refresh logic. Adds mutex, retry, proactive refresh, Azure AD error parsing. |
+| Proactive token refresh on page load | Frontend calls `/api/integrations/calendar/health` on every page load (fire-and-forget). Keeps tokens alive by refreshing before expiry, preventing "please reconnect" UX. |
+| Azure AD error code parsing | Parse AADSTS error codes to distinguish permanent failures (require user reconnect) from transient ones (retry with backoff). 13 known codes mapped. |
+| Token refresh mutex | In-memory `Map<integrationId, Promise>` prevents concurrent refresh race conditions. Azure AD rotates refresh tokens on use; without mutex, concurrent requests invalidate each other. |
+| Direct provider SDKs (future) | Replace LiteLLM with 4 direct integrations: Anthropic, OpenAI, Google (premium providers) + AWS Bedrock (open-source in VPC for enterprise data sovereignty). LiteLLM has proven unreliable for streaming usage (Bug #4905 — Anthropic/Gemini), cache metrics, and thinking content normalization. Direct SDKs give native streaming, accurate usage/billing, proper caching, and eliminate single-proxy dependency. Bedrock enables "data never leaves your environment" enterprise story. Envisioned end state: purpose-built Go routing service — single internal API to SvelteKit, provider-native SDKs, accurate tokenization, stateless/scalable, VPC-deployable. LiteLLM stays for now (abstraction value is real at this stage); transition timing informed by `is_estimated` ratio in `llm_usage` and workaround frequency. |
+| Usage estimation fallback | When LiteLLM doesn't return streaming usage (Anthropic/Gemini), estimate with js-tiktoken cl100k_base. `is_estimated` flag in `llm_usage` tracks data quality. Cache tokens set to 0 when estimated. ~90% accuracy for English text, less for code/non-Latin. |
 
 ---
 
@@ -344,6 +350,7 @@ Don't revisit without good reason:
 - [ ] No error boundaries (add before production)
 - [ ] Missing favicon.png (404 errors in console)
 - [x] **✅ AUTO router model name mismatch - RESOLVED** - `model-tiers.ts` had stale model names (`gemini-pro`, `gpt-5`, `gemini-2.0-flash-lite`) not matching `litellm-config.yaml`. Fixed to use actual model names. Added `model-tiers.ts` to "Adding a New Model" checklist.
+- [x] **✅ Calendar daily reconnection - RESOLVED** - Inline token refresh had no mutex, no retry, no proactive refresh. Single Azure AD transient error would mark integration as 'error', forcing manual reconnect. Fixed with centralized `token-service.ts` + health check endpoint + page-load proactive refresh.
 
 ---
 
@@ -369,7 +376,80 @@ Don't revisit without good reason:
 
 > Full history: `SESSIONS.md`
 
-### Latest: 2026-01-26 (Image Document Support)
+### Latest: 2026-01-30 (Page Lifecycle Phase 4 — Polish)
+
+**Completed:**
+
+*Context-Aware Unlock:*
+- `context_version_number` column preserves existing DB constraint `chk_context_requires_finalized`
+- UnlockPageModal shows "Keep v{N} in AI context while editing" checkbox when page is in context
+- Two-query pattern in `findPagesInContext`: normal finalized pages + frozen-pinned pages (JOINs `page_versions`)
+- AI sees pinned version content (not draft) via frozen version projection
+
+*"Editing v{N}" Indicator:*
+- PageHeader shows amber "Editing v{N}" badge when editing an unlocked finalized page
+- Companion "v{N} in Context" badge when context version is pinned
+
+*Discard Changes:*
+- DiscardChangesModal (new) follows RestoreVersionModal pattern
+- Reverts to last finalized version via `restoreVersion` + editor content sync
+- Triple-gated: only visible when `isDirty && status === 'shared' && currentVersion >= 1`
+
+*ContextPanel Integration:*
+- Pinned pages shown with "pinned · editing" amber label
+- Toggle disabled for pinned pages (must finalize to change context)
+- Chat context annotates frozen pages: `(v{N}, being updated)`
+
+**Key Architecture Decision:**
+- `context_version_number INTEGER` (nullable) on pages table — when NOT NULL, frozen version served to AI while page is being edited. Avoids weakening existing `chk_context_requires_finalized` constraint.
+
+**Files Created:** 3 new files (migration, DiscardChangesModal, plan)
+**Files Modified:** 12 files (types, repo, store, API, 5 components, chat server, schema, backlog)
+
+---
+
+### Previous: 2026-01-30 (Calendar Token Lifecycle Hardening)
+
+**Completed:**
+
+*Centralized Token Service (token-service.ts — new):*
+- Single `ensureValidToken()` entry point for all OAuth token refresh
+- In-memory mutex prevents concurrent refresh race conditions (Azure AD rotates refresh tokens)
+- Exponential backoff retry (3 attempts, 500ms → 1s delays) for transient failures
+- Azure AD AADSTS error code parsing (13 known codes) — distinguishes "retry" from "reconnect"
+- Proactive refresh with 5-minute buffer (refreshes before expiry, not after)
+
+*Health Check Endpoint (/api/integrations/calendar/health — new):*
+- Lightweight GET endpoint called by frontend on every page load
+- Triggers proactive token refresh server-side
+- Returns status: healthy / refreshed / disconnected / error
+
+*Refactored Token Refresh Callers:*
+- `helpers.ts` — removed inline refresh, delegates to token service
+- `chat/+server.ts` — removed 40+ lines of inline refresh, delegates to token service
+- Removed unused `postgresIntegrationCredentialsRepository` and `refreshAccessToken` imports from chat
+
+*Frontend Health Check (+layout.svelte):*
+- `checkCalendarHealth()` — fire-and-forget on every authenticated page load
+- Follows same pattern as existing `syncTimezone()` (silent, non-blocking)
+
+**Key Learnings:**
+- Azure AD Conditional Access policies (sign-in frequency) are the #1 cause of forced daily re-auth in enterprise tenants — but requires Premium license. StratGroup doesn't have it, so the issue was purely code-side.
+- Azure AD rotates refresh tokens on use — concurrent requests using the same old refresh token will fail the second request. Mutex is essential.
+- Token refresh should be proactive (before expiry) not reactive (after failure). A 5-minute buffer eliminates the window where a request can hit an expired token.
+- Azure AADSTS error codes are the key to intelligent retry — some errors (AADSTS700082: expired) are permanent, others (AADSTS500011: resource not found) are transient.
+
+**Documentation Updated:**
+- `CALENDAR_INTEGRATION.md` — New "Token Lifecycle Hardening" section with architecture diagram
+- `CLAUDE.md` — 4 decision log entries, session log, known issues update
+- `creating-endpoints/SKILL.md` — OAuth token management pattern reference
+
+**Files Created:** 2 new files
+**Files Modified:** 4 files
+
+---
+
+### Previous: 2026-01-26 (Image Document Support)
 
 **Completed:**
 

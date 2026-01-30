@@ -362,6 +362,44 @@ CREATE UNIQUE INDEX idx_area_memberships_user_unique ON area_memberships(area_id
 CREATE UNIQUE INDEX idx_area_memberships_group_unique ON area_memberships(area_id, group_id) WHERE group_id IS NOT NULL;
 
 -- ============================================================================
+-- 7b. SKILLS
+-- ============================================================================
+
+CREATE TABLE skills (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    space_id TEXT REFERENCES spaces(id) ON DELETE CASCADE,
+    area_id TEXT REFERENCES areas(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    content TEXT NOT NULL,
+    summary TEXT,
+    activation_mode TEXT NOT NULL DEFAULT 'manual'
+        CHECK (activation_mode IN ('always', 'trigger', 'manual')),
+    triggers TEXT[],
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT skill_has_owner CHECK (
+        (space_id IS NOT NULL AND area_id IS NULL) OR
+        (space_id IS NULL AND area_id IS NOT NULL)
+    )
+);
+
+CREATE INDEX idx_skills_space ON skills(space_id) WHERE space_id IS NOT NULL;
+CREATE INDEX idx_skills_area ON skills(area_id) WHERE area_id IS NOT NULL;
+
+CREATE TABLE area_skill_activations (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    area_id TEXT NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
+    skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    activated_at TIMESTAMPTZ DEFAULT NOW(),
+    activated_by TEXT NOT NULL,
+    UNIQUE(area_id, skill_id)
+);
+
+CREATE INDEX idx_area_skill_activations ON area_skill_activations(area_id);
+
+-- ============================================================================
 -- 8. CONVERSATIONS
 -- ============================================================================
 
@@ -394,6 +432,7 @@ CREATE INDEX idx_conversations_tags ON conversations USING GIN(tags) WHERE delet
 CREATE INDEX idx_conversations_messages_gin ON conversations USING GIN(messages jsonb_path_ops);
 CREATE INDEX idx_conversations_last_viewed ON conversations(user_id, last_viewed_at DESC NULLS LAST) WHERE deleted_at IS NULL;
 CREATE INDEX idx_conversations_space_last_viewed ON conversations(user_id, space_id, last_viewed_at DESC NULLS LAST) WHERE deleted_at IS NULL AND space_id IS NOT NULL;
+CREATE INDEX idx_conversations_search ON conversations USING GIN(to_tsvector('english', COALESCE(title, ''))) WHERE deleted_at IS NULL;
 
 CREATE TRIGGER update_conversations_updated_at
     BEFORE UPDATE ON conversations
@@ -431,6 +470,7 @@ CREATE INDEX idx_documents_filename_space ON documents(space_id, filename) WHERE
 CREATE INDEX idx_documents_updated ON documents(user_id, updated_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_documents_visibility ON documents(visibility) WHERE deleted_at IS NULL;
 CREATE INDEX idx_documents_content_type ON documents(space_id, content_type) WHERE deleted_at IS NULL;
+CREATE INDEX idx_documents_search ON documents USING GIN(to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(filename, '') || ' ' || COALESCE(summary, ''))) WHERE deleted_at IS NULL;
 
 CREATE TRIGGER documents_updated_at
     BEFORE UPDATE ON documents
@@ -458,6 +498,7 @@ CREATE INDEX idx_doc_shares_shared_by ON document_area_shares(shared_by);
 CREATE TABLE tasks (
     id TEXT PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id),
+    assignee_id UUID REFERENCES users(id) ON DELETE SET NULL,
     space_id TEXT NOT NULL,
     area_id TEXT REFERENCES areas(id) ON DELETE SET NULL,
     title TEXT NOT NULL,
@@ -503,6 +544,9 @@ CREATE INDEX idx_tasks_planning ON tasks(user_id, space_id) WHERE status = 'plan
 CREATE INDEX idx_tasks_estimated_effort ON tasks(estimated_effort) WHERE estimated_effort IS NOT NULL;
 CREATE INDEX idx_tasks_source_document ON tasks(source_assist_id) WHERE source_type = 'document' AND deleted_at IS NULL;
 CREATE INDEX idx_tasks_source_meeting ON tasks(source_meeting_id) WHERE source_meeting_id IS NOT NULL AND deleted_at IS NULL;
+CREATE INDEX idx_tasks_assignee ON tasks(assignee_id, space_id, status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_tasks_creator_delegated ON tasks(user_id, space_id) WHERE deleted_at IS NULL AND user_id != assignee_id;
+CREATE INDEX idx_tasks_search ON tasks USING GIN(to_tsvector('english', COALESCE(title, '') || ' ' || COALESCE(description, ''))) WHERE deleted_at IS NULL;
 
 CREATE TRIGGER tasks_updated_at
     BEFORE UPDATE ON tasks
@@ -671,7 +715,7 @@ CREATE TABLE email_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-    email_type TEXT NOT NULL CHECK (email_type IN ('password_reset', 'email_verification', 'team_invite', 'space_invite', 'notification', 'welcome')),
+    email_type TEXT NOT NULL CHECK (email_type IN ('password_reset', 'email_verification', 'team_invite', 'space_invite', 'notification', 'welcome', 'calendar_connect', 'task_assigned')),
     recipient_email TEXT NOT NULL,
     subject TEXT NOT NULL,
     sendgrid_message_id TEXT,
@@ -774,6 +818,7 @@ CREATE TABLE llm_usage (
     cache_creation_tokens INTEGER DEFAULT 0,
     cache_read_tokens INTEGER DEFAULT 0,
     estimated_cost_millicents INTEGER DEFAULT 0,
+    is_estimated BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -860,7 +905,7 @@ CREATE TABLE game_scores (
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT game_scores_score_positive CHECK (score >= 0),
-    CONSTRAINT game_scores_valid_game_type CHECK (game_type IN ('snake', 'wordle', 'tictactoe'))
+    CONSTRAINT game_scores_valid_game_type CHECK (game_type IN ('snake', 'wordle', 'tictactoe', 'prompt-runner'))
 );
 
 CREATE INDEX idx_game_scores_org_leaderboard ON game_scores(org_id, game_type, score DESC);
@@ -990,7 +1035,9 @@ INSERT INTO schema_migrations (version) VALUES
     ('20260120_001_game_scores'),
     ('20260127_001_integrations_infrastructure'),
     ('20260128_001_page_lifecycle'),
-    ('20260128_002_page_context');
+    ('20260128_002_page_context'),
+    ('20260131_001_task_assignment'),
+    ('20260131_003_prompt_runner_game_type');
 
 -- ============================================================================
 -- DONE!

@@ -13,6 +13,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 
 interface ContextBody {
 	inContext: boolean;
@@ -51,6 +52,21 @@ export const PATCH: RequestHandler = async ({ params, locals, request }) => {
 
 	try {
 		const page = await postgresPageRepository.setPageInContext(id, body.inContext, userId);
+
+		if (page) {
+			// Log audit event
+			postgresAuditRepository.logEvent(
+				userId,
+				body.inContext ? 'page_context_added' : 'page_context_removed',
+				'page', id,
+				body.inContext ? 'add_to_context' : 'remove_from_context',
+				{
+					version_number: page.currentVersion ?? 1,
+					area_id: page.areaId
+				},
+				locals.session.organizationId
+			);
+		}
 
 		if (!page) {
 			return json(

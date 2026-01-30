@@ -18,6 +18,7 @@
 	import StarterKit from '@tiptap/starter-kit';
 	import Placeholder from '@tiptap/extension-placeholder';
 	import Underline from '@tiptap/extension-underline';
+	import TextAlign from '@tiptap/extension-text-align';
 	import Link from '@tiptap/extension-link';
 	import TaskList from '@tiptap/extension-task-list';
 	import TaskItem from '@tiptap/extension-task-item';
@@ -440,6 +441,9 @@
 					placeholder: isReadOnly ? '' : 'Start typing your content...'
 				}),
 				Underline,
+				TextAlign.configure({
+					types: ['heading', 'paragraph']
+				}),
 				Link.configure({
 					openOnClick: false,
 					HTMLAttributes: {
@@ -517,13 +521,18 @@
 			}
 		});
 
-		// Add keyboard shortcut for save (disabled for viewers)
+		// Add keyboard shortcuts (save, select all)
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if ((e.metaKey || e.ctrlKey) && e.key === 's') {
 				e.preventDefault();
 				if (!isReadOnly && !isPreviewMode) {
 					handleSave();
 				}
+			}
+			// Redirect Cmd+A to select editor content only (not entire page)
+			if ((e.metaKey || e.ctrlKey) && e.key === 'a' && editor) {
+				e.preventDefault();
+				editor.chain().focus().selectAll().run();
 			}
 		};
 		document.addEventListener('keydown', handleKeyDown);

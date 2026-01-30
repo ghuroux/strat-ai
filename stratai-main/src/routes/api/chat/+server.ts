@@ -23,10 +23,11 @@ import { generateSummaryOnDemand, needsSummarization } from '$lib/server/summari
 import { commerceTools, executeCommerceTool, isCommerceTool } from '$lib/server/commerce/tools';
 import type { CommerceMessageContent } from '$lib/types/commerce';
 import { postgresIntegrationsRepository } from '$lib/server/persistence/integrations-postgres';
-import { postgresIntegrationCredentialsRepository } from '$lib/server/persistence/integration-credentials-postgres';
 import { calendarTools, isCalendarTool, executeCalendarTool } from '$lib/server/integrations/providers/calendar/tools';
 import { emailTools, isEmailTool, executeEmailTool } from '$lib/server/integrations/providers/calendar/email-tools';
-import { refreshAccessToken, tokensToCredentials } from '$lib/server/integrations/providers/calendar/oauth';
+import { ensureValidToken } from '$lib/server/integrations/providers/calendar/token-service';
+import { estimatePromptTokens, buildEstimatedUsage } from '$lib/server/usage-fallback';
+import { postgresSkillsRepository } from '$lib/server/persistence/skills-postgres';
 
 /**
  * Context for tracking usage across streaming responses
@@ -51,6 +52,7 @@ async function saveUsage(
 		totalTokens: number;
 		cacheCreationTokens?: number;
 		cacheReadTokens?: number;
+		isEstimated?: boolean;
 	}
 ): Promise<void> {
 	try {
@@ -72,10 +74,12 @@ async function saveUsage(
 			totalTokens: usage.totalTokens,
 			cacheCreationTokens: usage.cacheCreationTokens || 0,
 			cacheReadTokens: usage.cacheReadTokens || 0,
-			estimatedCostMillicents
+			estimatedCostMillicents,
+			isEstimated: usage.isEstimated || false
 		});
 
-		debugLog('USAGE', `Saved: ${usage.totalTokens} tokens, ${context.model}, cost: ${estimatedCostMillicents} millicents`);
+		const estimatedTag = usage.isEstimated ? ' [estimated]' : '';
+		debugLog('USAGE', `Saved: ${usage.totalTokens} tokens, ${context.model}, cost: ${estimatedCostMillicents} millicents${estimatedTag}`);
 	} catch (error) {
 		// Log but don't fail the request - usage tracking is non-critical
 		console.error('[Usage] Failed to save usage:', error);
@@ -789,6 +793,42 @@ const readDocumentToolOpenAI = {
 	}
 };
 
+// Skill reading tool - Anthropic format
+// Enables AI to access full skill content on-demand (prompts may contain summaries)
+const readSkillToolAnthropic: ToolDefinition = {
+	name: 'read_skill',
+	description: 'Read the full content of an active skill methodology. Use this when a skill is shown as summary-only and you need the complete instructions, rubric, or workflow to apply it properly.',
+	input_schema: {
+		type: 'object',
+		properties: {
+			skill_name: {
+				type: 'string',
+				description: 'The name of the skill to read (as listed in active_skills)'
+			}
+		},
+		required: ['skill_name']
+	}
+};
+
+// Skill reading tool - OpenAI format
+const readSkillToolOpenAI = {
+	type: 'function' as const,
+	function: {
+		name: 'read_skill',
+		description: 'Read the full content of an active skill methodology. Use this when a skill is shown as summary-only and you need the complete instructions, rubric, or workflow to apply it properly.',
+		parameters: {
+			type: 'object',
+			properties: {
+				skill_name: {
+					type: 'string',
+					description: 'The name of the skill to read (as listed in active_skills)'
+				}
+			},
+			required: ['skill_name']
+		}
+	}
+};
+
 // Commerce tools - OpenAI format (type: 'function', function.parameters)
 // Mirrors the Anthropic-format tools in commerce/tools.ts
 const commerceToolsOpenAI = [
@@ -1095,8 +1135,8 @@ interface DocumentInfo {
  * Optionally includes commerce tools for shopping functionality
  * Optionally includes calendar tools for meeting/scheduling functionality
  */
-function getToolsForModel(model: string, options: { includeDocumentTool?: boolean; includeCommerceTools?: boolean; includeCalendarTools?: boolean; includeEmailTools?: boolean } = {}): ToolDefinition[] {
-	const { includeDocumentTool = false, includeCommerceTools = false, includeCalendarTools = false, includeEmailTools = false } = options;
+function getToolsForModel(model: string, options: { includeDocumentTool?: boolean; includeSkillTool?: boolean; includeCommerceTools?: boolean; includeCalendarTools?: boolean; includeEmailTools?: boolean } = {}): ToolDefinition[] {
+	const { includeDocumentTool = false, includeSkillTool = false, includeCommerceTools = false, includeCalendarTools = false, includeEmailTools = false } = options;
 	const lowerModel = model.toLowerCase();
 
 	// Check if it's an Anthropic/Claude model
@@ -1104,6 +1144,9 @@ function getToolsForModel(model: string, options: { includeDocumentTool?: boolea
 		const tools = [webSearchToolAnthropic];
 		if (includeDocumentTool) {
 			tools.push(readDocumentToolAnthropic);
+		}
+		if (includeSkillTool) {
+			tools.push(readSkillToolAnthropic);
 		}
 		if (includeCommerceTools) {
 			tools.push(...commerceTools);
@@ -1122,6 +1165,9 @@ function getToolsForModel(model: string, options: { includeDocumentTool?: boolea
 	const tools: any[] = [webSearchToolOpenAI];
 	if (includeDocumentTool) {
 		tools.push(readDocumentToolOpenAI);
+	}
+	if (includeSkillTool) {
+		tools.push(readSkillToolOpenAI);
 	}
 	if (includeCommerceTools) {
 		// Use OpenAI-formatted commerce tools for non-Claude models
@@ -1387,57 +1433,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			sessionUserId,
 			'calendar'
 		);
-		if (calendarIntegration && calendarIntegration.status === 'connected') {
-			// Check if access token is still valid
-			const hasValidToken = await postgresIntegrationCredentialsRepository.hasValidAccessToken(calendarIntegration.id);
+		if (calendarIntegration && calendarIntegration.status !== 'disconnected') {
+			// Use centralized token service (handles proactive refresh, retry, mutex)
+			const tokenResult = await ensureValidToken(calendarIntegration.id);
 
-			if (hasValidToken) {
-				// Token is valid, use it directly
-				const accessTokenCred = await postgresIntegrationCredentialsRepository.getDecryptedCredential(
-					calendarIntegration.id,
-					'access_token'
-				);
-				if (accessTokenCred) {
-					calendarAccessToken = accessTokenCred.value;
-					debugLog('CHAT', 'Calendar integration connected - using valid access token');
-				}
+			if (tokenResult.success) {
+				calendarAccessToken = tokenResult.accessToken!;
+				debugLog('CHAT', 'Calendar integration connected - valid access token');
 			} else {
-				// Token expired, try to refresh
-				debugLog('CHAT', 'Calendar access token expired, attempting refresh...');
-				const refreshTokenCred = await postgresIntegrationCredentialsRepository.getDecryptedCredential(
-					calendarIntegration.id,
-					'refresh_token'
-				);
-
-				if (refreshTokenCred) {
-					try {
-						// Refresh the tokens
-						const newTokens = await refreshAccessToken(refreshTokenCred.value);
-						const newCredentials = tokensToCredentials(newTokens);
-
-						// Store the new credentials
-						for (const cred of newCredentials) {
-							await postgresIntegrationCredentialsRepository.upsert({
-								integrationId: calendarIntegration.id,
-								credentialType: cred.type,
-								value: cred.value,
-								expiresAt: cred.expiresAt,
-								scope: cred.scope
-							});
-						}
-
-						// Use the new access token
-						calendarAccessToken = newTokens.accessToken;
-						debugLog('CHAT', 'Calendar tokens refreshed successfully');
-					} catch (refreshError) {
-						console.error('Failed to refresh calendar token:', refreshError);
-						// Mark integration as needing reconnection
-						await postgresIntegrationsRepository.updateStatus(calendarIntegration.id, 'error');
-						debugLog('CHAT', 'Calendar token refresh failed - user needs to reconnect');
-					}
-				} else {
-					debugLog('CHAT', 'No refresh token available for calendar');
-				}
+				debugLog('CHAT', `Calendar token unavailable: ${tokenResult.error}`);
 			}
 		}
 	} catch (error) {
@@ -1713,6 +1717,17 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				} catch (pageError) {
 					console.warn('Failed to load pages in context:', pageError);
 				}
+
+				// Load active skills for this area
+				try {
+					const activeSkills = await postgresSkillsRepository.getActiveSkillsForArea(areaId);
+					if (activeSkills.length > 0) {
+						focusAreaContext.skills = activeSkills;
+						debugLog('CHAT', `Loaded ${activeSkills.length} skill(s) for area "${focusArea.name}"`);
+					}
+				} catch (skillError) {
+					console.warn('Failed to load skills:', skillError);
+				}
 			}
 		} catch (error) {
 			// Log but don't fail - focus area context is optional enhancement
@@ -1905,12 +1920,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// 1. Web search is enabled
 		// 2. Reference documents exist (enables on-demand document reading via read_document tool)
 		//    - This is critical for cost optimization: prompts contain summaries, tool provides full content
+		// 3. Active skills exist (enables read_skill tool for summary-injected skills)
 		const hasReferenceDocuments =
 			(focusAreaContext?.contextDocuments?.length ?? 0) > 0 ||
 			(planModeContext?.context?.documents?.length ?? 0) > 0 ||
 			(spaceContext?.contextDocuments?.length ?? 0) > 0;
+		const hasActiveSkills = (focusAreaContext?.skills?.length ?? 0) > 0;
 		const hasCalendarAccess = !!calendarAccessToken;
-		const needsToolHandling = searchEnabled || hasReferenceDocuments || hasCalendarAccess;
+		const needsToolHandling = searchEnabled || hasReferenceDocuments || hasActiveSkills || hasCalendarAccess;
 
 		if (needsToolHandling) {
 			return await handleChatWithTools(cleanBody, effectiveThinkingEnabled, space, assistContext, focusedTaskWithPlanningContext, planModeContext, focusAreaContext, spaceContext, sessionUserId, locals.session.organizationId, routingDecision, userTimezone, searchEnabled, calendarAccessToken);
@@ -2010,7 +2027,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			cacheRead: cacheRead ? parseInt(cacheRead, 10) : 0
 		};
 
-		return streamResponse(litellmResponse, effectiveThinkingEnabled, usageContext, cacheHeaders, routingDecision);
+		// Pre-compute prompt token estimate for fallback when provider doesn't return usage
+		const promptTokenEstimate = estimatePromptTokens(validatedMessages);
+
+		return streamResponse(litellmResponse, effectiveThinkingEnabled, usageContext, cacheHeaders, routingDecision, promptTokenEstimate);
 
 	} catch (err) {
 		console.error('Chat endpoint error:', err);
@@ -2146,11 +2166,13 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 				const includeCalendarTools = !!calendarAccessToken;
 				// Enable email tools if user has Microsoft integration connected (same token)
 				const includeEmailTools = !!calendarAccessToken;
+				// Enable skill reading tool if area has active skills
+				const hasSkills = !!(focusArea?.skills && focusArea.skills.length > 0);
 				const toolRequestOptions: typeof body & { max_tokens?: number } = {
 					...body,
 					messages: finalMessages,
 					stream: false,
-					tools: getToolsForModel(body.model, { includeDocumentTool: hasDocuments, includeCommerceTools, includeCalendarTools, includeEmailTools })
+					tools: getToolsForModel(body.model, { includeDocumentTool: hasDocuments, includeSkillTool: hasSkills, includeCommerceTools, includeCalendarTools, includeEmailTools })
 				};
 
 				// Structural constraint: limit response length during ALL of Plan Mode elicitation
@@ -2396,6 +2418,39 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 									content: 'No filename provided for read_document'
 								});
 							}
+						} else if (toolCall.function?.name === 'read_skill') {
+							// Skill reading tool - returns full skill content from in-memory context
+							const args = JSON.parse(toolCall.function.arguments || '{}');
+							const skillName = args.skill_name;
+
+							if (skillName && focusArea?.skills) {
+								const skill = focusArea.skills.find(
+									s => s.name.toLowerCase() === skillName.toLowerCase()
+								);
+								if (skill) {
+									debugLog('TOOLS', `Reading skill: ${skillName}`);
+									sendSSE(controller, encoder, {
+										type: 'status',
+										status: 'reading_skill',
+										query: skillName
+									});
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: `# ${skill.name}\n\n${skill.content}`
+									});
+								} else {
+									const available = focusArea.skills.map(s => s.name).join(', ');
+									toolResults.push({
+										tool_call_id: toolCall.id,
+										content: `Skill "${skillName}" not found. Available skills: ${available}`
+									});
+								}
+							} else {
+								toolResults.push({
+									tool_call_id: toolCall.id,
+									content: 'No skills available in current context'
+								});
+							}
 						} else if (isCommerceTool(toolCall.function?.name || '')) {
 							// Commerce tool - product search, cart, checkout
 							const toolName = toolCall.function?.name || '';
@@ -2597,8 +2652,10 @@ async function handleChatWithTools(body: ChatCompletionRequest, thinkingEnabled:
 						});
 					} else {
 						debugLog('CHAT', 'Starting to stream final response...');
+						// Pre-compute prompt token estimate for fallback
+						const toolPromptEstimate = estimatePromptTokens([...messagesWithToolResults, synthesisInstruction]);
 						// Stream the final response with usage tracking and routing decision
-						await streamToController(finalResponse, controller, encoder, thinkingEnabled, usageContext, routingDecision);
+						await streamToController(finalResponse, controller, encoder, thinkingEnabled, usageContext, routingDecision, toolPromptEstimate);
 						debugLog('CHAT', 'Finished streaming final response');
 
 						// Send sources after content (deduplicated)
@@ -2806,7 +2863,8 @@ async function streamToController(
 	encoder: TextEncoder,
 	thinkingEnabled: boolean = false,
 	usageContext?: UsageContext,
-	routingDecision?: RoutingDecision | null
+	routingDecision?: RoutingDecision | null,
+	promptTokenEstimate?: number
 ) {
 	const reader = response.body?.getReader();
 	if (!reader) {
@@ -2827,6 +2885,9 @@ async function streamToController(
 		cache_read_input_tokens?: number;
 	} | null = null;
 
+	// Accumulate response text for token estimation fallback
+	let accumulatedResponseText = '';
+
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) {
@@ -2835,34 +2896,66 @@ async function streamToController(
 			if (isThinking) {
 				sendSSE(controller, encoder, { type: 'thinking_end' });
 			}
-			// Save usage if we have context and data
-			if (usageContext && usageData) {
-				const cacheCreation = usageData.cache_creation_input_tokens || 0;
-				const cacheRead = usageData.cache_read_input_tokens || 0;
+			// Save usage — use real data if available, otherwise estimate
+			if (usageContext) {
+				let effectiveUsage: {
+					prompt_tokens: number;
+					completion_tokens: number;
+					total_tokens: number;
+					cache_creation_input_tokens: number;
+					cache_read_input_tokens: number;
+				};
+				let isEstimated = false;
+
+				if (usageData) {
+					// Real usage from provider
+					effectiveUsage = {
+						prompt_tokens: usageData.prompt_tokens || 0,
+						completion_tokens: usageData.completion_tokens || 0,
+						total_tokens: usageData.total_tokens || 0,
+						cache_creation_input_tokens: usageData.cache_creation_input_tokens || 0,
+						cache_read_input_tokens: usageData.cache_read_input_tokens || 0
+					};
+				} else if (promptTokenEstimate !== undefined) {
+					// Estimate usage when provider didn't return it
+					const estimated = buildEstimatedUsage(promptTokenEstimate, accumulatedResponseText);
+					effectiveUsage = estimated;
+					isEstimated = true;
+					debugLog('USAGE', `Estimated usage for ${usageContext.model}: prompt=${estimated.prompt_tokens}, completion=${estimated.completion_tokens}, total=${estimated.total_tokens}`);
+				} else {
+					// No usage data and no estimate available — skip
+					debugLog('USAGE', `streamToController: no usage data and no estimate for ${usageContext.model}`);
+					break;
+				}
+
+				const cacheCreation = effectiveUsage.cache_creation_input_tokens || 0;
+				const cacheRead = effectiveUsage.cache_read_input_tokens || 0;
 
 				if (cacheCreation > 0 || cacheRead > 0) {
 					debugLog('CACHE', `${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
 				}
 
-				debugLog('USAGE', `streamToController saving for ${usageContext.model}:`, JSON.stringify(usageData));
+				debugLog('USAGE', `streamToController saving for ${usageContext.model}:`, JSON.stringify(effectiveUsage));
 				saveUsage(usageContext, {
-					promptTokens: usageData.prompt_tokens || 0,
-					completionTokens: usageData.completion_tokens || 0,
-					totalTokens: usageData.total_tokens || 0,
+					promptTokens: effectiveUsage.prompt_tokens,
+					completionTokens: effectiveUsage.completion_tokens,
+					totalTokens: effectiveUsage.total_tokens,
 					cacheCreationTokens: cacheCreation,
-					cacheReadTokens: cacheRead
+					cacheReadTokens: cacheRead,
+					isEstimated
 				});
 
 				// Send usage to client for Arena metrics display
-				sendSSE(controller, encoder, { type: 'usage', usage: usageData });
+				const usageSSE = usageData || effectiveUsage;
+				sendSSE(controller, encoder, { type: 'usage', usage: usageSSE });
 
 				// Update routing decision outcome if we have a record ID
 				const recordId = (routingDecision as RoutingDecision & { recordId?: string })?.recordId;
 				if (recordId) {
-					const completionTokens = usageData.completion_tokens || 0;
+					const completionTokens = effectiveUsage.completion_tokens;
 					const cost = estimateCost(
 						usageContext.model,
-						usageData.prompt_tokens || 0,
+						effectiveUsage.prompt_tokens,
 						completionTokens,
 						cacheRead
 					);
@@ -2874,8 +2967,6 @@ async function streamToController(
 						console.error('[Router] Failed to update routing outcome:', err);
 					});
 				}
-			} else if (usageContext) {
-				debugLog('USAGE', `streamToController: no usage data for ${usageContext.model}`);
 			}
 			break;
 		}
@@ -2968,6 +3059,7 @@ async function streamToController(
 								sendSSE(controller, encoder, { type: 'thinking_end' });
 							}
 							sendSSE(controller, encoder, { type: 'content', content: delta.content });
+							accumulatedResponseText += delta.content;
 							hasReceivedContent = true;
 						}
 					}
@@ -3022,7 +3114,8 @@ function streamResponse(
 	thinkingEnabled: boolean = false,
 	usageContext?: UsageContext,
 	cacheHeaders?: { cacheCreation: number; cacheRead: number },
-	routingDecision?: RoutingDecision | null
+	routingDecision?: RoutingDecision | null,
+	promptTokenEstimate?: number
 ): Response {
 	const reader = litellmResponse.body?.getReader();
 	if (!reader) {
@@ -3070,6 +3163,9 @@ function streamResponse(
 				cache_read_input_tokens?: number;
 			} | null = null;
 
+			// Accumulate response text for token estimation fallback
+			let accumulatedResponseText = '';
+
 			try {
 				while (true) {
 					const { done, value } = await reader.read();
@@ -3081,34 +3177,68 @@ function streamResponse(
 							debugLog('USAGE', `Stream done for ${usageContext?.model || 'unknown'}: NO usage data captured`);
 						}
 
-						// Save usage if we have context and data
-						// Prefer cache metrics from usage object (Anthropic), fallback to HTTP headers
-						if (usageContext && usageData) {
-							const cacheCreation = usageData.cache_creation_input_tokens || cacheHeaders?.cacheCreation || 0;
-							const cacheRead = usageData.cache_read_input_tokens || cacheHeaders?.cacheRead || 0;
+						// Save usage — use real data if available, otherwise estimate
+						if (usageContext) {
+							let effectiveUsage: {
+								prompt_tokens: number;
+								completion_tokens: number;
+								total_tokens: number;
+								cache_creation_input_tokens: number;
+								cache_read_input_tokens: number;
+							};
+							let isEstimated = false;
+
+							if (usageData) {
+								// Real usage from provider
+								effectiveUsage = {
+									prompt_tokens: usageData.prompt_tokens || 0,
+									completion_tokens: usageData.completion_tokens || 0,
+									total_tokens: usageData.total_tokens || 0,
+									cache_creation_input_tokens: usageData.cache_creation_input_tokens || 0,
+									cache_read_input_tokens: usageData.cache_read_input_tokens || 0
+								};
+							} else if (promptTokenEstimate !== undefined) {
+								// Estimate usage when provider didn't return it
+								const estimated = buildEstimatedUsage(promptTokenEstimate, accumulatedResponseText);
+								effectiveUsage = estimated;
+								isEstimated = true;
+								debugLog('USAGE', `Estimated usage for ${usageContext.model}: prompt=${estimated.prompt_tokens}, completion=${estimated.completion_tokens}, total=${estimated.total_tokens}`);
+							} else {
+								// No usage data and no estimate available — skip
+								debugLog('USAGE', `streamResponse: no usage data and no estimate for ${usageContext.model}`);
+								// Send done signal
+								controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+								controller.close();
+								break;
+							}
+
+							const cacheCreation = effectiveUsage.cache_creation_input_tokens || cacheHeaders?.cacheCreation || 0;
+							const cacheRead = effectiveUsage.cache_read_input_tokens || cacheHeaders?.cacheRead || 0;
 
 							if (cacheCreation > 0 || cacheRead > 0) {
 								debugLog('CACHE', `${usageContext.model}: created=${cacheCreation}, read=${cacheRead} tokens`);
 							}
 
 							saveUsage(usageContext, {
-								promptTokens: usageData.prompt_tokens || 0,
-								completionTokens: usageData.completion_tokens || 0,
-								totalTokens: usageData.total_tokens || 0,
+								promptTokens: effectiveUsage.prompt_tokens,
+								completionTokens: effectiveUsage.completion_tokens,
+								totalTokens: effectiveUsage.total_tokens,
 								cacheCreationTokens: cacheCreation,
-								cacheReadTokens: cacheRead
+								cacheReadTokens: cacheRead,
+								isEstimated
 							});
 
 							// Send usage to client for Arena metrics display
-							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'usage', usage: usageData })}\n\n`));
+							const usageSSE = usageData || effectiveUsage;
+							controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'usage', usage: usageSSE })}\n\n`));
 
 							// Update routing decision outcome if we have a record ID
 							const recordId = (routingDecision as RoutingDecision & { recordId?: string })?.recordId;
 							if (recordId) {
-								const completionTokens = usageData.completion_tokens || 0;
+								const completionTokens = effectiveUsage.completion_tokens;
 								const cost = estimateCost(
 									usageContext.model,
-									usageData.prompt_tokens || 0,
+									effectiveUsage.prompt_tokens,
 									completionTokens,
 									cacheRead
 								);
@@ -3236,6 +3366,7 @@ function streamResponse(
 											type: 'content',
 											content: delta.content
 										})}\n\n`));
+										accumulatedResponseText += delta.content;
 										hasReceivedContent = true;
 									}
 								}

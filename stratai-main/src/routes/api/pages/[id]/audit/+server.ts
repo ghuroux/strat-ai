@@ -31,10 +31,14 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const userId = locals.session.userId;
 
 	try {
-		// Check if user has admin permission (audit log is sensitive)
+		// Check access: owner always sees activity; non-owners need admin permission
 		const access = await postgresPageSharingRepository.canAccessPage(userId, pageId);
 
-		if (!access.hasAccess || access.permission !== 'admin') {
+		if (!access.hasAccess) {
+			return json({ error: 'Access denied' }, { status: 403 });
+		}
+
+		if (access.source !== 'owner' && access.permission !== 'admin') {
 			return json({ error: 'Access denied' }, { status: 403 });
 		}
 

@@ -18,6 +18,7 @@
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import { ACCEPT_DOCUMENTS } from '$lib/config/file-types';
+	import MemberSelector from '$lib/components/shared/MemberSelector.svelte';
 
 	interface InitialValues {
 		title?: string;
@@ -35,6 +36,7 @@
 		spaceColor?: string;
 		task?: Task | null; // If provided, modal is in edit mode
 		initialValues?: InitialValues; // Pre-fill form in create mode (e.g., from task suggestions)
+		currentUserId?: string; // For MemberSelector "(You)" suffix
 		onClose: () => void;
 		onCreate: (input: CreateTaskInput) => Promise<Task | null>; // Returns created task for document linking
 	}
@@ -46,6 +48,7 @@
 		spaceColor = '#3b82f6',
 		task = null,
 		initialValues,
+		currentUserId,
 		onClose,
 		onCreate
 	}: Props = $props();
@@ -60,6 +63,7 @@
 	let dueDateType = $state<DueDateType>('soft');
 	let priority = $state<TaskPriority>('normal');
 	let areaId = $state<string>('');
+	let assigneeId = $state<string | null>(null);
 	let isSubmitting = $state(false);
 	let error = $state<string | null>(null);
 
@@ -85,6 +89,7 @@
 				dueDateType = task.dueDateType || 'soft';
 				priority = task.priority;
 				areaId = task.areaId || '';
+				assigneeId = task.assigneeId ?? currentUserId ?? null;
 				// Load linked documents
 				documentStore.loadDocumentsForTask(task.id);
 			} else if (initialValues) {
@@ -95,6 +100,7 @@
 				dueDateType = initialValues.dueDateType || 'soft';
 				priority = initialValues.priority || 'normal';
 				areaId = initialValues.areaId || '';
+				assigneeId = currentUserId ?? null;
 			} else {
 				// Create mode: reset form
 				title = '';
@@ -103,6 +109,7 @@
 				dueDateType = 'soft';
 				priority = 'normal';
 				areaId = '';
+				assigneeId = currentUserId ?? null;
 			}
 			// Reset document state
 			showDocuments = false;
@@ -226,7 +233,8 @@
 					priority,
 					dueDateType,
 					dueDate: dueDate ? new Date(dueDate) : undefined,
-					areaId: areaId || undefined
+					areaId: areaId || undefined,
+					assigneeId: assigneeId || undefined
 				});
 				taskId = task.id;
 			} else {
@@ -248,6 +256,9 @@
 				}
 				if (areaId) {
 					input.areaId = areaId;
+				}
+				if (assigneeId) {
+					input.assigneeId = assigneeId;
 				}
 
 				const createdTask = await onCreate(input);
@@ -456,6 +467,15 @@
 							</select>
 						</div>
 					{/if}
+
+					<!-- Assignee field -->
+					<MemberSelector
+						{spaceId}
+						value={assigneeId}
+						onchange={(id) => assigneeId = id}
+						{currentUserId}
+						disabled={isSubmitting}
+					/>
 
 					<!-- Documents section (collapsible) -->
 					<div class="documents-section">

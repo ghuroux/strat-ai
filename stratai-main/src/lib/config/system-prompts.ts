@@ -10,6 +10,7 @@
 
 import type { SpaceType } from "$lib/types/chat";
 import type { TaskContextInfo } from "$lib/utils/context-builder";
+import type { SkillContext } from "$lib/types/skills";
 
 // ============================================================================
 // TEMPORAL CONTEXT
@@ -577,6 +578,7 @@ export interface FocusAreaInfo {
   context?: string; // Markdown context content
   contextDocuments?: ContextDocument[]; // Documents attached to this focus area
   spaceId: string;
+  skills?: SkillContext[]; // Active skills for this area
 }
 
 /**
@@ -592,6 +594,91 @@ export interface FocusedTaskInfo {
   parentTaskTitle?: string;
   sourceConversationId?: string; // Plan Mode conversation ID for context injection
   planningConversationSummary?: string; // Summary of the planning conversation (injected by API)
+}
+
+// ============================================================================
+// SKILLS PROMPT INJECTION
+// ============================================================================
+
+/**
+ * Token budget for skills in the system prompt.
+ * Skills within this budget get full injection; overflow gets summary-only.
+ */
+const SKILL_TOKEN_BUDGET = 3000;
+
+/**
+ * Skills with content under this threshold (in estimated tokens) are injected in full.
+ * Larger skills get summary + read_skill instruction.
+ */
+const FULL_INJECTION_THRESHOLD = 800;
+
+/**
+ * Rough token estimate: ~4 chars per token for English text
+ */
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * Generate the skills prompt block for system prompt injection.
+ *
+ * Implements hybrid injection strategy from SKILLS.md Section 7:
+ * - Sort: always-active first, shorter first, ID tiebreaker (cache stability)
+ * - Skills ≤ FULL_INJECTION_THRESHOLD tokens AND within budget → full content
+ * - Over threshold or budget → summary only + read_skill instruction
+ */
+export function getSkillsPrompt(skills: SkillContext[]): string {
+  if (skills.length === 0) return '';
+
+  // Sort: always-active first, then shorter content first, then by ID for cache stability
+  const sorted = [...skills].sort((a, b) => {
+    // always > trigger > manual
+    const modeOrder = { always: 0, trigger: 1, manual: 2 };
+    const modeDiff = (modeOrder[a.activationMode] ?? 2) - (modeOrder[b.activationMode] ?? 2);
+    if (modeDiff !== 0) return modeDiff;
+
+    // Shorter content first (more likely to fit in budget)
+    const lenDiff = a.content.length - b.content.length;
+    if (lenDiff !== 0) return lenDiff;
+
+    // Stable tiebreaker
+    return a.id.localeCompare(b.id);
+  });
+
+  let budgetRemaining = SKILL_TOKEN_BUDGET;
+  let prompt = `
+
+### Active Skills
+<active_skills count="${sorted.length}">`;
+
+  for (const skill of sorted) {
+    const contentTokens = estimateTokens(skill.content);
+
+    if (contentTokens <= FULL_INJECTION_THRESHOLD && contentTokens <= budgetRemaining) {
+      // Full injection — content fits in budget
+      prompt += `
+
+<skill name="${skill.name}" injection="full" mode="${skill.activationMode}">
+${skill.content}
+</skill>`;
+      budgetRemaining -= contentTokens;
+    } else {
+      // Summary injection — too large or budget exhausted
+      const summaryText = skill.summary || skill.description;
+      prompt += `
+
+<skill name="${skill.name}" injection="summary" mode="${skill.activationMode}">
+${summaryText}
+[Use read_skill tool with skill_name="${skill.name}" to access full methodology]
+</skill>`;
+      budgetRemaining -= estimateTokens(summaryText);
+    }
+  }
+
+  prompt += `
+</active_skills>`;
+
+  return prompt;
 }
 
 /**
@@ -675,6 +762,12 @@ ${page.summary || "[Use read_document tool to access content]"}
     }
   }
 
+  // Include active skills
+  const hasSkills = (focusArea.skills?.length ?? 0) > 0;
+  if (hasSkills) {
+    prompt += getSkillsPrompt(focusArea.skills!);
+  }
+
   // Build role guidelines based on document types
   const hasTextDocs = textDocs.length > 0;
   const hasImageDocs = imageDocs.length > 0;
@@ -698,6 +791,10 @@ ${page.summary || "[Use read_document tool to access content]"}
   if (hasPages) {
     prompt += `
 - Finalized pages are authoritative team content — treat them as reliable reference material`;
+  }
+  if (hasSkills) {
+    prompt += `
+- For summarized skills, use **read_skill** tool to access full methodology before applying`;
   }
   prompt += `
 - Stay focused on topics relevant to this context

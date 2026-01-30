@@ -36,6 +36,9 @@
 		// Global dashboard: area overrides (denormalized from GlobalTask)
 		areaName?: string;
 		areaColor?: string;
+		// Assignment display
+		assigneeName?: string; // Resolved name of assignee (if assigned to someone else)
+		showAssigneeBadge?: boolean; // Show assignee badge when assigned to another user
 		onComplete: () => void;
 		onClick: () => void;
 		onToggleExpanded?: () => void;
@@ -59,6 +62,8 @@
 		spaceBadgeColor,
 		areaName: areaNameOverride,
 		areaColor: areaColorOverride,
+		assigneeName,
+		showAssigneeBadge = false,
 		onComplete,
 		onClick,
 		onToggleExpanded,
@@ -226,6 +231,16 @@
 						</span>
 					{/if}
 
+					<!-- Assignee badge -->
+					{#if showAssigneeBadge && assigneeName}
+						<span class="assignee-badge">
+							<svg class="assignee-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+							</svg>
+							{assigneeName}
+						</span>
+					{/if}
+
 					<!-- Badges -->
 					{#if showOverdueBadge}
 						<span class="badge badge-overdue">Overdue</span>
@@ -269,6 +284,10 @@
 				{:else if area}
 					<span class="compact-dot">·</span>
 					<span class="compact-area" style="--area-color: {area.color || spaceColor}">{area.name}</span>
+				{/if}
+				{#if showAssigneeBadge && assigneeName}
+					<span class="compact-dot">·</span>
+					<span class="compact-assignee">{assigneeName}</span>
 				{/if}
 			</div>
 		{/if}
@@ -547,6 +566,30 @@
 		color: var(--area-color, var(--space-color));
 	}
 
+	/* Assignee badge */
+	.assignee-badge {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.6875rem;
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		background: rgba(139, 92, 246, 0.12);
+		color: rgba(139, 92, 246, 0.9);
+	}
+
+	:global(.light) .assignee-badge,
+	:global([data-theme='light']) .assignee-badge {
+		background: rgba(139, 92, 246, 0.08);
+		color: rgba(109, 40, 217, 0.85);
+	}
+
+	.assignee-icon {
+		width: 0.75rem;
+		height: 0.75rem;
+		flex-shrink: 0;
+	}
+
 	/* Badges */
 	.badge {
 		font-size: 0.625rem;
@@ -780,6 +823,16 @@
 		color: var(--area-color, var(--space-color));
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.compact-assignee {
+		font-size: 0.6875rem;
+		color: rgba(139, 92, 246, 0.8);
+	}
+
+	:global(.light) .compact-assignee,
+	:global([data-theme='light']) .compact-assignee {
+		color: rgba(109, 40, 217, 0.7);
 	}
 
 	/* Responsive: hide action buttons on small screens, show menu instead */

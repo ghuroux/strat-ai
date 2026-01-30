@@ -15,6 +15,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 
 interface FinalizeBody {
 	changeSummary?: string;
@@ -47,6 +48,20 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 
 	try {
 		const page = await postgresPageRepository.finalizePage(id, userId, changeSummary, addToContext);
+
+		if (page) {
+			// Log audit event
+			postgresAuditRepository.logEvent(
+				userId, 'page_finalized', 'page', id, 'finalize',
+				{
+					version_number: page.currentVersion ?? 1,
+					word_count: page.wordCount ?? 0,
+					added_to_context: addToContext ?? false,
+					change_summary: changeSummary ?? null
+				},
+				locals.session.organizationId
+			);
+		}
 
 		if (!page) {
 			// Could be not found, not owner, or already finalized

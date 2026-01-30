@@ -1,6 +1,8 @@
 # Task Assignment System
 
-> **Status:** Design Complete | **Priority:** High | **Dependencies:** Space Memberships, Area Sharing
+> **Status:** Implementation Ready | **Priority:** High | **Dependencies:** Space Memberships (✅ built), Area Sharing (✅ built), Meeting Capture Loop (✅ built)
+>
+> **Updated:** 2026-01-30 — Refreshed to reflect Post-Meeting Capture Loop, SendGrid infrastructure, and current codebase state.
 
 Enable assigning tasks to other users within a Space, with email notifications and proper visibility rules.
 
@@ -15,9 +17,10 @@ Enable assigning tasks to other users within a Space, with email notifications a
 5. [API Changes](#5-api-changes)
 6. [UI Components](#6-ui-components)
 7. [Email Notification](#7-email-notification)
-8. [Implementation Phases](#8-implementation-phases)
-9. [Edge Cases](#9-edge-cases)
-10. [Future Enhancements (V2)](#10-future-enhancements-v2)
+8. [Meeting Capture Integration](#8-meeting-capture-integration)
+9. [Implementation Phases](#9-implementation-phases)
+10. [Edge Cases](#10-edge-cases)
+11. [Future Enhancements (V2)](#11-future-enhancements-v2)
 
 ---
 
@@ -29,6 +32,7 @@ Tasks in StratAI are personal:
 - Created by a user (`user_id`)
 - Visible only to that user
 - No way to delegate work to team members
+- **Meeting capture creates subtasks, but all owned by the capturer** — assignee selection in the capture wizard is cosmetic only (name stored in title, not as real assignment)
 
 ### The Gap
 
@@ -44,8 +48,19 @@ Teams need to:
 |---------|-------------|
 | **Delegation** | Assign work to team members directly |
 | **Accountability** | Clear ownership of every task |
-| **Meeting Follow-through** | Action items become assigned tasks |
+| **Meeting Follow-through** | Action items become assigned tasks (closes the capture loop) |
 | **Team Visibility** | Track delegated work completion |
+
+### What Already Exists
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Space Memberships | ✅ Built | `space_memberships` table, member loading, role system |
+| Area Sharing | ✅ Built | `area_memberships`, restricted areas, access checks |
+| Meeting Capture Wizard | ✅ Built | `CaptureActionsStep` has attendee dropdown for assignee |
+| `createSubtask()` | ✅ Built | Takes `parentTaskId`, creates nested tasks — needs `assigneeId` param |
+| SendGrid Email | ✅ Built | `src/lib/server/email/sendgrid.ts`, templates for password reset & invites |
+| Task Store | ✅ Built | `src/lib/stores/tasks.svelte.ts` — needs assignee-aware filtering |
 
 ---
 
@@ -95,21 +110,21 @@ This keeps the access model simple - no implicit access grants.
 
 ### Subtask Assignment
 
-Each subtask can have a different assignee:
+Each subtask can have a different assignee. This is the core model that enables the Meeting Capture → Task Assignment flow:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Parent Task: "Q1 Planning Meeting"                              │
-│  Creator: Sarah    Assignee: Sarah                               │
+│  Parent Task: "Prepare for: Q1 Planning Meeting"                │
+│  Creator: Sarah    Assignee: Sarah    (source: meeting)         │
 │                                                                  │
 │  └── Subtask: "Draft budget proposal"                           │
-│      Creator: Sarah    Assignee: John                           │
+│      Creator: Sarah    Assignee: John    (from capture wizard)  │
 │                                                                  │
 │  └── Subtask: "Review competitor analysis"                      │
-│      Creator: Sarah    Assignee: Maria                          │
+│      Creator: Sarah    Assignee: Maria   (from capture wizard)  │
 │                                                                  │
 │  └── Subtask: "Send meeting notes to stakeholders"              │
-│      Creator: Sarah    Assignee: Sarah                          │
+│      Creator: Sarah    Assignee: Sarah   (self-assigned)        │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -152,13 +167,14 @@ Acceptance Criteria:
 
 ```
 AS A meeting owner
-I WANT TO assign action items to attendees
+I WANT TO assign action items from the capture wizard to attendees
 SO THAT follow-up work is clearly owned
 
 Acceptance Criteria:
-- [ ] When creating meeting notes, can assign each action item
-- [ ] Assignee selector shows meeting attendees first
-- [ ] Each action item becomes a subtask with its assignee
+- [ ] CaptureActionsStep assignee selection maps to real assigneeId
+- [ ] finalizeMeeting() creates subtasks with correct assignees
+- [ ] Each assignee receives email notification
+- [ ] Subtasks appear in assignee's task list
 ```
 
 ### Assignment Notification
@@ -181,11 +197,12 @@ Acceptance Criteria:
 ### Migration: Add assignee_id to tasks
 
 ```sql
--- Migration: YYYYMMDD_001_task_assignment.sql
+-- Migration: 20260130_003_task_assignment.sql
 
 -- Add assignee_id column to tasks
+-- UUID type to match users(id), nullable for gradual rollout
 ALTER TABLE tasks
-ADD COLUMN assignee_id TEXT REFERENCES users(id) ON DELETE SET NULL;
+ADD COLUMN assignee_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
 -- Backfill: existing tasks assigned to creator
 UPDATE tasks
@@ -197,11 +214,13 @@ CREATE INDEX idx_tasks_assignee
 ON tasks(assignee_id, space_id, status)
 WHERE deleted_at IS NULL;
 
--- Index for fetching tasks created by a user (delegated view)
+-- Index for fetching tasks created by a user but assigned to others (delegated view)
 CREATE INDEX idx_tasks_creator_delegated
 ON tasks(user_id, space_id)
 WHERE deleted_at IS NULL AND user_id != assignee_id;
 ```
+
+> **Note:** Column is `UUID` not `TEXT` — matches existing `user_id UUID` column type on tasks table.
 
 ### Updated Task Type
 
@@ -214,8 +233,8 @@ export interface Task {
   // ... existing fields ...
 
   // Ownership
-  userId: string;      // Creator - who made this task
-  assigneeId: string;  // Assignee - who should complete it (defaults to userId)
+  userId: string;        // Creator - who made this task
+  assigneeId?: string;   // Assignee - who should complete it (defaults to userId)
 
   // ... rest of fields ...
 }
@@ -226,9 +245,16 @@ export interface CreateTaskInput {
   assigneeId?: string;  // Optional, defaults to current user
 }
 
+export interface CreateSubtaskInput {
+  title: string;
+  parentTaskId: string;
+  // ... existing fields ...
+  assigneeId?: string;  // Optional, defaults to current user
+}
+
 export interface UpdateTaskInput {
   // ... existing fields ...
-  assigneeId?: string;  // Can reassign
+  assigneeId?: string | null;  // Can reassign, null to unassign
 }
 ```
 
@@ -237,7 +263,7 @@ export interface UpdateTaskInput {
 ```typescript
 export interface TaskRow {
   // ... existing fields ...
-  assigneeId: string;  // postgres.js camelCase transformation
+  assigneeId: string | null;  // postgres.js camelCase transformation from assignee_id
 }
 ```
 
@@ -255,6 +281,14 @@ export interface TaskRow {
 }
 ```
 
+**POST /api/tasks/[id]/subtasks** - Create subtask
+```typescript
+// Request body addition
+{
+  assigneeId?: string  // Optional, defaults to authenticated user
+}
+```
+
 **PATCH /api/tasks/[id]** - Update task
 ```typescript
 // Request body addition
@@ -263,38 +297,31 @@ export interface TaskRow {
 }
 ```
 
-### New Endpoint: Get Assignable Users
+### Assignable Members
 
-**GET /api/spaces/[spaceId]/members/assignable**
+No new endpoint needed — the existing space members endpoint (`GET /api/spaces/[id]/members`) already returns members with user data. The `MemberSelector` component can consume this directly.
 
-Returns users who can be assigned tasks in this space.
-If `areaId` query param provided, filters to users with Area access.
-
-```typescript
-// Response
-{
-  members: Array<{
-    id: string;
-    name: string;
-    email: string;
-    avatarUrl?: string;
-  }>
-}
-```
+For Area-scoped filtering, the `area_memberships` table provides access checks. V1 keeps it simple: show all Space members, validate Area access server-side on save.
 
 ### Repository Changes
 
 ```typescript
 // In tasks-postgres.ts
 
-// Update getTasksForUser to filter by assignee
-async getTasksForUser(userId: string, filter?: TaskListFilter): Promise<Task[]> {
-  // WHERE assignee_id = userId (not user_id)
+// CHANGE: Filter by assignee_id instead of user_id for "my tasks"
+async findAll(userId: string, filter?: TaskListFilter): Promise<Task[]> {
+  // WHERE assignee_id = userId (tasks assigned to me)
+  // OR (user_id = userId AND assignee_id = userId) (tasks I self-assigned)
 }
 
-// New method: get tasks user created but assigned to others
-async getDelegatedTasks(userId: string, spaceId?: string): Promise<Task[]> {
-  // WHERE user_id = userId AND assignee_id != userId
+// NEW: Get tasks user created but assigned to others
+async findDelegated(userId: string, filter?: TaskListFilter): Promise<Task[]> {
+  // WHERE user_id = userId AND assignee_id != userId AND assignee_id IS NOT NULL
+}
+
+// CHANGE: createSubtask accepts assigneeId
+async createSubtask(input: CreateSubtaskInput, userId: string): Promise<Task> {
+  // INSERT ... assignee_id = input.assigneeId ?? userId
 }
 ```
 
@@ -304,7 +331,7 @@ async getDelegatedTasks(userId: string, spaceId?: string): Promise<Task[]> {
 
 ### 6.1 MemberSelector Component
 
-New component for selecting a user from Space members.
+Shared component for selecting a user from Space members. Used by both TaskModal and CaptureActionsStep.
 
 **Location:** `src/lib/components/shared/MemberSelector.svelte`
 
@@ -312,21 +339,22 @@ New component for selecting a user from Space members.
 <script lang="ts">
   interface Props {
     spaceId: string;
-    areaId?: string;
     value: string | null;  // Selected user ID
-    onchange: (userId: string) => void;
+    onchange: (userId: string | null) => void;
     label?: string;
     placeholder?: string;
+    currentUserId?: string;  // To show "(You)" suffix
+    /** Pre-loaded members — avoids fetch when parent already has members */
+    members?: Array<{ userId: string; displayName?: string; email: string }>;
   }
 </script>
 ```
 
 **Features:**
-- Dropdown with user avatars and names
-- Search/filter functionality
+- Dropdown with user initials/avatars and names
 - Shows current user first with "(You)" suffix
-- Loads members from API on mount
-- Filters by Area access when areaId provided
+- Accepts pre-loaded members (for capture wizard which already has attendees) or loads from API
+- "Unassigned" option to clear assignment
 
 ### 6.2 Task Card Updates
 
@@ -346,7 +374,7 @@ Show assignee on task cards:
 
 ### 6.3 Task Modal Updates
 
-Add assignee field to TaskModal:
+Add `MemberSelector` to `TaskModal.svelte`:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -369,31 +397,6 @@ Add assignee field to TaskModal:
 │  └───────────────────┘      └───────────────────┘      │
 │                                                         │
 │                              [Cancel]  [Create Task]    │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 6.4 Guided Creation: Action Items Step
-
-Update the action items step in Meeting Notes guided creation:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Action Items                                           │
-│                                                         │
-│  What follow-up tasks came out of this meeting?         │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Draft budget proposal                           │   │
-│  │ 👤 John Smith ▼           📅 Jan 30 (soft)      │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │ Review competitor analysis                      │   │
-│  │ 👤 Maria Garcia ▼         📅 Feb 5 (soft)       │   │
-│  └─────────────────────────────────────────────────┘   │
-│                                                         │
-│  [+ Add another]                                        │
-│                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -424,10 +427,6 @@ Update the action items step in Meeting Notes guided creation:
 │  │                                                           │  │
 │  │  📋 Draft Q1 budget proposal                              │  │
 │  │                                                           │  │
-│  │  Description:                                             │  │
-│  │  Create initial budget proposal based on Q4 actuals       │  │
-│  │  and projected growth targets.                            │  │
-│  │                                                           │  │
 │  │  📅 Due: January 30, 2026                                 │  │
 │  │  🏷️ Priority: High                                        │  │
 │  │                                                           │  │
@@ -448,121 +447,180 @@ Update the action items step in Meeting Notes guided creation:
 ```typescript
 // In src/lib/server/email/task-notifications.ts
 
-export async function sendTaskAssignmentEmail(params: {
-  task: Task;
-  assignee: User;
-  assigner: User;
-  space: Space;
-  area?: Area;
-}): Promise<void> {
-  // Skip if assigner === assignee (self-assigned)
-  if (params.assigner.id === params.assignee.id) return;
+import type { Task } from '$lib/types/tasks';
 
-  // Use SendGrid template
-  await sendEmail({
-    to: params.assignee.email,
-    templateId: 'task-assigned',
-    dynamicData: {
-      assignerName: params.assigner.name,
-      taskTitle: params.task.title,
-      taskDescription: params.task.description,
-      dueDate: params.task.dueDate,
-      priority: params.task.priority,
-      spaceName: params.space.name,
-      areaName: params.area?.name,
-      taskUrl: `${BASE_URL}/spaces/${params.space.slug}/task/${params.task.id}`
-    }
-  });
+interface TaskAssignmentEmailParams {
+  task: Task;
+  assigneeEmail: string;
+  assigneeName: string;
+  assignerName: string;
+  spaceName: string;
+  areaName?: string;
+}
+
+export async function sendTaskAssignmentEmail(params: TaskAssignmentEmailParams): Promise<void> {
+  // Uses existing sendgrid.ts infrastructure
+  // Follows same pattern as space-invite emails
 }
 ```
 
 ---
 
-## 8. Implementation Phases
+## 8. Meeting Capture Integration
 
-### Phase 1: Schema & Backend (Session 1)
+> **This section is new** — describes how task assignment plugs into the Post-Meeting Capture Loop built on 2026-01-30.
 
-- [ ] Create migration: add `assignee_id` to tasks
-- [ ] Update `TaskRow` and `Task` types
-- [ ] Update `rowToTask` conversion
-- [ ] Update tasks repository:
-  - [ ] `createTask` - accept assigneeId
-  - [ ] `updateTask` - accept assigneeId
-  - [ ] `getTasksForUser` - filter by assigneeId
-  - [ ] New: `getDelegatedTasks`
-- [ ] Update task API endpoints
-- [ ] Create `/api/spaces/[spaceId]/members/assignable` endpoint
-- [ ] Run migration, verify backfill
+### Current State (Cosmetic Assignment)
 
-### Phase 2: UI Components (Session 2)
+The `CaptureActionsStep.svelte` component already has:
+- Attendee dropdown per action item (`assigneeId` field on `CaptureActionItem`)
+- Assignee name resolution (`assigneeName` field)
 
-- [ ] Create `MemberSelector` component
-- [ ] Update `TaskModal` with assignee field
-- [ ] Update task cards to show assignee
-- [ ] Update task store to handle assignee
-- [ ] Test: create task with assignee, verify visibility
+But `finalizeMeeting()` in `meeting-finalize.ts` creates subtasks via:
+```typescript
+await postgresTaskRepository.createSubtask({
+  title: action.text,
+  parentTaskId: meeting.taskId,
+  subtaskType: 'action'
+}, userId);
+```
 
-### Phase 3: Email Notification (Session 2-3)
+The `assigneeId` from the capture data is **not passed through** — all subtasks end up owned by the capturer.
 
-- [ ] Create email template: `task-assigned`
-- [ ] Create `sendTaskAssignmentEmail` function
-- [ ] Hook into task creation/update flow
-- [ ] Test: assign task, verify email sent
+### After Task Assignment (Real Assignment)
 
-### Phase 4: Meeting Integration (Session 3)
+Wire the existing capture UI to real assignment:
 
-- [ ] Update action items step with assignee selector
-- [ ] Ensure subtasks created with correct assignees
-- [ ] Test: complete meeting capture, verify assignees
+```typescript
+// In meeting-finalize.ts — createActionSubtask()
+await postgresTaskRepository.createSubtask({
+  title: action.text,
+  parentTaskId: meeting.taskId,
+  subtaskType: 'action',
+  assigneeId: action.assigneeId  // ← Wire this through
+}, userId);
 
-### Phase 5: Polish & Edge Cases (Session 3)
+// Send notification to assignee (if different from creator)
+if (action.assigneeId && action.assigneeId !== userId) {
+  await sendTaskAssignmentEmail({...});
+}
+```
 
-- [ ] Handle reassignment (send new notification?)
-- [ ] Handle deleted users (SET NULL)
-- [ ] Verify Area access enforcement
-- [ ] UI polish and testing
+### Changes Required
+
+| File | Change |
+|------|--------|
+| `meeting-finalize.ts` | Pass `action.assigneeId` to `createSubtask()` |
+| `CaptureActionsStep.svelte` | Already done — UI exists, just needs real backend wiring |
+| `CaptureReviewStep.svelte` | Already shows assignee names — no changes needed |
+
+**Estimated effort:** ~30 minutes once task assignment backend is in place.
 
 ---
 
-## 9. Edge Cases
+## 9. Implementation Phases
+
+### Phase 1: Schema + Types + Repository
+
+- [ ] Create migration: `20260130_003_task_assignment.sql`
+  - [ ] Add `assignee_id UUID` to tasks
+  - [ ] Backfill existing tasks (`assignee_id = user_id`)
+  - [ ] Create indexes (`idx_tasks_assignee`, `idx_tasks_creator_delegated`)
+- [ ] Update `src/lib/types/tasks.ts`:
+  - [ ] Add `assigneeId` to `Task`, `TaskRow`, `CreateTaskInput`, `UpdateTaskInput`, `CreateSubtaskInput`
+  - [ ] Update `rowToTask()` conversion
+- [ ] Update `src/lib/server/persistence/tasks-postgres.ts`:
+  - [ ] `create()` — accept and store `assigneeId` (default to `userId`)
+  - [ ] `createSubtask()` — accept and store `assigneeId` (default to `userId`)
+  - [ ] `update()` — accept `assigneeId` for reassignment
+  - [ ] `findAll()` — filter by `assignee_id` for "my tasks" (this is the visibility change)
+  - [ ] New: `findDelegated()` — tasks user created but assigned to others
+- [ ] Update repository interface in `persistence/types.ts`
+- [ ] Update task API endpoints:
+  - [ ] `POST /api/tasks` — accept `assigneeId`
+  - [ ] `PATCH /api/tasks/[id]` — accept `assigneeId`
+  - [ ] Subtask endpoint — accept `assigneeId`
+- [ ] Update `fresh-install/schema.sql` with new column
+- [ ] Run migration, verify backfill
+
+### Phase 2: UI Components
+
+- [ ] Create `MemberSelector.svelte` shared component
+- [ ] Update `TaskModal.svelte` with MemberSelector
+- [ ] Update task cards to show assignee (when different from self)
+- [ ] Update `tasks.svelte.ts` store to handle `assigneeId` field
+- [ ] Test: create task with assignee, verify visibility rules
+
+### Phase 3: Email Notification
+
+- [ ] Create `src/lib/server/email/templates/task-assigned.ts`
+- [ ] Create `src/lib/server/email/task-notifications.ts`
+- [ ] Hook into task creation flow (non-blocking, fire-and-forget)
+- [ ] Hook into task update flow (reassignment notification)
+- [ ] Test: assign task to another user, verify email
+
+### Phase 4: Meeting Capture Wiring
+
+- [ ] Update `meeting-finalize.ts` → pass `assigneeId` to `createSubtask()`
+- [ ] Send assignment emails for each unique assignee from capture
+- [ ] Replace inline `<select>` in `CaptureActionsStep` with `MemberSelector`
+- [ ] Test: capture meeting with assigned actions, verify subtask owners
+
+### Phase 5: Polish
+
+- [ ] Handle reassignment (new notification, old assignee loses task from list)
+- [ ] Handle deleted/removed users (SET NULL behavior)
+- [ ] Verify Area access enforcement on assignment
+- [ ] Global tasks page — filter by "assigned to me" vs "delegated"
+- [ ] TypeScript check + build gate
+
+---
+
+## 10. Edge Cases
 
 | Scenario | Handling |
 |----------|----------|
 | Assignee loses Area access | Task remains, but they can't see Area context |
-| Assignee deleted from system | `assignee_id` set to NULL, task orphaned |
-| Reassign to different user | Update assignee, send notification to new assignee |
-| Assign to self | No notification sent |
+| Assignee removed from Space | `assignee_id` stays (FK to users, not memberships), task visible but Space context lost |
+| Assignee deleted from system | `ON DELETE SET NULL` — task orphaned, falls back to creator view |
+| Reassign to different user | Update assignee_id, send notification to new assignee |
+| Assign to self | No notification sent (skip if assigner === assignee) |
 | Create subtask with assignee | Each subtask independent, notifications per assignee |
-| Bulk assign from meeting | One notification per unique assignee |
+| Bulk assign from meeting capture | One notification per unique assignee (batch, non-blocking) |
+| User has no Space membership | Server-side validation rejects assignment (403) |
 
 ---
 
-## 10. Future Enhancements (V2)
+## 11. Future Enhancements (V2)
 
 **Not in V1 scope - defer these:**
 
 | Enhancement | Description |
 |-------------|-------------|
-| **Delegated Tasks View** | Dedicated view showing tasks you assigned to others |
+| **Delegated Tasks View** | Dedicated UI tab showing tasks you assigned to others |
 | **Assignment History** | Audit log of who assigned/reassigned when |
 | **In-app Notifications** | Bell icon with assignment notifications |
 | **Notification Preferences** | User settings for email frequency |
 | **Team Task Views** | See all tasks in a Space (manager view) |
 | **Assignment Comments** | Add context when assigning ("Please prioritize this") |
 | **Due Date Reminders** | Email reminders before due dates |
+| **@mention in chat** | "Assign this to @John" creates task with assignee from chat |
 
 ---
 
 ## Key Files Reference
 
-| File | Purpose |
-|------|---------|
-| `src/lib/server/persistence/tasks-postgres.ts` | Task repository |
-| `src/lib/types/tasks.ts` | Task types |
-| `src/lib/stores/tasks.svelte.ts` | Task store |
-| `src/routes/api/tasks/+server.ts` | Task API endpoints |
-| `src/lib/components/spaces/TaskModal.svelte` | Task create/edit modal |
-| `src/lib/components/shared/MemberSelector.svelte` | **NEW** - Member selector |
-| `src/lib/server/email/task-notifications.ts` | **NEW** - Assignment emails |
-| `docs/features/MEETING_LIFECYCLE.md` | Meeting system (related) |
-| `docs/features/GUIDED_CREATION.md` | Guided creation (related) |
+| File | Purpose | Status |
+|------|---------|--------|
+| `src/lib/server/persistence/tasks-postgres.ts` | Task repository | **Modify** — add assigneeId support |
+| `src/lib/types/tasks.ts` | Task types | **Modify** — add assigneeId fields |
+| `src/lib/stores/tasks.svelte.ts` | Task store | **Modify** — assignee-aware filtering |
+| `src/routes/api/tasks/+server.ts` | Task API endpoints | **Modify** — accept assigneeId |
+| `src/lib/components/spaces/TaskModal.svelte` | Task create/edit modal | **Modify** — add MemberSelector |
+| `src/lib/components/shared/MemberSelector.svelte` | Member selector | **NEW** |
+| `src/lib/server/email/task-notifications.ts` | Assignment emails | **NEW** |
+| `src/lib/server/email/templates/task-assigned.ts` | Email template | **NEW** |
+| `src/lib/server/services/meeting-finalize.ts` | Meeting finalization | **Modify** — wire assigneeId |
+| `src/lib/components/meetings/capture/CaptureActionsStep.svelte` | Capture actions UI | **Modify** — use MemberSelector |
+| `src/lib/server/email/sendgrid.ts` | SendGrid integration | ✅ Exists |
+| `src/lib/server/email/templates.ts` | Email templates | ✅ Exists (extend) |

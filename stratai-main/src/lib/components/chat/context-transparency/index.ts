@@ -8,3 +8,4 @@ export { default as NotesPanel } from './panels/NotesPanel.svelte';
 export { default as TasksPanel } from './panels/TasksPanel.svelte';
 export { default as ThinkingContextBar } from './ThinkingContextBar.svelte';
 export { default as ResponseContextBadge } from './ResponseContextBadge.svelte';
+export { default as ContextSnapshotModal } from './ContextSnapshotModal.svelte';

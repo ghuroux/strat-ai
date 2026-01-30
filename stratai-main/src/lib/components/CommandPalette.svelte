@@ -13,7 +13,7 @@
 	 */
 
 	import { fade, fly } from 'svelte/transition';
-	import { Search } from 'lucide-svelte';
+	import { Search, Loader2 } from 'lucide-svelte';
 	import { commandPaletteStore } from '$lib/stores/commandPalette.svelte';
 	import {
 		getAllCommands,
@@ -21,6 +21,7 @@
 		sortByRelevance,
 		groupByCategory,
 		categoryConfig,
+		convertSearchResults,
 		type Command,
 		type CommandCategory
 	} from '$lib/config/commands';
@@ -41,8 +42,73 @@
 		return sortByRelevance(filtered, commandPaletteStore.searchQuery);
 	});
 
+	// Server-side search state
+	let searchResults = $state<Command[]>([]);
+	let isSearching = $state(false);
+	let searchVersion = 0;
+
+	// Debounced server search when query >= 2 chars
+	$effect(() => {
+		const query = commandPaletteStore.searchQuery.trim();
+		const version = ++searchVersion;
+
+		if (!commandPaletteStore.isOpen || query.length < 2) {
+			searchResults = [];
+			isSearching = false;
+			return;
+		}
+
+		isSearching = true;
+		const timeout = setTimeout(async () => {
+			try {
+				const response = await fetch(
+					`/api/search?q=${encodeURIComponent(query)}&types=pages,tasks,areas,spaces&limit=5`
+				);
+				if (response.ok && version === searchVersion) {
+					const data = await response.json();
+					searchResults = convertSearchResults(data.results);
+				}
+			} catch {
+				// Silently fail — client-side results still available
+			} finally {
+				if (version === searchVersion) {
+					isSearching = false;
+				}
+			}
+		}, 250);
+
+		return () => clearTimeout(timeout);
+	});
+
+	// Deduplicate: remove server results already shown as client-side commands
+	let deduplicatedSearchResults = $derived.by(() => {
+		if (searchResults.length === 0) return [];
+
+		const clientEntityIds = new Set<string>();
+		for (const cmd of filteredCommands) {
+			for (const prefix of ['nav-space-', 'nav-area-', 'nav-task-', 'nav-page-', 'conv-']) {
+				if (cmd.id.startsWith(prefix)) {
+					clientEntityIds.add(cmd.id.slice(prefix.length));
+					break;
+				}
+			}
+		}
+
+		return searchResults.filter((cmd) => {
+			const match = cmd.id.match(/^search-\w+-(.+)$/);
+			return !match || !clientEntityIds.has(match[1]);
+		});
+	});
+
+	// Merge client-side commands with deduplicated server search results
+	let allDisplayCommands = $derived(
+		deduplicatedSearchResults.length > 0
+			? [...filteredCommands, ...deduplicatedSearchResults]
+			: filteredCommands
+	);
+
 	// Group for display
-	let groupedCommands = $derived(groupByCategory(filteredCommands));
+	let groupedCommands = $derived(groupByCategory(allDisplayCommands));
 
 	// Reset selection when search changes
 	$effect(() => {
@@ -68,7 +134,7 @@
 		switch (e.key) {
 			case 'ArrowDown':
 				e.preventDefault();
-				selectedIndex = Math.min(selectedIndex + 1, filteredCommands.length - 1);
+				selectedIndex = Math.min(selectedIndex + 1, allDisplayCommands.length - 1);
 				scrollSelectedIntoView();
 				break;
 
@@ -80,8 +146,8 @@
 
 			case 'Enter':
 				e.preventDefault();
-				if (filteredCommands[selectedIndex]) {
-					executeCommand(filteredCommands[selectedIndex]);
+				if (allDisplayCommands[selectedIndex]) {
+					executeCommand(allDisplayCommands[selectedIndex]);
 				}
 				break;
 
@@ -129,7 +195,7 @@
 	 * Get the global index for a command in a category
 	 */
 	function getGlobalIndex(cmd: Command): number {
-		return filteredCommands.indexOf(cmd);
+		return allDisplayCommands.indexOf(cmd);
 	}
 </script>
 
@@ -163,6 +229,9 @@
 					onkeydown={handleKeydown}
 				/>
 				<div class="search-hint">
+					{#if isSearching}
+						<Loader2 size={14} class="animate-spin" style="color: rgba(255,255,255,0.4)" />
+					{/if}
 					<kbd>esc</kbd>
 					<span>to close</span>
 				</div>
@@ -170,7 +239,7 @@
 
 			<!-- Results -->
 			<div class="results" bind:this={listRef}>
-				{#if filteredCommands.length > 0}
+				{#if allDisplayCommands.length > 0}
 					{#each [...groupedCommands.entries()] as [category, commands]}
 						<div class="category">
 							<div class="category-label">
@@ -202,10 +271,15 @@
 							{/each}
 						</div>
 					{/each}
+				{:else if isSearching}
+					<div class="no-results">
+						<Loader2 size={24} class="animate-spin" style="color: rgba(255,255,255,0.3)" />
+						<span>Searching...</span>
+					</div>
 				{:else}
 					<div class="no-results">
 						<Search class="no-results-icon" />
-						<span>No commands found for "{commandPaletteStore.searchQuery}"</span>
+						<span>No results found for "{commandPaletteStore.searchQuery}"</span>
 					</div>
 				{/if}
 			</div>

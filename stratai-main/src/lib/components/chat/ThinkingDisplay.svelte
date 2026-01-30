@@ -2,14 +2,30 @@
 	import { slide, fade, scale } from 'svelte/transition';
 	import { cubicOut, cubicInOut, backOut } from 'svelte/easing';
 	import MarkdownRenderer from './MarkdownRenderer.svelte';
+	import { ThinkingContextBar } from './context-transparency';
+
+	interface ContextUsed {
+		documents?: Array<{ filename: string }>;
+		notes?: { included: boolean };
+		tasks?: Array<{ title: string }>;
+	}
 
 	interface Props {
 		thinking: string;
 		isThinking?: boolean;
 		hasContent?: boolean;
+		context?: ContextUsed;
 	}
 
-	let { thinking, isThinking = false, hasContent = false }: Props = $props();
+	let { thinking, isThinking = false, hasContent = false, context }: Props = $props();
+
+	let hasContextToShow = $derived(
+		context && (
+			(context.documents?.length ?? 0) > 0 ||
+			context.notes?.included ||
+			(context.tasks?.length ?? 0) > 0
+		)
+	);
 
 	let expanded = $state(true);
 	let wasThinking = $state(false);
@@ -126,6 +142,13 @@
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
 			</svg>
 		</button>
+
+		<!-- Context being used (visible during active thinking) -->
+		{#if isThinking && hasContextToShow && context}
+			<div class="context-row">
+				<ThinkingContextBar {context} />
+			</div>
+		{/if}
 
 		<!-- Expandable content -->
 		{#if expanded}
@@ -355,6 +378,12 @@
 
 	.thinking-header:hover .expand-icon {
 		color: rgb(var(--color-amber));
+	}
+
+	/* Context row (between header and content) */
+	.context-row {
+		padding: 0 16px 10px;
+		border-top: 1px solid rgba(var(--color-amber), 0.06);
 	}
 
 	/* Content area */

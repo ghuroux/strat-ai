@@ -13,8 +13,12 @@
 	 */
 
 	import { onMount } from 'svelte';
-	import { X, Eye, Edit, Share2, Shield, Clock, Users, Lock } from 'lucide-svelte';
+	import {
+		X, Eye, Edit, Share2, Shield, Clock, Users, Lock,
+		FilePlus, Unlock, RotateCcw, BookOpen, BookX, Download, Trash2
+	} from 'lucide-svelte';
 	import type { AuditEventWithUser, AuditEventType } from '$lib/types/audit';
+	import { AUDIT_FILTER_GROUPS } from '$lib/types/audit';
 
 	// Props
 	interface Props {
@@ -28,7 +32,7 @@
 	let events = $state<AuditEventWithUser[]>([]);
 	let isLoading = $state(true);
 	let error = $state<string | null>(null);
-	let filter = $state<'all' | 'views' | 'edits' | 'sharing'>('all');
+	let filter = $state<'all' | 'views' | 'edits' | 'lifecycle' | 'sharing'>('all');
 	let offset = $state(0);
 	let hasMore = $state(true);
 	const LIMIT = 50;
@@ -54,24 +58,20 @@
 			isLoading = true;
 			error = null;
 
-			// Map filter to event types
+			// Map filter to event types using filter groups
 			let eventTypes: AuditEventType[] | undefined;
 			switch (filter) {
 				case 'views':
-					eventTypes = ['page_viewed'];
+					eventTypes = AUDIT_FILTER_GROUPS.views;
 					break;
 				case 'edits':
-					eventTypes = ['page_edited'];
+					eventTypes = AUDIT_FILTER_GROUPS.edits;
+					break;
+				case 'lifecycle':
+					eventTypes = AUDIT_FILTER_GROUPS.lifecycle;
 					break;
 				case 'sharing':
-					eventTypes = [
-						'page_shared_user',
-						'page_shared_group',
-						'page_unshared_user',
-						'page_unshared_group',
-						'page_permission_changed',
-						'page_visibility_changed'
-					];
+					eventTypes = AUDIT_FILTER_GROUPS.sharing;
 					break;
 				default:
 					eventTypes = undefined;
@@ -89,7 +89,7 @@
 
 			if (!response.ok) {
 				if (response.status === 403) {
-					error = 'Access denied. Only admins can view the activity log.';
+					error = 'Access denied. Only the page owner or admins can view the activity log.';
 				} else {
 					error = 'Failed to load activity';
 				}
@@ -186,6 +186,20 @@
 				return 'created this page';
 			case 'page_deleted':
 				return 'deleted this page';
+			case 'page_finalized':
+				return `finalized as v${metadata.version_number ?? '?'}`;
+			case 'page_unlocked': {
+				const keptCtx = metadata.kept_in_context ? ' (kept in context)' : '';
+				return `unlocked v${metadata.from_version ?? '?'} for editing${keptCtx}`;
+			}
+			case 'page_version_restored':
+				return `restored to v${metadata.restored_version ?? '?'}`;
+			case 'page_context_added':
+				return `added v${metadata.version_number ?? '?'} to AI context`;
+			case 'page_context_removed':
+				return 'removed from AI context';
+			case 'page_exported':
+				return `exported as ${metadata.format ?? 'file'}`;
 			case 'page_shared_user':
 				return `shared with ${metadata.target_user_name || 'a user'} as ${metadata.permission}`;
 			case 'page_shared_group':
@@ -196,13 +210,14 @@
 				return `removed ${metadata.target_group_name || 'a group'}`;
 			case 'page_permission_changed':
 				return `changed ${metadata.target_name || 'permission'} from ${metadata.old_permission} to ${metadata.new_permission}`;
-			case 'page_visibility_changed':
+			case 'page_visibility_changed': {
 				const sharesRemoved = metadata.specific_shares_removed as number | undefined;
 				let msg = `changed visibility from ${metadata.old_visibility} to ${metadata.new_visibility}`;
 				if (sharesRemoved && sharesRemoved > 0) {
 					msg += ` (${sharesRemoved} shares removed)`;
 				}
 				return msg;
+			}
 			default:
 				return event.action;
 		}
@@ -214,8 +229,23 @@
 			case 'page_viewed':
 				return Eye;
 			case 'page_edited':
-			case 'page_created':
 				return Edit;
+			case 'page_created':
+				return FilePlus;
+			case 'page_finalized':
+				return Lock;
+			case 'page_unlocked':
+				return Unlock;
+			case 'page_version_restored':
+				return RotateCcw;
+			case 'page_context_added':
+				return BookOpen;
+			case 'page_context_removed':
+				return BookX;
+			case 'page_exported':
+				return Download;
+			case 'page_deleted':
+				return Trash2;
 			case 'page_shared_user':
 			case 'page_shared_group':
 			case 'page_unshared_user':
@@ -225,10 +255,66 @@
 				return Shield;
 			case 'page_visibility_changed':
 				return Users;
-			case 'page_deleted':
-				return Lock;
 			default:
 				return Clock;
+		}
+	}
+
+	// Get detail line for events with rich metadata (returns null if no details worth showing)
+	function getEventDetails(event: AuditEventWithUser): string | null {
+		const m = event.metadata as Record<string, unknown>;
+
+		switch (event.eventType) {
+			case 'page_created': {
+				const parts: string[] = [];
+				if (m.page_type && m.page_type !== 'general') parts.push(String(m.page_type));
+				if (m.visibility) parts.push(String(m.visibility));
+				if (m.source_conversation_id) parts.push('from chat');
+				return parts.length > 0 ? parts.join(' · ') : null;
+			}
+			case 'page_edited': {
+				const parts: string[] = [];
+				const before = m.word_count_before as number | undefined;
+				const after = m.word_count_after as number | undefined;
+				if (before != null && after != null) {
+					const diff = after - before;
+					if (diff > 0) parts.push(`+${diff} words (${after.toLocaleString()} total)`);
+					else if (diff < 0) parts.push(`${diff} words (${after.toLocaleString()} total)`);
+					else parts.push(`${after.toLocaleString()} words`);
+				}
+				if (m.title_changed) parts.push('title changed');
+				return parts.length > 0 ? parts.join(' · ') : null;
+			}
+			case 'page_finalized': {
+				const parts: string[] = [];
+				const wc = m.word_count as number | undefined;
+				if (wc) parts.push(`${wc.toLocaleString()} words`);
+				if (m.added_to_context) parts.push('added to AI context');
+				if (m.change_summary) parts.push(`"${m.change_summary}"`);
+				return parts.length > 0 ? parts.join(' · ') : null;
+			}
+			case 'page_unlocked': {
+				if (m.kept_in_context && m.context_version_number) {
+					return `context pinned at v${m.context_version_number}`;
+				}
+				return null;
+			}
+			case 'page_version_restored': {
+				if (m.current_version_before) {
+					return `was at v${m.current_version_before}`;
+				}
+				return null;
+			}
+			case 'page_deleted': {
+				const parts: string[] = [];
+				if (m.was_finalized) parts.push('was finalized');
+				if (m.was_in_context) parts.push('was in context');
+				const vc = m.version_count as number | undefined;
+				if (vc && vc > 0) parts.push(`${vc} version${vc > 1 ? 's' : ''}`);
+				return parts.length > 0 ? parts.join(' · ') : null;
+			}
+			default:
+				return null;
 		}
 	}
 
@@ -310,6 +396,15 @@
 		<button
 			type="button"
 			class="filter-tab"
+			class:active={filter === 'lifecycle'}
+			onclick={() => (filter = 'lifecycle')}
+			aria-pressed={filter === 'lifecycle'}
+		>
+			Lifecycle
+		</button>
+		<button
+			type="button"
+			class="filter-tab"
 			class:active={filter === 'sharing'}
 			onclick={() => (filter = 'sharing')}
 			aria-pressed={filter === 'sharing'}
@@ -348,6 +443,11 @@
 										<span class="event-user">{event.userName || 'Unknown'}</span>
 										<span class="event-action">{formatEvent(event)}</span>
 									</div>
+									{#if getEventDetails(event)}
+										<div class="event-details">
+											└─ {getEventDetails(event)}
+										</div>
+									{/if}
 									<div class="event-meta">
 										<svelte:component this={getEventIcon(event.eventType)} size={12} />
 										<span class="event-time">{formatRelativeTime(event.createdAt)}</span>
@@ -603,6 +703,14 @@
 	.event-action {
 		font-size: 0.875rem;
 		color: var(--editor-text-secondary);
+	}
+
+	.event-details {
+		font-size: 0.75rem;
+		color: var(--editor-text-muted);
+		margin-bottom: 0.125rem;
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		letter-spacing: -0.01em;
 	}
 
 	.event-meta {

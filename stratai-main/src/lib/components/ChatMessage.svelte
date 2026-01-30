@@ -330,7 +330,7 @@
 
 					<!-- Extended thinking display (Claude models) -->
 					{#if hasThinking || isThinking}
-						<ThinkingDisplay thinking={message.thinking || ''} {isThinking} {hasContent} />
+						<ThinkingDisplay thinking={message.thinking || ''} {isThinking} {hasContent} context={contextInfo} />
 					{/if}
 
 					<!-- Search indicator when also showing thinking -->

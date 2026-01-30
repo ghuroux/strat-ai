@@ -9,6 +9,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 import type { UpdatePageInput } from '$lib/types/page';
 
 /**
@@ -103,6 +104,17 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 			return json({ error: 'Page not found' }, { status: 404 });
 		}
 
+		// Log audit event
+		postgresAuditRepository.logEvent(
+			userId, 'page_edited', 'page', id, 'edit',
+			{
+				word_count_before: existingPage.wordCount ?? 0,
+				word_count_after: page.wordCount ?? 0,
+				title_changed: updates.title !== undefined && updates.title !== existingPage.title
+			},
+			locals.session.organizationId
+		);
+
 		return json({ page });
 	} catch (error) {
 		console.error('Failed to update page:', error);
@@ -136,6 +148,18 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		}
 
 		await postgresPageRepository.delete(id, userId);
+
+		// Log audit event
+		postgresAuditRepository.logEvent(
+			userId, 'page_deleted', 'page', id, 'delete',
+			{
+				title: page.title,
+				was_finalized: page.status === 'finalized',
+				was_in_context: page.inContext ?? false,
+				version_count: page.currentVersion ?? 0
+			},
+			locals.session.organizationId
+		);
 
 		return json({ success: true });
 	} catch (error) {

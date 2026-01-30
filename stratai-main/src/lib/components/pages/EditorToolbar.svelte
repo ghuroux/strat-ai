@@ -135,6 +135,10 @@
 	let isCodeBlockActive = $derived(editorTick >= 0 && editor.isActive('codeBlock'));
 	let isLinkActive = $derived(editorTick >= 0 && editor.isActive('link'));
 	let isTableActive = $derived(editorTick >= 0 && editor.isActive('table'));
+	let isAlignLeftActive = $derived(editorTick >= 0 && editor.isActive({ textAlign: 'left' }));
+	let isAlignCenterActive = $derived(editorTick >= 0 && editor.isActive({ textAlign: 'center' }));
+	let isAlignRightActive = $derived(editorTick >= 0 && editor.isActive({ textAlign: 'right' }));
+	let isAlignJustifyActive = $derived(editorTick >= 0 && editor.isActive({ textAlign: 'justify' }));
 
 	// Current code block language (reactive)
 	let currentCodeLanguage = $derived(editorTick >= 0 && isCodeBlockActive ? getCurrentCodeBlockLanguage() : '');
@@ -412,6 +416,67 @@
 		</button>
 	</div>
 
+	<div class="toolbar-divider desktop-only"></div>
+
+	<!-- Group 2b: Text Alignment - Desktop only -->
+	<div class="toolbar-group desktop-only">
+		<button
+			type="button"
+			class="toolbar-btn"
+			class:active={isAlignLeftActive}
+			onclick={() => editor.chain().focus().setTextAlign('left').run()}
+			title="Align Left ({modKey}+Shift+L)"
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="3" y1="6" x2="21" y2="6" />
+				<line x1="3" y1="12" x2="15" y2="12" />
+				<line x1="3" y1="18" x2="21" y2="18" />
+			</svg>
+		</button>
+
+		<button
+			type="button"
+			class="toolbar-btn"
+			class:active={isAlignCenterActive}
+			onclick={() => editor.chain().focus().setTextAlign('center').run()}
+			title="Align Center ({modKey}+Shift+E)"
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="3" y1="6" x2="21" y2="6" />
+				<line x1="6" y1="12" x2="18" y2="12" />
+				<line x1="3" y1="18" x2="21" y2="18" />
+			</svg>
+		</button>
+
+		<button
+			type="button"
+			class="toolbar-btn"
+			class:active={isAlignRightActive}
+			onclick={() => editor.chain().focus().setTextAlign('right').run()}
+			title="Align Right ({modKey}+Shift+R)"
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="3" y1="6" x2="21" y2="6" />
+				<line x1="9" y1="12" x2="21" y2="12" />
+				<line x1="3" y1="18" x2="21" y2="18" />
+			</svg>
+		</button>
+
+		<button
+			type="button"
+			class="toolbar-btn"
+			class:active={isAlignJustifyActive}
+			onclick={() => editor.chain().focus().setTextAlign('justify').run()}
+			title="Justify ({modKey}+Shift+J)"
+		>
+			<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				<line x1="3" y1="6" x2="21" y2="6" />
+				<line x1="3" y1="12" x2="21" y2="12" />
+				<line x1="3" y1="18" x2="21" y2="18" />
+			</svg>
+		</button>
+	</div>
+
 	<div class="toolbar-divider"></div>
 
 	<!-- Group 3: Lists - Always visible -->
@@ -672,6 +737,65 @@
 						>
 							<span class="text-label-lg">H3</span>
 							<span>Heading 3</span>
+						</button>
+					</div>
+				</div>
+
+				<!-- Alignment Section -->
+				<div class="mobile-menu-section">
+					<div class="mobile-menu-section-title">Alignment</div>
+					<div class="mobile-menu-row">
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isAlignLeftActive}
+							onclick={() => { editor.chain().focus().setTextAlign('left').run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="3" y1="6" x2="21" y2="6" />
+								<line x1="3" y1="12" x2="15" y2="12" />
+								<line x1="3" y1="18" x2="21" y2="18" />
+							</svg>
+							<span>Left</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isAlignCenterActive}
+							onclick={() => { editor.chain().focus().setTextAlign('center').run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="3" y1="6" x2="21" y2="6" />
+								<line x1="6" y1="12" x2="18" y2="12" />
+								<line x1="3" y1="18" x2="21" y2="18" />
+							</svg>
+							<span>Center</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isAlignRightActive}
+							onclick={() => { editor.chain().focus().setTextAlign('right').run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="3" y1="6" x2="21" y2="6" />
+								<line x1="9" y1="12" x2="21" y2="12" />
+								<line x1="3" y1="18" x2="21" y2="18" />
+							</svg>
+							<span>Right</span>
+						</button>
+						<button
+							type="button"
+							class="mobile-menu-btn"
+							class:active={isAlignJustifyActive}
+							onclick={() => { editor.chain().focus().setTextAlign('justify').run(); showMobileMenu = false; }}
+						>
+							<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+								<line x1="3" y1="6" x2="21" y2="6" />
+								<line x1="3" y1="12" x2="21" y2="12" />
+								<line x1="3" y1="18" x2="21" y2="18" />
+							</svg>
+							<span>Justify</span>
 						</button>
 					</div>
 				</div>

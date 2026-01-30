@@ -375,5 +375,68 @@ export const postgresMeetingsRepository: MeetingsRepository = {
 			ORDER BY m.scheduled_end DESC
 		`;
 		return rows.map(rowToMeeting);
+	},
+
+	async findAwaitingCaptureByArea(areaId: string, userId: string): Promise<Meeting[]> {
+		const rows = await sql<MeetingRow[]>`
+			SELECT m.* FROM meetings m
+			WHERE m.deleted_at IS NULL
+				AND m.status = 'awaiting_capture'
+				AND m.area_id = ${areaId}
+				AND (
+					m.organizer_id = ${userId}::uuid
+					OR m.owner_id = ${userId}::uuid
+					OR EXISTS (
+						SELECT 1 FROM space_memberships sm
+						WHERE sm.space_id = m.space_id AND sm.user_id = ${userId}::uuid
+					)
+				)
+			ORDER BY m.scheduled_end DESC
+		`;
+		return rows.map(rowToMeeting);
+	},
+
+	async transitionToAwaitingCapture(id: string, userId: string): Promise<Meeting | null> {
+		const hasAccess = await userCanAccessMeeting(id, userId);
+		if (!hasAccess) return null;
+
+		await sql`
+			UPDATE meetings
+			SET status = 'awaiting_capture', updated_at = NOW()
+			WHERE id = ${id}
+				AND status IN ('scheduled', 'in_progress', 'completed')
+				AND deleted_at IS NULL
+		`;
+
+		return this.findById(id, userId);
+	},
+
+	async storeCaptureData(
+		id: string,
+		captureData: Record<string, unknown>,
+		captureMethod: string,
+		pageId?: string,
+		userId?: string
+	): Promise<Meeting | null> {
+		await sql`
+			UPDATE meetings
+			SET
+				status = 'captured',
+				capture_data = ${sql.json(captureData as JSONValue)},
+				capture_method = ${captureMethod},
+				page_id = COALESCE(${pageId ?? null}, page_id),
+				updated_at = NOW()
+			WHERE id = ${id}
+				AND deleted_at IS NULL
+		`;
+
+		if (userId) {
+			return this.findById(id, userId);
+		}
+		// Return without access check when userId not provided (internal service call)
+		const rows = await sql<MeetingRow[]>`
+			SELECT * FROM meetings WHERE id = ${id} AND deleted_at IS NULL
+		`;
+		return rows.length > 0 ? rowToMeeting(rows[0]) : null;
 	}
 };

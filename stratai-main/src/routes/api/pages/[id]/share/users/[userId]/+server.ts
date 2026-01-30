@@ -62,7 +62,8 @@ export const PATCH: RequestHandler = async ({ params, locals, request }) => {
 			{
 				target_user_id: targetUserId,
 				new_permission: permission
-			}
+			},
+			locals.session.organizationId
 		);
 
 		return json({ success: true });
@@ -110,7 +111,8 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 			'unshare',
 			{
 				target_user_id: targetUserId
-			}
+			},
+			locals.session.organizationId
 		);
 
 		return json({ success: true });

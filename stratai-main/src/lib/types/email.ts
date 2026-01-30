@@ -18,7 +18,8 @@ export type EmailType =
 	| 'space_invite'
 	| 'notification'
 	| 'welcome'
-	| 'calendar_connect';
+	| 'calendar_connect'
+	| 'task_assigned';
 
 /**
  * Types of password reset tokens

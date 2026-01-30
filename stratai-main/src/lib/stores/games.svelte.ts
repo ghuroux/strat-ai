@@ -11,6 +11,7 @@
 
 let isSnakeOpen = $state(false);
 let isWordleOpen = $state(false);
+let isPromptRunnerOpen = $state(false);
 
 // =============================================================================
 // Store Export
@@ -53,5 +54,24 @@ export const gameStore = {
 
 	toggleWordle() {
 		isWordleOpen = !isWordleOpen;
+	},
+
+	// =========================================================================
+	// Prompt Runner
+	// =========================================================================
+	get isPromptRunnerOpen() {
+		return isPromptRunnerOpen;
+	},
+
+	openPromptRunner() {
+		isPromptRunnerOpen = true;
+	},
+
+	closePromptRunner() {
+		isPromptRunnerOpen = false;
+	},
+
+	togglePromptRunner() {
+		isPromptRunnerOpen = !isPromptRunnerOpen;
 	}
 };

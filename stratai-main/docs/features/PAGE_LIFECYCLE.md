@@ -699,15 +699,35 @@ Response: Page
 - [ ] Restore version functionality
 - [ ] Change summary on finalize
 
-### Phase 4: Polish
+### Phase 4: Polish ✅
 
-**Goal**: Refined UX and edge cases
+**Completed**: January 2026
 
-- [ ] Status dropdown with visual states
-- [ ] "Editing v1" indicator while unlocked
-- [ ] Discard changes option (revert to last finalized)
-- [ ] Bulk context management in ContextPanel
-- [ ] Search across finalized pages
+- [x] Context-aware unlock (keep finalized version in AI context while editing)
+- [x] "Editing v{N}" indicator while unlocked
+- [x] Pinned context badge ("v{N} in Context")
+- [x] Discard changes option (revert to last finalized version)
+- [x] Premium PageHeader redesign (3-group layout, overflow menu, visual hierarchy)
+- [ ] ~~Status dropdown with visual states~~ (deferred — overflow menu approach adopted instead)
+- [ ] Bulk context management in ContextPanel (deferred)
+- [ ] Search across finalized pages (deferred)
+
+### Phase 5: Audit Trail & Activity Log
+
+**Goal**: SOC 2-grade activity tracking for all page operations
+
+> See `docs/features/PAGE_AUDIT_TRAIL.md` for full specification
+
+**Tier 1 (Core Compliance)**:
+- [ ] Expand event taxonomy (16 event types covering full lifecycle)
+- [ ] Wire `logEvent()` calls in all page API endpoints
+- [ ] View deduplication (one per user per page per day)
+- [ ] Populate `organization_id` on all events
+
+**Tier 2 (Usability)**:
+- [ ] Open Activity Log access to page owners (not just admins)
+- [ ] Add "Lifecycle" filter tab (finalize, unlock, restore, create, delete)
+- [ ] Format and icon support for all 16 event types
 
 ---
 
@@ -734,6 +754,7 @@ Response: Page
 
 ## Related Documents
 
+- `docs/features/PAGE_AUDIT_TRAIL.md` - Audit trail & activity log specification (Phase 5)
 - `docs/features/CONTEXT_TRANSPARENCY.md` - How context is shown to users
 - `docs/CONTEXT_STRATEGY.md` - Overall context architecture
 - `src/lib/types/page.ts` - Page type definitions

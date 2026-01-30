@@ -10,6 +10,7 @@ import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import type { CreateTaskInput, TaskListFilter, TaskStatus, GlobalTaskFilter } from '$lib/types/tasks';
+import { sendTaskAssignmentNotification } from '$lib/server/email/task-notifications';
 
 /**
  * GET /api/tasks
@@ -126,10 +127,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		// Check if bulk create
 		if (body.tasks && Array.isArray(body.tasks)) {
-			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string; estimatedEffort?: string; areaId?: string }) => ({
+			const inputs: CreateTaskInput[] = body.tasks.map((t: { title: string; priority?: string; dueDate?: string; dueDateType?: string; estimatedEffort?: string; areaId?: string; assigneeId?: string }) => ({
 				title: t.title,
 				spaceId: resolvedSpaceId,
 				areaId: t.areaId ?? body.areaId, // Per-task or bulk level
+				assigneeId: t.assigneeId ?? body.assigneeId, // Per-task or bulk level
 				priority: t.priority,
 				dueDate: t.dueDate ? new Date(t.dueDate) : undefined,
 				dueDateType: t.dueDateType,
@@ -152,6 +154,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			description: body.description,
 			spaceId: resolvedSpaceId,
 			areaId: body.areaId,
+			assigneeId: body.assigneeId,
 			priority: body.priority,
 			dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
 			dueDateType: body.dueDateType,
@@ -160,6 +163,14 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		};
 
 		const task = await postgresTaskRepository.create(input, userId);
+
+		// Fire-and-forget: send assignment notification if assigned to someone else
+		if (task.assigneeId && task.assigneeId !== userId) {
+			sendTaskAssignmentNotification({
+				task, assigneeId: task.assigneeId, assignerId: userId,
+				orgId: locals.session.organizationId
+			}).catch(console.error);
+		}
 
 		return json({ task }, { status: 201 });
 	} catch (error) {

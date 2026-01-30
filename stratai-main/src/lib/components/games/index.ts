@@ -15,3 +15,7 @@ export { default as WordleGame } from './WordleGame.svelte';
 export { default as WordleBoard } from './WordleBoard.svelte';
 export { default as WordleKeyboard } from './WordleKeyboard.svelte';
 export * from './wordle-words';
+
+// Prompt Runner
+export { default as PromptRunnerGame } from './PromptRunnerGame.svelte';
+export { default as PromptRunnerCanvas } from './PromptRunnerCanvas.svelte';

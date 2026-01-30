@@ -125,7 +125,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			context: body.context,
 			contextDocumentIds: body.contextDocumentIds,
 			color: areaColor,
-			icon: body.icon
+			icon: body.icon,
+			isRestricted: body.isRestricted === true ? true : undefined
 		};
 
 		const area = await postgresAreaRepository.create(input, userId);

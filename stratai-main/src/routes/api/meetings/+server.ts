@@ -10,6 +10,7 @@ import type { RequestHandler } from './$types';
 import { postgresMeetingsRepository } from '$lib/server/persistence/meetings-postgres';
 import { resolveSpaceIdAccessible } from '$lib/server/persistence/spaces-postgres';
 import type { CreateMeetingInput, MeetingListFilter, MeetingStatus } from '$lib/types/meetings';
+import { runLazyTransitions } from '$lib/server/services/meeting-lifecycle';
 
 /**
  * GET /api/meetings
@@ -28,6 +29,9 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const userId = locals.session.userId;
 
 	try {
+		// Run lazy status transitions (scheduled/in_progress → awaiting_capture for overdue)
+		await runLazyTransitions(userId);
+
 		const filter: MeetingListFilter = {};
 
 		// Resolve space identifier

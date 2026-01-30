@@ -12,6 +12,7 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 import type { TipTapContent, TipTapNode, TipTapMark } from '$lib/types/page';
 import {
 	Document,
@@ -491,6 +492,13 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 	if (!page) {
 		throw error(404, 'Page not found');
 	}
+
+	// Log audit event
+	postgresAuditRepository.logEvent(
+		userId, 'page_exported', 'page', id, 'export',
+		{ format },
+		locals.session.organizationId
+	);
 
 	const filename = slugify(page.title) || 'untitled';
 

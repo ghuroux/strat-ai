@@ -10,6 +10,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresTaskRepository } from '$lib/server/persistence/tasks-postgres';
 import type { UpdateTaskInput } from '$lib/types/tasks';
+import { sendTaskAssignmentNotification } from '$lib/server/email/task-notifications';
 
 /**
  * GET /api/tasks/[id]
@@ -85,11 +86,22 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 		if (body.approachChosenAt !== undefined) {
 			updates.approachChosenAt = body.approachChosenAt ? new Date(body.approachChosenAt) : null;
 		}
+		if (body.assigneeId !== undefined) {
+			updates.assigneeId = body.assigneeId || null; // empty string becomes null
+		}
 
 		const task = await postgresTaskRepository.update(params.id, updates, userId);
 
 		if (!task) {
 			return json({ error: 'Task not found' }, { status: 404 });
+		}
+
+		// Fire-and-forget: send assignment notification if assignee changed to someone else
+		if (updates.assigneeId && updates.assigneeId !== userId && task.assigneeId) {
+			sendTaskAssignmentNotification({
+				task, assigneeId: task.assigneeId, assignerId: userId,
+				orgId: locals.session.organizationId
+			}).catch(console.error);
 		}
 
 		return json({ task });

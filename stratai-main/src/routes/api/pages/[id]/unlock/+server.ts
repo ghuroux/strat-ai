@@ -14,6 +14,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 
 /**
  * POST /api/pages/[id]/unlock
@@ -39,6 +40,19 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 
 	try {
 		const page = await postgresPageRepository.unlockPage(id, userId, keepInContext);
+
+		if (page) {
+			// Log audit event
+			postgresAuditRepository.logEvent(
+				userId, 'page_unlocked', 'page', id, 'unlock',
+				{
+					from_version: page.currentVersion ?? 1,
+					kept_in_context: keepInContext,
+					context_version_number: keepInContext ? (page.contextVersionNumber ?? null) : null
+				},
+				locals.session.organizationId
+			);
+		}
 
 		if (!page) {
 			// Could be not found, not owner, or not finalized

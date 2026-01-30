@@ -23,6 +23,7 @@ export interface LLMUsageRecord {
 	cacheCreationTokens: number;
 	cacheReadTokens: number;
 	estimatedCostMillicents: number;
+	isEstimated: boolean;
 	createdAt: Date;
 }
 
@@ -42,6 +43,7 @@ interface UsageRow {
 	cacheCreationTokens: number | null;
 	cacheReadTokens: number | null;
 	estimatedCostMillicents: number | null;
+	isEstimated: boolean;
 	createdAt: Date;
 }
 
@@ -142,6 +144,7 @@ function rowToUsage(row: UsageRow): LLMUsageRecord {
 		cacheCreationTokens: row.cacheCreationTokens || 0,
 		cacheReadTokens: row.cacheReadTokens || 0,
 		estimatedCostMillicents: row.estimatedCostMillicents || 0,
+		isEstimated: row.isEstimated,
 		createdAt: row.createdAt
 	};
 }
@@ -159,6 +162,7 @@ export interface UsageRepository {
 		cacheCreationTokens?: number;
 		cacheReadTokens?: number;
 		estimatedCostMillicents?: number;
+		isEstimated?: boolean;
 	}): Promise<LLMUsageRecord>;
 
 	getStats(organizationId: string, daysBack?: number): Promise<UsageStats>;
@@ -179,7 +183,8 @@ export const postgresUsageRepository: UsageRepository = {
 			INSERT INTO llm_usage (
 				organization_id, user_id, conversation_id, model, request_type,
 				prompt_tokens, completion_tokens, total_tokens,
-				cache_creation_tokens, cache_read_tokens, estimated_cost_millicents
+				cache_creation_tokens, cache_read_tokens, estimated_cost_millicents,
+				is_estimated
 			)
 			VALUES (
 				${data.organizationId},
@@ -192,7 +197,8 @@ export const postgresUsageRepository: UsageRepository = {
 				${data.totalTokens},
 				${data.cacheCreationTokens || 0},
 				${data.cacheReadTokens || 0},
-				${data.estimatedCostMillicents || 0}
+				${data.estimatedCostMillicents || 0},
+				${data.isEstimated || false}
 			)
 			RETURNING *
 		`;

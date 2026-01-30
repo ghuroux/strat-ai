@@ -241,7 +241,7 @@ export const postgresAreaRepository: AreaRepository = {
 
 		await sql`
 			INSERT INTO areas (
-				id, space_id, name, slug, is_general,
+				id, space_id, name, slug, is_general, is_restricted,
 				context, context_document_ids,
 				color, icon, order_index,
 				user_id, created_by, created_at, updated_at
@@ -251,6 +251,7 @@ export const postgresAreaRepository: AreaRepository = {
 				${input.name},
 				${slug},
 				false,
+				${input.isRestricted ?? false},
 				${input.context ?? null},
 				${input.contextDocumentIds ?? null},
 				${input.color ?? null},
@@ -525,5 +526,27 @@ export const postgresAreaRepository: AreaRepository = {
 			  AND deleted_at IS NULL
 		`;
 		return parseInt(result[0]?.count ?? '0', 10);
+	},
+
+	/**
+	 * Search areas by name (ILIKE)
+	 */
+	async search(query: string, userId: string, limit = 20): Promise<Area[]> {
+		const ilikePattern = `%${query.trim()}%`;
+		if (!query.trim()) return [];
+
+		const rows = await sql<AreaRow[]>`
+			SELECT a.*
+			FROM areas a
+			JOIN space_memberships sm ON sm.space_id = a.space_id AND sm.user_id = ${userId}::uuid
+			WHERE a.name ILIKE ${ilikePattern}
+				AND a.deleted_at IS NULL
+			ORDER BY
+				CASE WHEN a.name ILIKE ${query.trim() + '%'} THEN 0 ELSE 1 END,
+				a.name ASC
+			LIMIT ${limit}
+		`;
+
+		return rows.map(rowToArea);
 	}
 };

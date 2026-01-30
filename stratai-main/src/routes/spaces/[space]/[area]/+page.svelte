@@ -33,9 +33,15 @@
 	import { CreatePageModal } from '$lib/components/pages';
 	import PageSuggestion from '$lib/components/chat/PageSuggestion.svelte';
 	import { shouldSuggestPage, type PageSuggestion as PageSuggestionType } from '$lib/utils/page-detection';
+	import { ContextSnapshotModal } from '$lib/components/chat/context-transparency';
+	import { isContextSnapshotDismissed, dismissContextSnapshot } from '$lib/utils/context-snapshot';
+	import DocumentMentionBanner from '$lib/components/chat/DocumentMentionBanner.svelte';
+	import { detectMentionedDocument, type MentionMatch } from '$lib/utils/document-mention-detector';
 	import TaskModal from '$lib/components/spaces/TaskModal.svelte';
 	import ShareAreaModal from '$lib/components/areas/ShareAreaModal.svelte';
 	import { CreateMeetingModal } from '$lib/components/meetings';
+	import MeetingCaptureBanner from '$lib/components/meetings/MeetingCaptureBanner.svelte';
+	import MeetingCaptureModal from '$lib/components/meetings/MeetingCaptureModal.svelte';
 	import AreaAvatarStack from '$lib/components/areas/AreaAvatarStack.svelte';
 	import { parseTaskSuggestions, parseDueDate, type TaskSuggestion } from '$lib/utils/task-suggestion-parser';
 	import { chatStore } from '$lib/stores/chat.svelte';
@@ -254,6 +260,21 @@
 
 	// Meeting wizard modal state
 	let meetingModalOpen = $state(false);
+
+	// Meeting capture modal state
+	let captureModalOpen = $state(false);
+	let captureTargetMeetingId = $state('');
+
+	// Context Snapshot Modal state (Phase 2.1: shows context before first message)
+	let showContextSnapshotModal = $state(false);
+	let pendingSendContent = $state<string | null>(null);
+	let pendingSendAttachments = $state<FileAttachment[] | undefined>(undefined);
+
+	// Document Mention Detection state (Phase 3: Intelligent Detection)
+	let currentInputText = $state('');
+	let mentionMatch = $state<MentionMatch | null>(null);
+	let dismissedMentions = $state<Set<string>>(new Set());
+	let mentionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Page suggestion state (P6-IN-02: dismissed state persists in session)
 	let dismissedPageSuggestions = $state<Set<string>>(new Set());
@@ -615,19 +636,15 @@
 	}
 
 	async function handleSend(content: string, attachments?: FileAttachment[]) {
+		// Guard: don't re-enter if context snapshot modal is already open
+		if (showContextSnapshotModal) return;
+
 		// Clear any previous timeouts and reset timeout state
 		clearStreamingTimeouts();
 		streamingTimedOut = false;
 
 		// Clear any previous failed message state
 		failedMessage = null;
-
-		// Capture context at send time for transparency
-		const usedContext = captureUsedContext();
-
-		// Store message content and attachments for retry
-		lastMessageContent = content;
-		lastMessageAttachments = attachments;
 
 		if (chatStore.isSecondOpinionOpen) {
 			chatStore.closeSecondOpinion();
@@ -657,6 +674,26 @@
 				guidedCreationStore.startGuidedMode(intent.pageType, intent.topic);
 			}
 		}
+
+		// Context Snapshot: intercept first message in new conversation
+		const isNewConversation = !chatStore.activeConversation?.id;
+		if (isNewConversation && shouldShowContextSnapshot()) {
+			pendingSendContent = content;
+			pendingSendAttachments = attachments;
+			showContextSnapshotModal = true;
+			return; // Exit early — executeSend called from modal handlers
+		}
+
+		await executeSend(content, attachments);
+	}
+
+	async function executeSend(content: string, attachments?: FileAttachment[]) {
+		// Capture context FRESH (user may have toggled docs/pages in snapshot modal)
+		const usedContext = captureUsedContext();
+
+		// Store message content and attachments for retry
+		lastMessageContent = content;
+		lastMessageAttachments = attachments;
 
 		let conversationId = chatStore.activeConversation?.id;
 		if (!conversationId) {
@@ -1319,6 +1356,108 @@
 			areaSlug: areaParam
 		};
 	});
+
+	// Context Snapshot: derive context data for modal (reactive)
+	let snapshotContextData = $derived.by(() => {
+		if (!area || !properSpaceId) return null;
+		const allDocs = documentStore.getDocuments(properSpaceId);
+		const activeIds = new Set(area.contextDocumentIds ?? []);
+		const allPages = pageStore.getPagesForArea(area.id);
+		return {
+			activeDocuments: allDocs
+				.filter(d => activeIds.has(d.id))
+				.map(d => ({ id: d.id, filename: d.filename, charCount: d.charCount, title: d.title })),
+			availableDocuments: allDocs
+				.filter(d => !activeIds.has(d.id))
+				.map(d => ({ id: d.id, filename: d.filename, charCount: d.charCount, title: d.title })),
+			activePages: allPages
+				.filter(p => p.status === 'finalized' && p.inContext)
+				.map(p => ({ id: p.id, title: p.title, wordCount: p.wordCount, currentVersion: p.currentVersion })),
+			availablePages: allPages
+				.filter(p => p.status === 'finalized' && !p.inContext)
+				.map(p => ({ id: p.id, title: p.title, wordCount: p.wordCount, currentVersion: p.currentVersion })),
+			notes: { hasNotes: !!area.context, preview: area.context?.slice(0, 200) },
+			relatedTasks: areaTasks.map(t => ({ id: t.id, title: t.title, status: t.status, color: t.color }))
+		};
+	});
+
+	// Context Snapshot: should we show the modal?
+	function shouldShowContextSnapshot(): boolean {
+		if (!area) return false;
+		return !isContextSnapshotDismissed('area', area.id);
+	}
+
+	// Context Snapshot: handlers
+	function handleContextSnapshotStart() {
+		showContextSnapshotModal = false;
+		if (pendingSendContent !== null) {
+			executeSend(pendingSendContent, pendingSendAttachments);
+		}
+		pendingSendContent = null;
+		pendingSendAttachments = undefined;
+	}
+
+	function handleContextSnapshotSkip() {
+		showContextSnapshotModal = false;
+		if (pendingSendContent !== null) {
+			executeSend(pendingSendContent, pendingSendAttachments);
+		}
+		pendingSendContent = null;
+		pendingSendAttachments = undefined;
+	}
+
+	function handleContextSnapshotCancel() {
+		showContextSnapshotModal = false;
+		pendingSendContent = null;
+		pendingSendAttachments = undefined;
+	}
+
+	function handleContextSnapshotDismissForever() {
+		if (area) {
+			dismissContextSnapshot('area', area.id);
+		}
+	}
+
+	// Document Mention Detection: debounced handler
+	function handleInputChange(text: string) {
+		currentInputText = text;
+
+		// Clear previous timer
+		if (mentionDebounceTimer) clearTimeout(mentionDebounceTimer);
+
+		// Clear match immediately if input is short
+		if (text.length < 4) {
+			mentionMatch = null;
+			return;
+		}
+
+		// Debounce detection at 500ms
+		mentionDebounceTimer = setTimeout(() => {
+			if (!properSpaceId || !area) return;
+
+			// Get unactivated documents (available but not in context)
+			const allDocs = documentStore.getDocuments(properSpaceId);
+			const activeIds = new Set(area.contextDocumentIds ?? []);
+			const unactivated = allDocs
+				.filter(d => !activeIds.has(d.id) && !dismissedMentions.has(d.id))
+				.map(d => ({ id: d.id, filename: d.filename, title: d.title }));
+
+			mentionMatch = detectMentionedDocument(text, unactivated);
+		}, 500);
+	}
+
+	function handleMentionActivate() {
+		if (!mentionMatch) return;
+		handleActivateDocument(mentionMatch.document.id);
+		mentionMatch = null;
+	}
+
+	function handleMentionDismiss() {
+		if (!mentionMatch) return;
+		dismissedMentions.add(mentionMatch.document.id);
+		dismissedMentions = dismissedMentions; // Trigger reactivity
+		mentionMatch = null;
+	}
 
 	// Task creation handler (from TasksPanel)
 	async function handleCreateTask(input: CreateTaskInput): Promise<Task | null> {
@@ -2116,6 +2255,17 @@
 				/>
 			{/if}
 
+			<!-- Meeting Capture Banner (post-meeting nudge) -->
+			{#if area}
+				<MeetingCaptureBanner
+					areaId={area.id}
+					onCapture={(meetingId) => {
+						captureTargetMeetingId = meetingId;
+						captureModalOpen = true;
+					}}
+				/>
+			{/if}
+
 			<!-- Phase 8: Guided creation banner (P8-GF-01) -->
 			{#if guidedModeActive}
 				<div class="guided-banner-wrapper">
@@ -2291,6 +2441,17 @@
 				{/if}
 			</div>
 
+			<!-- Document mention detection banner (matches ChatInput's max-w-4xl constraint) -->
+			{#if mentionMatch}
+				<div class="max-w-4xl mx-auto px-4">
+					<DocumentMentionBanner
+						filename={mentionMatch.document.filename}
+						onactivate={handleMentionActivate}
+						ondismiss={handleMentionDismiss}
+					/>
+				</div>
+			{/if}
+
 			<!-- Chat input -->
 			<ChatInput
 				onsend={handleSend}
@@ -2305,6 +2466,7 @@
 				onDeactivatePage={handleDeactivatePage}
 				onOpenContextPanel={() => contextPanelOpen = true}
 				onOpenTasksPanel={() => tasksPanelOpen = true}
+				oninputchange={handleInputChange}
 			/>
 		</main>
 
@@ -2431,6 +2593,44 @@
 				areaName={area.name}
 				currentUserId={userStore.id || ''}
 				onClose={() => (meetingModalOpen = false)}
+			/>
+		{/if}
+
+		<!-- Meeting Capture Modal -->
+		<MeetingCaptureModal
+			open={captureModalOpen}
+			meetingId={captureTargetMeetingId}
+			onClose={() => {
+				captureModalOpen = false;
+				captureTargetMeetingId = '';
+			}}
+		/>
+
+		<!-- Context Snapshot Modal (Phase 2.1: first message context review) -->
+		{#if snapshotContextData && area}
+			<ContextSnapshotModal
+				open={showContextSnapshotModal}
+				contextName={area.name}
+				activeDocuments={snapshotContextData.activeDocuments}
+				availableDocuments={snapshotContextData.availableDocuments}
+				activePages={snapshotContextData.activePages}
+				availablePages={snapshotContextData.availablePages}
+				notes={snapshotContextData.notes}
+				relatedTasks={snapshotContextData.relatedTasks}
+				onstart={handleContextSnapshotStart}
+				onskip={handleContextSnapshotSkip}
+				oncancel={handleContextSnapshotCancel}
+				onactivatedoc={handleActivateDocument}
+				ondeactivatedoc={handleDeactivateDocument}
+				onactivatepage={handleActivatePage}
+				ondeactivatepage={handleDeactivatePage}
+				oneditnotesclick={() => {
+					showContextSnapshotModal = false;
+					pendingSendContent = null;
+					pendingSendAttachments = undefined;
+					contextPanelOpen = true;
+				}}
+				ondismissforever={handleContextSnapshotDismissForever}
 			/>
 		{/if}
 	</div>

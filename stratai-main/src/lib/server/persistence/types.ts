@@ -202,6 +202,8 @@ export interface TaskRepository {
 	): Promise<void>;
 	unlinkRelatedTask(sourceTaskId: string, targetTaskId: string, userId: string): Promise<void>;
 	getRelatedTasks(taskId: string, userId: string): Promise<RelatedTaskInfo[]>;
+	// Global search
+	search(query: string, userId: string, limit?: number): Promise<Task[]>;
 }
 
 // =====================================================
@@ -236,6 +238,8 @@ export interface DocumentRepository {
 	// Document sharing queries
 	findSharedWithUser(userId: string, spaceId: string): Promise<Document[]>;
 	findAvailableForArea(userId: string, areaId: string, spaceId: string): Promise<Document[]>;
+	// Global search
+	search(query: string, userId: string, limit?: number): Promise<Document[]>;
 }
 
 // =====================================================
@@ -317,6 +321,8 @@ export interface AreaRepository {
 	reorder(spaceId: string, orderedIds: string[], userId: string): Promise<void>;
 	getTaskCount(id: string, userId: string): Promise<number>;
 	getConversationCount(id: string, userId: string): Promise<number>;
+	// Global search
+	search(query: string, userId: string, limit?: number): Promise<Area[]>;
 }
 
 /**
@@ -368,6 +374,8 @@ export interface SpaceRepository {
 	getPinnedCount(userId: string): Promise<number>;
 	pinSpace(spaceId: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
 	unpinSpace(spaceId: string, userId: string): Promise<(Space & { userRole: SpaceRole }) | null>;
+	// Global search
+	search(query: string, userId: string, limit?: number): Promise<Space[]>;
 }
 
 // =====================================================
@@ -613,6 +621,17 @@ export interface MeetingsRepository {
 	findBySpace(spaceId: string, userId: string, status?: MeetingStatus | MeetingStatus[]): Promise<Meeting[]>;
 	findUpcoming(userId: string, limit?: number): Promise<Meeting[]>;
 	findAwaitingCapture(userId: string): Promise<Meeting[]>;
+	findAwaitingCaptureByArea(areaId: string, userId: string): Promise<Meeting[]>;
+
+	// Capture
+	transitionToAwaitingCapture(id: string, userId: string): Promise<Meeting | null>;
+	storeCaptureData(
+		id: string,
+		captureData: Record<string, unknown>,
+		captureMethod: string,
+		pageId?: string,
+		userId?: string
+	): Promise<Meeting | null>;
 }
 
 /**

@@ -28,6 +28,8 @@
 		open: boolean;
 		area?: Area | null; // Null = create mode, Area = edit mode
 		spaceId: string;
+		/** Whether this is an organization space (affects default visibility) */
+		isOrgSpace?: boolean;
 		/** Colors already in use by other areas (for auto-generation and visual feedback) */
 		existingColors?: string[];
 		onClose: () => void;
@@ -40,6 +42,7 @@
 		open,
 		area = null,
 		spaceId,
+		isOrgSpace = false,
 		existingColors = [],
 		onClose,
 		onCreate,
@@ -51,6 +54,7 @@
 	let name = $state('');
 	let context = $state('');
 	let color = $state('');
+	let visibility = $state<'open' | 'private'>('open');
 	let contextDocumentIds = $state<string[]>([]);
 	let isSubmitting = $state(false);
 	let isUploading = $state(false);
@@ -126,6 +130,7 @@
 				// Create mode - reset form and auto-generate color
 				name = '';
 				context = '';
+				visibility = isOrgSpace ? 'private' : 'open';
 				contextDocumentIds = [];
 
 				// Generate a distinct color based on existing area colors
@@ -206,7 +211,8 @@
 					name: trimmedName,
 					context: context || undefined,
 					color: color || undefined,
-					contextDocumentIds: contextDocumentIds.length > 0 ? contextDocumentIds : undefined
+					contextDocumentIds: contextDocumentIds.length > 0 ? contextDocumentIds : undefined,
+					isRestricted: visibility === 'private' ? true : undefined
 				};
 				await onCreate(input);
 			}
@@ -397,6 +403,61 @@
 								/>
 							{/if}
 						</div>
+
+						<!-- Visibility field (create mode only, not for General areas) -->
+						{#if !isEditMode && !isGeneral}
+							<div class="field">
+								<span class="field-label">
+									<svg class="inline-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+									</svg>
+									Visibility
+								</span>
+								<div class="visibility-options">
+									<label class="visibility-option" class:selected={visibility === 'open'}>
+										<input
+											type="radio"
+											name="visibility"
+											value="open"
+											bind:group={visibility}
+											disabled={isSubmitting}
+											class="sr-only"
+										/>
+										<div class="option-radio" class:checked={visibility === 'open'}></div>
+										<div class="option-content">
+											<span class="option-label">Open to space members</span>
+											<span class="option-description">Everyone in this space can see and access this area</span>
+										</div>
+									</label>
+									<label class="visibility-option" class:selected={visibility === 'private'}>
+										<input
+											type="radio"
+											name="visibility"
+											value="private"
+											bind:group={visibility}
+											disabled={isSubmitting}
+											class="sr-only"
+										/>
+										<div class="option-radio" class:checked={visibility === 'private'}></div>
+										<div class="option-content">
+											<span class="option-label">
+												Private (just me)
+												{#if isOrgSpace}
+													<span class="recommended-badge">Recommended</span>
+												{/if}
+											</span>
+											<span class="option-description">Only you can see this area. Share when ready.</span>
+										</div>
+									</label>
+								</div>
+								{#if visibility === 'private'}
+									<p class="field-description">
+										Documents and context you add here will be private to you until you share this area.
+									</p>
+								{/if}
+							</div>
+						{/if}
 
 						<!-- Context field -->
 						<div class="field">
@@ -960,6 +1021,112 @@
 	/* Auto-selected color glow effect */
 	.color-option.auto {
 		box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.5);
+	}
+
+	/* Visibility selector */
+	.inline-icon {
+		width: 1rem;
+		height: 1rem;
+		display: inline;
+		vertical-align: -0.125rem;
+		margin-right: 0.25rem;
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.visibility-options {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.visibility-option {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.75rem;
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: all 0.15s ease;
+	}
+
+	.visibility-option:hover {
+		background: rgba(255, 255, 255, 0.06);
+		border-color: rgba(255, 255, 255, 0.2);
+	}
+
+	.visibility-option.selected {
+		background: rgba(59, 130, 246, 0.08);
+		border-color: rgba(59, 130, 246, 0.4);
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	.option-radio {
+		width: 1.125rem;
+		height: 1.125rem;
+		border-radius: 50%;
+		border: 2px solid rgba(255, 255, 255, 0.3);
+		flex-shrink: 0;
+		margin-top: 0.0625rem;
+		transition: all 0.15s ease;
+		position: relative;
+	}
+
+	.option-radio.checked {
+		border-color: var(--space-accent, #3b82f6);
+	}
+
+	.option-radio.checked::after {
+		content: '';
+		position: absolute;
+		inset: 3px;
+		border-radius: 50%;
+		background: var(--space-accent, #3b82f6);
+	}
+
+	.option-content {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.option-label {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.9);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.option-description {
+		font-size: 0.8125rem;
+		color: rgba(255, 255, 255, 0.45);
+		line-height: 1.4;
+	}
+
+	.recommended-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.0625rem 0.375rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: #10b981;
+		background: rgba(16, 185, 129, 0.15);
+		border: 1px solid rgba(16, 185, 129, 0.3);
+		border-radius: 0.25rem;
 	}
 
 	.modal-actions {

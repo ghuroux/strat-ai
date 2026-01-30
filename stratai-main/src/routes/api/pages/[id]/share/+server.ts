@@ -106,7 +106,8 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 				{
 					target_user_id: body.userId,
 					permission
-				}
+				},
+				locals.session.organizationId
 			);
 
 			return json(share);
@@ -128,7 +129,8 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 				{
 					target_group_id: body.groupId,
 					permission
-				}
+				},
+				locals.session.organizationId
 			);
 
 			return json(share);

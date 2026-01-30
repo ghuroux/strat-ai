@@ -448,6 +448,7 @@
 		open={showAreaModal}
 		area={null}
 		spaceId={spaceFromStore?.id || ''}
+		isOrgSpace={spaceFromStore?.spaceType === 'organization'}
 		onClose={handleCloseAreaModal}
 		onCreate={handleAreaCreate}
 		onUpdate={handleAreaUpdate}

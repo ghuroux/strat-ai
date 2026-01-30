@@ -777,6 +777,113 @@ async function ensureValidToken(userId: string): Promise<string> {
 }
 ```
 
+### Token Lifecycle Hardening
+
+> **Added: 2026-01-30** — Resolved daily "please reconnect" issue by centralizing token management.
+
+The original implementation had inline token refresh logic duplicated across `helpers.ts` and `chat/+server.ts`. This caused reliability issues:
+
+- **No race protection**: Concurrent requests could both attempt refresh, but Azure AD rotates refresh tokens on use — the second request would fail because its refresh token was already invalidated by the first.
+- **No retry**: A single transient Azure AD failure immediately marked the integration as `'error'`, forcing manual reconnection.
+- **Reactive-only refresh**: Tokens were only refreshed when a chat message or tool call detected expiry — never proactively.
+- **No diagnostics**: Azure AD error codes were not parsed, making it impossible to distinguish "token revoked by admin" from "transient network error".
+
+#### Architecture: Centralized Token Service
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                      TOKEN REFRESH ARCHITECTURE                            │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│   Frontend (+layout.svelte)                                                │
+│   ┌──────────────────────────────────┐                                     │
+│   │ onMount → checkCalendarHealth()  │  Fire-and-forget on every page load │
+│   └──────────────┬───────────────────┘                                     │
+│                  │ GET                                                      │
+│                  ▼                                                          │
+│   /api/integrations/calendar/health                                        │
+│   ┌──────────────────────────────────┐                                     │
+│   │ Health check endpoint            │  Lightweight, idempotent            │
+│   └──────────────┬───────────────────┘                                     │
+│                  │                                                          │
+│                  ▼                                                          │
+│   ensureValidToken(integrationId)     ◄── Also called by:                  │
+│   ┌──────────────────────────────────┐    • chat/+server.ts                │
+│   │ TOKEN SERVICE (centralized)      │    • helpers.ts                     │
+│   │                                  │                                     │
+│   │ 1. Check token validity          │                                     │
+│   │ 2. Proactive refresh (5min buf)  │                                     │
+│   │ 3. Mutex (per-integration)       │                                     │
+│   │ 4. Retry + exponential backoff   │                                     │
+│   │ 5. Azure AD error parsing        │                                     │
+│   │ 6. Status transition management  │                                     │
+│   └──────────────┬───────────────────┘                                     │
+│                  │                                                          │
+│                  ▼                                                          │
+│   Microsoft Azure AD Token Endpoint                                        │
+│   POST /oauth2/v2.0/token (grant_type=refresh_token)                       │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Key Files
+
+| File | Purpose |
+|------|---------|
+| `providers/calendar/token-service.ts` | Centralized refresh with mutex, retry, error parsing |
+| `routes/api/integrations/calendar/health/+server.ts` | Proactive health check endpoint |
+| `providers/calendar/helpers.ts` | `getAuthenticatedCalendarClient()` — delegates to token service |
+| `routes/api/chat/+server.ts` | Chat endpoint — delegates to token service |
+| `routes/+layout.svelte` | Frontend — calls health check on every page load |
+
+#### Azure AD Error Code Handling
+
+The token service parses AADSTS error codes from Azure AD responses to determine the correct action:
+
+| Error Code | Description | Retryable | Requires Reconnect |
+|------------|-------------|-----------|-------------------|
+| `AADSTS700082` | Refresh token expired | No | Yes |
+| `AADSTS50173` | Grant revoked (password change/admin) | No | Yes |
+| `AADSTS50076` | MFA required | No | Yes |
+| `AADSTS65001` | App consent revoked | No | Yes |
+| `AADSTS70000` | Invalid grant (general) | No | Yes |
+| `AADSTS7000222` | Client secret expired | No | Yes |
+| `AADSTS500011` | Resource principal not found | Yes | No |
+| Unknown | Treated as transient | Yes (first) | No |
+
+#### Proactive Refresh Strategy
+
+```
+Timeline:
+├── Token issued (T+0)
+├── ...
+├── Token expiry minus 5min → PROACTIVE REFRESH (via health check or chat)
+├── Token expires (T+60min)
+├── ... expired ...
+└── If refresh token also expired → RECONNECT required
+
+Key: The 5-minute buffer ensures tokens are refreshed BEFORE they expire,
+not after. The page-load health check ensures this happens on every session.
+```
+
+#### Race Condition Protection
+
+Azure AD rotates refresh tokens on use (the old token is invalidated when a new one is issued). Without protection, concurrent requests can fail:
+
+```
+WITHOUT MUTEX:
+  Request A: refresh(old_token) → success → new_token_A stored
+  Request B: refresh(old_token) → FAIL (old_token already rotated by A)
+  Result: Request B marks integration as 'error' ❌
+
+WITH MUTEX:
+  Request A: refresh(old_token) → success → new_token_A stored
+  Request B: waiting... → gets result from A's refresh
+  Result: Both requests succeed ✅
+```
+
+The token service uses an in-memory `Map<integrationId, Promise>` as a lightweight mutex — no external dependencies needed.
+
 ---
 
 ## 8. UX Design
@@ -1292,3 +1399,6 @@ export class MicrosoftGraphClient {
 | Polling for capture detection | Simple, reliable; webhooks add complexity for V1 | 2026-01-22 |
 | Foundational tier (first-party UX) | Calendar shouldn't feel like "an integration" | 2026-01-22 |
 | Basic capture in calendar spec | Full extraction belongs in Meeting Lifecycle spec | 2026-01-22 |
+| Centralized token service | Single `ensureValidToken()` entry point eliminates duplication, adds mutex + retry + proactive refresh | 2026-01-30 |
+| Proactive health check on page load | Frontend calls `/api/integrations/calendar/health` on every page load (fire-and-forget) to keep tokens alive | 2026-01-30 |
+| Azure AD error code parsing | Parse AADSTS codes to distinguish permanent failures (require reconnect) from transient ones (retry) | 2026-01-30 |

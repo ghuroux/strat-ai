@@ -783,5 +783,27 @@ export const postgresSpaceRepository: SpaceRepository = {
 		`;
 
 		return this.findByIdAccessible(spaceId, userId);
+	},
+
+	/**
+	 * Search spaces by name (ILIKE)
+	 */
+	async search(query: string, userId: string, limit = 20): Promise<Space[]> {
+		const ilikePattern = `%${query.trim()}%`;
+		if (!query.trim()) return [];
+
+		const rows = await sql<SpaceRow[]>`
+			SELECT s.*
+			FROM spaces s
+			JOIN space_memberships sm ON sm.space_id = s.id AND sm.user_id = ${userId}::uuid
+			WHERE s.name ILIKE ${ilikePattern}
+				AND s.deleted_at IS NULL
+			ORDER BY
+				CASE WHEN s.name ILIKE ${query.trim() + '%'} THEN 0 ELSE 1 END,
+				s.name ASC
+			LIMIT ${limit}
+		`;
+
+		return rows.map(rowToSpace);
 	}
 };

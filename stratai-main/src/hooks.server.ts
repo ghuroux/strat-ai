@@ -1,7 +1,8 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
-import { redirect } from '@sveltejs/kit';
+import { json, redirect } from '@sveltejs/kit';
 import { getSessionCookie, verifySession } from '$lib/server/session';
 import { postgresUserRepository, postgresOrgMembershipRepository } from '$lib/server/persistence';
+import { matchRule, checkRateLimit, getClientIp } from '$lib/server/rate-limiter';
 
 const PUBLIC_ROUTES = ['/login', '/logout', '/forgot-password', '/reset-password', '/set-password'];
 
@@ -51,6 +52,41 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 			if (isLogoutRelated) {
 				console.log('[HOOKS] Session enriched for user:', session.userId);
+			}
+		}
+	}
+
+	// Rate limiting (mutating requests only)
+	const method = event.request.method;
+	const path = event.url.pathname;
+	const rule = matchRule(path, method);
+
+	if (rule) {
+		let key: string | null = null;
+
+		if (rule.keyType === 'userId') {
+			key = event.locals.session?.userId ?? null;
+			// No session = endpoint will 401 on its own, skip rate limiting
+		} else {
+			key = getClientIp(event.request);
+		}
+
+		if (key) {
+			const result = checkRateLimit(key, rule.id, rule);
+
+			if (!result.allowed) {
+				// Login uses SvelteKit form actions — flag it so the action can return fail()
+				if (path === '/login') {
+					event.locals.rateLimited = true;
+				} else {
+					return json(
+						{ error: 'Too many requests. Please slow down and try again.' },
+						{
+							status: 429,
+							headers: { 'Retry-After': String(result.retryAfterSeconds) }
+						}
+					);
+				}
 			}
 		}
 	}

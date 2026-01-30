@@ -13,6 +13,7 @@ declare global {
 				role: 'owner' | 'admin' | 'member';
 				createdAt: number;
 			} | null;
+			rateLimited?: boolean;
 		}
 		interface Error {
 			message: string;

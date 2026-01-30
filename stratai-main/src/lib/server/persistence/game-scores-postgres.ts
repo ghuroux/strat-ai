@@ -16,7 +16,7 @@ import { sql, type JSONValue } from './db';
 // Types
 // =============================================================================
 
-export type GameType = 'snake' | 'wordle' | 'tictactoe';
+export type GameType = 'snake' | 'wordle' | 'tictactoe' | 'prompt-runner';
 
 export interface GameScore {
 	id: string;

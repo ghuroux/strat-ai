@@ -23,6 +23,7 @@
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { documentStore } from '$lib/stores/documents.svelte';
+	import { pageStore } from '$lib/stores/pages.svelte';
 	import { modelCapabilitiesStore } from '$lib/stores/modelCapabilities.svelte';
 	import { SPACES, isValidSpace } from '$lib/config/spaces';
 	import ChatMessage from '$lib/components/ChatMessage.svelte';
@@ -46,6 +47,10 @@
 	import UserMenu from '$lib/components/layout/UserMenu.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
 	import { ContextPanel } from '$lib/components/areas';
+	import { ContextSnapshotModal } from '$lib/components/chat/context-transparency';
+	import { isContextSnapshotDismissed, dismissContextSnapshot } from '$lib/utils/context-snapshot';
+	import DocumentMentionBanner from '$lib/components/chat/DocumentMentionBanner.svelte';
+	import { detectMentionedDocument, type MentionMatch } from '$lib/utils/document-mention-detector';
 	import { FileText, Download, LayoutList } from 'lucide-svelte';
 	import type { Task, ProposedSubtask, SubtaskType } from '$lib/types/tasks';
 	import type { PageType } from '$lib/types/page';
@@ -143,6 +148,17 @@
 	// Delete conversation modal state
 	let showDeleteConversationModal = $state(false);
 	let deletingConversation = $state<typeof chatStore.conversationList[0] | null>(null);
+
+	// Context Snapshot Modal state (Phase 2.1: shows context before first message)
+	let showContextSnapshotModal = $state(false);
+	let pendingSendContent = $state<string | null>(null);
+	let pendingSendAttachments = $state<FileAttachment[] | undefined>(undefined);
+
+	// Document Mention Detection state (Phase 3)
+	let currentInputText = $state('');
+	let mentionMatch = $state<MentionMatch | null>(null);
+	let dismissedMentions = $state<Set<string>>(new Set());
+	let mentionDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Multi-conversation support for subtasks
 	let taskConversations = $derived(
@@ -401,16 +417,33 @@
 
 	// Handle send message
 	async function handleSend(content: string, attachments?: FileAttachment[], options?: { hidden?: boolean }) {
-		if (!content.trim() && !attachments?.length) return;
+		// Guard: don't re-enter if context snapshot modal is already open
+		if (showContextSnapshotModal) return;
 
-		// Capture context at send time for transparency
-		const usedContext = captureUsedContext();
+		if (!content.trim() && !attachments?.length) return;
 
 		const modelToUse = chatStore.activeConversation?.model || settingsStore.selectedModel;
 		if (!modelToUse) {
 			toastStore.error('Please select a model first');
 			return;
 		}
+
+		// Context Snapshot: intercept first message in new conversation
+		// Skip for hidden messages (e.g., auto-sent planning prompts)
+		const isNewConversation = !chatStore.activeConversation?.id;
+		if (isNewConversation && !options?.hidden && shouldShowTaskContextSnapshot()) {
+			pendingSendContent = content;
+			pendingSendAttachments = attachments;
+			showContextSnapshotModal = true;
+			return;
+		}
+
+		await executeSend(content, attachments, options);
+	}
+
+	async function executeSend(content: string, attachments?: FileAttachment[], options?: { hidden?: boolean }) {
+		// Capture context FRESH (user may have toggled docs/pages in snapshot modal)
+		const usedContext = captureUsedContext();
 
 		let conversationId = chatStore.activeConversation?.id;
 		if (!conversationId) {
@@ -1152,6 +1185,130 @@
 			areaId: task.areaId ?? undefined
 		};
 	});
+
+	// Context Snapshot: derive context data for modal (task-scoped)
+	let snapshotContextData = $derived.by(() => {
+		if (!task) return null;
+		const areaId = task.areaId;
+		const spaceId = task.spaceId ?? spaceParam;
+		if (!areaId || !spaceId) {
+			return {
+				activeDocuments: [] as { id: string; filename: string; charCount?: number; title?: string }[],
+				availableDocuments: [] as { id: string; filename: string; charCount?: number; title?: string }[],
+				activePages: [] as { id: string; title: string; wordCount: number; currentVersion?: number }[],
+				availablePages: [] as { id: string; title: string; wordCount: number; currentVersion?: number }[],
+				notes: { hasNotes: false, preview: undefined as string | undefined },
+				relatedTasks: [{ id: task.id, title: task.title, status: task.status, color: task.color }]
+			};
+		}
+		const area = areaStore.getAreaById(areaId);
+		const allDocs = documentStore.getDocuments(spaceId);
+		const activeIds = new Set(area?.contextDocumentIds ?? []);
+		const allPages = pageStore.getPagesForArea(areaId);
+		return {
+			activeDocuments: allDocs
+				.filter(d => activeIds.has(d.id))
+				.map(d => ({ id: d.id, filename: d.filename, charCount: d.charCount, title: d.title })),
+			availableDocuments: allDocs
+				.filter(d => !activeIds.has(d.id))
+				.map(d => ({ id: d.id, filename: d.filename, charCount: d.charCount, title: d.title })),
+			activePages: allPages
+				.filter(p => p.status === 'finalized' && p.inContext)
+				.map(p => ({ id: p.id, title: p.title, wordCount: p.wordCount, currentVersion: p.currentVersion })),
+			availablePages: allPages
+				.filter(p => p.status === 'finalized' && !p.inContext)
+				.map(p => ({ id: p.id, title: p.title, wordCount: p.wordCount, currentVersion: p.currentVersion })),
+			notes: { hasNotes: !!area?.context, preview: area?.context?.slice(0, 200) },
+			relatedTasks: [
+				{ id: task.id, title: task.title, status: task.status, color: task.color },
+				...subtasks.map(s => ({ id: s.id, title: s.title, status: s.status, color: s.color }))
+			]
+		};
+	});
+
+	function shouldShowTaskContextSnapshot(): boolean {
+		if (!task) return false;
+		return !isContextSnapshotDismissed('task', task.id);
+	}
+
+	function handleContextSnapshotStart() {
+		showContextSnapshotModal = false;
+		if (pendingSendContent !== null) {
+			executeSend(pendingSendContent, pendingSendAttachments);
+		}
+		pendingSendContent = null;
+		pendingSendAttachments = undefined;
+	}
+
+	function handleContextSnapshotSkip() {
+		showContextSnapshotModal = false;
+		if (pendingSendContent !== null) {
+			executeSend(pendingSendContent, pendingSendAttachments);
+		}
+		pendingSendContent = null;
+		pendingSendAttachments = undefined;
+	}
+
+	function handleContextSnapshotCancel() {
+		showContextSnapshotModal = false;
+		pendingSendContent = null;
+		pendingSendAttachments = undefined;
+	}
+
+	function handleContextSnapshotDismissForever() {
+		if (task) {
+			dismissContextSnapshot('task', task.id);
+		}
+	}
+
+	// Page context handlers for snapshot modal
+	async function handleActivatePage(pageId: string) {
+		await pageStore.setPageInContext(pageId, true);
+	}
+
+	async function handleDeactivatePage(pageId: string) {
+		await pageStore.setPageInContext(pageId, false);
+	}
+
+	// Document Mention Detection: debounced handler
+	function handleInputChange(text: string) {
+		currentInputText = text;
+
+		if (mentionDebounceTimer) clearTimeout(mentionDebounceTimer);
+
+		if (text.length < 4) {
+			mentionMatch = null;
+			return;
+		}
+
+		mentionDebounceTimer = setTimeout(() => {
+			if (!task?.areaId) return;
+			const spaceId = task.spaceId ?? spaceParam;
+			if (!spaceId) return;
+
+			const area = areaStore.getAreaById(task.areaId);
+			const allDocs = documentStore.getDocuments(spaceId);
+			const activeIds = new Set(area?.contextDocumentIds ?? []);
+			const unactivated = allDocs
+				.filter(d => !activeIds.has(d.id) && !dismissedMentions.has(d.id))
+				.map(d => ({ id: d.id, filename: d.filename, title: d.title }));
+
+			mentionMatch = detectMentionedDocument(text, unactivated);
+		}, 500);
+	}
+
+	function handleMentionActivate() {
+		if (!mentionMatch) return;
+		handleActivateDocument(mentionMatch.document.id);
+		mentionMatch = null;
+	}
+
+	function handleMentionDismiss() {
+		if (!mentionMatch) return;
+		dismissedMentions.add(mentionMatch.document.id);
+		dismissedMentions = dismissedMentions;
+		mentionMatch = null;
+	}
 
 	// Navigate back to space
 	function handleBack() {
@@ -2118,6 +2275,17 @@
 					onclick={() => scrollController.scrollToNewContent()}
 				/>
 
+					<!-- Document mention detection banner (matches ChatInput's max-w-4xl constraint) -->
+					{#if mentionMatch}
+						<div class="max-w-4xl mx-auto px-4">
+							<DocumentMentionBanner
+								filename={mentionMatch.document.filename}
+								onactivate={handleMentionActivate}
+								ondismiss={handleMentionDismiss}
+							/>
+						</div>
+					{/if}
+
 					<!-- Chat Input -->
 					<div class="chat-input-container" class:plan-mode={isPlanModeActive} class:completed={isTaskCompleted}>
 						<ChatInput
@@ -2131,6 +2299,7 @@
 							onActivateDocument={handleActivateDocument}
 							onDeactivateDocument={handleDeactivateDocument}
 							onOpenContextPanel={() => setContextPanelCollapsed(false)}
+							oninputchange={handleInputChange}
 						/>
 					</div>
 				</div>
@@ -2319,6 +2488,34 @@
 			onClose={handleCloseDeleteConversationModal}
 			onConfirm={handleConfirmDeleteConversation}
 		/>
+
+		<!-- Context Snapshot Modal (Phase 2.1: first message context review) -->
+		{#if snapshotContextData && task}
+			<ContextSnapshotModal
+				open={showContextSnapshotModal}
+				contextName={task.title}
+				activeDocuments={snapshotContextData.activeDocuments}
+				availableDocuments={snapshotContextData.availableDocuments}
+				activePages={snapshotContextData.activePages}
+				availablePages={snapshotContextData.availablePages}
+				notes={snapshotContextData.notes}
+				relatedTasks={snapshotContextData.relatedTasks}
+				onstart={handleContextSnapshotStart}
+				onskip={handleContextSnapshotSkip}
+				oncancel={handleContextSnapshotCancel}
+				onactivatedoc={handleActivateDocument}
+				ondeactivatedoc={handleDeactivateDocument}
+				onactivatepage={handleActivatePage}
+				ondeactivatepage={handleDeactivatePage}
+				oneditnotesclick={() => {
+					showContextSnapshotModal = false;
+					pendingSendContent = null;
+					pendingSendAttachments = undefined;
+					contextPanelOpen = true;
+				}}
+				ondismissforever={handleContextSnapshotDismissForever}
+			/>
+		{/if}
 	</div>
 {:else}
 	<div class="error-container">

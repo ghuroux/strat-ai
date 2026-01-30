@@ -6,6 +6,7 @@
 
 import type { PageServerLoad } from './$types';
 import { postgresPageRepository } from '$lib/server/persistence/pages-postgres';
+import { postgresAuditRepository } from '$lib/server/persistence/audit-postgres';
 import { error } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -37,6 +38,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			console.warn(`[PageLoad] Page not found or access denied: pageId=${pageId}, userId=${userId}`);
 			error(404, 'Page not found');
 		}
+
+		// Log deduplicated page view (fire-and-forget — don't delay page load)
+		postgresAuditRepository.logPageView(userId, pageId, locals.session.organizationId);
 
 		// Get user's permission level for this page
 		const userPermission = await postgresPageRepository.getUserPagePermission(userId, pageId);

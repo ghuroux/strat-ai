@@ -10,6 +10,7 @@
 
 /** Comprehensive event type taxonomy for audit logging */
 export type AuditEventType =
+	// Core (10)
 	| 'page_created'
 	| 'page_viewed'
 	| 'page_edited'
@@ -19,7 +20,16 @@ export type AuditEventType =
 	| 'page_unshared_group'
 	| 'page_permission_changed'
 	| 'page_visibility_changed'
-	| 'page_deleted';
+	| 'page_deleted'
+	// Lifecycle (3)
+	| 'page_finalized'
+	| 'page_unlocked'
+	| 'page_version_restored'
+	// Context (2)
+	| 'page_context_added'
+	| 'page_context_removed'
+	// Export (1)
+	| 'page_exported';
 
 /** Resource types that can be audited */
 export type AuditResourceType = 'page' | 'document' | 'area' | 'space' | 'task';
@@ -100,6 +110,78 @@ export interface PageEditedMetadata {
 	word_count_before?: number;
 	word_count_after?: number;
 }
+
+/** Metadata for page_created event */
+export interface PageCreatedMetadata {
+	page_type: string;
+	visibility: string;
+	area_id: string;
+	source_conversation_id?: string;
+}
+
+/** Metadata for page_finalized event */
+export interface PageFinalizedMetadata {
+	version_number: number;
+	word_count: number;
+	added_to_context: boolean;
+	change_summary?: string;
+}
+
+/** Metadata for page_unlocked event */
+export interface PageUnlockedMetadata {
+	from_version: number;
+	kept_in_context: boolean;
+	context_version_number?: number;
+}
+
+/** Metadata for page_version_restored event */
+export interface PageVersionRestoredMetadata {
+	restored_version: number;
+	current_version_before: number;
+}
+
+/** Metadata for page_context_changed event */
+export interface PageContextChangedMetadata {
+	version_number: number;
+	area_id: string;
+}
+
+/** Metadata for page_exported event */
+export interface PageExportedMetadata {
+	format: string;
+}
+
+/** Metadata for page_deleted event */
+export interface PageDeletedMetadata {
+	was_finalized: boolean;
+	was_in_context: boolean;
+	version_count: number;
+}
+
+// ============================================================================
+// Filter groups
+// ============================================================================
+
+/** Map filter categories to event types (for UI filter tabs) */
+export const AUDIT_FILTER_GROUPS: Record<string, AuditEventType[]> = {
+	views: ['page_viewed'],
+	edits: ['page_edited'],
+	lifecycle: [
+		'page_created',
+		'page_finalized',
+		'page_unlocked',
+		'page_version_restored',
+		'page_deleted'
+	],
+	sharing: [
+		'page_shared_user',
+		'page_shared_group',
+		'page_unshared_user',
+		'page_unshared_group',
+		'page_permission_changed',
+		'page_visibility_changed'
+	]
+};
 
 // ============================================================================
 // Query filters

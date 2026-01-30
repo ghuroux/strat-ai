@@ -48,7 +48,8 @@
 		onActivatePage,
 		onDeactivatePage,
 		onOpenContextPanel,
-		onOpenTasksPanel
+		onOpenTasksPanel,
+		oninputchange
 	}: {
 		disabled?: boolean;
 		placeholder?: string;
@@ -66,6 +67,8 @@
 		onDeactivatePage?: (pageId: string) => Promise<void>;
 		onOpenContextPanel?: () => void;
 		onOpenTasksPanel?: () => void;
+		// Input change callback for document mention detection
+		oninputchange?: (text: string) => void;
 	} = $props();
 
 	// Pending file attachments
@@ -996,6 +999,7 @@ Where every request is a round-trip to yourself. Very zen. 🧘`,
 			textarea.style.height = 'auto';
 			textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
 		}
+		oninputchange?.(input);
 	}
 
 	function handleStop() {

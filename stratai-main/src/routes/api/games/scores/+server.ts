@@ -11,7 +11,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { postgresGameScoresRepository, type GameType } from '$lib/server/persistence';
 
-const VALID_GAME_TYPES: GameType[] = ['snake', 'wordle', 'tictactoe'];
+const VALID_GAME_TYPES: GameType[] = ['snake', 'wordle', 'tictactoe', 'prompt-runner'];
 
 /**
  * GET /api/games/scores

@@ -806,6 +806,39 @@ const data = await response.json();
 console.log(data);
 ```
 
+## OAuth Token Management Pattern
+
+When endpoints need OAuth-protected external API access (e.g., Microsoft Graph), **never refresh tokens inline**. Use the centralized token service pattern:
+
+```typescript
+// ✅ CORRECT - Use centralized token service
+import { ensureValidToken } from '$lib/server/integrations/providers/calendar/token-service';
+
+const tokenResult = await ensureValidToken(integration.id);
+if (!tokenResult.success) {
+    // tokenResult.requiresReconnect tells you if user must manually reconnect
+    return json({ error: tokenResult.error }, { status: 502 });
+}
+const accessToken = tokenResult.accessToken;
+```
+
+```typescript
+// ❌ WRONG - Inline token refresh (race conditions, no retry, no error parsing)
+const refreshToken = await getRefreshToken(integrationId);
+const newTokens = await refreshAccessToken(refreshToken.value); // No retry!
+```
+
+**Why the centralized service matters:**
+- **Mutex**: Azure AD rotates refresh tokens on use — concurrent refreshes invalidate each other
+- **Retry**: Transient Azure errors shouldn't force user to reconnect
+- **Proactive refresh**: 5-minute buffer refreshes tokens before they expire
+- **Error parsing**: Azure AADSTS codes distinguish "retry" from "reconnect required"
+
+**Reference implementation:** `src/lib/server/integrations/providers/calendar/token-service.ts`
+
+**Health check pattern:** For proactive refresh, create a lightweight health endpoint:
+- `src/routes/api/integrations/calendar/health/+server.ts` — called by frontend on page load
+
 ## File Reference
 
 **Excellent examples to learn from:**
@@ -814,6 +847,8 @@ console.log(data);
 - `src/routes/api/tasks/+server.ts` - Query parameter handling, bulk operations
 - `src/routes/api/admin/groups/+server.ts` - Organization admin checks
 - `src/routes/api/chat/+server.ts` - Streaming endpoint patterns
+- `src/routes/api/integrations/calendar/health/+server.ts` - OAuth health check pattern
+- `src/lib/server/integrations/providers/calendar/token-service.ts` - Centralized token refresh
 
 **Authentication source:**
 - `src/hooks.server.ts` - Where `locals.session` is set

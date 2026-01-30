@@ -101,6 +101,9 @@ export interface Task {
 	// Focus Area (optional - for specialized context within space)
 	areaId?: string;
 
+	// Assignment
+	assigneeId?: string; // Who should complete this task (defaults to userId)
+
 	// Scope
 	spaceId: string; // FK to spaces table (system space id = slug, custom = UUID)
 	userId: string;
@@ -123,6 +126,7 @@ export interface CreateTaskInput {
 	description?: string; // User-provided background/context
 	spaceId: string; // FK to spaces table
 	areaId?: string;
+	assigneeId?: string; // Who should complete this task (defaults to creator)
 	priority?: TaskPriority;
 	dueDate?: Date;
 	dueDateType?: DueDateType;
@@ -139,6 +143,7 @@ export interface UpdateTaskInput {
 	status?: TaskStatus;
 	priority?: TaskPriority;
 	areaId?: string | null;
+	assigneeId?: string | null; // null to unassign (falls back to creator)
 	dueDate?: Date | null;
 	dueDateType?: DueDateType | null;
 	estimatedEffort?: EstimatedEffort | null;
@@ -161,6 +166,7 @@ export interface CreateSubtaskInput {
 	title: string;
 	parentTaskId: string;
 	subtaskType?: SubtaskType;
+	assigneeId?: string; // Who should complete this subtask (defaults to creator)
 	priority?: TaskPriority;
 	sourceConversationId?: string; // The conversation that created this subtask (e.g., Plan Mode conversation)
 	contextSummary?: string; // JSON string containing SubtaskContext
@@ -278,6 +284,8 @@ export interface TaskRow {
 	areaId: string | null;
 	// Planning state
 	planningData: PlanningData | null;
+	// Assignment
+	assigneeId: string | null;
 	// Scope
 	spaceId: string;
 	userId: string;
@@ -383,6 +391,8 @@ export function rowToTask(row: TaskRow): Task {
 		areaId: row.areaId ?? undefined,
 		// Planning state
 		planningData: row.planningData ?? undefined,
+		// Assignment
+		assigneeId: row.assigneeId ?? undefined,
 		// Scope
 		spaceId: row.spaceId,
 		userId: row.userId,
