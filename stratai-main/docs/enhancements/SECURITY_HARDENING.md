@@ -64,10 +64,28 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 
 ### Migration Strategy
 
+**Option A: Transparent migration (zero user disruption)**
+
+For production with real users. Existing sessions stay valid; users migrate silently on next login.
+
 1. Add `password_version` column to `users` table (default `1` = SHA-256, `2` = bcrypt)
-2. On login with v1 hash: verify with SHA-256, re-hash with bcrypt, update to v2
-3. After 90 days: force password reset for remaining v1 accounts
-4. Remove SHA-256 code path
+2. On login, detect hash format (bcrypt hashes start with `$2b$`):
+   - If bcrypt: verify with `bcrypt.compare()` (new path)
+   - If SHA-256: verify with old `createHash()` logic, then re-hash with bcrypt and update the row
+3. After 90 days: force password reset for any remaining v1 accounts that never logged in
+4. Remove SHA-256 code path once all accounts are v2
+
+**Option B: Clean break (recommended for pre-launch / test users only)**
+
+Simpler — no legacy code path to maintain. Appropriate when all existing users are internal testers.
+
+1. Switch `hashPassword()` and `verifyPassword()` to bcrypt
+2. Invalidate all existing passwords: `UPDATE users SET password_hash = NULL, salt = NULL`
+3. Send password reset emails to all users (or communicate directly if small team)
+4. Remove SHA-256 `createHash` code entirely — no dual-path logic needed
+5. Drop the `salt` column (bcrypt embeds its own salt in the hash string)
+
+**Trade-off:** Option B is cleaner code (no version detection, no legacy path) but requires every user to reset their password. Option A is zero-disruption but carries a temporary dual-hash code path until all users have logged in.
 
 ---
 
