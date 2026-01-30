@@ -17,11 +17,13 @@
 	import { documentStore } from '$lib/stores/documents.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { pageStore } from '$lib/stores/pages.svelte';
+	import { skillStore } from '$lib/stores/skills.svelte';
 	import { toastStore } from '$lib/stores/toast.svelte';
 	import type { Document } from '$lib/types/documents';
 	import type { Area } from '$lib/types/areas';
+	import type { Skill } from '$lib/types/skills';
 	import { ACCEPT_ALL, ALL_TYPES_DISPLAY } from '$lib/config/file-types';
-	import { BookOpen } from 'lucide-svelte';
+	import { BookOpen, Zap } from 'lucide-svelte';
 	import { untrack } from 'svelte';
 
 	interface Props {
@@ -129,6 +131,63 @@
 	let pagesInContextCount = $derived(
 		finalizedPages.filter(p => p.inContext || p.contextVersionNumber != null).length
 	);
+
+	// Skills: load space skills and area activations when panel opens
+	$effect(() => {
+		if (isOpen && spaceId) {
+			skillStore.loadSkills(spaceId);
+		}
+	});
+	$effect(() => {
+		if (isOpen && area?.id) {
+			const areaId = area.id;
+			untrack(() => {
+				skillStore.loadActivatedSkills(areaId);
+			});
+		}
+	});
+
+	// Space skills and activation state
+	let spaceSkills = $derived.by(() => skillStore.getSkillsForSpace(spaceId));
+	let activatedSkillIds = $derived.by(() => new Set(skillStore.getActivatedSkills(area.id).map((s: Skill) => s.id)));
+	let activeSkillCount = $derived(
+		spaceSkills.filter((s: Skill) => s.activationMode === 'always' || activatedSkillIds.has(s.id)).length
+	);
+
+	// Sort: always first → activated → inactive → alphabetical
+	let sortedSkills = $derived.by(() => {
+		return [...spaceSkills].sort((a, b) => {
+			const aAlways = a.activationMode === 'always';
+			const bAlways = b.activationMode === 'always';
+			const aActive = aAlways || activatedSkillIds.has(a.id);
+			const bActive = bAlways || activatedSkillIds.has(b.id);
+
+			if (aAlways && !bAlways) return -1;
+			if (!aAlways && bAlways) return 1;
+			if (aActive && !bActive) return -1;
+			if (!aActive && bActive) return 1;
+			return a.name.localeCompare(b.name);
+		});
+	});
+
+	// Toggle skill activation
+	async function toggleSkill(skillId: string) {
+		const isActive = activatedSkillIds.has(skillId);
+		if (isActive) {
+			await skillStore.deactivateSkill(area.id, skillId);
+		} else {
+			await skillStore.activateSkill(area.id, skillId);
+		}
+	}
+
+	// Get mode badge config for skills
+	function getSkillModeLabel(mode: string): { label: string; className: string } {
+		switch (mode) {
+			case 'always': return { label: 'Always', className: 'skill-mode-always' };
+			case 'trigger': return { label: 'Trigger', className: 'skill-mode-trigger' };
+			default: return { label: 'Manual', className: 'skill-mode-manual' };
+		}
+	}
 
 	// Toggle page context
 	async function togglePageContext(pageId: string) {
@@ -537,6 +596,68 @@
 					</div>
 				{/if}
 			</section>
+
+			<!-- Skills Section -->
+			{#if spaceSkills.length > 0}
+				<section class="skills-section">
+					<div class="section-header">
+						<div class="section-title">
+							<Zap size={14} />
+							<span>Skills</span>
+						</div>
+						<div class="doc-stats">
+							{#if activeSkillCount > 0}
+								<span class="stat-badge">{activeSkillCount} active</span>
+							{:else}
+								<span class="stat-none">None active</span>
+							{/if}
+						</div>
+					</div>
+
+					<div class="doc-list">
+						{#each sortedSkills as skill (skill.id)}
+							{@const isAlways = skill.activationMode === 'always'}
+							{@const active = isAlways || activatedSkillIds.has(skill.id)}
+							{@const modeInfo = getSkillModeLabel(skill.activationMode)}
+							<div class="doc-item" class:active>
+								<!-- Activation toggle (disabled for "always" skills) -->
+								<button
+									type="button"
+									class="doc-toggle"
+									class:checked={active}
+									onclick={() => !isAlways && toggleSkill(skill.id)}
+									disabled={isAlways}
+									title={isAlways ? 'Always active in every conversation' : active ? 'Deactivate skill' : 'Activate skill'}
+								>
+									{#if active}
+										<svg viewBox="0 0 24 24" fill="currentColor">
+											<path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm13.36-1.814a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clip-rule="evenodd" />
+										</svg>
+									{:else}
+										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+											<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+										</svg>
+									{/if}
+								</button>
+
+								<!-- Skill icon -->
+								<div class="doc-icon text">
+									<Zap size={12} />
+								</div>
+
+								<!-- Skill info -->
+								<div class="doc-info">
+									<span class="doc-name" title={skill.name}>{skill.name}</span>
+									<div class="doc-meta-row">
+										<span class="skill-mode-badge {modeInfo.className}">{modeInfo.label}</span>
+										<span class="doc-meta">Space</span>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</section>
+			{/if}
 
 			<!-- Documents Section -->
 			<section class="docs-section">
@@ -1235,5 +1356,30 @@
 		padding: 1rem;
 		color: rgba(255, 255, 255, 0.4);
 		font-size: 0.75rem;
+	}
+
+	/* Skill mode badges */
+	.skill-mode-badge {
+		font-size: 0.5rem;
+		font-weight: 600;
+		padding: 0.0625rem 0.25rem;
+		border-radius: 0.1875rem;
+		text-transform: uppercase;
+		letter-spacing: 0.02em;
+	}
+
+	.skill-mode-always {
+		background: rgba(16, 185, 129, 0.2);
+		color: #10b981;
+	}
+
+	.skill-mode-trigger {
+		background: rgba(245, 158, 11, 0.2);
+		color: #f59e0b;
+	}
+
+	.skill-mode-manual {
+		background: rgba(161, 161, 170, 0.15);
+		color: rgb(161 161 170);
 	}
 </style>

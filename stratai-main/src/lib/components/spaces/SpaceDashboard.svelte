@@ -31,6 +31,7 @@
 	import { taskStore } from '$lib/stores/tasks.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { pageStore } from '$lib/stores/pages.svelte';
+	import { skillStore } from '$lib/stores/skills.svelte';
 	import type { Area, SharedAreaInfo } from '$lib/types/areas';
 	import type { Space } from '$lib/types/spaces';
 	import type { Conversation } from '$lib/types/chat';
@@ -113,6 +114,7 @@
 	// Counts for navigation badges
 	let taskCount = $derived(activeTasks.length);
 	let pageCount = $derived(pageStore.getPageCountForSpace(space.id));
+	let skillCount = $derived(skillStore.getSkillsForSpace(space.id).length);
 
 	// Load space members when component mounts
 	$effect(() => {
@@ -126,6 +128,13 @@
 		for (const area of areas) {
 			// loadMembers has internal caching, won't refetch if already loaded
 			areaStore.loadMembers(area.id);
+		}
+	});
+
+	// Load skills for badge count
+	$effect(() => {
+		if (space?.id) {
+			skillStore.loadSkills(space.id);
 		}
 	});
 
@@ -290,6 +299,7 @@
 				{spaceColor}
 				{taskCount}
 				{pageCount}
+				{skillCount}
 				{memberCount}
 				onMembersClick={() => (showMembersModal = true)}
 			/>

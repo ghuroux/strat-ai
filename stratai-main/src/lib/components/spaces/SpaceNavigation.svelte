@@ -7,13 +7,14 @@
 	 * - Mobile (<768px): Shows icon + count badge only (labels hidden)
 	 * - All sizes: Tooltips on hover showing label + count
 	 */
-	import { CheckCircle, File, FileEdit, Users } from 'lucide-svelte';
+	import { CheckCircle, File, FileEdit, Users, Zap } from 'lucide-svelte';
 
 	interface Props {
 		spaceSlug: string;
 		spaceColor?: string;
 		taskCount?: number;
 		pageCount?: number;
+		skillCount?: number;
 		memberCount?: number;
 		onMembersClick: () => void;
 	}
@@ -23,6 +24,7 @@
 		spaceColor = '#3b82f6',
 		taskCount = 0,
 		pageCount = 0,
+		skillCount = 0,
 		memberCount = 0,
 		onMembersClick
 	}: Props = $props();
@@ -80,6 +82,22 @@
 			{/if}
 		</div>
 		<span class="label">Pages</span>
+	</a>
+
+	<!-- Skills -->
+	<a
+		href="/spaces/{spaceSlug}/skills"
+		class="nav-item"
+		aria-label={getTooltip('Skills', skillCount)}
+		title={getTooltip('Skills', skillCount)}
+	>
+		<div class="icon-wrapper">
+			<Zap size={16} strokeWidth={1.5} />
+			{#if skillCount > 0}
+				<span class="badge">{skillCount}</span>
+			{/if}
+		</div>
+		<span class="label">Skills</span>
 	</a>
 
 	<!-- Members -->
