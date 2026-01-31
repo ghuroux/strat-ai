@@ -5,6 +5,7 @@
  * Tests basic app functionality: login, page loads, session persistence.
  *
  * Would have caught: Phase 2 login 500 error (reserved action name)
+ * Phase 1 additions: invalid credentials, forgot password, settings, admin pages
  */
 import { test, expect } from '@playwright/test';
 import { loginAs, logout } from './helpers/auth';
@@ -131,6 +132,133 @@ test.describe('Tier 1: Critical Path', () => {
 		});
 	});
 
+	test.describe('Login Error Handling', () => {
+		test('login with invalid credentials shows error', async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', (err) => errors.push(err.message));
+
+			await page.goto('/login');
+			await page.waitForSelector('form');
+
+			// Submit with wrong password
+			await page.fill('input[name="username"]', 'nonexistent-user');
+			await page.fill('input[name="password"]', 'wrong-password-12345');
+			await page.click('button[type="submit"]');
+
+			// Should stay on login page
+			await expect(page).toHaveURL(/\/login/);
+
+			// Should show error message (red banner)
+			await expect(page.locator('text=Invalid credentials')).toBeVisible({ timeout: 5000 });
+
+			// No JavaScript errors (just a form error, not a crash)
+			expect(errors).toHaveLength(0);
+		});
+	});
+
+	test.describe('Password Recovery', () => {
+		test('forgot password page loads without errors', async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', (err) => errors.push(err.message));
+
+			await page.goto('/forgot-password');
+
+			// Page should load with reset form
+			await expect(page.locator('h1')).toContainText('Reset Password');
+			await expect(page.locator('input[type="email"]')).toBeVisible();
+			await expect(page.locator('button[type="submit"]')).toBeVisible();
+
+			// Back to login link should exist
+			await expect(page.locator('a[href="/login"]')).toBeVisible();
+
+			// No JavaScript errors
+			expect(errors).toHaveLength(0);
+		});
+
+		test('forgot password form submits successfully', async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', (err) => errors.push(err.message));
+
+			await page.goto('/forgot-password');
+
+			// Fill email and submit
+			await page.fill('input[type="email"]', 'test@example.com');
+			await page.click('button[type="submit"]');
+
+			// Should show confirmation (always shows success for security)
+			await expect(page.getByRole('heading', { name: /check your email/i }).or(page.locator('text=reset link').first())).toBeVisible({ timeout: 5000 });
+
+			// No JavaScript errors
+			expect(errors).toHaveLength(0);
+		});
+	});
+
+	test.describe('Protected Page Loads', () => {
+		test.beforeEach(async ({ page }) => {
+			await loginAs(page, 'tester');
+		});
+
+		test('settings page loads without errors', async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', (err) => errors.push(err.message));
+
+			await page.goto('/settings');
+			await page.waitForLoadState('networkidle');
+
+			// Should not redirect to login
+			await expect(page).not.toHaveURL(/\/login/);
+
+			// Settings title should be in the page head
+			await expect(page).toHaveTitle(/Settings/);
+
+			// Page should have content
+			await expect(page.locator('body')).not.toBeEmpty();
+
+			// No JavaScript errors
+			expect(errors).toHaveLength(0);
+		});
+	});
+
+	test.describe('Admin Pages', () => {
+		test.beforeEach(async ({ page }) => {
+			await loginAs(page, 'admin');
+		});
+
+		test('admin overview page loads without errors', async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', (err) => errors.push(err.message));
+
+			await page.goto('/admin/overview');
+			await page.waitForLoadState('networkidle');
+
+			// Should not redirect to login
+			await expect(page).not.toHaveURL(/\/login/);
+
+			// Dashboard should have content
+			await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible({ timeout: 5000 });
+
+			// No JavaScript errors
+			expect(errors).toHaveLength(0);
+		});
+
+		test('admin members page loads without errors', async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', (err) => errors.push(err.message));
+
+			await page.goto('/admin/members');
+			await page.waitForLoadState('networkidle');
+
+			// Should not redirect to login
+			await expect(page).not.toHaveURL(/\/login/);
+
+			// Page should have content
+			await expect(page.locator('body')).not.toBeEmpty();
+
+			// No JavaScript errors
+			expect(errors).toHaveLength(0);
+		});
+	});
+
 	test.describe('API Health', () => {
 		test.beforeEach(async ({ page }) => {
 			await loginAs(page, 'tester');
@@ -148,6 +276,15 @@ test.describe('Tier 1: Critical Path', () => {
 
 		test('conversations API returns 200', async ({ page }) => {
 			const response = await page.request.get('/api/conversations');
+			expect(response.ok()).toBeTruthy();
+		});
+
+		test('password reset API accepts POST', async ({ page }) => {
+			const response = await page.request.post('/api/auth/forgot-password', {
+				data: { email: 'smoke-test@example.com' },
+				headers: { 'Content-Type': 'application/json' }
+			});
+			// Should return 200 (always succeeds for security - doesn't reveal if email exists)
 			expect(response.ok()).toBeTruthy();
 		});
 	});

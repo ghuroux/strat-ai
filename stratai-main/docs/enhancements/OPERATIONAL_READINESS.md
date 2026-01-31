@@ -295,8 +295,10 @@ Schedule monthly restore tests:
 
 ## 5. Legal Compliance {#5-legal}
 
-**Severity: HIGH (launch blocker)**
+**Severity: HIGH (blocks public launch)**
 **Current State: No legal pages exist**
+
+> **Note:** Severity depends on launch strategy. For internal use or closed beta, legal pages can be deferred. For public launch or app store submission, these are hard blockers.
 
 ### Required Pages
 
@@ -347,7 +349,7 @@ For an LLM-powered platform handling enterprise data:
 
 | Asset | Exists? | Quality |
 |-------|---------|---------|
-| README.md | Yes | Outdated (acknowledged in Known Issues) |
+| README.md | Yes | Rewritten (2026-01-30) — product overview, features, architecture, setup, docs links |
 | CONTRIBUTING.md | No | — |
 | CLAUDE.md | Yes | Excellent (but AI-oriented, not human-oriented) |
 | PR template | Yes | `.github/pull_request_template.md` |
@@ -355,50 +357,6 @@ For an LLM-powered platform handling enterprise data:
 | CODEOWNERS | No | — |
 | Pre-commit hooks | No | — |
 | Architecture docs | Yes | Thorough but scattered |
-
-### README Rewrite
-
-The README should cover:
-
-```markdown
-# StratAI
-
-Enterprise LLM context-aware routing platform.
-
-## Quick Start
-
-### Prerequisites
-- Node.js 20+
-- PostgreSQL 18
-- Docker & Docker Compose
-
-### Setup
-1. Clone the repository
-2. Copy environment file: `cp .env.example .env`
-3. Start infrastructure: `docker-compose up -d`
-4. Install dependencies: `cd stratai-main && npm install`
-5. Setup database: `npm run db:setup`
-6. Start dev server: `npm run dev`
-7. Open http://localhost:5173
-
-### Key Commands
-| Command | Purpose |
-|---------|---------|
-| `npm run dev` | Development server |
-| `npm run check` | TypeScript type check |
-| `npm run lint` | ESLint |
-| `npm run test` | Unit tests |
-| `npm run test:smoke` | E2E smoke tests |
-| `npm run build` | Production build |
-
-### Architecture
-See [docs/enhancements/README.md](docs/enhancements/README.md) for
-codebase assessment and [docs/architecture/](docs/architecture/) for
-design documents.
-
-### Contributing
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-```
 
 ### CONTRIBUTING.md
 
@@ -574,7 +532,7 @@ NODE_ENV=development
 | **P0** | Legal pages (privacy, terms) | Medium | Yes — legal blocker |
 | **P0** | Database backup automation | Medium | Yes — data safety |
 | **P1** | Structured logging (pino) | Medium | Recommended |
-| **P1** | README rewrite | Medium | Recommended for devs |
+| ~~P1~~ | ~~README rewrite~~ | ~~Medium~~ | Done (2026-01-30) |
 | **P1** | CONTRIBUTING.md | Small | Recommended for devs |
 | **P2** | Pre-commit hooks (husky) | Small | Nice to have |
 | **P2** | Health check expansion | Small | Nice to have |

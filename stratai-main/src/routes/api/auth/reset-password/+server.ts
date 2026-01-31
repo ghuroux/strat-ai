@@ -34,7 +34,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Hash new password and update user
-		const passwordHash = hashPassword(password);
+		const passwordHash = await hashPassword(password);
 		const updated = await postgresUserRepository.updatePassword(userId, passwordHash);
 
 		if (!updated) {

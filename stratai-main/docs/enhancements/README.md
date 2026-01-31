@@ -11,10 +11,10 @@
 
 | Document | Scope | Key Findings |
 |----------|-------|--------------|
-| [Code Quality](./CODE_QUALITY.md) | Developer experience, patterns, test coverage, build tooling | 8 test files for 192K LOC; ESLint unconfigured; god files; duplicated auth patterns |
-| [Security Hardening](./SECURITY_HARDENING.md) | Auth, secrets, headers, encryption, input validation | SHA-256 passwords; default secret fallbacks; no security headers; no email verification |
-| [Performance & Scalability](./PERFORMANCE_SCALABILITY.md) | Caching, queries, pagination, multi-instance, payloads | No caching layer; in-memory state breaks multi-instance; N+1 in chat; missing pagination |
-| [Operational Readiness](./OPERATIONAL_READINESS.md) | Monitoring, logging, CI/CD, backups, legal, onboarding | No error monitoring; no CI/CD; console-only logging; no legal pages; outdated README |
+| [Code Quality](./CODE_QUALITY.md) | Developer experience, patterns, test coverage, build tooling | ~~8 test files~~ → 51 smoke tests + 4 unit test files; ESLint unconfigured; god files; duplicated auth patterns |
+| [Security Hardening](./SECURITY_HARDENING.md) | Auth, secrets, headers, encryption, input validation | ~~SHA-256 passwords~~ → ✅ bcrypt; default secret fallbacks; no security headers; no email verification |
+| [Performance & Scalability](./PERFORMANCE_SCALABILITY.md) | Caching, queries, pagination, multi-instance, payloads | No caching layer; in-memory state breaks multi-instance; missing pagination |
+| [Operational Readiness](./OPERATIONAL_READINESS.md) | Monitoring, logging, CI/CD, backups, legal, onboarding | No error monitoring; no CI/CD; console-only logging; no legal pages |
 
 ---
 
@@ -45,14 +45,14 @@ These areas are production-ready and don't need work:
 
 ## Priority Roadmap
 
-### Phase 1: Security (Week 1)
+### Phase 1: Security (Week 1) — In Progress
 
-| Item | Effort | Document |
-|------|--------|----------|
-| Migrate password hashing to bcrypt | Small | [Security](./SECURITY_HARDENING.md#1-password-hashing) |
-| Fail-fast on missing secrets | Small | [Security](./SECURITY_HARDENING.md#2-secret-management) |
-| Add security headers middleware | Small | [Security](./SECURITY_HARDENING.md#3-security-headers) |
-| Configure HTTPS / reverse proxy | Medium | [Security](./SECURITY_HARDENING.md#4-https) |
+| Item | Effort | Document | Status |
+|------|--------|----------|--------|
+| Migrate password hashing to bcrypt | Small | [Security](./SECURITY_HARDENING.md#1-password-hashing) | ✅ Done |
+| Fail-fast on missing secrets | Small | [Security](./SECURITY_HARDENING.md#2-secret-management) | TODO |
+| Add security headers middleware | Small | [Security](./SECURITY_HARDENING.md#3-security-headers) | TODO |
+| Configure HTTPS / reverse proxy | Medium | [Security](./SECURITY_HARDENING.md#4-https) | TODO |
 
 ### Phase 2: Ops Foundation (Week 2)
 
@@ -63,42 +63,55 @@ These areas are production-ready and don't need work:
 | CI/CD pipeline (GitHub Actions) | Small | [Ops](./OPERATIONAL_READINESS.md#3-cicd) |
 | Database backup strategy | Medium | [Ops](./OPERATIONAL_READINESS.md#4-backups) |
 
-### Phase 3: Developer Experience (Week 3)
+### Phase 3: Auth Hardening (Week 3)
+
+| Item | Effort | Document |
+|------|--------|----------|
+| Email verification flow | Medium | [Security](./SECURITY_HARDENING.md#5-email-verification) |
+| Remove env var password override | Small | [Security](./SECURITY_HARDENING.md#2-secret-management) |
+| Input validation on public endpoints (Zod) | Medium | [Security](./SECURITY_HARDENING.md#6-input-validation) |
+
+### Phase 4: Developer Experience (Week 3-4)
 
 | Item | Effort | Document |
 |------|--------|----------|
 | ESLint configuration | Small | [Code Quality](./CODE_QUALITY.md#2-build-tooling) |
-| README rewrite + CONTRIBUTING.md | Medium | [Ops](./OPERATIONAL_READINESS.md#6-contribution-infrastructure) |
+| CONTRIBUTING.md | Small | [Ops](./OPERATIONAL_READINESS.md#6-contribution-infrastructure) |
 | Centralized API error handling | Medium | [Code Quality](./CODE_QUALITY.md#3-api-error-handling) |
 | Pre-commit hooks (husky/lint-staged) | Small | [Ops](./OPERATIONAL_READINESS.md#6-contribution-infrastructure) |
 
-### Phase 4: Legal + Auth (Week 3-4)
+### Phase 5: Legal + Scale (Week 4-5)
 
 | Item | Effort | Document |
 |------|--------|----------|
 | Privacy policy + Terms of Service pages | Medium | [Ops](./OPERATIONAL_READINESS.md#5-legal) |
-| Email verification flow | Medium | [Security](./SECURITY_HARDENING.md#5-email-verification) |
-| Remove env var password override | Small | [Security](./SECURITY_HARDENING.md#2-secret-management) |
-
-### Phase 5: Scale Preparation (Week 4-5)
-
-| Item | Effort | Document |
-|------|--------|----------|
-| Redis for rate limiter + cache + mutex | Medium | [Performance](./PERFORMANCE_SCALABILITY.md#1-caching) |
 | Pagination on tasks/documents | Small | [Performance](./PERFORMANCE_SCALABILITY.md#4-pagination) |
-| Batch document fetching in chat | Medium | [Performance](./PERFORMANCE_SCALABILITY.md#3-n1-queries) |
-| Input validation library (Zod) | Medium | [Security](./SECURITY_HARDENING.md#6-input-validation) |
+| Redis for rate limiter + cache + mutex | Medium | [Performance](./PERFORMANCE_SCALABILITY.md#1-caching) |
 
-### Phase 6: Structural Quality (Ongoing)
+### Phase 6: Structural Quality (Ongoing) — Partially Started
 
-| Item | Effort | Document |
-|------|--------|----------|
-| API endpoint test suite (top 20) | Large | [Code Quality](./CODE_QUALITY.md#1-test-coverage) |
-| Split chat server monolith | Large | [Code Quality](./CODE_QUALITY.md#4-god-files) |
-| Split large components | Medium | [Code Quality](./CODE_QUALITY.md#4-god-files) |
-| Store unit tests | Medium | [Code Quality](./CODE_QUALITY.md#1-test-coverage) |
-| SSO / WorkOS integration | Large | [Security](./SECURITY_HARDENING.md#7-sso) |
-| Image storage migration | Large | [Performance](./PERFORMANCE_SCALABILITY.md#6-image-storage) |
+| Item | Effort | Document | Status |
+|------|--------|----------|--------|
+| Smoke test suite (Playwright, 3 tiers) | Large | [Code Quality](./CODE_QUALITY.md#1-test-coverage) | ✅ 51 tests |
+| API endpoint test suite (top 20) | Large | [Code Quality](./CODE_QUALITY.md#1-test-coverage) | TODO |
+| Split chat server monolith | Large | [Code Quality](./CODE_QUALITY.md#4-god-files) | TODO |
+| Split large components | Medium | [Code Quality](./CODE_QUALITY.md#4-god-files) | TODO |
+| Store unit tests | Medium | [Code Quality](./CODE_QUALITY.md#1-test-coverage) | TODO |
+| SSO / WorkOS integration | Large | [Security](./SECURITY_HARDENING.md#7-sso) | TODO |
+| Image storage migration | Large | [Performance](./PERFORMANCE_SCALABILITY.md#6-image-storage) | TODO |
+
+---
+
+## Not Yet Assessed
+
+These areas were not covered in this round but should be evaluated before public launch:
+
+| Area | Why It Matters |
+|------|----------------|
+| **Accessibility (WCAG)** | Enterprise customers require WCAG 2.1 AA compliance; no audit has been done |
+| **Internationalization (i18n)** | Non-English enterprise markets; all strings are currently hardcoded English |
+| **Data export / portability** | GDPR Article 20 requires data portability beyond just a privacy policy page |
+| **Disaster recovery (RTO/RPO)** | Backup strategy exists but no defined recovery time or recovery point objectives |
 
 ---
 
@@ -112,3 +125,32 @@ This assessment was conducted through:
 4. **Performance audit** — Query patterns, caching, connection pooling, pagination, payload handling
 5. **Tooling audit** — Build scripts, lint configs, test framework, CI/CD, dependency health
 6. **Multi-instance analysis** — In-memory state inventory, horizontal scaling readiness
+
+### Verification Pass (2026-01-30)
+
+A follow-up verification confirmed key claims against actual source code:
+
+| Claim | Verified? | Notes |
+|-------|-----------|-------|
+| ~~SHA-256 password hashing~~ | ✅ Fixed | Migrated to bcrypt (12 rounds) on 2026-01-31 |
+| Secret fallbacks | Confirmed | `SESSION_SECRET` defaults to `'default-secret-change-me'`; `LITELLM_API_KEY` defaults to `'sk-1234'` in 3 files |
+| No security headers | Confirmed | `hooks.server.ts` sets zero response headers |
+| ESLint unconfigured | Confirmed | No config file; runs with defaults |
+| No Prettier config | Confirmed | No `.prettierrc` or `prettier.config.js` |
+| WorkOS integrated | **Not confirmed** | Decision log only; no packages or code exist |
+| No CI/CD | Confirmed | `.github/workflows/` does not exist |
+| N+1 document fetching | **Not confirmed** | Chat endpoint iterates pre-fetched data, not per-document queries |
+| No error monitoring | Confirmed | No Sentry packages; docs-only references |
+| package.json name outdated | Confirmed | Still reads `"sveltekit-chat"` |
+
+Corrections applied: N+1 severity downgraded to LOW, Redis priority deferred, severity labels adjusted, WorkOS status clarified, `requireAuth()` pattern updated to use SvelteKit idioms, "Not Yet Assessed" section added.
+
+### Progress Update (2026-01-31)
+
+| Item | Change |
+|------|--------|
+| Password hashing | ✅ Migrated from SHA-256 to bcrypt (12 rounds). Clean break: all existing passwords invalidated, security upgrade emails sent, force-reset flow implemented. |
+| Smoke test coverage | ✅ Expanded from ~30 tests to **51 tests** across 3 tiers. Phase 2 (core workflows: chat streaming, CRUD, panels, command palette, error recovery, admin) and Phase 3 (theme persistence, arena, task creation) complete. See `docs/SMOKE_TEST_PLAN.md`. |
+| Modal overflow UX | ✅ Fixed SpaceModal and AreaModal CSS — `max-height: 90vh` + flexbox + `overflow-y: auto` on content. |
+| Rate limiting (dev) | ✅ Relaxed for dev mode (`import.meta.env.DEV`) to prevent test flakiness. |
+| Pre-existing T3 bug | ✅ Fixed "user menu accessible" test — dual header strict mode violation. |

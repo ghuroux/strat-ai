@@ -9,6 +9,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { PageEditor } from '$lib/components/pages';
+	import ErrorFallback from '$lib/components/ErrorFallback.svelte';
 	import { pageStore } from '$lib/stores/pages.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -179,18 +180,23 @@
 	</div>
 {:else if area}
 	<div class="editor-page">
-		<PageEditor
-			page={currentPage}
-			areaId={area.id}
-			areaName={area.name}
-			spaceName={spaceFromStore?.name ?? 'Space'}
-			userPermission={data.userPermission}
-			initialContent={initialContent}
-			initialTitle={initialTitle}
-			initialType={initialType}
-			onSave={handleSave}
-			onClose={handleClose}
-		/>
+		<svelte:boundary onerror={(e) => console.error('[PageEditor Error]', e)}>
+			<PageEditor
+				page={currentPage}
+				areaId={area.id}
+				areaName={area.name}
+				spaceName={spaceFromStore?.name ?? 'Space'}
+				userPermission={data.userPermission}
+				initialContent={initialContent}
+				initialTitle={initialTitle}
+				initialType={initialType}
+				onSave={handleSave}
+				onClose={handleClose}
+			/>
+			{#snippet failed(error, reset)}
+				<ErrorFallback {error} {reset} variant="page" />
+			{/snippet}
+		</svelte:boundary>
 	</div>
 {:else}
 	<div class="error-container">

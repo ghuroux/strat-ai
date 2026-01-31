@@ -86,8 +86,8 @@
 	// =============================================================================
 
 	let canvas: HTMLCanvasElement | undefined = $state();
-	let canvasWidth = $state(700);
-	let canvasHeight = $state(250);
+	let canvasWidth = $state(800);
+	let canvasHeight = $state(336);
 	let dpr = $state(1);
 
 	// =============================================================================
@@ -129,6 +129,9 @@
 	let groundScrollX = 0;
 	let frameCount = 0;
 	let spawnTimer = 0;
+	let scoreAccumulator = 0;
+	let trailTimer = 0;
+	let lastScoreReportFrame = 0;
 
 	// =============================================================================
 	// Speed & Difficulty
@@ -139,6 +142,7 @@
 	const LEVEL_THRESHOLD = 1000;
 	const MIN_GAP = 250;
 	const MAX_GAP = 450;
+	const TARGET_FRAME_MS = 1000 / 60; // Normalize game speed to 60fps across all refresh rates
 
 	// =============================================================================
 	// Derived
@@ -229,6 +233,9 @@
 		groundScrollX = 0;
 		frameCount = 0;
 		spawnTimer = 300;
+		scoreAccumulator = 0;
+		trailTimer = 0;
+		lastScoreReportFrame = 0;
 		startTime = Date.now();
 		gameState = 'playing';
 
@@ -303,10 +310,10 @@
 	// Update (called every frame when playing)
 	// =============================================================================
 
-	function update() {
-		// Physics
-		playerVelocity += GRAVITY;
-		playerY += playerVelocity;
+	function update(dt: number) {
+		// Physics (delta-time normalized to 60fps)
+		playerVelocity += GRAVITY * dt;
+		playerY += playerVelocity * dt;
 
 		if (playerY >= groundY - PLAYER_HEIGHT) {
 			playerY = groundY - PLAYER_HEIGHT;
@@ -316,7 +323,7 @@
 
 		// Move obstacles
 		for (const obs of obstacles) {
-			obs.x -= currentSpeed;
+			obs.x -= currentSpeed * dt;
 			if (!obs.passed && obs.x + obs.width < PLAYER_X) {
 				obs.passed = true;
 				obstaclesCleared++;
@@ -325,7 +332,7 @@
 		obstacles = obstacles.filter((o) => o.x > -100);
 
 		// Spawn obstacles
-		spawnTimer -= currentSpeed;
+		spawnTimer -= currentSpeed * dt;
 		if (spawnTimer <= 0) {
 			spawnObstacle();
 			let gap = MIN_GAP + Math.random() * (MAX_GAP - MIN_GAP);
@@ -333,9 +340,13 @@
 			spawnTimer = Math.max(gap, 180);
 		}
 
-		// Score
-		score++;
-		frameCount++;
+		// Score (accumulate fractional frames for consistent scoring across refresh rates)
+		scoreAccumulator += dt;
+		while (scoreAccumulator >= 1) {
+			score++;
+			scoreAccumulator -= 1;
+		}
+		frameCount += dt;
 
 		// Level check
 		const newLevel = Math.floor(score / LEVEL_THRESHOLD) + 1;
@@ -344,8 +355,10 @@
 			onLevelUp?.(level);
 		}
 
-		if (frameCount % 10 === 0) {
+		// Report score periodically (~10 logical frames)
+		if (frameCount - lastScoreReportFrame >= 10) {
 			onScore?.(score);
+			lastScoreReportFrame = frameCount;
 		}
 
 		// Collision
@@ -355,10 +368,12 @@
 		}
 
 		// Ground scroll
-		groundScrollX = (groundScrollX + currentSpeed) % 200;
+		groundScrollX = (groundScrollX + currentSpeed * dt) % 200;
 
-		// Trail particles
-		if (frameCount % 2 === 0) {
+		// Trail particles (every ~2 logical frames)
+		trailTimer += dt;
+		if (trailTimer >= 2) {
+			trailTimer -= 2;
 			trail.push({
 				x: PLAYER_X - 2,
 				y: playerY + PLAYER_HEIGHT / 2 + (Math.random() - 0.5) * 8,
@@ -368,14 +383,14 @@
 			});
 		}
 		for (const p of trail) {
-			p.x -= currentSpeed * 0.3;
-			p.life--;
+			p.x -= currentSpeed * 0.3 * dt;
+			p.life -= dt;
 		}
 		trail = trail.filter((p) => p.life > 0);
 
 		// Background text
 		for (const t of bgTexts) {
-			t.x -= t.speed + currentSpeed * 0.3;
+			t.x -= (t.speed + currentSpeed * 0.3) * dt;
 			if (t.x < -250) {
 				t.x = canvasWidth + 20;
 				t.y = 20 + Math.random() * (groundY - 40);
@@ -671,8 +686,8 @@
 		if (!canvas) return;
 
 		dpr = window.devicePixelRatio || 1;
-		canvasWidth = Math.min(700, canvas.parentElement?.clientWidth || 700);
-		canvasHeight = Math.round(canvasWidth * 0.36);
+		canvasWidth = Math.min(800, canvas.parentElement?.clientWidth || 800);
+		canvasHeight = Math.round(canvasWidth * 0.42);
 
 		canvas.width = canvasWidth * dpr;
 		canvas.height = canvasHeight * dpr;
@@ -686,10 +701,19 @@
 		render();
 
 		let animationId: number;
+		let lastTime = 0;
 
-		function loop() {
+		function loop(timestamp: number) {
+			if (lastTime === 0) lastTime = timestamp;
+			const rawDelta = timestamp - lastTime;
+			lastTime = timestamp;
+
+			// Cap delta to prevent huge jumps after tab switch (max ~3 frames at 60fps)
+			const deltaMs = Math.min(rawDelta, TARGET_FRAME_MS * 3);
+			const dt = deltaMs / TARGET_FRAME_MS;
+
 			if (gameState === 'playing' && !isPaused) {
-				update();
+				update(dt);
 			}
 			render();
 			animationId = requestAnimationFrame(loop);

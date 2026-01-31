@@ -19,7 +19,8 @@ export type EmailType =
 	| 'notification'
 	| 'welcome'
 	| 'calendar_connect'
-	| 'task_assigned';
+	| 'task_assigned'
+	| 'security_upgrade';
 
 /**
  * Types of password reset tokens

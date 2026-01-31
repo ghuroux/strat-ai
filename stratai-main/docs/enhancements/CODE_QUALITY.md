@@ -19,35 +19,37 @@
 | Dead Code | 8/10 | Minor legacy code (focusAreas alias), mostly clean |
 | Code Duplication | 6/10 | Auth, space resolution, error handling all repeated |
 | Scripts Organization | 9/10 | Multi-tier testing, clear separation |
-| Linting Config | 5/10 | ESLint v9 installed but unconfigured |
+| Linting Config | 5/10 | ESLint v9 runs with defaults; no explicit config file for Svelte/TS rules |
 
 ---
 
 ## 1. Test Coverage {#1-test-coverage}
 
-**Status: CRITICAL GAP**
+**Status: SMOKE TESTS STRONG, UNIT TESTS GAP** (smoke tests comprehensive; API/store/component unit tests still needed for refactoring confidence)
 
-### Current State
+### Current State (Updated 2026-01-31)
 
-| Category | Files | Coverage |
-|----------|-------|----------|
-| Smoke tests (Playwright) | 4 | Happy-path only, 3 tiers |
-| Unit tests (Vitest) | 4 | Formula engine, model router, color generation |
-| API endpoint tests | 0 | None |
-| Store tests | 0 | None |
-| Component tests | 0 | None |
-| Integration tests | 0 | None |
+| Category | Files | Tests | Coverage |
+|----------|-------|-------|----------|
+| Smoke tests (Playwright) | 4 | **51** | 3 tiers: auth, workflows, UX |
+| Unit tests (Vitest) | 4 | ~20 | Formula engine, model router, color generation |
+| API endpoint tests | 0 | 0 | None |
+| Store tests | 0 | 0 | None |
+| Component tests | 0 | 0 | None |
+| Integration tests | 0 | 0 | None |
 
-**8 test files for 192,000 lines of code.**
+### Smoke Test Infrastructure (Comprehensive)
 
-### Test Files
+Built out across 3 phases (2026-01-30 to 2026-01-31):
 
 ```
 tests/smoke/
-├── tier1-critical.spec.ts    # Login, navigation, basic chat
-├── tier2-core.spec.ts        # Spaces, areas, tasks
-├── tier3-ux.spec.ts          # Settings, preferences
-└── helpers/auth.ts           # Shared auth utilities
+├── tier1-critical.spec.ts    # 17 tests: login, logout, auth, protected routes, API health, settings/admin pages
+├── tier2-core.spec.ts        # 20 tests: chat streaming, space/area/page CRUD, deletion, panels, model selection,
+│                             #           command palette, error recovery, admin member invitation
+├── tier3-ux.spec.ts          # 14 tests: settings panel, modals, sidebar, overflow, keyboard, theme persistence,
+│                             #           arena page, task creation
+└── helpers/auth.ts           # Shared auth (tester + admin login flows)
 
 src/lib/services/
 ├── cell-references.test.ts
@@ -56,10 +58,19 @@ src/lib/services/
 └── model-router/__tests__/router.test.ts
 ```
 
-### Impact
+**Tiered failure handling:**
+- T1 failures → ABORT deployment
+- T2 failures → BLOCK completion
+- T3 failures → WARN only
 
-- No refactoring confidence — any change could break downstream consumers silently
-- No regression protection — bug fixes can reintroduce previous bugs
+**Key smoke test capabilities:** end-to-end workflows (not just "element exists"), API response capture/validation, context snapshot modal handling, graceful skip on environment-dependent features, cleanup tests (space deletion prevents limit accumulation).
+
+See `docs/SMOKE_TEST_PLAN.md` for full test inventory and Phase 3 remaining items.
+
+### Remaining Gap
+
+- No refactoring confidence on server code — API endpoint tests needed
+- No store state management tests — complex stores (chat, tasks) untested in isolation
 - No coverage thresholds — `vitest.config.ts` has no coverage configuration
 
 ### Recommended Actions
@@ -106,18 +117,20 @@ coverage: {
 
 ## 2. Build Tooling {#2-build-tooling}
 
-**Status: BROKEN for new developers**
+**Status: INCOMPLETE** — ESLint runs but with minimal defaults; no Svelte or TypeScript rules
 
 ### ESLint Not Configured
 
-ESLint v9 is installed in `package.json` but **no configuration file exists**:
+ESLint v9 and `eslint-plugin-svelte` are installed in `package.json`, and `npm run lint` runs, but **no configuration file exists**:
 
 ```bash
 $ ls eslint.config.* .eslintrc*
 # Nothing found
 ```
 
-Running `npm run lint` will use ESLint defaults, which are minimal and don't include Svelte or TypeScript rules.
+This means linting works but only enforces ESLint's minimal built-in rules. Svelte-specific rules, TypeScript rules, and project conventions (e.g., `no-console`) are not enforced.
+
+> **Note:** The primary "other developers" today are Claude Code agents, which have their own conventions via `.claude/skills/`. This reduces the urgency but doesn't eliminate it — human developers and CI pipelines need a config file.
 
 **Fix:** Create `eslint.config.js` with the flat config format:
 
@@ -225,42 +238,39 @@ Three different error shapes used across endpoints:
 
 ### Recommended Fix
 
-Create `src/lib/server/api-utils.ts`:
+Create `src/lib/server/api-utils.ts` using SvelteKit's `error()` helper (the idiomatic way to short-circuit endpoints):
 
 ```typescript
-import { json, type RequestEvent } from '@sveltejs/kit';
+import { error, json } from '@sveltejs/kit';
+import { resolveSpaceIdAccessible } from '$lib/server/persistence';
 
-/** Require authenticated session. Returns userId or throws JSON response. */
+/** Require authenticated session. Returns userId or throws 401. */
 export function requireAuth(locals: App.Locals): string {
     if (!locals.session) {
-        throw json(
-            { error: { message: 'Unauthorized', type: 'auth_error' } },
-            { status: 401 }
-        );
+        throw error(401, { message: 'Unauthorized' });
     }
     return locals.session.userId;
 }
 
-/** Resolve and authorize space access. Returns spaceId or throws JSON response. */
+/** Resolve and authorize space access. Returns spaceId or throws 404. */
 export async function requireSpace(spaceParam: string, userId: string): Promise<string> {
     const resolved = await resolveSpaceIdAccessible(spaceParam, userId);
     if (!resolved) {
-        throw json(
-            { error: { message: `Space not found: ${spaceParam}`, type: 'not_found' } },
-            { status: 404 }
-        );
+        throw error(404, { message: `Space not found: ${spaceParam}` });
     }
     return resolved;
 }
 
-/** Standard error response shape. */
+/** Standard JSON error response (for cases where you need a custom shape). */
 export function errorResponse(message: string, status: number, details?: string) {
     return json(
-        { error: { message, type: statusToType(status), ...(details && { details }) } },
+        { error: { message, ...(details && { details }) } },
         { status }
     );
 }
 ```
+
+> **Note:** SvelteKit's `error()` throws an `HttpError` that SvelteKit catches and renders. This is the idiomatic pattern — do not throw raw `json()` responses. Use `errorResponse()` only when you need a custom JSON shape (e.g., returning validation errors with field details).
 
 ---
 
@@ -411,15 +421,17 @@ Storage keys use `'strathost-'` prefix (documented in Known Issues). Renaming wi
 
 | Priority | Action | Effort | Impact |
 |----------|--------|--------|--------|
-| **P0** | Create `eslint.config.js` | Small | Unblocks `npm run lint` |
-| **P0** | Create `.prettierrc` | Small | Consistent formatting |
-| **P0** | Update package.json name/version | Small | Identity |
+| **P1** | Create `eslint.config.js` | Small | Enforces Svelte/TS rules beyond defaults |
+| **P1** | Create `.prettierrc` | Small | Consistent formatting |
+| **P1** | Update package.json name/version | Small | Identity |
 | **P1** | Create `api-utils.ts` (auth, errors) | Medium | Reduces duplication, enforces contract |
-| **P1** | API endpoint tests (top 20) | Large | Refactoring confidence |
-| **P1** | Vitest coverage thresholds | Small | Quality gate |
+| **P2** | API endpoint tests (top 20) | Large | Refactoring confidence |
+| **P2** | Vitest coverage thresholds | Small | Quality gate |
 | **P2** | Split `chat/+server.ts` | Large | Maintainability of core product logic |
 | **P2** | Split large components | Medium | Comprehension, review quality |
 | **P2** | Store unit tests | Medium | State management confidence |
 | **P3** | `apiFetch()` client utility | Small | Removes store duplication |
 | **P3** | Migrate inline SVGs to lucide-svelte | Ongoing | Bundle size, consistency |
 | **P3** | Remove focusAreas alias | Small | Dead code cleanup |
+
+> **Note:** ESLint, Prettier, and package.json were originally P0 but downgraded to P1. `npm run lint` already runs (with defaults), and these are developer experience improvements, not security or stability blockers. Security items (bcrypt, fail-fast secrets, headers) are the true P0s.

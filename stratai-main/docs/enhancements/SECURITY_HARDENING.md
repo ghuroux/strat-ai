@@ -27,50 +27,36 @@ Before listing gaps, these are genuinely strong and production-ready:
 
 ## 1. Password Hashing {#1-password-hashing}
 
-**Severity: CRITICAL**
+**Severity: CRITICAL** → **✅ RESOLVED (2026-01-31)**
 **File:** `src/lib/server/auth.ts`
+
+### Resolution
+
+Migrated from SHA-256 to bcrypt with 12 salt rounds. Clean break strategy executed:
+
+1. ✅ `hashPassword()` and `verifyPassword()` switched to bcrypt
+2. ✅ All existing passwords invalidated (`password_hash = NULL, salt = NULL`)
+3. ✅ Security upgrade email sent to all test users via SendGrid
+4. ✅ SHA-256 `createHash` code removed entirely
+5. ✅ `salt` column dropped (bcrypt embeds its own salt)
+6. ✅ Database migration: `20260131_004_bcrypt_migration.sql`
+7. ✅ Force password reset flow for users with null password_hash
 
 ### Current Implementation
 
 ```typescript
-const HASH_ALGORITHM = 'sha256';
-
-function hashPassword(password: string, salt: string): string {
-    return createHash(HASH_ALGORITHM).update(password + salt).digest('hex');
-}
-```
-
-### Problem
-
-SHA-256 is a fast hash designed for data integrity, not password storage. Modern GPUs can compute ~10 billion SHA-256 hashes per second. A 8-character password with this scheme can be brute-forced in under a minute.
-
-### Fix
-
-bcrypt is already in `package.json` but not used for password hashing:
-
-```typescript
 import bcrypt from 'bcrypt';
 
-const SALT_ROUNDS = 12;
+const BCRYPT_ROUNDS = 12;
 
-async function hashPassword(password: string): Promise<string> {
-    return bcrypt.hash(password, SALT_ROUNDS);
+export async function hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
     return bcrypt.compare(password, hash);
 }
 ```
-
-### Migration Strategy (Clean Break)
-
-All existing users are pre-launch testers. No legacy code path needed.
-
-1. Switch `hashPassword()` and `verifyPassword()` to bcrypt
-2. Invalidate all existing passwords: `UPDATE users SET password_hash = NULL, salt = NULL`
-3. Notify all test users to reset their passwords
-4. Remove SHA-256 `createHash` code entirely
-5. Drop the `salt` column (bcrypt embeds its own salt in the hash string)
 
 ---
 
@@ -331,7 +317,9 @@ const { title, description, spaceId } = result.data; // Typed and validated
 
 ### Current State
 
-Password-only authentication. WorkOS is in the Decision Log as planned but not implemented.
+Password-only authentication with bcrypt hashing (see [Section 1](#1-password-hashing) — migrated from SHA-256, 2026-01-31). WorkOS is listed in the Decision Log and `CLAUDE.md` Tech Stack as the auth solution, but **no WorkOS packages or integration code exist in the codebase** — it is a planned direction, not current reality.
+
+> **Action needed:** `CLAUDE.md` Tech Stack table says "Auth: WorkOS (SSO, user management)" which is misleading. Update to reflect current state: custom password auth (bcrypt), with WorkOS as the planned migration target.
 
 ### Recommendation
 
@@ -390,7 +378,7 @@ No `npm audit` step in any script or CI pipeline. Dependencies may have known vu
 
 | Priority | Action | Effort | Blocks Launch? |
 |----------|--------|--------|---------------|
-| **P0** | Migrate to bcrypt | Small | Yes |
+| **P0** | ~~Migrate to bcrypt~~ | ~~Small~~ | ✅ Done |
 | **P0** | Fail-fast on missing secrets | Small | Yes |
 | **P0** | Add security headers | Small | Yes |
 | **P0** | HTTPS via reverse proxy | Medium | Yes |

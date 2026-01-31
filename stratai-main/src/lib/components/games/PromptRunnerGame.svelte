@@ -229,7 +229,7 @@
 	<!-- Modal -->
 	<div
 		class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50
-			   w-full max-w-3xl max-h-[90vh] overflow-hidden
+			   w-full max-w-5xl max-h-[90vh] overflow-hidden
 			   bg-white dark:bg-zinc-900
 			   border border-zinc-200 dark:border-zinc-700/50
 			   rounded-2xl shadow-2xl"

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import SettingsLayout from '$lib/components/settings/SettingsLayout.svelte';
+	import ErrorFallback from '$lib/components/ErrorFallback.svelte';
 	import SettingsGeneral from '$lib/components/settings/SettingsGeneral.svelte';
 	import SettingsAppearance from '$lib/components/settings/SettingsAppearance.svelte';
 	import SettingsProfile from '$lib/components/settings/SettingsProfile.svelte';
@@ -26,23 +27,28 @@
 </svelte:head>
 
 <SettingsLayout {activeSection} onSectionChange={handleSectionChange}>
-	{#if activeSection === 'general'}
-		<SettingsGeneral spaces={data.spaces} areasMap={data.areasMap} />
-	{:else if activeSection === 'appearance'}
-		<SettingsAppearance />
-	{:else if activeSection === 'profile'}
-		<SettingsProfile />
-	{:else if activeSection === 'password'}
-		<SettingsPassword />
-	{:else if activeSection === 'ai-preferences'}
-		<SettingsAIPreferences />
-	{:else if activeSection === 'shortcuts'}
-		<SettingsShortcuts />
-	{:else if activeSection === 'integrations'}
-		<SettingsIntegrations />
-	{:else if activeSection === 'usage'}
-		<SettingsUsage />
-	{:else if activeSection === 'privacy'}
-		<SettingsPrivacy />
-	{/if}
+	<svelte:boundary onerror={(e) => console.error('[Settings Error]', e)}>
+		{#if activeSection === 'general'}
+			<SettingsGeneral spaces={data.spaces} areasMap={data.areasMap} />
+		{:else if activeSection === 'appearance'}
+			<SettingsAppearance />
+		{:else if activeSection === 'profile'}
+			<SettingsProfile />
+		{:else if activeSection === 'password'}
+			<SettingsPassword />
+		{:else if activeSection === 'ai-preferences'}
+			<SettingsAIPreferences />
+		{:else if activeSection === 'shortcuts'}
+			<SettingsShortcuts />
+		{:else if activeSection === 'integrations'}
+			<SettingsIntegrations />
+		{:else if activeSection === 'usage'}
+			<SettingsUsage />
+		{:else if activeSection === 'privacy'}
+			<SettingsPrivacy />
+		{/if}
+		{#snippet failed(error, reset)}
+			<ErrorFallback {error} {reset} variant="inline" />
+		{/snippet}
+	</svelte:boundary>
 </SettingsLayout>

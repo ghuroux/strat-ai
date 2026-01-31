@@ -11,6 +11,7 @@
 
 	import { Unlock, Lock, Info } from 'lucide-svelte';
 	import RestrictAccessConfirmModal from './RestrictAccessConfirmModal.svelte';
+	import { toastStore } from '$lib/stores/toast.svelte';
 
 	interface Props {
 		isRestricted: boolean;
@@ -59,7 +60,7 @@
 			// Success toast handled by parent
 		} catch (e) {
 			console.error('Access control change error:', e);
-			// Error handled by parent
+			toastStore.error('Failed to change access control');
 		} finally {
 			isChanging = false;
 		}

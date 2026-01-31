@@ -21,6 +21,7 @@ interface UserRow {
 	displayName: string | null;
 	passwordHash: string | null;
 	status: 'active' | 'inactive' | 'suspended';
+	forcePasswordReset: boolean;
 	lastLoginAt: Date | null;
 	settings: Record<string, unknown> | string;
 	createdAt: Date;
@@ -41,6 +42,7 @@ function rowToUser(row: UserRow): User {
 		lastName: row.lastName,
 		displayName: row.displayName,
 		status: row.status,
+		forcePasswordReset: row.forcePasswordReset,
 		lastLoginAt: row.lastLoginAt,
 		settings: typeof row.settings === 'string' ? JSON.parse(row.settings) : row.settings || {},
 		createdAt: row.createdAt,
@@ -291,7 +293,9 @@ export const postgresUserRepository: UserRepository = {
 	async updatePassword(id: string, passwordHash: string): Promise<boolean> {
 		const result = await sql`
 			UPDATE users
-			SET password_hash = ${passwordHash}, updated_at = NOW()
+			SET password_hash = ${passwordHash},
+			    force_password_reset = false,
+			    updated_at = NOW()
 			WHERE id = ${id} AND deleted_at IS NULL
 		`;
 		return result.count > 0;

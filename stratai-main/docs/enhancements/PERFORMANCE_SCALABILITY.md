@@ -156,68 +156,39 @@ before horizontal scaling.
 
 ---
 
-## 3. N+1 Query Patterns {#3-n1-queries}
+## 3. Document Fetching in Chat {#3-n1-queries}
 
-**Severity: MEDIUM-HIGH**
-**File:** `src/routes/api/chat/+server.ts`
+**Severity: LOW** (verified — no N+1 pattern exists)
 
-### Problem: Document Fetching
+### Verification Result
 
-The chat endpoint fetches documents one-by-one:
-
-```typescript
-// Current: N+1 pattern (50 documents = 50 queries)
-const documents = await Promise.all(
-    spaceData.contextDocumentIds.map(async (docId) => {
-        const doc = await postgresDocumentRepository.findById(docId, userId);
-        return doc;
-    })
-);
-
-// Then potentially N more LLM calls for summarization
-const enriched = await Promise.all(
-    validDocs.map(async (doc) => {
-        if (needsSummarization(doc.charCount, doc.summary)) {
-            summary = await generateSummaryOnDemand(doc);  // LLM call per doc
-        }
-        return { ...doc, summary };
-    })
-);
-```
-
-With 50 documents in context, this is:
-- 50 database queries (sequential via Promise.all but still 50 round trips)
-- Up to 50 LLM API calls for on-demand summarization
-- At 100 concurrent users: 5,000 database queries + potentially 5,000 LLM calls
-
-### Fix: Batch Fetch
+Code review confirmed that the chat endpoint does **not** exhibit N+1 query behavior. Documents are fetched upstream as part of `focusArea.contextDocuments` and `spaceInfo.contextDocuments`, then iterated in memory:
 
 ```typescript
-// Add to documents-postgres.ts
-async findByIds(ids: string[], userId: string): Promise<Document[]> {
-    return sql`
-        SELECT d.*, ds.shared_at
-        FROM documents d
-        LEFT JOIN document_sharing ds ON d.id = ds.document_id
-        WHERE d.id = ANY(${ids})
-        AND (d.uploaded_by = ${userId} OR ds.shared_at IS NOT NULL)
-    `;
+// Actual pattern — iterates pre-fetched data, NOT per-document queries
+if (focusArea?.contextDocuments) {
+    allDocs.push(...focusArea.contextDocuments);
 }
-
-// In chat endpoint
-const documents = await postgresDocumentRepository.findByIds(contextDocumentIds, userId);
+if (spaceInfo?.contextDocuments) {
+    for (const doc of spaceInfo.contextDocuments) {
+        if (!focusAreaFilenames.has(doc.filename)) {
+            allDocs.push(doc);
+        }
+    }
+}
 ```
 
-For summarization, pre-compute summaries at upload time (already partially implemented) and ensure they're always available, eliminating the on-demand LLM calls during chat.
+### Repository Patterns (Good)
 
-### Other Repository Patterns (Good)
-
-Most repositories already use efficient patterns:
+Most repositories use efficient patterns:
 - Areas: Single CTE query with UNION for access control
 - Tasks: Filtered composite indexes, single query with JOINs
 - Pages: Version-aware queries with proper indexes
+- Documents: Fetched as part of area/space context loading, not per-ID
 
-The document N+1 in the chat endpoint is the primary concern.
+### Recommendation
+
+No action required. If document volumes grow significantly (hundreds per area), monitor query performance on the upstream context-loading queries and consider adding a `findByIds()` batch method as a future optimization.
 
 ---
 
@@ -412,12 +383,13 @@ for await (const chunk of file.stream()) {
 | Priority | Action | Effort | Scaling Impact |
 |----------|--------|--------|----------------|
 | **P0** | Document single-instance constraint | Small | Prevents production incidents |
-| **P1** | Add Redis for rate limiter + mutex | Medium | Enables horizontal scaling |
-| **P1** | Batch document fetching in chat | Medium | Eliminates N+1 on core path |
 | **P1** | Paginate tasks/documents/pages endpoints | Small | Prevents large payload issues |
+| **P1** | HTTP cache headers on read endpoints | Small | Reduces server requests |
+| **P2** | Add Redis for rate limiter + mutex | Medium | Enables horizontal scaling (defer until multi-instance is needed) |
 | **P2** | Redis caching for user preferences + space metadata | Medium | Reduces DB load 50%+ |
-| **P2** | HTTP cache headers on read endpoints | Small | Reduces server requests |
 | **P3** | Lazy-load TipTap editor | Small | ~200KB off initial bundle |
 | **P3** | Image storage migration planning | Design | Needed at ~10GB stored |
 | **P3** | PgBouncer for connection pooling | Medium | Needed at >5 instances |
 | **P4** | Streaming file upload | Medium | Needed at high upload volume |
+
+> **Note:** Redis was originally listed as P1 for rate limiting and mutex. For a single-instance pre-launch deployment, the in-memory approach works fine. Redis becomes necessary when horizontal scaling is required — defer until then to avoid premature operational complexity.

@@ -71,7 +71,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Verify current password
-		const isValid = verifyPassword(currentPassword, storedHash);
+		const isValid = await verifyPassword(currentPassword, storedHash);
 
 		if (!isValid) {
 			return json(
@@ -81,7 +81,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Hash and save new password
-		const newHash = hashPassword(newPassword);
+		const newHash = await hashPassword(newPassword);
 		await postgresUserRepository.update(userId, { passwordHash: newHash });
 
 		return json({ success: true, message: 'Password changed successfully' });

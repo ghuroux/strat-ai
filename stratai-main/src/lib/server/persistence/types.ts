@@ -434,6 +434,7 @@ export interface User {
 	lastName: string | null;
 	displayName: string | null;
 	status: 'active' | 'inactive' | 'suspended';
+	forcePasswordReset: boolean;
 	lastLoginAt: Date | null;
 	settings: Record<string, unknown>;
 	createdAt: Date;

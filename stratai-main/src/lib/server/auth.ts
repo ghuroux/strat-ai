@@ -1,28 +1,21 @@
-import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { randomBytes } from 'crypto';
+import bcrypt from 'bcrypt';
 
-const HASH_ALGORITHM = 'sha256';
+const BCRYPT_ROUNDS = 12;
 
 /**
- * Hash a password with a random salt
+ * Hash a password with bcrypt
  */
-export function hashPassword(password: string): string {
-	const salt = randomBytes(16).toString('hex');
-	const hash = createHash(HASH_ALGORITHM).update(password + salt).digest('hex');
-	return `${salt}:${hash}`;
+export async function hashPassword(password: string): Promise<string> {
+	return bcrypt.hash(password, BCRYPT_ROUNDS);
 }
 
 /**
- * Verify a password against a stored hash
- * Uses timing-safe comparison to prevent timing attacks
+ * Verify a password against a stored bcrypt hash
  */
-export function verifyPassword(password: string, storedHash: string): boolean {
-	const [salt, hash] = storedHash.split(':');
-	if (!salt || !hash) return false;
-
-	const computedHash = createHash(HASH_ALGORITHM).update(password + salt).digest('hex');
-
+export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
 	try {
-		return timingSafeEqual(Buffer.from(hash), Buffer.from(computedHash));
+		return await bcrypt.compare(password, storedHash);
 	} catch {
 		return false;
 	}

@@ -35,6 +35,13 @@
 				};
 			}}
 		>
+			{#if form?.resetRequired}
+				<div class="mb-4 p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-amber-200 text-sm">
+					<p class="font-medium">Security Upgrade Required</p>
+					<p class="text-amber-300/80 mt-1">We've upgraded our password security. Please <a href="/forgot-password" class="underline text-amber-200 hover:text-amber-100">reset your password</a> to continue.</p>
+				</div>
+			{/if}
+
 			{#if data.sessionExpired}
 				<div class="mb-4 p-3 bg-amber-900/50 border border-amber-700 rounded-lg text-amber-200 text-sm">
 					<p class="font-medium">Session expired</p>
@@ -56,8 +63,9 @@
 					type="text"
 					id="username"
 					name="username"
+					required
 					class="input-field"
-					placeholder="username or email (optional for admin)"
+					placeholder="Username or email"
 					autocomplete="username"
 				/>
 			</div>

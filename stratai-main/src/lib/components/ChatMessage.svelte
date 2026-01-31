@@ -10,6 +10,7 @@
 	import CodeBlockDownloader from './chat/CodeBlockDownloader.svelte';
 	import { ResponseContextBadge } from './chat/context-transparency';
 	import { extractCodeBlocks } from '$lib/utils/codeBlocks';
+	import { toastStore } from '$lib/stores/toast.svelte';
 	import { ProductComparison, CheckoutPreview, OrderConfirmation } from './commerce';
 	import type { CommerceProductWithBadges } from '$lib/types/commerce';
 
@@ -201,6 +202,7 @@
 			setTimeout(() => (copied = false), 2000);
 		} catch {
 			console.error('Failed to copy');
+			toastStore.error('Failed to copy to clipboard');
 		}
 	}
 </script>

@@ -217,7 +217,7 @@ export const actions: Actions = {
 			// Create a random placeholder password hash that cannot be used to login
 			// This is a hash of a random 64-byte string - virtually impossible to guess
 			const placeholderPassword = generateTempPassword() + generateTempPassword() + Date.now();
-			const passwordHash = hashPassword(placeholderPassword);
+			const passwordHash = await hashPassword(placeholderPassword);
 
 			// Create user with placeholder password
 			user = await postgresUserRepository.create({
@@ -385,7 +385,7 @@ export const actions: Actions = {
 		try {
 			// Use provided password or generate temp password
 			const password = newPassword || generateTempPassword();
-			const passwordHash = hashPassword(password);
+			const passwordHash = await hashPassword(password);
 
 			await postgresUserRepository.update(userId, { passwordHash });
 

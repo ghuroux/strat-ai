@@ -31,6 +31,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/DOCUMENT_SHARING.md` - **Document sharing** (uploaded files - Space storage, Area-level sharing)
 - `stratai-main/docs/GUIDED_CREATION.md` - **Guided creation system** (templates as data schemas, Meeting Notes first)
 - `stratai-main/docs/architecture/CONTEXT_STRATEGY.md` - **Context/memory architecture** (WHAT to store - moat-level work)
+- `stratai-main/docs/architecture/COGNITIVE_GOVERNANCE.md` - **Cognitive governance** (bidirectional flow, cognitive friction, governance metadata — the error-correction layer for the context hierarchy)
 - `stratai-main/docs/architecture/context-loading-architecture.md` - **Just-in-time context loading** (HOW to load via tool calling)
 - `stratai-main/docs/architecture/CONTEXT_IMPLEMENTATION_ROADMAP.md` - **✅ Context implementation roadmap** (actionable phases, deliverables, success criteria)
 - `stratai-main/docs/features/CONTEXT_TRANSPARENCY.md` - **Context transparency UX** (progressive disclosure, ambient indicators, thinking attribution)
@@ -38,8 +39,9 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/auto-model-routing-research.md` - **Model routing research** (smart routing strategies)
 - `stratai-main/docs/AUTO_MODEL_ROUTING.md` - **AUTO routing implementation** (complexity analysis, tiers)
 - `stratai-main/PRICING_STRATEGY.md` - **Pricing strategy V1 (launch) + V2 (evolution)**
-- `stratai-main/PRODUCT_VISION.md` - Product vision and roadmap
-- `stratai-main/BACKLOG.md` - Feature backlog and priorities
+- `stratai-main/docs/product/PRODUCT_VISION.md` - Product vision and roadmap
+- `stratai-main/docs/product/FEATURE_VALUE_FRAMEWORK.md` - **Feature value framework** (scoring methodology, OII proxy metric, feature scorecard — every feature mapped to the killer feature)
+- `stratai-main/docs/product/BACKLOG.md` - Feature backlog and priorities
 - `stratai-main/docs/enterprise-roadmap.md` - Implementation phases and timeline
 - `stratai-main/docs/SENDGRID_EMAIL_INTEGRATION.md` - **Email system** (SendGrid, password reset, future notifications)
 - `stratai-main/docs/MODEL_CONFIGURATION_SYSTEM.md` - **Model configuration** (parameter constraints, runtime overrides, Admin UI)
@@ -49,6 +51,7 @@ You are **co-PM**, **team lead**, and **lead developer** for StratAI:
 - `stratai-main/docs/features/MEETING_CREATION_WIZARD.md` - **Meeting creation wizard** (lean 3-step: Purpose/Outcomes → People/Owner → Schedule. Area-context AI suggestions, invite body generation, creation→capture bridge)
 - `stratai-main/docs/features/TASK_ASSIGNMENT.md` - **Task assignment** (assign tasks to Space members, email notifications, delegation)
 - `stratai-main/docs/features/SKILLS.md` - **Skills system** (reusable AI instruction sets, workflows, methodologies for Spaces/Areas)
+- `stratai-main/docs/research/SKILLS_MARKET_RESEARCH.md` - **Skills market research** (Jan 2026 — competitor landscape, community sentiment, enterprise requirements, Skills+Integrations convergence)
 - `stratai-main/docs/architecture/AI_RETRIEVAL_ARCHITECTURE.md` - **AI retrieval mechanics** (how AI accesses org knowledge via tools, graph traversal, semantic search)
 - `stratai-main/docs/MEMBER_BUDGETS.md` - **Member budget system** ($ caps, progressive tier restrictions, escalation workflows, scenarios)
 - `stratai-main/docs/features/INTEGRATIONS_ARCHITECTURE.md` - **Integrations foundation** (MCP-native, two tiers, credential management, permissions)
@@ -335,22 +338,22 @@ Don't revisit without good reason:
 | Token refresh mutex | In-memory `Map<integrationId, Promise>` prevents concurrent refresh race conditions. Azure AD rotates refresh tokens on use; without mutex, concurrent requests invalidate each other. |
 | Direct provider SDKs (future) | Replace LiteLLM with 4 direct integrations: Anthropic, OpenAI, Google (premium providers) + AWS Bedrock (open-source in VPC for enterprise data sovereignty). LiteLLM has proven unreliable for streaming usage (Bug #4905 — Anthropic/Gemini), cache metrics, and thinking content normalization. Direct SDKs give native streaming, accurate usage/billing, proper caching, and eliminate single-proxy dependency. Bedrock enables "data never leaves your environment" enterprise story. Envisioned end state: purpose-built Go routing service — single internal API to SvelteKit, provider-native SDKs, accurate tokenization, stateless/scalable, VPC-deployable. LiteLLM stays for now (abstraction value is real at this stage); transition timing informed by `is_estimated` ratio in `llm_usage` and workaround frequency. |
 | Usage estimation fallback | When LiteLLM doesn't return streaming usage (Anthropic/Gemini), estimate with js-tiktoken cl100k_base. `is_estimated` flag in `llm_usage` tracks data quality. Cache tokens set to 0 when estimated. ~90% accuracy for English text, less for code/non-Latin. |
+| "Governed organisational mind" is the killer feature | Not technology, not productivity — the product's value is being the organisation's governed mind. Every feature must map back to this via the scoring framework. |
+| Feature Value Framework (5-dimension scoring) | Captures/Structures/Connects/Compounds/Governs. OII (Organisational Intelligence Index) as empirical proxy metric. Every new feature must score and qualify. |
+| Decision Registry identified as highest-value feature | Only perfect score (5.00) in the framework. Decisions are the atomic unit of the organisational mind — first-class entities, not meeting byproducts. |
+| Cognitive governance as error-correction layer | Bidirectional cognitive flow (top-down constraints + bottom-up challenge) with cognitive friction. Prevents the knowledge flywheel from spinning coherently but in the wrong direction. |
+| Weight evolution plan for scoring | Governs dimension increases from 15% to 20% as governance layer matures; Captures decreases from 25% to 20%. Reflects shift from data collection to data governance. |
 
 ---
 
 ## Known Issues
 
-- [x] **✅ Database snake_case/camelCase - RESOLVED** - All 22 *-postgres.ts files now use correct camelCase access. Audit script: `npm run audit-db-access`. Docs: `docs/database/`
-- [ ] **Icon inconsistency** - ~124 components use inline SVG, ~46 use `lucide-svelte`. Standard is `lucide-svelte` for new work. Migrate gradually as components are touched. See `.claude/skills/creating-components/SKILL.md`
-- [x] **✅ 🔴 CRITICAL SECURITY FIX (2026-01-16)** - `creating-endpoints` skill taught insecure auth pattern. **FIXED** - Now teaches correct `locals.session` pattern. Audit confirmed 0 production endpoints affected.
-- [ ] **Mobile responsiveness** - App-wide issue; layouts break on small screens (Arena, Spaces, Chat). Needs systematic review.
-- [ ] **localStorage quota exceeded** - Chat store hitting storage limits. **Addressed by CONTEXT_STRATEGY.md Phase 1** (server-side persistence)
-- [ ] localStorage keys use `strathost-` prefix (will lose POC data on rename)
-- [ ] README.md outdated (needs rewrite)
-- [ ] No error boundaries (add before production)
-- [ ] Missing favicon.png (404 errors in console)
-- [x] **✅ AUTO router model name mismatch - RESOLVED** - `model-tiers.ts` had stale model names (`gemini-pro`, `gpt-5`, `gemini-2.0-flash-lite`) not matching `litellm-config.yaml`. Fixed to use actual model names. Added `model-tiers.ts` to "Adding a New Model" checklist.
-- [x] **✅ Calendar daily reconnection - RESOLVED** - Inline token refresh had no mutex, no retry, no proactive refresh. Single Azure AD transient error would mark integration as 'error', forcing manual reconnect. Fixed with centralized `token-service.ts` + health check endpoint + page-load proactive refresh.
+- [ ] **Icon inconsistency** - ~124 inline SVG, ~46 `lucide-svelte`. Standard: `lucide-svelte` for new work. Migrate as touched.
+- [ ] **Mobile responsiveness** - Layouts break on small screens (Arena, Spaces, Chat). Needs systematic review.
+- [ ] **localStorage quota exceeded** - Chat store hitting limits. Addressed by CONTEXT_STRATEGY.md Phase 1 (server-side persistence).
+- [ ] **localStorage prefix** - Keys use `strathost-` prefix (will lose POC data on rename)
+- [ ] **No error boundaries** - Add before production
+- [ ] **Missing favicon.png** - 404 errors in console
 
 ---
 
@@ -374,154 +377,9 @@ Don't revisit without good reason:
 
 ## Session Log
 
-> Full history: `SESSIONS.md`
+> **Detailed history:** `SESSIONS.md` | Only the latest session summary lives here.
 
-### Latest: 2026-01-30 (Page Lifecycle Phase 4 — Polish)
-
-**Completed:**
-
-*Context-Aware Unlock:*
-- `context_version_number` column preserves existing DB constraint `chk_context_requires_finalized`
-- UnlockPageModal shows "Keep v{N} in AI context while editing" checkbox when page is in context
-- Two-query pattern in `findPagesInContext`: normal finalized pages + frozen-pinned pages (JOINs `page_versions`)
-- AI sees pinned version content (not draft) via frozen version projection
-
-*"Editing v{N}" Indicator:*
-- PageHeader shows amber "Editing v{N}" badge when editing an unlocked finalized page
-- Companion "v{N} in Context" badge when context version is pinned
-
-*Discard Changes:*
-- DiscardChangesModal (new) follows RestoreVersionModal pattern
-- Reverts to last finalized version via `restoreVersion` + editor content sync
-- Triple-gated: only visible when `isDirty && status === 'shared' && currentVersion >= 1`
-
-*ContextPanel Integration:*
-- Pinned pages shown with "pinned · editing" amber label
-- Toggle disabled for pinned pages (must finalize to change context)
-- Chat context annotates frozen pages: `(v{N}, being updated)`
-
-**Key Architecture Decision:**
-- `context_version_number INTEGER` (nullable) on pages table — when NOT NULL, frozen version served to AI while page is being edited. Avoids weakening existing `chk_context_requires_finalized` constraint.
-
-**Files Created:** 3 new files (migration, DiscardChangesModal, plan)
-**Files Modified:** 12 files (types, repo, store, API, 5 components, chat server, schema, backlog)
-
----
-
-### Previous: 2026-01-30 (Calendar Token Lifecycle Hardening)
-
-**Completed:**
-
-*Centralized Token Service (token-service.ts — new):*
-- Single `ensureValidToken()` entry point for all OAuth token refresh
-- In-memory mutex prevents concurrent refresh race conditions (Azure AD rotates refresh tokens)
-- Exponential backoff retry (3 attempts, 500ms → 1s delays) for transient failures
-- Azure AD AADSTS error code parsing (13 known codes) — distinguishes "retry" from "reconnect"
-- Proactive refresh with 5-minute buffer (refreshes before expiry, not after)
-
-*Health Check Endpoint (/api/integrations/calendar/health — new):*
-- Lightweight GET endpoint called by frontend on every page load
-- Triggers proactive token refresh server-side
-- Returns status: healthy / refreshed / disconnected / error
-
-*Refactored Token Refresh Callers:*
-- `helpers.ts` — removed inline refresh, delegates to token service
-- `chat/+server.ts` — removed 40+ lines of inline refresh, delegates to token service
-- Removed unused `postgresIntegrationCredentialsRepository` and `refreshAccessToken` imports from chat
-
-*Frontend Health Check (+layout.svelte):*
-- `checkCalendarHealth()` — fire-and-forget on every authenticated page load
-- Follows same pattern as existing `syncTimezone()` (silent, non-blocking)
-
-**Key Learnings:**
-- Azure AD Conditional Access policies (sign-in frequency) are the #1 cause of forced daily re-auth in enterprise tenants — but requires Premium license. StratGroup doesn't have it, so the issue was purely code-side.
-- Azure AD rotates refresh tokens on use — concurrent requests using the same old refresh token will fail the second request. Mutex is essential.
-- Token refresh should be proactive (before expiry) not reactive (after failure). A 5-minute buffer eliminates the window where a request can hit an expired token.
-- Azure AADSTS error codes are the key to intelligent retry — some errors (AADSTS700082: expired) are permanent, others (AADSTS500011: resource not found) are transient.
-
-**Documentation Updated:**
-- `CALENDAR_INTEGRATION.md` — New "Token Lifecycle Hardening" section with architecture diagram
-- `CLAUDE.md` — 4 decision log entries, session log, known issues update
-- `creating-endpoints/SKILL.md` — OAuth token management pattern reference
-
-**Files Created:** 2 new files
-**Files Modified:** 4 files
-
----
-
-### Previous: 2026-01-26 (Image Document Support)
-
-**Completed:**
-
-*Image Upload Feature (Committed: 1920376):*
-- Full image upload support (JPG, PNG, GIF, WebP) for documents
-- Database migration: `content_type` column discriminates text vs image
-- AI-generated descriptions using Haiku 4.5 vision at upload time
-- Vision context injection for vision-capable models (Claude 3/4, GPT-4V, Gemini)
-- Updated system prompts to show image descriptions
-- UI updates: DocumentCard thumbnails, ContextPanel accepts images, Space documents page
-
-*Prompt Inspector Fix:*
-- Fixed misleading 1.3M token count for images (was counting base64 as text)
-- Added `estimateVisionTokens()` for accurate Vision API token estimation (~1-3K)
-- Image documents now show purple "Image" badge and correct icon
-
-*Bug Fix:*
-- Fixed resend/regenerate not capturing context metadata
-- `triggerAssistantResponse()` now calls `captureUsedContext()` like `handleSend()`
-
-**Key Learnings:**
-- Vision APIs bill by pixel dimensions, NOT base64 string length
-- Pattern: Use Haiku 4.5 (vision-capable, cheap) for image description generation
-- Pattern: Store image descriptions as `summary` field (same as text doc summaries)
-
-**Files Changed:** 15 files, 711 insertions, 122 deletions
-
----
-
-### Previous: 2026-01-14 (Database Standardization Project & Membership Bug Fixes)
-
-**Completed:**
-
-*Critical Bug Fixes (Committed: b7a21c3):*
-- Fixed member names showing "Unknown" (postgres.js camelCase issue)
-- Fixed duplicate owner in member lists (existence check)
-- Fixed General area not created for new spaces (per-space not per-user)
-- Fixed area access control not persisting (isRestricted flag handling)
-- All fixes pushed to main branch
-
-*Database Standardization Project Plan:*
-- Created comprehensive 2-week project plan: `DATABASE_STANDARDIZATION_PROJECT.md`
-- Documented postgres.js snake_case → camelCase transformation issue
-- Defined 6 implementation phases with detailed checklists
-- Created "For Coding Agents" quick start guide
-- Established success criteria (code quality, docs, tooling, testing, process)
-- Defined reference patterns for all database access
-- Planned audit script, schema generator, lint rules, CI validation
-- Updated CLAUDE.md with database access principles
-
-**Key Insights:**
-- postgres.js automatically transforms column names: `user_id` → `userId`
-- Mixed patterns in codebase causing silent undefined access bugs
-- Type definitions don't match runtime shapes (illusion of type safety)
-- Every new feature risks similar bugs without standardization
-- Comprehensive docs needed: schema, relationships, access patterns, type mapping
-
-**Files Created:**
-- `docs/DATABASE_STANDARDIZATION_PROJECT.md` - Complete 6-phase implementation plan
-
-**Files Modified:**
-- `CLAUDE.md` - Added database principles, strategic doc reference, known issue, 2 decision log entries, session log
-
-**Decision Log Entries:**
-- postgres.js camelCase standard (row.userId not row.user_id)
-- Database standardization project (2-week systematic fix)
-
-**Next Steps:**
-- Phase 1: Create docs structure, audit script, POSTGRES_JS_GUIDE.md
-- Phase 2: Fix all repositories to use camelCase consistently
-- Phase 3: Generate schema docs, relationships, access patterns
-- See DATABASE_STANDARDIZATION_PROJECT.md for full roadmap
+**Last session:** 2026-01-31 — Strategic Product Foundation ("Governed Organisational Mind"). Pure strategy session: Feature Value Framework with 5-dimension scoring + OII metric, Cognitive Governance framework, Closed-Loop Knowledge System added to CONTEXT_STRATEGY.md and PRODUCT_VISION.md, Skills market research. 5 new feature concepts identified (Decision Registry scored 5.00). Key decision: every feature must map to "governed organisational mind" via scoring framework.
 
 ---
 
@@ -531,16 +389,18 @@ Don't revisit without good reason:
 
 Retain:
 - Current phase and focus
-- Recent session work
+- Latest session summary (1-2 lines in Session Log)
 - Decision Log entries
 - Collaboration model (pushback welcome)
 
 **For agents at session start:**
-1. Check Session Log for recent work
+1. Check Session Log summary here; read `SESSIONS.md` for detail if needed
 2. Review Known Issues before related changes
 3. Respect Decision Log
 
-**At session end:**
-1. Update Session Log (move old entries to SESSIONS.md)
-2. Update Known Issues if debt introduced
-3. Add to Decision Log for significant architecture choices
+**At session end (session-closer agent handles this):**
+1. Write detailed session entry to `SESSIONS.md` (prepend, most recent first)
+2. Replace the "Last session" line in this file with a 1-2 line summary
+3. Update Known Issues if debt introduced
+4. Add to Decision Log for significant architecture choices
+5. Review session for learnings → update relevant skill files (memory flywheel)

@@ -38,6 +38,11 @@ interface RateLimitResult {
 
 // --- Rules (most specific first) ---
 
+// Relax login/auth limits in non-production (smoke tests do many sequential logins)
+const isDev = import.meta.env.DEV;
+const LOGIN_LIMIT = isDev ? 100 : 10;
+const AUTH_LIMIT = isDev ? 50 : 5;
+
 const RULES: RateLimitRule[] = [
 	{
 		id: 'llm-second-opinion',
@@ -84,7 +89,7 @@ const RULES: RateLimitRule[] = [
 		pattern: '/login',
 		methods: ['POST'],
 		windowMs: 900_000, // 15 minutes
-		limit: 10,
+		limit: LOGIN_LIMIT,
 		keyType: 'ip'
 	},
 	{
@@ -92,7 +97,7 @@ const RULES: RateLimitRule[] = [
 		pattern: /^\/api\/auth\//,
 		methods: ['POST'],
 		windowMs: 900_000, // 15 minutes
-		limit: 5,
+		limit: AUTH_LIMIT,
 		keyType: 'ip'
 	},
 	{

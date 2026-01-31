@@ -4,6 +4,77 @@ Full session logs for StratAI development. Most recent session in `CLAUDE.md`.
 
 ---
 
+## 2026-01-31: Strategic Product Foundation — "Governed Organisational Mind"
+
+**Session Character:** Pure strategy/product session. No code written. All work was documentation and strategic thinking.
+
+**Completed:**
+
+*Closed-Loop Knowledge System:*
+- Added new section to `CONTEXT_STRATEGY.md` (between Architecture Vision and Phase 1) showing how all features form a closed loop
+- Calendar → Meetings → Decisions → Tasks/Pages/Skills → Context → Memory → Integrations
+- Every feature is simultaneously a context consumer and context generator
+- Concrete example: "Prepare me for tomorrow's budget review with Sarah" — demonstrates all features orchestrating together
+- Also added to `PRODUCT_VISION.md` after Core Capabilities with simplified flywheel diagram
+
+*Cognitive Governance Framework (new document):*
+- Created standalone `docs/architecture/COGNITIVE_GOVERNANCE.md`
+- Based on Investec-style corporate governance applied to AI context
+- Bidirectional cognitive flow: top-down constraints + bottom-up challenge
+- Cognitive friction as error-correction (prevents flywheel spinning in wrong direction)
+- Governance metadata per hierarchy level (Org, Space, Area)
+- 3-phase implementation approach with worked examples
+- Referenced from `CONTEXT_STRATEGY.md` closed-loop implications
+
+*Skills Market Research (new document):*
+- Created `docs/research/SKILLS_MARKET_RESEARCH.md`
+- Competitive landscape analysis (Jan 2026)
+- Community sentiment from Reddit, enterprise requirements
+- Skills + Integrations convergence thesis
+- Referenced from `SKILLS.md` and `CLAUDE.md`
+
+*Feature Value Framework (new document — centerpiece of session):*
+- Created `docs/product/FEATURE_VALUE_FRAMEWORK.md`
+- Killer feature definition: "governed organisational mind"
+- 5-dimension scoring methodology: Captures, Structures, Connects, Compounds, Governs
+- OII (Organisational Intelligence Index) proxy metric with 6 measurable signals
+- 31 features scored (18 built, 8 planned, 5 identified through framework analysis)
+- Master ranking with 4 natural tiers
+- Feature qualification gate for new features
+- Weight evolution plan as product matures
+
+*Five New Feature Concepts Identified:*
+- Decision Registry (5.00 — only perfect score, decisions as first-class entities)
+- Retrospective Intelligence (4.85 — automated periodic synthesis per Area/Space)
+- Outcome Tracking (4.70 — proactive "what happened?" loop closure)
+- Onboarding Briefing (4.30 — "Brief me" command for new members)
+- Knowledge Gap Detection (3.85 — search failures as intelligence signals)
+
+*SKILLS.md Rewrite:*
+- Comprehensive rewrite with market research reference
+- Updated value proposition framing
+
+**Files Created:**
+- `stratai-main/docs/architecture/COGNITIVE_GOVERNANCE.md` — Cognitive governance framework
+- `stratai-main/docs/product/FEATURE_VALUE_FRAMEWORK.md` — Feature value scoring system
+- `stratai-main/docs/research/SKILLS_MARKET_RESEARCH.md` — Skills competitive research
+
+**Files Modified:**
+- `stratai-main/docs/architecture/CONTEXT_STRATEGY.md` — Added Closed-Loop Knowledge System section, cognitive governance reference, updated ToC
+- `stratai-main/docs/product/PRODUCT_VISION.md` — Added Skills capability, Closed-Loop Knowledge System subsection
+- `stratai-main/docs/features/SKILLS.md` — Added market research reference, updated framing
+- `CLAUDE.md` — Added strategic doc references, 5 decision log entries, updated session log
+
+**Key Decisions:**
+- "Governed organisational mind" is the killer feature — not technology, not productivity
+- Every feature must map back to the killer feature via the scoring framework
+- OII is the empirical proxy metric for success
+- Two most valuable unbuilt features: Memory (4.85) and Governance (4.60) — confirms where to invest
+- Decision Registry (5.00) is the atomic unit of the organisational mind
+- Weights evolve: Governs increases from 15% to 20% as governance layer matures
+
+---
+
 ## 2026-01-14: Graph-Ready Architecture & AI Retrieval Documentation
 
 **Completed:**

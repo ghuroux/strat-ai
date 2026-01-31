@@ -19,13 +19,20 @@ export type TestUserType = 'admin' | 'tester';
  * @returns Promise that resolves when login is complete
  *
  * Environment variables required:
+ * - TEST_ADMIN_USERNAME: Username for admin user (default: 'admin')
  * - TEST_ADMIN_PASSWORD: Password for admin user
+ * - TEST_USER_USERNAME: Username for regular test user (default: 'tester')
  * - TEST_USER_PASSWORD: Password for regular test user
  */
 export async function loginAs(
 	page: Page,
 	userType: TestUserType = 'tester'
 ): Promise<void> {
+	const username =
+		userType === 'admin'
+			? process.env.TEST_ADMIN_USERNAME || 'admin'
+			: process.env.TEST_USER_USERNAME || 'tester';
+
 	const password =
 		userType === 'admin'
 			? process.env.TEST_ADMIN_PASSWORD
@@ -43,11 +50,8 @@ export async function loginAs(
 	// Wait for the form to be ready
 	await page.waitForSelector('form');
 
-	// Fill in credentials
-	// Username is optional for admin (per login page comment)
-	if (userType === 'tester') {
-		await page.fill('input[name="username"]', process.env.TEST_USER_USERNAME || 'tester');
-	}
+	// Fill in credentials — both username and password required for all users
+	await page.fill('input[name="username"]', username);
 	await page.fill('input[name="password"]', password);
 
 	// Submit the form

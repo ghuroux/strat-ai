@@ -26,6 +26,7 @@
 	import SecondOpinionPanel from '$lib/components/chat/SecondOpinionPanel.svelte';
 	import SecondOpinionModelSelect from '$lib/components/chat/SecondOpinionModelSelect.svelte';
 	import SettingsPanel from '$lib/components/settings/SettingsPanel.svelte';
+	import ErrorFallback from '$lib/components/ErrorFallback.svelte';
 	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
 	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
 	import UserMenu from '$lib/components/layout/UserMenu.svelte';
@@ -2473,16 +2474,21 @@
 		<!-- Second Opinion Panel -->
 		{#if isSecondOpinionOpen && secondOpinion}
 			<div class="panel-container" transition:fly={{ x: 300, duration: 200 }}>
-				<SecondOpinionPanel
-					content={secondOpinion.content}
-					thinking={secondOpinion.thinking}
-					modelId={secondOpinion.modelId}
-					isStreaming={secondOpinion.isStreaming}
-					error={secondOpinion.error}
-					onClose={handleCloseSecondOpinion}
-					onUseAnswer={handleUseSecondOpinion}
-					onFork={handleForkWithSecondOpinion}
-				/>
+				<svelte:boundary onerror={(e) => console.error('[SecondOpinionPanel Error]', e)}>
+					<SecondOpinionPanel
+						content={secondOpinion.content}
+						thinking={secondOpinion.thinking}
+						modelId={secondOpinion.modelId}
+						isStreaming={secondOpinion.isStreaming}
+						error={secondOpinion.error}
+						onClose={handleCloseSecondOpinion}
+						onUseAnswer={handleUseSecondOpinion}
+						onFork={handleForkWithSecondOpinion}
+					/>
+					{#snippet failed(error, reset)}
+						<ErrorFallback {error} {reset} variant="panel" />
+					{/snippet}
+				</svelte:boundary>
 			</div>
 		{/if}
 
@@ -2513,44 +2519,59 @@
 		{/if}
 
 		<!-- Conversation Drawer -->
-		<ConversationDrawer
-			open={drawerOpen}
-			{area}
-			allAreas={allAreasInSpace}
-			conversations={areaConversations}
-			{otherAreaConversations}
-			activeConversationId={chatStore.activeConversation?.id ?? null}
-			{getTaskInfo}
-			onClose={() => drawerOpen = false}
-			onSelectConversation={handleContinueChat}
-			onNewChat={handleNewChat}
-			onPinConversation={handlePinConversation}
-			onMoveToArea={handleMoveToArea}
-			onRenameConversation={handleDrawerRename}
-			onExportConversation={handleDrawerExport}
-			onDeleteConversation={handleDrawerDelete}
-		/>
+		<svelte:boundary onerror={(e) => console.error('[ConversationDrawer Error]', e)}>
+			<ConversationDrawer
+				open={drawerOpen}
+				{area}
+				allAreas={allAreasInSpace}
+				conversations={areaConversations}
+				{otherAreaConversations}
+				activeConversationId={chatStore.activeConversation?.id ?? null}
+				{getTaskInfo}
+				onClose={() => drawerOpen = false}
+				onSelectConversation={handleContinueChat}
+				onNewChat={handleNewChat}
+				onPinConversation={handlePinConversation}
+				onMoveToArea={handleMoveToArea}
+				onRenameConversation={handleDrawerRename}
+				onExportConversation={handleDrawerExport}
+				onDeleteConversation={handleDrawerDelete}
+			/>
+			{#snippet failed(error, reset)}
+				<ErrorFallback {error} {reset} variant="panel" />
+			{/snippet}
+		</svelte:boundary>
 
 		<!-- Tasks Panel -->
-		<TasksPanel
-			isOpen={tasksPanelOpen}
-			areaId={area.id}
-			spaceColor={areaColor}
-			onClose={() => tasksPanelOpen = false}
-			onAddTask={() => taskModalOpen = true}
-			onTaskClick={(task) => goToTask(task.id)}
-		/>
+		<svelte:boundary onerror={(e) => console.error('[TasksPanel Error]', e)}>
+			<TasksPanel
+				isOpen={tasksPanelOpen}
+				areaId={area.id}
+				spaceColor={areaColor}
+				onClose={() => tasksPanelOpen = false}
+				onAddTask={() => taskModalOpen = true}
+				onTaskClick={(task) => goToTask(task.id)}
+			/>
+			{#snippet failed(error, reset)}
+				<ErrorFallback {error} {reset} variant="panel" />
+			{/snippet}
+		</svelte:boundary>
 
 		<!-- Context Panel -->
 		{#if area}
-			<ContextPanel
-				isOpen={contextPanelOpen}
-				{area}
-				spaceId={properSpaceId}
-				spaceColor={areaColor}
-				onClose={() => contextPanelOpen = false}
-				onAreaUpdate={handleAreaUpdate}
-			/>
+			<svelte:boundary onerror={(e) => console.error('[ContextPanel Error]', e)}>
+				<ContextPanel
+					isOpen={contextPanelOpen}
+					{area}
+					spaceId={properSpaceId}
+					spaceColor={areaColor}
+					onClose={() => contextPanelOpen = false}
+					onAreaUpdate={handleAreaUpdate}
+				/>
+				{#snippet failed(error, reset)}
+					<ErrorFallback {error} {reset} variant="panel" />
+				{/snippet}
+			</svelte:boundary>
 		{/if}
 
 		<!-- Task Modal -->

@@ -8,6 +8,7 @@
 >
 > **Related Documents:**
 > - [`context-loading-architecture.md`](./context-loading-architecture.md) — Technical architecture for HOW to load context (hybrid upfront + just-in-time via tool calling)
+> - [`COGNITIVE_GOVERNANCE.md`](./COGNITIVE_GOVERNANCE.md) — Cognitive governance framework (bidirectional flow, cognitive friction, governance metadata per hierarchy level)
 > - [`DOCUMENT_SHARING.md`](./DOCUMENT_SHARING.md) — Uploaded documents sharing model (Space storage, Area-level visibility)
 > - [`DOCUMENT_SYSTEM.md`](./DOCUMENT_SYSTEM.md) — Pages system (created content at Area-level)
 
@@ -20,15 +21,16 @@
 3. [Organizational Knowledge Architecture](#organizational-knowledge-architecture)
 4. [Current State Analysis](#current-state-analysis)
 5. [Architecture Vision](#architecture-vision)
-6. [Phase 1: Foundation](#phase-1-foundation)
-7. [Phase 2: Active Memory](#phase-2-active-memory)
-8. [Phase 3: Shared Context](#phase-3-shared-context)
-9. [Phase 4: Organizational Intelligence](#phase-4-organizational-intelligence)
-10. [UX Patterns](#ux-patterns)
-11. [Technical Specifications](#technical-specifications)
-12. [Success Metrics](#success-metrics)
-13. [Risks & Mitigations](#risks-mitigations)
-14. [Decision Log](#decision-log)
+6. [The Closed-Loop Knowledge System](#the-closed-loop-knowledge-system)
+7. [Phase 1: Foundation](#phase-1-foundation)
+8. [Phase 2: Active Memory](#phase-2-active-memory)
+9. [Phase 3: Shared Context](#phase-3-shared-context)
+10. [Phase 4: Organizational Intelligence](#phase-4-organizational-intelligence)
+11. [UX Patterns](#ux-patterns)
+12. [Technical Specifications](#technical-specifications)
+13. [Success Metrics](#success-metrics)
+14. [Risks & Mitigations](#risks-mitigations)
+15. [Decision Log](#decision-log)
 
 ---
 
@@ -896,6 +898,102 @@ StratAI's existing hierarchy is actually ahead of most competitors. The gap is i
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## The Closed-Loop Knowledge System
+
+### Why This Matters
+
+The context hierarchy (Org → Space → Area → Task) isn't just an organizational convenience — it's the backbone of a **closed-loop knowledge system** where every feature is simultaneously a context consumer and a context generator. Each feature feeds the others through the hierarchy, creating compounding intelligence that no competitor can replicate.
+
+This is the mechanism that turns the Data Flywheel (see `PRODUCT_VISION.md`) from concept into reality.
+
+### The Feature Loop
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 THE CLOSED-LOOP KNOWLEDGE SYSTEM                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐               │
+│   │  CALENDAR     │────▶│  MEETINGS    │────▶│  DECISIONS   │               │
+│   │  (scheduling) │     │  (capture)   │     │  + ACTIONS   │               │
+│   └──────────────┘     └──────────────┘     └──────┬───────┘               │
+│                                                     │                       │
+│                                                     ▼                       │
+│   ┌──────────────┐     ┌──────────────┐     ┌──────────────┐               │
+│   │  SKILLS      │────▶│  PAGES       │◀────│  TASKS       │               │
+│   │  (methods)   │     │  (knowledge) │     │  (execution) │               │
+│   └──────┬───────┘     └──────┬───────┘     └──────┬───────┘               │
+│          │                    │                     │                       │
+│          └────────────────────┼─────────────────────┘                       │
+│                               │                                             │
+│                               ▼                                             │
+│                    ┌─────────────────────┐                                  │
+│                    │  HIERARCHICAL       │                                  │
+│                    │  CONTEXT            │                                  │
+│                    │  (Space → Area)     │                                  │
+│                    └──────────┬──────────┘                                  │
+│                               │                                             │
+│                    ┌──────────▼──────────┐                                  │
+│                    │  AI MEMORY          │                                  │
+│                    │  (learns, recalls,  │                                  │
+│                    │   recommends)       │                                  │
+│                    └──────────┬──────────┘                                  │
+│                               │                                             │
+│          ┌────────────────────┼─────────────────────┐                       │
+│          │                    │                     │                       │
+│          ▼                    ▼                     ▼                       │
+│   ┌──────────────┐  ┌──────────────┐     ┌──────────────┐                  │
+│   │ INTEGRATIONS │  │  CHAT        │     │  NEXT        │                  │
+│   │ (external    │  │  (guidance)  │     │  MEETING     │                  │
+│   │  data/action)│  │              │     │  (prep)      │                  │
+│   └──────────────┘  └──────────────┘     └──────────────┘                  │
+│                                                                              │
+│   Every arrow is a context flow. Every node is both consumer and producer.  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Concrete Example: "Prepare me for tomorrow's budget review with Sarah"
+
+A single user prompt demonstrates the full loop:
+
+| Feature | Role | What It Contributes |
+|---------|------|---------------------|
+| **Calendar** | Trigger | Knows the meeting is tomorrow at 2pm, Sarah is the attendee |
+| **Meeting Records** | Historical context | Last month's QBR with Sarah — she raised concerns about Q4 spend |
+| **Pages** | Knowledge | "Q3 Budget Analysis" page in this Area has the latest numbers |
+| **Tasks** | Open items | 3 outstanding budget action items assigned to you |
+| **Skills** | Methodology | "QBR Prep" skill structures the analysis (agenda, talking points, risk flags) |
+| **Integrations** | Live data | Xero integration pulls current month actuals vs. forecast |
+| **Memory** | Preferences | Sarah prefers visual summaries; you like executive-first format |
+| **Context Hierarchy** | Scope | All of the above scoped to the Finance Area within the Operations Space |
+
+The AI doesn't just answer a question — it **orchestrates** across every feature, scoped through the context hierarchy, to produce a genuinely useful response. No single feature achieves this. The combination does.
+
+### Why Competitors Can't Replicate This
+
+| Competitor | What They Have | What They Lack |
+|------------|---------------|----------------|
+| **ChatGPT Custom GPTs** | Instructions, some memory | No hierarchy, no integrations, no structured knowledge |
+| **Claude Projects** | Project-scoped context | Single model, no calendar/tasks/meetings, no integrations |
+| **Microsoft Copilot** | M365 data, calendar | No hierarchical memory, no skills methodology, generic instructions |
+| **Gemini Gems** | Instructions, Drive | No enterprise hierarchy, no task/meeting lifecycle |
+
+StratAI is the only platform where Skills (methodology) + Integrations (external data) + Context (hierarchical memory) converge in a single system. Each feature alone is table stakes. The closed loop is the moat.
+
+### Implications for Context Architecture
+
+This closed-loop system has direct implications for how we design context loading:
+
+1. **Every feature must write to the context hierarchy** — Meetings produce decisions, tasks track execution, pages capture knowledge. All scoped to Area/Space.
+2. **Context loading must be cross-feature** — A chat query might need calendar data, task status, page content, and meeting history simultaneously.
+3. **Skills must be context-aware** — A skill's instructions are only half the picture; the Area's accumulated context is the other half.
+4. **Integrations are context bridges** — External data (Xero, GitHub, Calendar) enters the hierarchy through integrations and becomes part of the context graph.
+5. **Memory spans all features** — The AI should recall relevant information regardless of which feature generated it (meeting, task, page, or chat).
+6. **The loop needs error-correction** — Without governance-aware friction detection, the flywheel can spin in the wrong direction (locally optimal, globally incoherent). See [`COGNITIVE_GOVERNANCE.md`](./COGNITIVE_GOVERNANCE.md) for the framework that prevents "high-quality chaos."
 
 ---
 

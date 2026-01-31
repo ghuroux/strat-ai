@@ -10,6 +10,7 @@
 
 	import { onMount } from 'svelte';
 	import UsageChart from '$lib/components/admin/UsageChart.svelte';
+	import { toastStore } from '$lib/stores/toast.svelte';
 
 	interface UsageStats {
 		totalRequests: number;
@@ -120,6 +121,7 @@
 		} catch (e) {
 			console.error('Failed to fetch usage:', e);
 			error = e instanceof Error ? e.message : 'Failed to load usage data';
+			toastStore.error('Failed to load usage data');
 		} finally {
 			isLoading = false;
 		}
@@ -153,6 +155,7 @@
 		} catch (e) {
 			console.error('Failed to fetch recent requests:', e);
 			recentRequests = [];
+			toastStore.error('Failed to load recent requests');
 		} finally {
 			isLoadingRequests = false;
 		}

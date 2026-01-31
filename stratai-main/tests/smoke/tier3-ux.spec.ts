@@ -225,8 +225,8 @@ test.describe('Tier 3: UX Interactions', () => {
 				)
 			);
 
-			// There should be some way to access user settings
-			await expect(page.locator('header')).toBeVisible();
+			// There should be some way to access user settings (desktop header is visible)
+			await expect(page.locator('header').last()).toBeVisible();
 		});
 	});
 
@@ -276,6 +276,120 @@ test.describe('Tier 3: UX Interactions', () => {
 			// Something should be focused
 			const focusedElement = await page.evaluate(() => document.activeElement?.tagName);
 			expect(focusedElement).toBeTruthy();
+		});
+	});
+
+	// ─── Phase 3: Additional UX Tests ────────────────────────────────────
+
+	test.describe('Theme Preference', () => {
+		test('theme toggle persists preference', async ({ page }) => {
+			await page.goto('/settings');
+			await page.waitForLoadState('networkidle');
+
+			// Navigate to Appearance section in the settings sidebar
+			const appearanceNav = page.locator('button.nav-item', { hasText: 'Appearance' });
+			if (!(await appearanceNav.isVisible({ timeout: 5000 }).catch(() => false))) {
+				test.skip(); // Settings layout not accessible
+				return;
+			}
+			await appearanceNav.click();
+
+			// Verify theme options are visible
+			const themeCards = page.locator('.theme-card');
+			await expect(themeCards.first()).toBeVisible({ timeout: 3000 });
+
+			// Determine current theme and pick a different one
+			const selectedCard = page.locator('.theme-card.selected');
+			const selectedLabel = await selectedCard.locator('.theme-label').textContent();
+			const isDark = selectedLabel?.trim() === 'Dark';
+			const targetLabel = isDark ? 'Light' : 'Dark';
+
+			// Click the target theme card — match via .theme-label to avoid
+			// substring issues (Dark card description contains "low-light")
+			const targetCard = page.locator('.theme-card').filter({
+				has: page.locator('.theme-label', { hasText: new RegExp(`^${targetLabel}$`) })
+			});
+			await expect(targetCard).toBeVisible();
+			await targetCard.click();
+
+			// Wait for save to complete
+			await page.waitForTimeout(1000);
+
+			// Reload the page and navigate back to appearance
+			await page.reload();
+			await page.waitForLoadState('networkidle');
+			await page.locator('button.nav-item', { hasText: 'Appearance' }).click();
+
+			// Verify the new theme is still selected
+			const newSelected = page.locator('.theme-card.selected .theme-label');
+			await expect(newSelected).toBeVisible({ timeout: 3000 });
+			const newLabel = await newSelected.textContent();
+			expect(newLabel?.trim()).toBe(targetLabel);
+
+			// Restore to dark theme (cleanup)
+			if (targetLabel !== 'Dark') {
+				const darkCard = page.locator('.theme-card').filter({
+					has: page.locator('.theme-label', { hasText: /^Dark$/ })
+				});
+				await darkCard.click();
+				await page.waitForTimeout(500);
+			}
+		});
+	});
+
+	test.describe('Arena Page', () => {
+		test('arena page loads without errors', async ({ page }) => {
+			await page.goto('/arena');
+			await page.waitForLoadState('networkidle');
+
+			// Arena page should render — look for the heading
+			const arenaHeading = page.getByRole('heading', { name: 'Model Arena', exact: true });
+			await expect(arenaHeading).toBeVisible({ timeout: 5000 });
+
+			// Page should not show an error
+			const errorText = page.locator('text=Something went wrong');
+			expect(await errorText.isVisible().catch(() => false)).toBeFalsy();
+		});
+	});
+
+	test.describe('Task Creation', () => {
+		test('task creation from space dashboard completes', async ({ page }) => {
+			await page.goto('/');
+			await page.waitForLoadState('networkidle');
+
+			// Navigate to a space dashboard
+			const spaceLink = page.locator('a[href^="/spaces/"]').first();
+			if (!(await spaceLink.isVisible({ timeout: 5000 }).catch(() => false))) {
+				test.skip();
+				return;
+			}
+			await spaceLink.click();
+			await page.waitForLoadState('networkidle');
+
+			// Find the "Add task" button in the Tasks section
+			const addTaskButton = page.locator('.add-task-btn').first();
+			if (!(await addTaskButton.isVisible({ timeout: 5000 }).catch(() => false))) {
+				test.skip(); // Tasks section not visible
+				return;
+			}
+			await addTaskButton.click();
+
+			// Task modal should open
+			const modal = page.locator('[role="dialog"]');
+			await expect(modal).toBeVisible({ timeout: 3000 });
+
+			// Fill required title field
+			const titleInput = modal.locator('#title');
+			await expect(titleInput).toBeVisible();
+			await titleInput.fill(`Smoke Task ${Date.now()}`);
+
+			// Submit the form
+			const createButton = modal.locator('button').filter({ hasText: 'Create Task' });
+			await expect(createButton).toBeVisible();
+			await createButton.click();
+
+			// Modal should close on success
+			await expect(modal).not.toBeVisible({ timeout: 10000 });
 		});
 	});
 });

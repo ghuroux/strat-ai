@@ -368,6 +368,60 @@ Every significant decision recorded with:
 - **Audit Trails:** What was asked, what was answered
 - **Guardrails:** Enterprise-appropriate responses
 
+#### 7. Skills
+- **Reusable AI methodologies:** Structured instruction sets (QBR prep, proposal writing, sprint retro)
+- **Hierarchical activation:** Org → Space → Area inheritance
+- **Integration-aware:** Skills can reference external tools (email send, Xero query, GitHub search)
+- **Context-amplified:** Skill instructions + Area context = contextual expertise
+
+### The Closed-Loop Knowledge System
+
+The capabilities above aren't isolated features — they form a **closed-loop system** where each feature is simultaneously a context consumer and a context generator. This is the mechanism that makes the Data Flywheel (Section 4) operational.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              HOW THE FEATURES FEED EACH OTHER                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   Calendar ──▶ Meetings ──▶ Decisions + Actions                             │
+│                                    │                                         │
+│                                    ▼                                         │
+│   Skills ──▶ Pages ◀── Tasks                                                │
+│       │         │          │                                                 │
+│       └─────────┼──────────┘                                                 │
+│                 ▼                                                             │
+│         Hierarchical Context (Space → Area)                                  │
+│                 │                                                             │
+│                 ▼                                                             │
+│            AI Memory (learns, recalls, recommends)                           │
+│                 │                                                             │
+│       ┌─────────┼──────────┐                                                 │
+│       ▼         ▼          ▼                                                 │
+│   Integrations  Chat   Next Meeting (prep)                                  │
+│                                                                              │
+│   Every arrow is a context flow.                                             │
+│   Every node is both consumer and producer.                                  │
+│   The loop never stops. Intelligence compounds.                              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Example:** A user asks "Prepare me for tomorrow's budget review with Sarah."
+
+| Feature | Contribution |
+|---------|-------------|
+| Calendar | Knows the meeting is at 2pm, Sarah is the attendee |
+| Meeting Records | Last QBR with Sarah — she flagged Q4 spend concerns |
+| Pages | "Q3 Budget Analysis" has the latest numbers |
+| Tasks | 3 outstanding budget items assigned to you |
+| Skills | "QBR Prep" skill structures agenda, talking points, risk flags |
+| Integrations | Xero pulls current month actuals vs. forecast |
+| Memory | Sarah prefers visual summaries; you like executive-first format |
+
+No single feature achieves this. The combination does. And every interaction feeds back into the system, making the next response smarter.
+
+> **See:** [`CONTEXT_STRATEGY.md`](../architecture/CONTEXT_STRATEGY.md) — "The Closed-Loop Knowledge System" section for technical architecture implications.
+
 ---
 
 ## Integration Strategy

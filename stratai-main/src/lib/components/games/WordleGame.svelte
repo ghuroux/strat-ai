@@ -208,6 +208,7 @@
 			}
 		} catch (error) {
 			console.error('Failed to check daily completion:', error);
+			toastStore.error('Failed to check daily status');
 		}
 	}
 
@@ -249,6 +250,7 @@
 			}
 		} catch (error) {
 			console.error('Failed to fetch leaderboard:', error);
+			toastStore.error('Failed to load leaderboard');
 		} finally {
 			isLoadingLeaderboard = false;
 		}
@@ -375,6 +377,7 @@
 			}
 		} catch (error) {
 			console.error('Failed to save score:', error);
+			toastStore.error('Failed to save score');
 		}
 	}
 

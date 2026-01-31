@@ -486,3 +486,71 @@ Your calendar data is encrypted and used only to help you be more productive. Yo
 export function createCalendarConnectLink(): string {
 	return `${getBaseUrl()}/settings?section=integrations`;
 }
+
+// ============================================================
+// Security Upgrade Email Template (bcrypt migration)
+// ============================================================
+
+interface SecurityUpgradeTemplateData {
+	userName: string;
+	resetLink: string;
+	expiresInMinutes: number;
+}
+
+/**
+ * Generate security upgrade email content
+ * Sent when password hashing is upgraded and users must reset their passwords
+ */
+export function getSecurityUpgradeEmail(data: SecurityUpgradeTemplateData) {
+	const { userName, resetLink, expiresInMinutes } = data;
+
+	const html = `
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Security Upgrade - Reset Your Password</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+	<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 8px 8px 0 0;">
+		<h1 style="color: white; margin: 0; font-size: 24px;">StratAI</h1>
+	</div>
+	<div style="background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none;">
+		<h2 style="margin-top: 0;">Security Upgrade</h2>
+		<p>Hi ${userName},</p>
+		<p>We've upgraded our password security to use stronger encryption. As part of this upgrade, all existing passwords have been reset.</p>
+		<p>Please set a new password to continue using StratAI:</p>
+		<div style="text-align: center; margin: 30px 0;">
+			<a href="${resetLink}" style="background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Set New Password</a>
+		</div>
+		<p style="color: #6b7280; font-size: 14px;">This link will expire in ${expiresInMinutes} minutes.</p>
+		<p style="color: #6b7280; font-size: 14px;"><strong>Why is this happening?</strong> We've moved to bcrypt password hashing, an industry-standard algorithm that provides significantly stronger protection for your account. This is a one-time upgrade.</p>
+		<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+		<p style="color: #9ca3af; font-size: 12px;">If the button doesn't work, copy and paste this link into your browser:<br><a href="${resetLink}" style="color: #667eea; word-break: break-all;">${resetLink}</a></p>
+	</div>
+</body>
+</html>`;
+
+	const text = `Security Upgrade - Reset Your Password
+
+Hi ${userName},
+
+We've upgraded our password security to use stronger encryption. As part of this upgrade, all existing passwords have been reset.
+
+Please set a new password by visiting:
+
+${resetLink}
+
+This link will expire in ${expiresInMinutes} minutes.
+
+Why is this happening? We've moved to bcrypt password hashing, an industry-standard algorithm that provides significantly stronger protection for your account. This is a one-time upgrade.
+
+- The StratAI Team`;
+
+	return {
+		subject: 'StratAI Security Upgrade — Please Reset Your Password',
+		html,
+		text
+	};
+}

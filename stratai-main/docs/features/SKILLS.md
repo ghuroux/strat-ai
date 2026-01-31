@@ -1,6 +1,8 @@
 # Skills System
 
 > **Status:** Design Complete | **Priority:** Medium | **Dependencies:** Spaces, Areas, System Prompts
+>
+> **Market Research:** See [`docs/research/SKILLS_MARKET_RESEARCH.md`](../research/SKILLS_MARKET_RESEARCH.md) for competitive landscape, community sentiment, enterprise requirements, and the Skills + Integrations convergence thesis.
 
 Enable specialized AI capabilities within Spaces and Areas through reusable instruction sets called Skills.
 
@@ -40,7 +42,7 @@ Teams need to:
 - Apply consistent, proven methodologies to AI interactions (e.g., financial analysis frameworks)
 - Share expertise across the organization (not just documents, but *how to work*)
 - Ensure AI follows domain-specific workflows (e.g., PRD templates, code review checklists)
-- Activate specialized behaviors on-demand without rewriting prompts
+- Codify team expertise so it persists across conversations and team members
 
 ### Value Proposition
 
@@ -58,79 +60,137 @@ Teams need to:
 
 ### What is a Skill?
 
-A skill is a **domain-specific instruction set** that teaches the AI specialized behaviors, workflows, and methodologies.
+A skill is a **domain-specific instruction set** that teaches the AI specialized behaviors, workflows, and methodologies. Skills are **passive context** — once activated in an Area, they shape every AI response in that Area without requiring user action per-message.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         SKILL ANATOMY                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │  METADATA                                                │   │
-│   │  ─────────                                               │   │
-│   │  • Name: financial-analysis                              │   │
-│   │  • Description: "Analyze financial data using DCF..."    │   │
-│   │  • Triggers: ["valuation", "DCF", "financial model"]     │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │  CONTENT (Markdown)                                      │   │
-│   │  ─────────────────                                       │   │
-│   │  # Financial Analysis Skill                              │   │
-│   │                                                          │   │
-│   │  ## Workflow                                             │   │
-│   │  1. Gather key metrics (revenue, EBITDA, growth rate)    │   │
-│   │  2. Determine appropriate valuation methodology          │   │
-│   │  3. Build DCF model with explicit assumptions            │   │
-│   │  4. Sensitivity analysis on key drivers                  │   │
-│   │  5. Compare to market multiples                          │   │
-│   │                                                          │   │
-│   │  ## Key Principles                                       │   │
-│   │  - Always state assumptions explicitly                   │   │
-│   │  - Use conservative projections                          │   │
-│   │  - Consider multiple scenarios (base/bull/bear)          │   │
-│   │  ...                                                     │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                         SKILL ANATOMY                        |
++-------------------------------------------------------------+
+|                                                              |
+|   METADATA                                                   |
+|   - Name: financial-analysis                                 |
+|   - Description: "Analyze financial data using DCF..."       |
+|   - Keywords: ["valuation", "DCF", "financial model"]        |
+|                                                              |
+|   CONTENT (Markdown)                                         |
+|   - # Financial Analysis Skill                               |
+|   -                                                          |
+|   - ## Workflow                                              |
+|   - 1. Gather key metrics (revenue, EBITDA, growth rate)     |
+|   - 2. Determine appropriate valuation methodology           |
+|   - 3. Build DCF model with explicit assumptions             |
+|   - 4. Sensitivity analysis on key drivers                   |
+|   - 5. Compare to market multiples                           |
+|   -                                                          |
+|   - ## Key Principles                                        |
+|   - - Always state assumptions explicitly                    |
+|   - - Use conservative projections                           |
+|   - - Consider multiple scenarios (base/bull/bear)           |
+|   -   ...                                                    |
+|                                                              |
++-------------------------------------------------------------+
 ```
 
-### Skill Levels
+### Ownership Model
 
-Skills can be attached at different levels of the hierarchy:
+> **Decision (2026-01-31):** Skills are **first-class entities owned by users**, not child objects of Spaces or Areas. Like Spaces, skills belong to their creator and live within an org context. Ownership can transfer (succession) if the creator leaves.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      SKILL HIERARCHY                             │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│   ORGANIZATION (V2)                                              │
-│   └── Skills available to all Spaces                            │
-│       Example: "Company Communication Style"                     │
-│                                                                  │
-│   SPACE                                                          │
-│   └── Skills available to all Areas in Space                    │
-│       Example: "Nedbank Financial Analysis"                      │
-│                                                                  │
-│   AREA                                                           │
-│   └── Skills active for this specific Area                      │
-│       Example: "Q1 Budget Planning Process"                      │
-│                                                                  │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │  Context Injection Order:                                │   │
-│   │  Platform → Space → Space Skills → Area → Area Skills    │   │
-│   └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|                    SKILL OWNERSHIP                            |
++-------------------------------------------------------------+
+|                                                              |
+|   Skills are like Spaces:                                    |
+|                                                              |
+|   +-- Belong to an ORG (context boundary)                    |
+|   +-- Owned by a USER (creator, transferable)                |
+|   +-- Created by a USER (immutable audit trail)              |
+|                                                              |
+|   Skills are NOT like Documents:                             |
+|                                                              |
+|   Documents = Space-scoped data ("Nedbank Q3 Financials")    |
+|   Skills = User-owned expertise ("Financial Analysis")       |
+|                                                              |
+|   A user's skills follow them across all their Spaces.       |
+|                                                              |
++-------------------------------------------------------------+
 ```
 
-### Activation Modes
+| Aspect | Space | Skill |
+|--------|-------|-------|
+| **Owner** | Creator (user) | Creator (user) |
+| **Belongs to** | Org | Org (via creator's org) |
+| **If owner leaves** | Ownership transfers | Ownership transfers |
+| **Deletion** | Owner or org admin | Owner or org admin |
 
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| **Always Active** | Skill always included in context | Core methodology that applies to all work in this Space/Area |
-| **Trigger-based** | Skill activated when keywords detected | Specialized skills invoked on-demand |
-| **Manual** | User explicitly activates via UI | Optional skills user can toggle |
+### Visibility & Sharing
+
+Skills have a visibility level that determines who can see and activate them:
+
+```
+PERSONAL (V1 default)
+  Creator sees it in all their Areas/Spaces
+  Nobody else sees it
+  No approval needed
+      |
+      v  [Creator requests to share] (V2)
+      |
+SPACE-SHARED (V2, approval required)
+  Creator submits to Space admin
+  Space admin approves -> Space members can see and activate it
+      |
+      v  [Org admin can promote] (V2)
+      |
+ORG-WIDE (V2, org admin approval)
+  Visible to all Spaces in the org
+  Org admin approves (or promotes from Space-shared)
+```
+
+| Visibility | Who sees it | Who decides | Quality gate | Version |
+|------------|-------------|-------------|--------------|---------|
+| **Personal** | Only creator | Creator | None needed | **V1** |
+| **Space** | Space members | Space admin approves | Space admin reviews | V2 |
+| **Org** | All Spaces in org | Org admin approves | Org admin reviews | V2 |
+
+**Key principle:** The creator always sees their own skills everywhere they work, regardless of sharing status. A personal skill doesn't need approval to be useful to its creator.
+
+**V2 Approval Flow:**
+
+```
+Creator: "Share Financial Analysis with Nedbank Space"
+    |
+    v
+Space Admin sees request:
+    [Approve for this Space]  [Approve for Org]  [Reject]
+    |                          |
+    v                          v
+visibility = 'space'         visibility = 'org'
++ skill_space_shares entry   (visible everywhere in org)
+```
+
+An org admin seeing a Space-level share request can "upgrade" it to org-wide. A Space admin can only approve for their Space.
+
+### Activation Model
+
+Skills are activated per-Area via the ContextPanel, same pattern as documents.
+
+**V1 (personal skills):**
+
+| Action | How |
+|--------|-----|
+| **Create** | User creates skill (personal library) |
+| **Activate** | Creator toggles their skill on in any Area's ContextPanel |
+| **Deactivate** | Creator toggles skill off |
+
+**V2 (shared skills):**
+
+| Action | How |
+|--------|-----|
+| **Share** | Creator requests share -> admin approves |
+| **Activate** | Any Space/Area member toggles shared skill on in ContextPanel |
+| **Deactivate** | Any member toggles it off for their Area |
+
+This is deliberately simple. Skills are *environment* — "how we work in this Area" — not on-demand actions. See [V2: Quick Skills](#quick-skills-v2) for the on-demand invocation pattern.
 
 ### Skill vs Document
 
@@ -138,18 +198,18 @@ Skills can be attached at different levels of the hierarchy:
 - **Skills** = *How* to work (methodologies, quality standards, workflows, rules)
 - **Documents** = *What* we're working on (context, data, specs, reference materials)
 
-This means quality assurance, review checklists, and process standards belong in Skills—not scattered across documents. A financial analyst's DCF methodology is a Skill; the company's Q3 financials are a Document.
+This means quality assurance, review checklists, and process standards belong in Skills — not scattered across documents. A financial analyst's DCF methodology is a Skill; the company's Q3 financials are a Document.
 
 | Aspect | Document | Skill |
 |--------|----------|-------|
 | **Purpose** | Reference information | Behavioral instructions |
 | **Content** | Facts, data, specs | Workflows, methodologies, rules |
-| **Injection** | Summary in prompt, full via tool | Summary in prompt, full via tool |
+| **Ownership** | Space-scoped (data belongs to project) | User-owned (expertise belongs to person) |
+| **Cross-Space** | No (inherently contextual) | Yes (expertise is portable) |
+| **Injection** | Summary in prompt, full via `read_document` tool | Short: full in prompt. Long: summary + `read_skill` tool |
 | **Example** | "Q1 Budget Spreadsheet" | "Financial Analysis Methodology" |
 | **Changes** | Updated when data changes | Updated when process improves |
-| **Ownership** | Often external (uploaded) | Internal (team-created) |
-
-Both use the same pattern: **summary in prompt, full content via tool call**.
+| **Activation** | Toggle per-Area in ContextPanel | Toggle per-Area in ContextPanel |
 
 ---
 
@@ -158,28 +218,44 @@ Both use the same pattern: **summary in prompt, full content via tool call**.
 ### Create a Skill
 
 ```
-AS A Space owner
-I WANT TO create a skill for my Space
-SO THAT my team uses consistent methodologies
+AS A user
+I WANT TO create a skill
+SO THAT I can codify my expertise as reusable AI instructions
 
 Acceptance Criteria:
 - [ ] Can create skill with name, description, and content
-- [ ] Can specify trigger keywords (optional)
-- [ ] Can set activation mode (always/trigger/manual)
-- [ ] Skill appears in Space skills list
+- [ ] Can optionally add keywords (for discoverability and tool matching)
+- [ ] Skill is personal by default (only I can see it)
+- [ ] Skill appears in my skills list
+- [ ] Can use the skill in any Area I belong to
 ```
 
 ### Activate Skill in Area
 
 ```
-AS AN Area user
-I WANT TO activate Space skills in my Area
+AS A user in an Area
+I WANT TO activate my skills (and shared skills) in this Area
 SO THAT the AI uses those methodologies here
 
 Acceptance Criteria:
-- [ ] Can see available Space skills
-- [ ] Can activate/deactivate skills per Area
+- [ ] ContextPanel shows my personal skills + shared skills for this Space
+- [ ] Can activate/deactivate skills per Area (same toggle pattern as documents)
 - [ ] Active skills reflected in AI responses
+```
+
+### Share a Skill (V2)
+
+```
+AS A skill creator
+I WANT TO share my skill with a Space or org
+SO THAT my team can benefit from my expertise
+
+Acceptance Criteria:
+- [ ] Can request to share a skill with a specific Space
+- [ ] Space admin receives share request notification
+- [ ] Space admin can approve for Space or promote to Org
+- [ ] Approved skills visible to Space/Org members in ContextPanel
+- [ ] Rejected requests notify creator with optional reason
 ```
 
 ### Use a Skill Template
@@ -204,8 +280,8 @@ I WANT the AI to follow the skill methodologies
 SO THAT I get consistent, high-quality outputs
 
 Acceptance Criteria:
-- [ ] AI receives skill summaries in context
-- [ ] AI can read full skill content when needed
+- [ ] Short skills injected fully into AI context
+- [ ] Long skills summarized in context, full content via read_skill tool
 - [ ] AI follows skill workflows and principles
 - [ ] Context transparency shows active skills
 ```
@@ -214,18 +290,25 @@ Acceptance Criteria:
 
 ## 4. Database Schema
 
-### Migration: Create skills table
+### Migration: Create skills tables
 
 ```sql
 -- Migration: YYYYMMDD_001_skills.sql
 
--- Skills table (attached to Space or Area)
+-- Skills table (first-class entity, user-owned)
 CREATE TABLE skills (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
 
-  -- Ownership (one of space_id or area_id, not both for V1)
-  space_id TEXT REFERENCES spaces(id) ON DELETE CASCADE,
-  area_id TEXT REFERENCES areas(id) ON DELETE CASCADE,
+  -- Org context (skills don't cross orgs, same as Spaces)
+  org_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+
+  -- Ownership
+  owner_id TEXT NOT NULL REFERENCES users(id),     -- Current owner (transferable)
+  created_by TEXT NOT NULL REFERENCES users(id),    -- Original creator (immutable audit)
+
+  -- Visibility (V1: personal only. V2 adds 'space', 'org')
+  visibility TEXT NOT NULL DEFAULT 'personal'
+    CHECK (visibility IN ('personal', 'space', 'org')),
 
   -- Metadata
   name TEXT NOT NULL,
@@ -235,24 +318,16 @@ CREATE TABLE skills (
   content TEXT NOT NULL,  -- Full markdown skill content
   summary TEXT,  -- AI-generated summary (~200 tokens) for prompt injection
 
-  -- Activation
-  activation_mode TEXT NOT NULL DEFAULT 'manual'
-    CHECK (activation_mode IN ('always', 'trigger', 'manual')),
-  triggers TEXT[],  -- Keywords that activate trigger-based skills
+  -- Discoverability
+  keywords TEXT[],  -- Optional keywords for search, filtering, and tool matching
 
   -- Audit
-  created_by TEXT NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-
-  -- Constraints
-  CONSTRAINT skill_has_owner CHECK (
-    (space_id IS NOT NULL AND area_id IS NULL) OR
-    (space_id IS NULL AND area_id IS NOT NULL)
-  )
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Area skill activation (which Space skills are active in which Areas)
+-- Area skill activation (which skills are active in which Areas)
+-- Works for both personal and shared skills
 CREATE TABLE area_skill_activations (
   id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
   area_id TEXT NOT NULL REFERENCES areas(id) ON DELETE CASCADE,
@@ -263,10 +338,42 @@ CREATE TABLE area_skill_activations (
   UNIQUE(area_id, skill_id)
 );
 
+-- V2: Space-scoped sharing (which Spaces can see a shared skill)
+-- Only needed when visibility = 'space'
+-- When visibility = 'org', skill is visible everywhere (no entries needed)
+CREATE TABLE skill_space_shares (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  space_id TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+  approved_by TEXT NOT NULL REFERENCES users(id),
+  approved_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(skill_id, space_id)
+);
+
+-- V2: Share request workflow
+CREATE TABLE skill_share_requests (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+  requested_by TEXT NOT NULL REFERENCES users(id),
+  target_space_id TEXT REFERENCES spaces(id),  -- NULL = requesting org-wide
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'approved', 'rejected')),
+  reviewed_by TEXT REFERENCES users(id),
+  reviewed_at TIMESTAMPTZ,
+  rejection_reason TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Indexes
-CREATE INDEX idx_skills_space ON skills(space_id) WHERE space_id IS NOT NULL;
-CREATE INDEX idx_skills_area ON skills(area_id) WHERE area_id IS NOT NULL;
-CREATE INDEX idx_area_skill_activations ON area_skill_activations(area_id);
+CREATE INDEX idx_skills_org ON skills(org_id);
+CREATE INDEX idx_skills_owner ON skills(owner_id);
+CREATE INDEX idx_skills_visibility ON skills(visibility);
+CREATE INDEX idx_area_skill_activations_area ON area_skill_activations(area_id);
+CREATE INDEX idx_area_skill_activations_skill ON area_skill_activations(skill_id);
+CREATE INDEX idx_skill_space_shares_space ON skill_space_shares(space_id);
+CREATE INDEX idx_skill_share_requests_status ON skill_share_requests(status)
+  WHERE status = 'pending';
 ```
 
 ### TypeScript Types
@@ -274,14 +381,20 @@ CREATE INDEX idx_area_skill_activations ON area_skill_activations(area_id);
 ```typescript
 // In src/lib/types/skills.ts
 
-export type SkillActivationMode = 'always' | 'trigger' | 'manual';
+export type SkillVisibility = 'personal' | 'space' | 'org';
 
 export interface Skill {
   id: string;
 
+  // Context
+  orgId: string;
+
   // Ownership
-  spaceId: string | null;
-  areaId: string | null;
+  ownerId: string;
+  createdBy: string;
+
+  // Visibility
+  visibility: SkillVisibility;
 
   // Metadata
   name: string;
@@ -291,32 +404,27 @@ export interface Skill {
   content: string;  // Full markdown
   summary: string | null;  // AI-generated ~200 token summary
 
-  // Activation
-  activationMode: SkillActivationMode;
-  triggers: string[] | null;
+  // Discoverability
+  keywords: string[] | null;
 
   // Audit
-  createdBy: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface CreateSkillInput {
-  spaceId?: string;
-  areaId?: string;
   name: string;
   description: string;
   content: string;
-  activationMode?: SkillActivationMode;
-  triggers?: string[];
+  keywords?: string[];
+  // orgId and ownerId derived from session
 }
 
 export interface UpdateSkillInput {
   name?: string;
   description?: string;
   content?: string;
-  activationMode?: SkillActivationMode;
-  triggers?: string[];
+  keywords?: string[];
 }
 
 export interface AreaSkillActivation {
@@ -327,14 +435,35 @@ export interface AreaSkillActivation {
   activatedBy: string;
 }
 
-// For context injection (hybrid: full content or summary based on size)
+// V2: Sharing
+export interface SkillSpaceShare {
+  id: string;
+  skillId: string;
+  spaceId: string;
+  approvedBy: string;
+  approvedAt: Date;
+}
+
+export interface SkillShareRequest {
+  id: string;
+  skillId: string;
+  requestedBy: string;
+  targetSpaceId: string | null;  // null = org-wide request
+  status: 'pending' | 'approved' | 'rejected';
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+  rejectionReason: string | null;
+  createdAt: Date;
+}
+
+// For context injection (size-based: full content or summary)
 export interface SkillContext {
   id: string;
   name: string;
   description: string;
   content: string;
   summary: string | null;
-  activationMode: SkillActivationMode;  // Needed for injection priority sorting
+  keywords: string[] | null;
 }
 ```
 
@@ -344,18 +473,17 @@ export interface SkillContext {
 
 ### Skill Endpoints
 
-**POST /api/skills** - Create skill
+**POST /api/skills** - Create skill (personal)
 ```typescript
 // Request body
 {
-  spaceId?: string;
-  areaId?: string;
   name: string;
   description: string;
   content: string;
-  activationMode?: 'always' | 'trigger' | 'manual';
-  triggers?: string[];
+  keywords?: string[];
 }
+// orgId, ownerId, createdBy derived from session
+// visibility defaults to 'personal'
 
 // Response
 {
@@ -363,8 +491,9 @@ export interface SkillContext {
 }
 ```
 
-**GET /api/skills?spaceId={spaceId}** - List Space skills
+**GET /api/skills** - List my skills
 ```typescript
+// Returns all skills owned by the current user
 // Response
 {
   skills: Skill[];
@@ -379,19 +508,31 @@ export interface SkillContext {
 }
 ```
 
-**PATCH /api/skills/[id]** - Update skill
+**PATCH /api/skills/[id]** - Update skill (owner only)
 ```typescript
 // Request body
 {
   name?: string;
   description?: string;
   content?: string;
-  activationMode?: 'always' | 'trigger' | 'manual';
-  triggers?: string[];
+  keywords?: string[];
 }
 ```
 
-**DELETE /api/skills/[id]** - Delete skill
+**DELETE /api/skills/[id]** - Delete skill (owner or org admin)
+
+### Skills Available for an Area
+
+**GET /api/areas/[areaId]/available-skills** - List skills activatable in this Area
+```typescript
+// Returns:
+// V1: Current user's personal skills
+// V2: + Space-shared skills + Org-wide skills
+// Response
+{
+  skills: Skill[];
+}
+```
 
 ### Area Skill Activation Endpoints
 
@@ -405,11 +546,42 @@ export interface SkillContext {
 
 **DELETE /api/areas/[areaId]/skills/[skillId]** - Deactivate skill
 
-**GET /api/areas/[areaId]/skills** - List activated skills
+**GET /api/areas/[areaId]/skills** - List activated skills for this Area
 ```typescript
 // Response
 {
   skills: Skill[];  // Full skill objects for activated skills
+}
+```
+
+### V2: Sharing Endpoints
+
+**POST /api/skills/[id]/share** - Request to share skill
+```typescript
+// Request body
+{
+  targetSpaceId?: string;  // null = org-wide request
+}
+// Response
+{
+  request: SkillShareRequest;
+}
+```
+
+**GET /api/spaces/[spaceId]/skill-requests** - List pending share requests (Space admin)
+```typescript
+// Response
+{
+  requests: (SkillShareRequest & { skill: Skill })[];
+}
+```
+
+**POST /api/skill-requests/[id]/review** - Approve/reject share request
+```typescript
+// Request body
+{
+  action: 'approve' | 'approve_org' | 'reject';
+  rejectionReason?: string;
 }
 ```
 
@@ -420,23 +592,35 @@ export interface SkillContext {
 
 interface SkillsRepository {
   // CRUD
-  createSkill(input: CreateSkillInput, userId: string): Promise<Skill>;
+  createSkill(input: CreateSkillInput, userId: string, orgId: string): Promise<Skill>;
   getSkill(skillId: string): Promise<Skill | null>;
   updateSkill(skillId: string, input: UpdateSkillInput): Promise<Skill>;
   deleteSkill(skillId: string): Promise<void>;
 
   // Listing
-  getSkillsForSpace(spaceId: string): Promise<Skill[]>;
-  getSkillsForArea(areaId: string): Promise<Skill[]>;  // Area-owned skills
+  getSkillsByOwner(userId: string): Promise<Skill[]>;
+
+  // Area context
+  getAvailableSkillsForArea(areaId: string, userId: string): Promise<Skill[]>;
+  // V1: personal skills owned by userId
+  // V2: + Space-shared skills for this Area's Space + Org-wide skills
 
   // Area activations
   activateSkillInArea(areaId: string, skillId: string, userId: string): Promise<void>;
   deactivateSkillInArea(areaId: string, skillId: string): Promise<void>;
-  getActivatedSkillsForArea(areaId: string): Promise<Skill[]>;  // Space skills activated here
+  getActivatedSkillsForArea(areaId: string): Promise<Skill[]>;
 
-  // Context loading
-  getActiveSkillsForArea(areaId: string): Promise<SkillContext[]>;
-  // Returns: Area-owned skills + activated Space skills (for prompt injection)
+  // Context loading (for prompt injection)
+  getActiveSkillContextForArea(areaId: string): Promise<SkillContext[]>;
+  // Returns all activated skills for this Area with content for injection
+
+  // V2: Sharing
+  requestShare(skillId: string, userId: string, targetSpaceId?: string): Promise<SkillShareRequest>;
+  reviewShareRequest(requestId: string, reviewerId: string, action: string, reason?: string): Promise<void>;
+  getPendingShareRequests(spaceId: string): Promise<SkillShareRequest[]>;
+
+  // V2: Ownership transfer
+  transferOwnership(skillId: string, newOwnerId: string): Promise<void>;
 }
 ```
 
@@ -454,7 +638,8 @@ Display a skill with metadata and actions.
 <script lang="ts">
   interface Props {
     skill: Skill;
-    isActivated?: boolean;  // For Space skills in Area context
+    isActivated?: boolean;  // In Area context
+    showActions?: boolean;  // Edit/Delete (only for owner)
     onEdit?: () => void;
     onDelete?: () => void;
     onToggleActivation?: (activated: boolean) => void;
@@ -463,17 +648,19 @@ Display a skill with metadata and actions.
 ```
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  ⚡ Financial Analysis                                [Always]  │
-│  ─────────────────────────────────────────────────────────────  │
-│  Analyze financial data using DCF methodology,                  │
-│  sensitivity analysis, and market comparables.                  │
-│                                                                  │
-│  Triggers: valuation, DCF, financial model                      │
-│                                                                  │
-│                                    [Edit]  [Delete]             │
-└─────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|  Financial Analysis                          [Personal]      |
+|  -----------------------------------------------------------+
+|  Analyze financial data using DCF methodology,               |
+|  sensitivity analysis, and market comparables.               |
+|                                                              |
+|  Keywords: valuation, DCF, financial model                   |
+|                                                              |
+|                              [Share] [Edit]  [Delete]        |
++-------------------------------------------------------------+
 ```
+
+Visibility badge shows: `[Personal]`, `[Shared: Nedbank]`, or `[Org-wide]`
 
 ### 6.2 SkillEditor Component
 
@@ -482,168 +669,125 @@ Create/edit skill with markdown preview.
 **Location:** `src/lib/components/skills/SkillEditor.svelte`
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Create Skill                                             [X]   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Name                                                            │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Financial Analysis                                       │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  Description (one line for AI context)                          │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Analyze financial data using DCF methodology...         │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  Activation Mode                                                 │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ ○ Always Active   ○ Trigger-based   ● Manual           │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  Trigger Keywords (comma-separated)                              │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ valuation, DCF, financial model, EBITDA                 │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  Content                                    [Edit] [Preview]    │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ # Financial Analysis Skill                               │   │
-│  │                                                          │   │
-│  │ ## Workflow                                              │   │
-│  │ 1. Gather key metrics...                                 │   │
-│  │ 2. Determine methodology...                              │   │
-│  │ ...                                                      │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│                               [Cancel]  [Create Skill]          │
-└─────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|  Create Skill                                           [X]  |
++-------------------------------------------------------------+
+|                                                              |
+|  Name                                                        |
+|  +-------------------------------------------------------+  |
+|  | Financial Analysis                                     |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|  Description (one line for AI context)                       |
+|  +-------------------------------------------------------+  |
+|  | Analyze financial data using DCF methodology...        |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|  Keywords (optional, comma-separated)                        |
+|  +-------------------------------------------------------+  |
+|  | valuation, DCF, financial model, EBITDA                |  |
+|  +-------------------------------------------------------+  |
+|  Helps with search and AI tool matching                      |
+|                                                              |
+|  Content                                  [Edit] [Preview]   |
+|  +-------------------------------------------------------+  |
+|  | # Financial Analysis Skill                             |  |
+|  |                                                        |  |
+|  | ## Workflow                                            |  |
+|  | 1. Gather key metrics...                               |  |
+|  | 2. Determine methodology...                            |  |
+|  | ...                                                    |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|                               [Cancel]  [Create Skill]       |
++-------------------------------------------------------------+
 ```
 
-### 6.3 Space Skills Page
+No Space/Area selector — skills are personal by default. Sharing is a separate action (V2).
 
-Manage skills at Space level.
+### 6.3 My Skills Page
 
-**Location:** `src/routes/spaces/[space]/skills/+page.svelte`
+Personal skills library. Accessible from user menu or settings.
+
+**Location:** `src/routes/skills/+page.svelte`
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Nedbank SVS  >  Skills                          [+ New Skill]  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Space Skills                                                    │
-│  Skills available to all Areas in this Space                    │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  ⚡ Financial Analysis                         [Always]  │   │
-│  │  DCF methodology, sensitivity analysis...               │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  ⚡ Investment Memo                           [Trigger]  │   │
-│  │  Structure investment memos with thesis...              │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  ⚡ Code Review                                [Manual]  │   │
-│  │  Review code for security, performance...               │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|  My Skills                                  [+ New Skill]    |
++-------------------------------------------------------------+
+|                                                              |
+|  Your personal skills library                                |
+|  Activate these in any Area you work in                      |
+|                                                              |
+|  +-------------------------------------------------------+  |
+|  |  Financial Analysis                     [Personal]     |  |
+|  |  DCF methodology, sensitivity analysis...              |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|  +-------------------------------------------------------+  |
+|  |  Investment Memo                        [Personal]     |  |
+|  |  Structure investment memos with thesis...             |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|  +-------------------------------------------------------+  |
+|  |  Code Review                    [Shared: Nedbank SVS]  |  |
+|  |  Review code for security, performance...              |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|  ---  Platform Library  ----------------------------------   |
+|                                                              |
+|  Curated skills maintained by StratAI                        |
+|                                                              |
+|  ANALYSIS & STRATEGY                                         |
+|  +-------------------------------------------------------+  |
+|  |  PRD Writing                              [+ Add]      |  |
+|  |  Structure product requirements documents...           |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
++-------------------------------------------------------------+
 ```
 
 ### 6.4 Context Panel Skills Section
 
-Show active skills in Area Context Panel.
+Show activatable skills in Area Context Panel. **Same toggle pattern as documents.**
 
 **Location:** Update `src/lib/components/areas/ContextPanel.svelte`
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Context                                                  [X]   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  Area Notes                                                      │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │ Q1 budget planning for Nedbank project...               │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  Active Skills                                       [Manage]   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  ⚡ Financial Analysis            [Space] [Always]  ✓   │   │
-│  │  ⚡ Investment Memo               [Space] [Active]  ✓   │   │
-│  │  ⚡ Code Review                   [Space]           ○   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  Documents                                                       │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  📄 Q1_Budget_Template.xlsx                         ✓   │   │
-│  │  📄 Historical_Data.pdf                             ✓   │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|  Context                                                [X]  |
++-------------------------------------------------------------+
+|                                                              |
+|  Area Notes                                                  |
+|  +-------------------------------------------------------+  |
+|  | Q1 budget planning for Nedbank project...              |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|  Skills                                                      |
+|  +-------------------------------------------------------+  |
+|  |  My Skills                                             |  |
+|  |  Financial Analysis                               yes  |  |
+|  |  Investment Memo                                   no  |  |
+|  |                                                        |  |
+|  |  Shared Skills (V2)                                    |  |
+|  |  Brand Guidelines              [Org]              yes  |  |
+|  |  Nedbank Compliance            [Space]            yes  |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
+|  Documents                                                   |
+|  +-------------------------------------------------------+  |
+|  |  Q1_Budget_Template.xlsx                          yes  |  |
+|  |  Historical_Data.pdf                              yes  |  |
+|  +-------------------------------------------------------+  |
+|                                                              |
++-------------------------------------------------------------+
 ```
 
 ### 6.5 Platform Skills Library
 
 Curated skills provided by StratAI, inspired by [Anthropic's Skills Library](https://github.com/anthropics/skills).
 
-**Location:** `src/routes/spaces/[space]/skills/+page.svelte` (tab or section)
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Nedbank SVS  >  Skills                          [+ New Skill]  │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  [Your Skills]  [Platform Library]                              │
-│                                                                  │
-│  ─────────────────────────────────────────────────────────────  │
-│                                                                  │
-│  📚 Platform Skills Library                                      │
-│  Curated skills maintained by StratAI                           │
-│                                                                  │
-│  BUSINESS & COMMUNICATION                                        │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  📋 Internal Communications                    [+ Add]   │   │
-│  │  Craft 3P updates, newsletters, status reports...       │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  🎨 Brand Guidelines                           [+ Add]   │   │
-│  │  Apply brand voice, tone, and visual standards...       │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  DOCUMENTS & DATA                                                │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  📄 PDF Processing                             [+ Add]   │   │
-│  │  Extract text, merge, split, create PDFs...             │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  📊 Excel Analysis                             [+ Add]   │   │
-│  │  Parse spreadsheets, pivot tables, formulas...          │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  ANALYSIS & STRATEGY                                             │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  💰 Financial Analysis                         [+ Add]   │   │
-│  │  DCF, comparables, sensitivity analysis...              │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  📝 PRD Writing                                [+ Add]   │   │
-│  │  Structure product requirements documents...            │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  DEVELOPMENT                                                     │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  🔍 Code Review                                [+ Add]   │   │
-│  │  Security, performance, best practices...               │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │  🧪 Test Writing                               [+ Add]   │   │
-│  │  Unit tests, integration tests, coverage...             │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+Accessible from the My Skills page as a section/tab (not Space-scoped — platform skills are added to your personal library).
 
 **Platform Skills Categories:**
 
@@ -663,11 +807,11 @@ Curated skills provided by StratAI, inspired by [Anthropic's Skills Library](htt
 
 // Structure:
 // platform-skills/
-// ├── index.ts           # Registry of all platform skills
-// ├── internal-comms.ts  # Internal Communications skill
-// ├── financial-analysis.ts
-// ├── code-review.ts
-// └── ...
+// +-- index.ts           # Registry of all platform skills
+// +-- internal-comms.ts  # Internal Communications skill
+// +-- financial-analysis.ts
+// +-- code-review.ts
+// +-- ...
 
 export interface PlatformSkill {
   id: string;           // e.g., 'platform:internal-comms'
@@ -676,17 +820,18 @@ export interface PlatformSkill {
   category: 'business' | 'documents' | 'analysis' | 'development' | 'creative';
   content: string;      // Full markdown content
   summary: string;      // Pre-generated summary for prompt injection
+  keywords: string[];   // For search and discoverability
   version: string;      // Semantic version for updates
 }
 
-// When user adds platform skill to Space:
+// When user adds platform skill to personal library:
 // 1. Copy platform skill content to skills table
-// 2. Mark as `source: 'platform'` and `platform_skill_id: 'platform:internal-comms'`
+// 2. Mark as source: 'platform' and platform_skill_id: 'platform:internal-comms'
 // 3. User can customize (creates fork)
 // 4. Updates available when platform version > local version
 ```
 
-**Database Addition:**
+**Database columns for platform skill tracking:**
 
 ```sql
 -- Add to skills table
@@ -700,56 +845,59 @@ ALTER TABLE skills ADD COLUMN platform_version TEXT;   -- Track version for upda
 
 ## 7. System Prompt Integration
 
-### Injection Strategy: Hybrid (Full Content + Summary Fallback)
+### Injection Strategy: Size-Based (Full Content or Summary + Tool)
 
-> **Decision (2026-01-30):** Skills use a **hybrid injection strategy**, NOT the document summary+tool pattern. Skills are behavioral instructions that the AI must follow — they need to be visible in the system prompt for reliable adherence. Documents are reference material looked up on demand. Different usage patterns warrant different injection strategies.
+> **Decision (2026-01-31):** Skills use a **size-based injection strategy** that follows the document pattern but with a key difference — short skills get their full content injected directly (because they're behavioral instructions the AI must follow), while long skills use summary + `read_skill` tool (same as documents use `read_document`).
 
-#### Why Not Follow the Document Pattern?
+#### Why Size-Based?
+
+Skills are **instructions the AI must follow**, not reference material it looks up. A 200-token summary of a 2000-token methodology doesn't give the AI enough detail to actually adhere to the workflow. But injecting the full content of every skill would be wasteful for large skills.
+
+```
++---------------------------------------------------------------------+
+|                    SKILL INJECTION (SIZE-BASED)                      |
++---------------------------------------------------------------------+
+|                                                                      |
+|   For each active skill in the Area:                                 |
+|                                                                      |
+|   Content <= 800 tokens?  --YES-->  Inject FULL CONTENT              |
+|        |                            in system prompt                 |
+|        |                            (inside <skill> tags)            |
+|        |                                                             |
+|        +--NO--->  Inject SUMMARY in system prompt                    |
+|                   + register read_skill tool                         |
+|                   (AI fetches full content when needed)              |
+|                                                                      |
+|   read_skill tool is ONLY registered when long skills exist.         |
+|   Short skills need no tool -- full content is already visible.      |
+|                                                                      |
++---------------------------------------------------------------------+
+```
+
+**Context loading for an Area combines:**
+- Creator's personal skills activated in this Area
+- V2: Space-shared skills activated in this Area
+- V2: Org-wide skills activated in this Area
+
+All activated skills are treated identically for injection — the visibility/sharing model is purely an access control concern, not a prompt concern.
+
+#### Why Not Pure Document Pattern (Summary + Tool for Everything)?
 
 | | Documents | Skills |
 |---|-----------|--------|
 | **AI's relationship** | Reference material — look up *when relevant* | Behavioral instructions — follow *always when active* |
 | **Usage pattern** | Occasional lookup | Continuous adherence |
-| **Failure mode** | AI doesn't cite a fact → minor quality issue | AI doesn't follow methodology → **feature failed** |
-| **Conclusion** | Summary + tool is optimal | Full visibility needed for adherence |
+| **Failure mode** | AI doesn't cite a fact -> minor quality issue | AI doesn't follow methodology -> **feature failed** |
+| **Conclusion** | Summary + tool is optimal | Full content needed for adherence (when feasible) |
 
-Research (Section 11) shows 50-70% adherence with summaries vs 70-85% with full content visible. For a system whose core value is "consistent AI behavior," that difference matters.
-
-#### Hybrid Injection Rules
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                    HYBRID SKILL INJECTION                                         │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                  │
-│   For each active skill:                                                         │
-│                                                                                  │
-│   Content ≤ 800 tokens?  ──YES──▶  Inject FULL CONTENT in system prompt         │
-│        │                           (inside <skill> tags)                          │
-│        │                                                                         │
-│        └──NO───▶  Inject SUMMARY/DESCRIPTION + tool instruction                  │
-│                   (AI uses read_skill to get full content)                        │
-│                                                                                  │
-│   BUDGET GUARDRAIL:                                                              │
-│   Total skill injection capped at 3000 tokens.                                   │
-│   If active skills exceed budget:                                                │
-│   1. Always-active skills get priority                                           │
-│   2. Shorter skills get priority (more likely to fit)                             │
-│   3. Remaining skills fall back to summary + tool                                │
-│   4. AI informed: "Additional skills available via read_skill tool"              │
-│                                                                                  │
-│   read_skill tool is ALWAYS registered (even for fully-injected skills)          │
-│   as a fallback for mid-conversation re-reads.                                   │
-│                                                                                  │
-└─────────────────────────────────────────────────────────────────────────────────┘
-```
+Research (Section 11) shows 50-70% adherence with summaries vs 70-85% with full content visible. For short skills (the common case), the cost of full injection is negligible — especially with prompt caching.
 
 #### Prompt Caching Economics
 
 Skills in the system prompt benefit from **prefix caching** (Anthropic: 0.1x cost on cache hit). This makes full injection cheaper than it appears:
 
 ```
-3 active skills × 500 tokens = 1,500 tokens in system prompt
+3 active skills x 500 tokens = 1,500 tokens in system prompt
 
 Message 1:  Cache WRITE (1.25x)  = 1,875 token-equivalents
 Message 2+: Cache HIT (0.1x)    = 150 token-equivalents each
@@ -773,63 +921,42 @@ Full injection is CHEAPER after message 3, AND gives better adherence.
 ```typescript
 /**
  * Skill context for prompt injection.
- * Uses hybrid strategy: full content for short skills, summary for long ones.
+ * Size-based strategy: full content for short skills, summary for long ones.
  */
-export interface SkillContext {
-  id: string;
-  name: string;
-  description: string;
-  content: string;
-  summary: string | null;
-  activationMode: SkillActivationMode;
-}
 
-// Skill injection budget (tokens). Prevents unbounded prompt growth.
-const SKILL_TOKEN_BUDGET = 3000;
 // Skills under this threshold get full content injection.
-// ~800 tokens ≈ a well-structured skill with workflow + output format + constraints.
+// ~800 tokens = a well-structured skill with workflow + output format + constraints.
 const FULL_INJECTION_THRESHOLD = 800;
 
 /**
  * Estimate token count from string length.
- * Rough heuristic: 1 token ≈ 4 characters for English text.
+ * Rough heuristic: 1 token ~ 4 characters for English text.
  */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
 /**
- * Generate prompt section for active skills using hybrid injection.
+ * Generate prompt section for active skills.
  *
  * Strategy:
- * 1. Sort: always-active first, then by content length (shorter first)
- * 2. Skills ≤ 800 tokens AND within budget → inject FULL content
- * 3. Skills > 800 tokens OR over budget → inject summary/description
- * 4. read_skill tool always available as fallback
+ * 1. Skills <= 800 tokens -> inject FULL content in system prompt
+ * 2. Skills > 800 tokens -> inject summary, AI uses read_skill tool for full content
+ * 3. Sort by ID for cache stability
  */
 export function getSkillsPrompt(skills: SkillContext[]): string {
   if (!skills || skills.length === 0) return '';
 
-  let tokensUsed = 0;
   const fullInjection: SkillContext[] = [];
   const summaryOnly: SkillContext[] = [];
 
-  // Sort: always-active first, then by content length (shorter first)
-  // Deterministic sort by ID as tiebreaker (cache stability)
-  const sorted = [...skills].sort((a, b) => {
-    if (a.activationMode === 'always' && b.activationMode !== 'always') return -1;
-    if (b.activationMode === 'always' && a.activationMode !== 'always') return 1;
-    const lenDiff = a.content.length - b.content.length;
-    if (lenDiff !== 0) return lenDiff;
-    return a.id.localeCompare(b.id);
-  });
+  // Sort by ID for deterministic ordering (cache stability)
+  const sorted = [...skills].sort((a, b) => a.id.localeCompare(b.id));
 
   for (const skill of sorted) {
     const contentTokens = estimateTokens(skill.content);
-    if (contentTokens <= FULL_INJECTION_THRESHOLD
-        && tokensUsed + contentTokens <= SKILL_TOKEN_BUDGET) {
+    if (contentTokens <= FULL_INJECTION_THRESHOLD) {
       fullInjection.push(skill);
-      tokensUsed += contentTokens;
     } else {
       summaryOnly.push(skill);
     }
@@ -850,7 +977,7 @@ ${skill.content}
 </skill>`;
   }
 
-  // Summary injection (fallback path — use read_skill for full content)
+  // Summary injection (fallback path -- use read_skill for full content)
   if (summaryOnly.length > 0) {
     prompt += `
 
@@ -861,7 +988,7 @@ The following skills are available via the **read_skill** tool:`;
 
 <skill name="${skill.name}" injection="summary">
 ${skill.summary || skill.description}
-(Use read_skill tool to access the full methodology)
+(Use read_skill tool to access the full methodology before applying)
 </skill>`;
     }
   }
@@ -869,7 +996,7 @@ ${skill.summary || skill.description}
   prompt += `
 
 **Skill Usage:**
-- Follow active skill methodologies for ALL relevant responses — these are instructions, not suggestions
+- Follow active skill methodologies for ALL relevant responses -- these are instructions, not suggestions
 - For skills shown in full above, apply the workflow directly
 - For summarized skills, use **read_skill** tool to load the full methodology before applying
 - Skills define *how* to work; documents provide *what* to reference
@@ -880,32 +1007,11 @@ ${skill.summary || skill.description}
 }
 ```
 
-### Updated Focus Area Prompt
-
-Update `getFocusAreaPrompt()` to include skills:
-
-```typescript
-export function getFocusAreaPrompt(
-  focusArea: FocusAreaInfo,
-  skills?: SkillContext[]
-): string {
-  // ... existing document handling ...
-
-  // Add skills section (hybrid injection)
-  if (skills && skills.length > 0) {
-    prompt += getSkillsPrompt(skills);
-  }
-
-  // ... rest of function ...
-}
-```
-
 ### Tool: read_skill
 
-The `read_skill` tool is **always registered** when skills are active, even for fully-injected skills. It serves as:
-1. **Fallback** for summarized skills (over threshold or over budget)
-2. **Re-read** for fully-injected skills when context window is long and AI needs a refresh
-3. **Trigger-mode** access for skills not yet activated in the conversation
+The `read_skill` tool is **only registered when long skills (>800 tokens) are active**. It serves one purpose: letting the AI fetch the full content of a skill whose summary was injected in the system prompt.
+
+This is the honest equivalent of the `read_document` tool — the AI genuinely needs the content and the UX animation ("Reading Financial Analysis skill...") reflects real work.
 
 **Location:** `src/lib/server/tools/read-skill.ts`
 
@@ -914,7 +1020,7 @@ export const READ_SKILL_TOOL = {
   type: 'function',
   function: {
     name: 'read_skill',
-    description: 'Read the full content of an active skill to access detailed workflows, steps, and methodologies. Use this for skills shown as summaries, or to re-read a skill\'s full methodology.',
+    description: 'Read the full content of an active skill to access detailed workflows, steps, and methodologies. Use this for skills shown as summaries in your context.',
     parameters: {
       type: 'object',
       properties: {
@@ -971,54 +1077,51 @@ interface Props {
 
 ## 8. Implementation Phases
 
-### Phase 1: Schema & Backend (Session 1)
+### Phase 1: Schema & Backend
 
 - [ ] Create migration: `skills` and `area_skill_activations` tables
+- [ ] Include V2 tables (`skill_space_shares`, `skill_share_requests`) in schema for forward compatibility (not used in V1)
 - [ ] Create TypeScript types in `src/lib/types/skills.ts`
 - [ ] Create `skills-postgres.ts` repository
-- [ ] Create skill API endpoints (CRUD)
+- [ ] Create skill API endpoints (CRUD, personal only)
 - [ ] Create area skill activation endpoints
+- [ ] Create `GET /api/areas/[areaId]/available-skills` endpoint
 - [ ] Run migration, verify tables
 
-### Phase 2: System Prompt Integration (Session 1-2)
+### Phase 2: System Prompt Integration
 
 - [ ] Add `getSkillsPrompt()` to `system-prompts.ts`
 - [ ] Update `getFocusAreaPrompt()` to accept skills
-- [ ] Create `read_skill` tool definition
+- [ ] Create `read_skill` tool definition (for long skills)
 - [ ] Implement `executeReadSkill()` function
 - [ ] Update Area chat endpoint to load and inject skills
-- [ ] Test: create skill, verify in AI context
+- [ ] Conditionally register `read_skill` tool (only when long skills active)
+- [ ] Test: create skill, activate in Area, verify in AI context
 
-### Phase 3: UI - Space Skills (Session 2)
+### Phase 3: UI - My Skills & Skill Editor
 
 - [ ] Create `SkillCard.svelte` component
-- [ ] Create `SkillEditor.svelte` component
-- [ ] Create Space skills page (`/spaces/[space]/skills`)
-- [ ] Add Skills link to Space navigation
+- [ ] Create `SkillEditor.svelte` component (modal)
+- [ ] Create My Skills page (`/skills`)
+- [ ] Add Skills link to user navigation
 - [ ] Test: create, edit, delete skills in UI
 
-### Phase 4: UI - Area Activation (Session 2-3)
+### Phase 4: UI - Area Activation & Context Panel
 
-- [ ] Update `ContextPanel.svelte` with skills section
-- [ ] Create skill activation toggle UI
+- [ ] Update `ContextPanel.svelte` with skills section (same toggle pattern as documents)
+- [ ] Show personal skills available for this Area
 - [ ] Wire up activation/deactivation API calls
-- [ ] Test: activate Space skill in Area, verify in AI context
+- [ ] Test: activate personal skill in Area, verify in AI context
 
-### Phase 5: Context Transparency (Session 3)
+### Phase 5: Context Transparency & AI Summary Generation
 
 - [ ] Update `ResponseContextBadge.svelte` with skills
 - [ ] Update context metadata to track active skills
 - [ ] Update Prompt Inspector to show skill content
-- [ ] Test: verify active skills shown in context badge
+- [ ] Add summary generation on skill create/update (Haiku 4.5, same pattern as documents)
+- [ ] Test: verify active skills shown in context badge, summaries generated
 
-### Phase 6: AI Summary Generation (Session 3)
-
-- [ ] Add summary generation on skill create/update
-- [ ] Use same pattern as document summaries (Haiku 4.5)
-- [ ] Backfill existing skills if any
-- [ ] Test: verify summaries generated and used
-
-### Phase 7: Platform Skills Library (Session 4)
+### Phase 6: Platform Skills Library
 
 - [ ] Create `src/lib/config/platform-skills/` directory structure
 - [ ] Define `PlatformSkill` interface and registry
@@ -1028,10 +1131,10 @@ interface Props {
   - [ ] Code Review
   - [ ] PRD Writing
 - [ ] Add `source` and `platform_skill_id` columns to skills table
-- [ ] Create "Add from Library" UI in Space skills page
-- [ ] Implement platform skill copying to Space
+- [ ] Create "Add from Library" section in My Skills page
+- [ ] Implement platform skill copying to personal library
 - [ ] Add version tracking for update notifications
-- [ ] Test: add platform skill to Space, customize, verify updates available
+- [ ] Test: add platform skill, customize, verify updates available
 
 ---
 
@@ -1040,32 +1143,71 @@ interface Props {
 | Scenario | Handling |
 |----------|----------|
 | Skill deleted while activated in Areas | CASCADE delete removes activations |
-| Skill updated while Area active | Next chat loads fresh content |
-| Large skill content (>10k chars) | Summary in prompt, full via tool (same as docs) |
-| Conflicting skills activated | AI synthesizes; order by activation time |
-| Space skill "always" mode | Auto-included without activation record |
-| Area has its own skill + Space skill | Both active, Area skill takes precedence for conflicts |
-| Trigger keyword detected but skill not activated | Only activated skills can be triggered |
-| User without Area access tries to activate | API returns 403 Forbidden |
+| Skill updated while active in Area | Next chat loads fresh content |
+| Large skill content (>3200 chars / ~800 tokens) | Summary in prompt, full via `read_skill` tool |
+| Conflicting skills activated in same Area | AI synthesizes; deterministic sort by ID |
+| User activates skill in Area they later lose access to | Activation remains but skill excluded from context (user can't access Area) |
+| Owner leaves org (V2) | Org admin transfers ownership to another user |
+| Shared skill updated by owner | All Spaces using it get updated content on next chat |
+| No skills active in Area | No skills section in prompt, `read_skill` tool not registered |
+| All active skills are short | Full content injected, `read_skill` tool not registered |
+| User has 20+ personal skills | All shown in My Skills page; only activated ones injected in prompt |
+| V2: Share request for Space user isn't in | Reject — can only request share to Spaces you belong to |
+| V2: Org admin deletes shared skill | CASCADE removes shares and activations; dependents notified |
 
 ---
 
 ## 10. Future Enhancements (V2)
 
-**Not in V1 scope - defer these:**
+**Not in V1 scope — defer these:**
+
+### Sharing & Approval Workflow (V2)
+
+> **Decision (2026-01-31):** V1 skills are personal only. V2 adds approval-based sharing to maintain quality as skills become shared resources.
+
+**Approval flow:**
+1. Creator requests to share skill with a Space (or org-wide)
+2. Space admin (or org admin) reviews the skill content
+3. Admin approves for Space, promotes to Org, or rejects with reason
+4. Approved skills become visible to Space/Org members in ContextPanel
+5. Creator can update content; changes propagate to all Spaces using it
+
+**Succession:**
+When a skill owner leaves the org, org admin transfers `owner_id` to another user. Same process as Space ownership transfer.
+
+**Admin UI:**
+- Space settings: "Pending Skill Requests" section
+- Org admin: "Manage Org Skills" page
+- Notification system: email/in-app for share requests and approvals
+
+### Quick Skills (V2)
+
+> **Decision (2026-01-31):** V1 Skills are passive context (environment). V2 adds on-demand invocation as a separate interaction pattern called **Quick Skills**.
+
+Quick Skills enable users to invoke a skill for a specific message or short interaction via "/" in the chat input or a button press, without permanently activating it in the Area.
+
+| Aspect | Area Skills (V1) | Quick Skills (V2) |
+|--------|-------------------|---------------------|
+| **Mental model** | "How this Area works" | "Help me with this right now" |
+| **Activation** | Toggle in ContextPanel | "/" in chat or button press |
+| **Lifetime** | Persistent until deactivated | Active until dismissed |
+| **Token cost** | Amortized by caching | Only when invoked |
+| **Example** | Financial Analysis methodology | PPTX formatting guide |
+| **UX** | Invisible (always in context) | Visible badge "PPTX Formatting active [x]" |
+
+Quick Skills share the same `skills` table and `read_skill` tool — the data model supports it without changes. Only the interaction pattern differs.
+
+### Other V2 Enhancements
 
 | Enhancement | Description |
 |-------------|-------------|
-| **Organization Skills** | Skills shared across all Spaces in an org |
-| **Anthropic Skills Sync** | Auto-import/update from [anthropics/skills](https://github.com/anthropics/skills) repo |
 | **Skill Analytics** | Track which skills are most used/effective |
 | **Skill Versioning** | Track changes over time, rollback capability |
-| **Skill Inheritance** | Area skills can extend/override Space skills |
-| **Dynamic Trigger Detection** | AI suggests activating skills based on conversation |
-| **Skill Sharing** | Share skills between Spaces |
+| **Skill Inheritance** | Org skills can be extended/overridden at Space level |
 | **Community Marketplace** | User-contributed skill templates (moderated) |
 | **Skill Parameters** | Skills with configurable options (e.g., "formality level") |
 | **Skill Composition** | Combine multiple skills into meta-skills |
+| **AI-Assisted Skill Authoring** | Meta-prompt optimizes user-written skills for adherence |
 
 **Platform Skills Expansion (V1.x):**
 
@@ -1090,14 +1232,13 @@ The Platform Skills Library (Section 6.5) launches with a curated set. Expansion
 | `src/lib/config/platform-skills/index.ts` | **NEW** - Platform skills registry |
 | `src/routes/api/skills/+server.ts` | **NEW** - Skills API |
 | `src/routes/api/areas/[areaId]/skills/+server.ts` | **NEW** - Area activation API |
-| `src/routes/spaces/[space]/skills/+page.svelte` | **NEW** - Space skills page |
+| `src/routes/api/areas/[areaId]/available-skills/+server.ts` | **NEW** - Available skills for Area |
+| `src/routes/skills/+page.svelte` | **NEW** - My Skills page |
 | `src/lib/components/skills/SkillCard.svelte` | **NEW** - Skill display component |
 | `src/lib/components/skills/SkillEditor.svelte` | **NEW** - Skill editor modal |
 | `src/lib/components/areas/ContextPanel.svelte` | Update for skills section |
 | `src/lib/config/system-prompts.ts` | Update for skills injection |
-| `src/lib/server/tools/read-skill.ts` | **NEW** - Read skill tool |
-| `docs/features/TASK_ASSIGNMENT.md` | Task assignment (related) |
-| `docs/CONTEXT_STRATEGY.md` | Context architecture (related) |
+| `src/lib/server/tools/read-skill.ts` | **NEW** - Read skill tool (long skills only) |
 
 ---
 
@@ -1154,7 +1295,6 @@ Choose appropriate valuation approach based on context:
 
 When providing financial analysis:
 
-```
 ## Executive Summary
 [One paragraph: conclusion, key metric, confidence level]
 
@@ -1177,7 +1317,6 @@ When providing financial analysis:
 - [Key risk 1]
 - [Key risk 2]
 ```
-```
 
 ---
 
@@ -1195,13 +1334,13 @@ Simply injecting skill content into prompts doesn't guarantee adherence. Models 
 - Override it when user requests seem to conflict
 - Forget it in longer conversations
 
-**Root cause:** LLMs cannot inherently distinguish between system prompts and user prompts—everything is just text. They tend to prioritize the most recent instructions in the context window.
+**Root cause:** LLMs cannot inherently distinguish between system prompts and user prompts -- everything is just text. They tend to prioritize the most recent instructions in the context window.
 
 ---
 
 ### Alternative Techniques Evaluated
 
-We evaluated seven alternative approaches against our baseline (summary + tool pattern):
+We evaluated seven alternative approaches:
 
 #### 1. DSPy-Style Programmatic Skills
 
@@ -1229,13 +1368,9 @@ optimized_skill = optimizer.compile(FinancialAnalysis, trainset=examples)
 | **User authoring** | Harder - need to define schemas |
 | **Verdict** | **V2 consideration** for critical skills |
 
-**Reference:** [DSPy Optimization Study](https://arxiv.org/html/2507.03620v1) - "Accuracy improved from 46.2% to 64.0% on prompt evaluation tasks."
-
 #### 2. Constrained Decoding
 
-From [XGrammar](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar):
-
-Enforce output structure at token generation level—model can ONLY generate valid tokens matching a schema.
+Enforce output structure at token generation level -- model can ONLY generate valid tokens matching a schema.
 
 | Aspect | Assessment |
 |--------|------------|
@@ -1245,25 +1380,12 @@ Enforce output structure at token generation level—model can ONLY generate val
 
 #### 3. Constitutional AI / Self-Critique Loop
 
-From [Anthropic's Constitutional AI](https://arxiv.org/abs/2212.08073):
-
 ```
-Generate → Critique → Revise Loop
-─────────────────────────────────
+Generate -> Critique -> Revise Loop
 1. AI generates response
 2. AI critiques: "Did I follow the skill methodology?"
 3. AI revises based on critique
 4. Repeat until satisfactory
-```
-
-**Implementation:**
-```markdown
-After generating your response, self-critique:
-1. Did I follow each step in the skill workflow?
-2. Did I include all required output sections?
-3. Did I violate any constraints?
-
-If any answer is "no", revise your response before presenting.
 ```
 
 | Aspect | Assessment |
@@ -1273,19 +1395,13 @@ If any answer is "no", revise your response before presenting.
 | **Token cost** | 1.3-1.5x |
 | **Verdict** | **Strong V1 candidate** |
 
-**Reference:** [Constitutional AI Paper](https://arxiv.org/abs/2212.08073) - "Model-generated critiques progressively reduce errors."
-
 #### 4. Extended Thinking Integration
-
-From [Claude Extended Thinking](https://platform.claude.com/docs/en/build-with-claude/extended-thinking):
 
 ```
 Use extended thinking for skill compliance checking
-──────────────────────────────────────────────────
 1. Enable extended thinking for skill-heavy responses
 2. Prompt: "In your thinking, verify each skill step"
 3. Thinking traces provide audit trail
-4. Summary shows methodology was followed
 ```
 
 | Aspect | Assessment |
@@ -1295,149 +1411,111 @@ Use extended thinking for skill compliance checking
 | **Token cost** | Variable (budget_tokens) |
 | **Verdict** | **Strong V1 candidate** |
 
-**Reference:** [Extended Thinking Tips](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/extended-thinking-tips) - "Valuable for policy-heavy environments when Claude needs to verify compliance."
-
 #### 5. ToolGuard Pattern (Two-Phase Enforcement)
 
-From [IBM ToolGuard](https://arxiv.org/abs/2507.16459):
-
 ```
-BUILDTIME: Compile skill → validation rules
+BUILDTIME: Compile skill -> validation rules
 RUNTIME: Check compliance before/after response
-──────────────────────────────────────────────
-Skill: Financial Analysis
-Guards:
-  - MUST contain "Assumptions" section
-  - MUST specify methodology (DCF|Comparables|LBO)
-  - MUST include risk factors
-  - Token count for assumptions >= 50
-
-Post-generation: Validate → Pass/Fail → Retry if needed
+Post-generation: Validate -> Pass/Fail -> Retry if needed
 ```
 
 | Aspect | Assessment |
 |--------|------------|
 | **Adherence** | High - deterministic validation |
 | **Complexity** | Medium - need validation engine |
-| **Determinism** | Guaranteed checks run |
 | **Verdict** | **Good V2 pattern** |
-
-**Reference:** [ToolGuard Research](https://arxiv.org/abs/2507.16459) - "31-69% baseline adherence without guards."
 
 #### 6. Cognitive Architecture (Procedural + Semantic Memory)
 
-From [Wheeler & Jeunen 2025](https://arxiv.org/abs/2505.03434):
-
-Separate LEARNER (semantic) from ACTOR (procedural):
-- Learner Agent monitors, identifies skills, adapts to context
-- Actor Agent (LLM) executes playbook, focuses on quality
+Separate LEARNER (semantic) from ACTOR (procedural).
 
 | Aspect | Assessment |
 |--------|------------|
 | **Adherence** | Potentially highest |
 | **Complexity** | Very high - multi-agent |
-| **Research maturity** | Emerging (2025) |
 | **Verdict** | **Over-engineered** for current stage |
 
 #### 7. Meta-Prompting (Prompt Optimization)
 
-From [OpenAI Cookbook](https://cookbook.openai.com/examples/enhance_your_prompts_with_meta_prompting):
-
-```
-Use LLM to optimize skill prompts for adherence
-───────────────────────────────────────────────
-1. User writes skill in natural language
-2. Meta-prompt optimizes for clarity/enforceability
-3. Test against examples, refine iteratively
-4. Store optimized version
-```
+Use LLM to optimize skill prompts for adherence at creation time.
 
 | Aspect | Assessment |
 |--------|------------|
 | **Adherence** | Improved prompts = better following |
 | **User experience** | Better - AI helps write skills |
-| **One-time cost** | Optimization on skill creation |
 | **Verdict** | **Good V1.5 feature** |
 
 ---
 
-### Recommended Hybrid Approach
+### Recommended Enforcement Stack
 
-#### V1 Enforcement Stack
-
-Layer techniques that require no infrastructure changes:
+#### V1 Enforcement
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  V1 SKILL ENFORCEMENT STACK                                 │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Layer 1: STRUCTURED SKILL TEMPLATE                         │
-│  ─────────────────────────────────────────────────────────  │
-│  • Required sections: Workflow, Output Format, Examples     │
-│  • MUST/NEVER constraints explicitly marked                 │
-│  • Counter-examples showing what NOT to do                  │
-│                                                             │
-│  Layer 2: SELF-CRITIQUE INSTRUCTION                         │
-│  ─────────────────────────────────────────────────────────  │
-│  • Add to skill prompt: "After generating, verify you       │
-│    followed each workflow step. Revise if needed."          │
-│  • ~1.3x token cost, meaningful adherence improvement       │
-│                                                             │
-│  Layer 3: EXTENDED THINKING FOR COMPLEX SKILLS              │
-│  ─────────────────────────────────────────────────────────  │
-│  • Skills can be marked `requires_thinking: true`           │
-│  • Enable extended thinking for those responses             │
-│  • Provides audit trail in thinking summary                 │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|  V1 SKILL ENFORCEMENT STACK                                  |
++-------------------------------------------------------------+
+|                                                              |
+|  Layer 1: SIZE-BASED INJECTION                               |
+|  ------------------------------------------------------------+
+|  - Short skills (<= 800 tokens): full content in prompt     |
+|  - Long skills (> 800 tokens): summary + read_skill tool    |
+|  - Full content gives 65-80% baseline adherence             |
+|                                                              |
+|  Layer 2: STRUCTURED SKILL TEMPLATE                          |
+|  ------------------------------------------------------------+
+|  - Required sections: Workflow, Output Format, Examples      |
+|  - MUST/NEVER constraints explicitly marked                  |
+|  - Counter-examples showing what NOT to do                   |
+|                                                              |
+|  Layer 3: SELF-CRITIQUE INSTRUCTION                          |
+|  ------------------------------------------------------------+
+|  - Add to skill prompt: "After generating, verify you        |
+|    followed each workflow step. Revise if needed."           |
+|  - ~1.3x token cost, meaningful adherence improvement        |
+|                                                              |
++-------------------------------------------------------------+
 ```
 
 #### V2 Additions
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  V2 ENFORCEMENT ADDITIONS                                   │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Layer 4: AI-ASSISTED SKILL AUTHORING                       │
-│  ─────────────────────────────────────────────────────────  │
-│  • Meta-prompt optimizes user-written skills                │
-│  • Suggests improvements for enforceability                 │
-│  • Addresses "users can't write good skills" problem        │
-│                                                             │
-│  Layer 5: POST-GENERATION VALIDATION                        │
-│  ─────────────────────────────────────────────────────────  │
-│  • Skills define validation_rules (required sections, etc.) │
-│  • Lightweight check after generation                       │
-│  • Retry loop if validation fails (max 2 retries)           │
-│                                                             │
-│  Layer 6: STRUCTURED OUTPUT SCHEMAS (critical skills)       │
-│  ─────────────────────────────────────────────────────────  │
-│  • For high-stakes skills (financial, legal, compliance)    │
-│  • JSON schema enforcement via API structured outputs       │
-│  • Guarantees structure, not content quality                │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
++-------------------------------------------------------------+
+|  V2 ENFORCEMENT ADDITIONS                                    |
++-------------------------------------------------------------+
+|                                                              |
+|  Layer 4: EXTENDED THINKING FOR COMPLEX SKILLS               |
+|  ------------------------------------------------------------+
+|  - Skills can be marked requires_thinking: true              |
+|  - Enable extended thinking for those responses              |
+|  - Provides audit trail in thinking summary                  |
+|                                                              |
+|  Layer 5: AI-ASSISTED SKILL AUTHORING                        |
+|  ------------------------------------------------------------+
+|  - Meta-prompt optimizes user-written skills                 |
+|  - Suggests improvements for enforceability                  |
+|                                                              |
+|  Layer 6: POST-GENERATION VALIDATION                         |
+|  ------------------------------------------------------------+
+|  - Skills define validation_rules (required sections, etc.)  |
+|  - Lightweight check after generation                        |
+|  - Retry loop if validation fails (max 2 retries)            |
+|                                                              |
++-------------------------------------------------------------+
 ```
-
----
 
 ### Estimated Adherence by Approach
 
 | Approach | Est. Adherence | Token Cost | Complexity |
 |----------|----------------|------------|------------|
-| Summary + tool (document pattern) | 50-70% | 1x | Low |
-| **Hybrid injection (V1 baseline)** | **65-80%** | **~1x (cached)** | **Low** |
+| Summary + tool only (document pattern) | 50-70% | 1x | Low |
+| **Size-based injection (V1 baseline)** | **65-80%** | **~1x (cached)** | **Low** |
 | + Structured templates | 70-85% | ~1x | Low |
 | + Self-critique loop | 80-90% | 1.3x | Low |
 | + Extended thinking | 85-95% | 1.5-2x | Low |
 | + Post-gen validation | 90-97% | 1.5x + retries | Medium |
-| + Structured outputs | 95-100% (structure) | 1x | Medium |
 
-**V1 baseline: Hybrid injection** — full content for skills ≤800 tokens (most skills), summary + tool for oversized skills. Budget cap at 3000 tokens. Prompt caching makes full injection cost-neutral after message 3.
-
-**V1 Target: 80-90% adherence** with hybrid injection + structured templates + self-critique (layers 1-3).
+**V1 Target: 80-90% adherence** with size-based injection + structured templates + self-critique (layers 1-3).
 
 ---
 
@@ -1447,12 +1525,12 @@ Layer techniques that require no infrastructure changes:
 # [Skill Name]
 
 ## When to Apply
-[Explicit conditions that trigger this methodology]
+[Explicit conditions for when this methodology is relevant]
 
 ## Required Workflow (MUST follow in order)
-1. [Step] → Verify: [what proves this step was done]
-2. [Step] → Verify: [checkpoint]
-3. [Step] → Verify: [checkpoint]
+1. [Step] -> Verify: [what proves this step was done]
+2. [Step] -> Verify: [checkpoint]
+3. [Step] -> Verify: [checkpoint]
 ...
 
 ## Output Format (MUST match this structure)
@@ -1484,12 +1562,11 @@ If any check fails, revise before presenting.
 
 ---
 
-### Database Schema Addition (V2)
+### V2 Database Schema Additions
 
 For enforcement features:
 
 ```sql
--- Add to skills table for V2 enforcement
 ALTER TABLE skills ADD COLUMN requires_thinking BOOLEAN DEFAULT false;
 ALTER TABLE skills ADD COLUMN validation_rules JSONB;  -- For post-gen validation
 ALTER TABLE skills ADD COLUMN output_schema JSONB;     -- For structured outputs
@@ -1499,25 +1576,12 @@ ALTER TABLE skills ADD COLUMN complexity TEXT DEFAULT 'standard'
 
 ---
 
-### Monitoring Skill Adherence
-
-Track whether skills are being followed:
-
-1. **Context transparency** - Show which skills were active (already planned)
-2. **User feedback** - "Did the AI follow the methodology?" thumbs up/down
-3. **Automated evaluation** - Sample responses, check against skill requirements
-4. **Thinking audit** - Review extended thinking summaries for compliance verification
-
-**Reference:** [LLM Reliability Evaluation](https://galileo.ai/blog/llm-reliability) - "Quality monitoring should assess instruction following as a key indicator."
-
----
-
 ### Research Sources
 
 **Instruction Adherence:**
 - [The Stability Trap: LLM Instruction Adherence Auditing](https://arxiv.org/html/2601.11783)
 - [Towards Verifiably Safe Tool Use](https://arxiv.org/html/2601.08012)
-- [Tool Calling Optimization](https://www.statsig.com/perspectives/tool-calling-optimization) - "Reliable agents are built, not wished into existence"
+- [Tool Calling Optimization](https://www.statsig.com/perspectives/tool-calling-optimization)
 
 **Enforcement Frameworks:**
 - [IBM ToolGuard](https://arxiv.org/abs/2507.16459) - Two-phase enforcement pattern
@@ -1530,43 +1594,52 @@ Track whether skills are being followed:
 - [Meta-Prompting Guide](https://www.promptingguide.ai/techniques/meta-prompting) - Prompt optimization
 - [Procedural Memory Research](https://arxiv.org/abs/2505.03434) - Cognitive architectures
 
-**Structured Generation:**
-- [Constrained Decoding Guide](https://www.aidancooper.co.uk/constrained-decoding/)
-- [XGrammar](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar)
-- [OpenAI Structured Outputs](https://platform.openai.com/docs/changelog)
-
 ---
 
 ## Design Rationale
 
-### Why Skills Separate from Documents?
+### Why User-Owned Skills (Not Space-Scoped)?
 
-Documents are **reference material** (facts, data, specifications). Skills are **behavioral instructions** (workflows, methodologies, rules). Keeping them separate:
+> **Decision (2026-01-31):** Skills are first-class entities owned by users, not child objects of Spaces or Areas.
 
-1. **Clarity**: Users understand the difference in purpose
-2. **Activation**: Skills have activation modes; documents don't
-3. **Conflict Resolution**: When methodologies conflict, resolution is explicit
-4. **Reusability**: Skills are designed to be applied across contexts
+Documents are Space-scoped because they're inherently contextual — "Nedbank Q3 Financials" belongs to the Nedbank Space. Skills are expertise — "Financial Analysis Methodology" belongs to the person who wrote it.
 
-### Why Hybrid Injection (Not Pure Summary + Tool)?
+Forcing skills into Space ownership means:
+1. **Duplication**: Same skill recreated in every Space the creator works in
+2. **Drift**: Copies diverge as the creator updates one but not others
+3. **Artificial scoping**: Expertise doesn't belong to a project; it belongs to a person
+4. **No succession**: If Space-scoped, what happens when the skill is used across 5 Spaces and the creator leaves?
 
-> **Updated 2026-01-30:** Originally specified as summary + tool (matching documents). Changed to hybrid injection after analyzing the fundamental difference between reference material and behavioral instructions.
+User ownership solves all four. A skill lives once, the creator uses it everywhere, and ownership can transfer cleanly.
 
-Skills are **instructions the AI must follow**, not reference material it looks up. The document pattern optimizes for token efficiency at the cost of adherence. For Skills, adherence IS the feature.
+### Why Approval-Based Sharing?
 
-**Hybrid injection** (full content for ≤800 token skills, summary for larger ones):
+> **Decision (2026-01-31):** Sharing skills beyond personal use requires admin approval.
 
-1. **Adherence**: Full content visibility → 65-80% baseline (vs 50-70% for summary-only)
-2. **Cache economics**: Full content in system prompt gets prefix caching (0.1x after msg 1). Tool results in message history are NOT prefix-cached. Full injection is actually *cheaper* after 3 messages.
-3. **Latency**: No tool round-trip for the common case (most skills are ≤800 tokens)
-4. **Graceful degradation**: 3000-token budget cap prevents unbounded growth. Oversized/overflow skills automatically fall back to summary + tool.
-5. **Tool still available**: `read_skill` always registered for re-reads, trigger-mode skills, and summarized overflow skills
+Without quality gates, shared skills become polluted. One poorly-written skill shared to an org affects every team member's AI experience. The approval flow provides:
 
-The key insight: **prompt caching makes the "expensive" approach cheaper than the "efficient" approach** for content that doesn't change within a conversation. Skills are the most cache-friendly content in the system prompt.
+1. **Quality control**: Admin reviews before broader exposure
+2. **Graduated scope**: Space admin approves for Space; org admin can promote to org-wide
+3. **Creator autonomy**: Personal skills need no approval — your expertise, your rules
+4. **Natural fit**: Mirrors how organizations already handle shared resources (document publishing, template libraries)
 
-### Why Space-Level First?
+V1 ships without sharing (personal only). This is safe because personal skills are already useful across all the creator's Spaces, and the schema supports sharing from day one.
 
-1. **Team Consistency**: Skills benefit from team-wide adoption
-2. **Reduced Duplication**: One skill, multiple Areas
-3. **Governance**: Space owners control methodology
-4. **Simpler V1**: Avoids org-level permission complexity
+### Why Size-Based Injection?
+
+> **Updated 2026-01-31:** Simplified from the previous "hybrid injection engine" (with token budgets, activation-mode priority sorting, and always-registered tools) to a simple size check.
+
+Skills are **instructions the AI must follow**, not reference material it looks up. For short skills (the common case, most skills are under 800 tokens), full content injection gives the best adherence at negligible cost (prompt caching makes it cheaper than tool calls after message 3).
+
+For long skills (>800 tokens), summary + `read_skill` tool follows the proven document pattern. The `read_skill` tool is only registered when long skills exist — no tool sprawl for the common case.
+
+**Key insight:** Prompt caching makes full injection of short skills cheaper than the "efficient" summary + tool approach. Skills are the most cache-friendly content in the system prompt (stable, rarely changed, deterministic order).
+
+### Why Area Skills First (Not Quick Skills)?
+
+> **Decision (2026-01-31):** V1 builds Area Skills (passive context). Quick Skills (on-demand "/" invocation) is V2.
+
+1. **Area Skills are the moat.** No competitor does "persistent methodology per workspace context." Everyone does slash commands.
+2. **Area Skills are simpler to build.** They follow the document pattern already in place. Quick Skills need new UX (chat input integration, auto-deactivation logic, "active for this message" semantics).
+3. **Quick Skills layer on top.** Once Area Skills exist, adding "/" invocation is additive. Same `skills` table, same content, different interaction pattern.
+4. **Foundation supports both.** The schema, types, and content model work for both paradigms without changes.
