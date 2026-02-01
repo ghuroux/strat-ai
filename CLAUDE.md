@@ -379,7 +379,7 @@ Don't revisit without good reason:
 
 > **Detailed history:** `SESSIONS.md` | Only the latest session summary lives here.
 
-**Last session:** 2026-01-31 — Strategic Product Foundation ("Governed Organisational Mind"). Pure strategy session: Feature Value Framework with 5-dimension scoring + OII metric, Cognitive Governance framework, Closed-Loop Knowledge System added to CONTEXT_STRATEGY.md and PRODUCT_VISION.md, Skills market research. 5 new feature concepts identified (Decision Registry scored 5.00). Key decision: every feature must map to "governed organisational mind" via scoring framework.
+**Last session:** 2026-02-01 — Content Import to Page (#32). Import .md and .docx files as draft Pages in any Area. Two conversion pipelines leveraging existing infrastructure (markdownToTipTap + new htmlToTipTap bridge for DOCX). User-tested successfully. Also updated Feature Value Framework with features #32 and #33, refined session-closer agent with pre-commit TypeScript gate.
 
 ---
 

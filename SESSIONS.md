@@ -4,6 +4,49 @@ Full session logs for StratAI development. Most recent session in `CLAUDE.md`.
 
 ---
 
+## 2026-02-01: Content Import to Page (#32)
+
+**Session Character:** Clean feature build leveraging existing infrastructure. Minimal new code — most of the pipeline already existed.
+
+**Completed:**
+
+*Content Import Feature:*
+- New multipart POST endpoint (`/api/pages/import`) accepts .md and .docx files
+- Two conversion pipelines: `.md` -> `markdownToTipTap()` -> TipTap JSON; `.docx` -> `mammoth.convertToHtml()` -> `htmlToTipTap()` -> TipTap JSON
+- New `htmlToTipTap()` function (~15 lines) bridges mammoth HTML output to TipTap JSON via `generateJSON()`
+- ImportPageModal with file picker (.md, .docx), auto-populated title from filename, loading state, error handling
+- Pages created as draft, private visibility, general type — user reviews before finalizing/sharing
+- Import button added to PageList header (desktop) and MobileHeader (mobile)
+- User-tested: successfully imported a document and shared it with a colleague via a Space/Area
+
+*Feature Value Framework Updates:*
+- Added feature #32 (Content Import to Page, score 2.85) and #33 (Governed Knowledge Pipeline, score 4.10)
+- Updated master ranking table and ASCII distribution chart
+- Documented "Foundation -> Vision" pattern: build #32 first, evolve toward #33
+
+*Agent Improvements:*
+- Session-closer agent: added pre-commit TypeScript check gate (npm run check before every commit)
+- New code-reviewer agent
+
+**Files Created:**
+- `stratai-main/src/routes/api/pages/import/+server.ts` -- Import endpoint (multipart, .md/.docx)
+- `stratai-main/src/lib/components/pages/ImportPageModal.svelte` -- Import modal UI
+
+**Files Modified:**
+- `stratai-main/src/lib/server/markdown-to-tiptap.ts` -- Added `htmlToTipTap()` for DOCX pipeline
+- `stratai-main/src/lib/components/pages/PageList.svelte` -- Added `onImport` prop and Import button
+- `stratai-main/src/routes/spaces/[space]/[area]/pages/+page.svelte` -- Import button (mobile + desktop), modal wiring
+- `stratai-main/src/lib/components/pages/index.ts` -- Added ImportPageModal to barrel export
+- `stratai-main/docs/product/FEATURE_VALUE_FRAMEWORK.md` -- Features #32, #33, updated rankings
+- `.claude/agents/session-closer.md` -- Pre-commit TypeScript check gate
+- `.claude/agents/code-reviewer.md` -- New agent (created)
+
+**Key Technical Details:**
+- Nearly everything already existed (markdown-to-tiptap pipeline, mammoth dependency, page creation API). Only genuinely new code was the `htmlToTipTap()` bridge function.
+- TypeScript check: 0 errors
+
+---
+
 ## 2026-01-31: Strategic Product Foundation — "Governed Organisational Mind"
 
 **Session Character:** Pure strategy/product session. No code written. All work was documentation and strategic thinking.
