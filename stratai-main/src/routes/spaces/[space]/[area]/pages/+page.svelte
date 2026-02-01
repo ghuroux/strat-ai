@@ -8,11 +8,11 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { MessageSquare, Plus, Settings } from 'lucide-svelte';
+	import { MessageSquare, Plus, Upload } from 'lucide-svelte';
 	import MobileHeader from '$lib/components/layout/MobileHeader.svelte';
 	import MobileActionsMenu from '$lib/components/layout/MobileActionsMenu.svelte';
 	import UserMenu from '$lib/components/layout/UserMenu.svelte';
-	import { PageList, NewPageModal, DeletePageModal, SharePageModal } from '$lib/components/pages';
+	import { PageList, NewPageModal, DeletePageModal, SharePageModal, ImportPageModal } from '$lib/components/pages';
 	import { pageStore } from '$lib/stores/pages.svelte';
 	import { areaStore } from '$lib/stores/areas.svelte';
 	import { spacesStore } from '$lib/stores/spaces.svelte';
@@ -43,6 +43,9 @@
 	let pageToDelete = $state<PageType | null>(null);
 	let isDeleteModalOpen = $state(false);
 	let isDeleting = $state(false);
+
+	// Import modal state
+	let isImportModalOpen = $state(false);
 
 	// Share modal state
 	let pageToShare = $state<PageType | null>(null);
@@ -183,6 +186,23 @@
 		isNewPageModalOpen = false;
 	}
 
+	function handleImportPage() {
+		isImportModalOpen = true;
+	}
+
+	async function handleImportSuccess(page: PageType) {
+		isImportModalOpen = false;
+		toastStore.success('Page imported');
+
+		// Refresh page store cache
+		if (area?.id) {
+			await pageStore.loadPages(area.id);
+		}
+
+		// Navigate to the new page
+		goto(`/spaces/${spaceParam}/${areaParam}/pages/${page.id}`);
+	}
+
 	async function handleCreatePage(data: {
 		title: string;
 		pageType: PageTypeEnum;
@@ -310,6 +330,15 @@
 			onBack={goToArea}
 			accentColor={areaColor}
 		>
+			<!-- Import button -->
+			<button
+				class="mobile-header-action"
+				onclick={handleImportPage}
+				title="Import File"
+			>
+				<Upload size={18} />
+			</button>
+
 			<!-- New Page button -->
 			<button
 				class="mobile-header-action primary"
@@ -368,6 +397,7 @@
 				loading={isLoading}
 				onSelect={handleSelectPage}
 				onNewPage={handleNewPage}
+				onImport={handleImportPage}
 				onDelete={handleDeletePage}
 				onShare={handleSharePage}
 			/>
@@ -398,6 +428,14 @@
 	{isDeleting}
 	onConfirm={handleConfirmDelete}
 	onCancel={handleCancelDelete}
+/>
+
+<!-- Import Page Modal -->
+<ImportPageModal
+	isOpen={isImportModalOpen}
+	areaId={area?.id ?? null}
+	onClose={() => isImportModalOpen = false}
+	onSuccess={handleImportSuccess}
 />
 
 <!-- Share Page Modal -->

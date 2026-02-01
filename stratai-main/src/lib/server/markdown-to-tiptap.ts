@@ -93,6 +93,32 @@ export function markdownToTipTap(markdown: string): TipTapContent {
 }
 
 /**
+ * Convert raw HTML to TipTap JSON content.
+ *
+ * Used for DOCX import (mammoth produces HTML) and any future HTML→TipTap needs.
+ *
+ * @param html - HTML string to convert
+ * @returns TipTap JSON content structure
+ * @throws If conversion fails (caller should use textToTipTap as fallback)
+ */
+export function htmlToTipTap(html: string): TipTapContent {
+	if (!html || !html.trim()) {
+		return {
+			type: 'doc',
+			content: [{ type: 'paragraph' }]
+		};
+	}
+
+	const json = generateJSON(html, extensions);
+
+	if (json.type !== 'doc' || !Array.isArray(json.content)) {
+		throw new Error('generateJSON produced invalid structure');
+	}
+
+	return json as TipTapContent;
+}
+
+/**
  * Convert plain text to TipTap JSON content (paragraph fallback).
  *
  * Used when markdownToTipTap() fails. Always produces valid content.

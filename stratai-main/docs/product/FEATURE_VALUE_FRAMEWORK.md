@@ -263,12 +263,16 @@ These features emerged from a thought experiment: "what's missing from the OII s
 | 29 | Outcome Tracking | 5 | 4 | 5 | 5 | 4 | **4.70** |
 | 30 | Onboarding Briefing | 3 | 5 | 5 | 5 | 3 | **4.30** |
 | 31 | Knowledge Gap Detection | 4 | 4 | 4 | 4 | 3 | **3.85** |
+| 32 | Content Import to Page | 3 | 4 | 3 | 2 | 2 | **2.85** |
+| 33 | Governed Knowledge Pipeline | 4 | 4 | 5 | 4 | 3 | **4.10** |
+
+> **32 & 33 — Foundation → Vision pattern:** Content Import (32) is the narrow, buildable foundation — import markdown/content into a Page in an Area. Governed Knowledge Pipeline (33) is the broader vision — a deliberate path from "AI helped me create this" to "this is now organizational knowledge" with provenance, review gates, and context integration. Build 32 first using existing Page infrastructure (sharing, lifecycle, versioning). Evolve toward 33 as the creation-to-knowledge loop matures. The gap today: valuable work created in AI sessions requires going *around* the system (git commit, copy-paste) instead of *through* it.
 
 ---
 
 ## Master Ranking
 
-All 31 features ranked by weighted score:
+All 33 features ranked by weighted score:
 
 | Rank | Feature | Score | Status | Category |
 |------|---------|-------|--------|----------|
@@ -282,7 +286,8 @@ All 31 features ranked by weighted score:
 | 8 | Post-Meeting Capture | **4.30** | Planned | Capture Accelerator |
 | **8** | **Onboarding Briefing** | **4.30** | **Identified** | **Compound Proof** |
 | 10 | Areas | **4.25** | Built | Working Context |
-| 11 | Chat & AI System | **3.90** | Built | Interaction Layer |
+| **11** | **Governed Knowledge Pipeline** | **4.10** | **Identified** | **Creation → Knowledge Loop** |
+| 12 | Chat & AI System | **3.90** | Built | Interaction Layer |
 | 12 | Pages | **3.85** | Built | Knowledge Store |
 | 12 | Skills | **3.85** | Built | Methodology Layer |
 | **12** | **Knowledge Gap Detection** | **3.85** | **Identified** | **Intelligence Gaps as Signal** |
@@ -293,8 +298,9 @@ All 31 features ranked by weighted score:
 | 18 | Jira Integration | **3.30** | Planned | Execution Bridge |
 | 20 | Context Transparency | **3.20** | Built | Trust Layer |
 | 21 | Comments & Discussions | **3.05** | Planned | Deliberation |
-| 22 | Documents | **2.55** | Built | Reference Library |
-| 22 | Email Integration | **2.55** | Planned | Communication Bridge |
+| **22** | **Content Import to Page** | **2.85** | **Identified** | **Knowledge Ingestion (foundation for #11)** |
+| 23 | Documents | **2.55** | Built | Reference Library |
+| 23 | Email Integration | **2.55** | Planned | Communication Bridge |
 | 24 | Admin Console | **2.45** | Built | Control Surface |
 | 25 | Auth & Members | **2.15** | Built | Permission Layer |
 | 26 | Search (Global) | **2.10** | Built | Navigation |
@@ -314,12 +320,12 @@ All 31 features ranked by weighted score:
 4.5 ┤ ■ Memory (4.85)  ★ Retrospective (4.85)
     │ ★ Outcome Tracking (4.70)  ■ Governance (4.60)
 4.0 ┤ ■■ Meetings/Guided (4.35)  ■ Post-Meeting (4.30)  ★ Onboarding (4.30)  ■ Areas (4.25)
-    │
+    │ ★ Governed Knowledge (4.10)
 3.5 ┤ ■■ Chat/Pages/Skills (3.85-3.90)  ★ Knowledge Gaps (3.85)  ■ Spaces (3.75)  ■ Tasks (3.65)
     │ ■ Audit (3.40)  ■■ GitHub/Jira (3.30)  ■ Context (3.20)
 3.0 ┤ ■ Comments (3.05)
     │
-2.5 ┤ ■■ Docs/Email (2.55)  ■ Admin (2.45)
+2.5 ┤ ★ Content Import (2.85)  ■■ Docs/Email (2.55)  ■ Admin (2.45)
     │ ■ Auth (2.15)  ■ Search (2.10)  ■ Usage (2.00)
 2.0 ┤
     │ ■ Confluence (1.75)  ■ Calendar (1.60)  ■ Arena (1.40)

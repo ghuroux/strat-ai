@@ -141,25 +141,34 @@ If the session was straightforward with no surprises, that's fine — skip this 
    - Run `git diff --stat` to understand the scope of changes
    - Review what was accomplished in the session
 
-2. **Create Commit**
+2. **Pre-Commit Quality Gate**
+   - Run `cd stratai-main && npm run check` to verify TypeScript compiles cleanly
+   - **If 0 errors**: Proceed to Step 3
+   - **If errors**: Report them with file:line references. Do NOT commit. Ask the user:
+     - Fix the errors (provide specific guidance)
+     - Or commit anyway with known issues (not recommended, but user's choice)
+   - This is a fast baseline check (~10s), not a full code review
+
+3. **Create Commit**
+   - If the changeset is substantial (5+ files or 200+ lines), suggest running `/review` first — this is advisory only, don't block
    - Stage changes appropriately
    - Craft a clear, descriptive commit message
    - Execute the commit
    - Verify the commit was successful with `git log -1`
 
-3. **Update Session Logs (Two Files)**
+4. **Update Session Logs (Two Files)**
    - Read `SESSIONS.md` and prepend a detailed new entry (after header, before previous entries)
    - Read `CLAUDE.md`, find the `## Session Log` section, and **replace** the "Last session" line with a 1-2 line summary
    - **DO NOT** add detailed entries to CLAUDE.md — keep it to one line only
 
-4. **Review Session for Learnings (Memory Flywheel)**
+5. **Review Session for Learnings (Memory Flywheel)**
    - Review the full conversation context for surprises, bugs, new patterns, or gotchas
    - Identify which skill file(s) are relevant (if any)
    - Read those skill files
    - Append to or create `## Lessons Learned` sections with structured entries
    - If no learnings, note it and move on — don't force entries
 
-5. **Final Verification**
+6. **Final Verification**
    - Confirm the commit exists in git history
    - Confirm SESSIONS.md has the detailed entry
    - Confirm CLAUDE.md "Last session" line was replaced (not appended)
@@ -177,6 +186,7 @@ If the session was straightforward with no surprises, that's fine — skip this 
 - If any step fails, report the error clearly and suggest remediation
 - After completing all steps, provide a brief confirmation message
 - The Lessons Learned step should take 1-2 minutes, not dominate the session close — be concise and targeted
+- **Never commit TypeScript errors.** Run `npm run check` before every commit. If it fails, report and stop.
 
 ## Error Handling
 

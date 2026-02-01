@@ -31,6 +31,7 @@ export { default as ExportMenu } from './ExportMenu.svelte';
 
 // Modal components
 export { default as DeletePageModal } from './DeletePageModal.svelte';
+export { default as ImportPageModal } from './ImportPageModal.svelte';
 
 // Sharing components
 export { default as SharePageModal } from './SharePageModal.svelte';

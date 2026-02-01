@@ -22,11 +22,12 @@
 		loading?: boolean;
 		onSelect: (page: Page) => void;
 		onNewPage: () => void;
+		onImport?: () => void;
 		onDelete?: (page: Page) => void;
 		onShare?: (page: Page) => void;
 	}
 
-	let { pages, loading = false, onSelect, onNewPage, onDelete, onShare }: Props = $props();
+	let { pages, loading = false, onSelect, onNewPage, onImport, onDelete, onShare }: Props = $props();
 
 	// Filter state
 	let searchQuery = $state('');
@@ -86,12 +87,24 @@
 	<!-- Header -->
 	<div class="list-header">
 		<h2 class="list-title">Pages</h2>
-		<button type="button" class="new-page-btn" onclick={onNewPage}>
-			<svg viewBox="0 0 20 20" fill="currentColor">
-				<path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
-			</svg>
-			<span>New Page</span>
-		</button>
+		<div class="header-actions">
+			{#if onImport}
+				<button type="button" class="import-btn" onclick={onImport}>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+						<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+						<polyline points="17 8 12 3 7 8" />
+						<line x1="12" y1="3" x2="12" y2="15" />
+					</svg>
+					<span>Import</span>
+				</button>
+			{/if}
+			<button type="button" class="new-page-btn" onclick={onNewPage}>
+				<svg viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+				</svg>
+				<span>New Page</span>
+			</button>
+		</div>
 	</div>
 
 	<!-- Filters -->
@@ -202,6 +215,37 @@
 		font-weight: 700;
 		color: var(--editor-text);
 		margin: 0;
+	}
+
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.import-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.625rem 1rem;
+		background: transparent;
+		color: var(--editor-text-secondary);
+		border: 1px solid var(--editor-border);
+		border-radius: 8px;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background-color 100ms ease, color 100ms ease;
+	}
+
+	.import-btn:hover {
+		background: var(--toolbar-button-hover);
+		color: var(--editor-text);
+	}
+
+	.import-btn svg {
+		width: 16px;
+		height: 16px;
 	}
 
 	.new-page-btn {
